@@ -1,0 +1,6 @@
+{
+  "name": "شات الغرف",
+  "description": "تطبيق شات ودردشة كتابية حية بغرف متعددة، ورتب ومشرفين وأدمن، وتحكم كامل للمالك.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

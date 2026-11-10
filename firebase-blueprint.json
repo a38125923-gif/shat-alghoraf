@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information in the live chat application",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique Google user ID"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email of the user"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Profile picture URL"
+        },
+        "bio": {
+          "type": "string",
+          "description": "Short bio or status quote"
+        },
+        "globalRole": {
+          "type": "string",
+          "enum": ["owner", "admin", "member"],
+          "description": "Global application role"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["online", "offline", "away"],
+          "description": "Presence status"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": ["userId", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Chat room entity containing metadata, roles, and moderation lists",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Room title/name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Room topic or description"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the room creator/owner"
+        },
+        "ownerName": {
+          "type": "string",
+          "description": "Display name of the room owner"
+        },
+        "category": {
+          "type": "string",
+          "description": "Room category (e.g. عام، ألعاب، تقنية، تعارف، ثقافة)"
+        },
+        "permissionLevel": {
+          "type": "string",
+          "enum": ["PUBLIC", "PRIVATE", "APPROVAL_ONLY"],
+          "description": "Access level: PUBLIC (open), PRIVATE (owner/admins only), APPROVAL_ONLY (approved members)"
+        },
+        "isLocked": {
+          "type": "boolean",
+          "description": "Whether the room is locked for non-admins"
+        },
+        "admins": {
+          "type": "array",
+          "description": "List of user IDs with room admin privileges"
+        },
+        "moderators": {
+          "type": "array",
+          "description": "List of user IDs with moderator privileges"
+        },
+        "mutedUsers": {
+          "type": "array",
+          "description": "List of user IDs muted in this room"
+        },
+        "bannedUsers": {
+          "type": "array",
+          "description": "List of user IDs banned from this room"
+        },
+        "pinnedMessage": {
+          "type": "string",
+          "description": "Important pinned announcement"
+        },
+        "pinnedMessageSender": {
+          "type": "string",
+          "description": "Name of user who pinned the announcement"
+        },
+        "memberCount": {
+          "type": "integer",
+          "description": "Approximate active member count"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of room creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last room update"
+        }
+      },
+      "required": ["name", "ownerId", "ownerName", "createdAt", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message sent inside a room",
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "description": "Parent room ID"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "UID of the message sender"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of the sender"
+        },
+        "senderRole": {
+          "type": "string",
+          "enum": ["owner", "admin", "moderator", "member"],
+          "description": "Role of the sender when posting"
+        },
+        "content": {
+          "type": "string",
+          "description": "Message text content"
+        },
+        "isAnnouncement": {
+          "type": "boolean",
+          "description": "Whether this is a special administrative broadcast"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of message creation"
+        }
+      },
+      "required": ["roomId", "senderId", "senderName", "content", "createdAt"]
+    },
+    "BanRecord": {
+      "title": "BanRecord",
+      "description": "Moderation record for temporary or permanent user ban from a room or entire app",
+      "type": "object",
+      "properties": {
+        "targetUid": { "type": "string" },
+        "targetName": { "type": "string" },
+        "reason": { "type": "string" },
+        "isPermanent": { "type": "boolean" },
+        "expiresAtMillis": { "type": "integer" },
+        "bannedByUid": { "type": "string" },
+        "bannedByName": { "type": "string" },
+        "roomId": { "type": "string" },
+        "roomName": { "type": "string" },
+        "isGlobal": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetUid", "targetName", "reason", "isPermanent", "expiresAtMillis", "bannedByUid", "bannedByName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles and global role info"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Chat rooms with role management and moderation lists"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages posted inside a specific room"
+    },
+    "/bans/{banId}": {
+      "schema": "BanRecord",
+      "description": "Active ban records for rooms or the entire application"
+    }
+  }
+}

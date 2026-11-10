@@ -1,0 +1,224 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isGlobalAdmin() {
+      return isSignedIn() &&
+             ('email' in request.auth.token) &&
+             request.auth.token.email == 'a38125923@gmail.com' &&
+             ('email_verified' in request.auth.token) &&
+             request.auth.token.email_verified == true;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 50 &&
+             data.email is string && data.email.size() <= 100 &&
+             (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 200)) &&
+             (!('globalRole' in data) || (data.globalRole in ['owner', 'admin', 'member'])) &&
+             (!('status' in data) || (data.status in ['online', 'offline', 'away'])) &&
+             (!('isBannedGlobally' in data) || data.isBannedGlobally is bool) &&
+             (!('banReason' in data) || data.banReason == null || (data.banReason is string && data.banReason.size() <= 300)) &&
+             (!('banExpiresAtMillis' in data) || data.banExpiresAtMillis is int) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidRoom(data) {
+      return data.name is string && data.name.size() >= 2 && data.name.size() <= 60 &&
+             (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 300)) &&
+             data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() <= 128 &&
+             data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 50 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 30)) &&
+             (!('permissionLevel' in data) || (data.permissionLevel is string && data.permissionLevel.size() <= 30)) &&
+             (!('isLocked' in data) || data.isLocked is bool) &&
+             (!('admins' in data) || (data.admins is list && data.admins.size() <= 20)) &&
+             (!('moderators' in data) || (data.moderators is list && data.moderators.size() <= 50)) &&
+             (!('mutedUsers' in data) || (data.mutedUsers is list && data.mutedUsers.size() <= 100)) &&
+             (!('bannedUsers' in data) || (data.bannedUsers is list && data.bannedUsers.size() <= 100)) &&
+             (!('pinnedMessage' in data) || data.pinnedMessage == null || (data.pinnedMessage is string && data.pinnedMessage.size() <= 500)) &&
+             (!('pinnedMessageSender' in data) || data.pinnedMessageSender == null || (data.pinnedMessageSender is string && data.pinnedMessageSender.size() <= 50)) &&
+             (!('memberCount' in data) || data.memberCount is int) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.roomId is string && data.roomId.size() > 0 && data.roomId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 50 &&
+             (!('senderRole' in data) || (data.senderRole in ['owner', 'admin', 'moderator', 'member'])) &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 1000 &&
+             (!('isAnnouncement' in data) || data.isAnnouncement is bool) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidBanRecord(data) {
+      return data.targetUid is string && data.targetUid.size() > 0 && data.targetUid.size() <= 128 &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 60 &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 300 &&
+             data.isPermanent is bool &&
+             data.expiresAtMillis is int &&
+             data.bannedByUid is string && data.bannedByUid.size() > 0 && data.bannedByUid.size() <= 128 &&
+             data.bannedByName is string && data.bannedByName.size() >= 1 && data.bannedByName.size() <= 60 &&
+             (!('roomId' in data) || data.roomId == null || (data.roomId is string && data.roomId.size() <= 128)) &&
+             (!('roomName' in data) || data.roomName == null || (data.roomName is string && data.roomName.size() <= 60)) &&
+             (!('isGlobal' in data) || data.isGlobal is bool) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isRoomOwner(roomData) {
+      return isSignedIn() && roomData != null && (roomData.ownerId == request.auth.uid || isGlobalAdmin());
+    }
+
+    function isRoomAdmin(roomData) {
+      return isRoomOwner(roomData) ||
+             (roomData != null && ('admins' in roomData) && roomData.admins is list && (request.auth.uid in roomData.admins));
+    }
+
+    function isRoomModerator(roomData) {
+      return isRoomAdmin(roomData) ||
+             (roomData != null && ('moderators' in roomData) && roomData.moderators is list && (request.auth.uid in roomData.moderators));
+    }
+
+    function isRoomMuted(roomData) {
+      return roomData != null && ('mutedUsers' in roomData) && roomData.mutedUsers is list && (request.auth.uid in roomData.mutedUsers);
+    }
+
+    function isRoomBanned(roomData) {
+      return roomData != null && ('bannedUsers' in roomData) && roomData.bannedUsers is list && (request.auth.uid in roomData.bannedUsers);
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn() && (request.auth.uid == userId || isGlobalAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().email == request.auth.token.email &&
+                       (incoming().globalRole == 'member' || isGlobalAdmin()) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       (request.auth.uid == userId || isGlobalAdmin()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (incoming().globalRole == existing().globalRole || isGlobalAdmin()) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'photoUrl', 'bio', 'status', 'globalRole',
+                         'isBannedGlobally', 'banReason', 'banExpiresAtMillis', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isGlobalAdmin());
+    }
+
+    // --- Rooms Collection ---
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) && !isRoomBanned(existing());
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().ownerName.size() >= 2 &&
+                       isValidRoom(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       isValidRoom(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Case 1: Room Owner or Global Admin has full control
+                         isRoomOwner(existing()) ||
+                         // Case 2: Room Admin can moderate users, pin announcements, lock room
+                         (
+                           isRoomAdmin(existing()) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'moderators', 'mutedUsers', 'bannedUsers', 'isLocked', 'pinnedMessage', 'pinnedMessageSender', 'updatedAt'
+                           ])
+                         ) ||
+                         // Case 3: Room Moderator can mute users, ban users from room, and pin messages
+                         (
+                           isRoomModerator(existing()) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'mutedUsers', 'bannedUsers', 'pinnedMessage', 'pinnedMessageSender', 'updatedAt'
+                           ])
+                         ) ||
+                         // Case 4: Any signed-in non-banned member can increment/decrement memberCount
+                         (
+                           !isRoomBanned(existing()) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberCount'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(roomId) && (isRoomOwner(existing()) || isGlobalAdmin());
+
+      // --- Messages Subcollection ---
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn() &&
+                            isValidId(roomId) &&
+                            !isRoomBanned(get(/databases/$(database)/documents/rooms/$(roomId)).data);
+
+        allow create: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(messageId) &&
+                         incoming().senderId == request.auth.uid &&
+                         incoming().roomId == roomId &&
+                         isValidMessage(incoming()) &&
+                         !isRoomBanned(get(/databases/$(database)/documents/rooms/$(roomId)).data) &&
+                         !isRoomMuted(get(/databases/$(database)/documents/rooms/$(roomId)).data) &&
+                         (!get(/databases/$(database)/documents/rooms/$(roomId)).data.isLocked || isRoomModerator(get(/databases/$(database)/documents/rooms/$(roomId)).data));
+
+        allow delete: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(messageId) &&
+                         (
+                           existing().senderId == request.auth.uid ||
+                           isRoomModerator(get(/databases/$(database)/documents/rooms/$(roomId)).data)
+                         );
+
+        allow update: if false;
+      }
+    }
+
+    // --- Bans Collection (Room & Global Bans with expiration) ---
+    match /bans/{banId} {
+      allow get, list: if isSignedIn() && isValidId(banId);
+      allow create, update: if isSignedIn() &&
+                               isValidId(banId) &&
+                               incoming().bannedByUid == request.auth.uid &&
+                               isValidBanRecord(incoming());
+      allow delete: if isSignedIn() && isValidId(banId);
+    }
+  }
+}
