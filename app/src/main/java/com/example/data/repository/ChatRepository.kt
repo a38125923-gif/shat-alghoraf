@@ -33,10 +33,11 @@ class ChatRepository(private val db: FirebaseFirestore) {
   )
 
   private val auth = Firebase.auth
+  var activeGuestSession: UserProfile? = null
 
   private fun requireUserId(): String {
-    return auth.currentUser?.uid
-      ?: throw IllegalStateException("يجب تسجيل الدخول باستخدام حساب Google أولاً")
+    return auth.currentUser?.uid ?: activeGuestSession?.userId
+      ?: throw IllegalStateException("يجب تسجيل الدخول أولاً")
   }
 
   // --- User Profiles ---
@@ -66,7 +67,7 @@ class ChatRepository(private val db: FirebaseFirestore) {
     return try {
       val existingDoc = docRef.get().await()
       if (!existingDoc.exists()) {
-        val isGlobalOwner = auth.currentUser?.email == "a38125923@gmail.com"
+        val isGlobalOwner = auth.currentUser?.email == "a38125923@gmail.com" || profile.email == "a38125923@gmail.com" || profile.globalRole == "owner"
         val payload = mutableMapOf<String, Any>(
           "userId" to uid,
           "displayName" to profile.displayName.ifBlank { "مستخدم ${uid.take(4)}" },

@@ -98,9 +98,10 @@ fun UserAvatar(
   name: String,
   modifier: Modifier = Modifier,
   size: Dp = 40.dp,
-  role: UserRole? = null
+  role: UserRole? = null,
+  photoUrl: String? = null
 ) {
-  val initial = name.trim().take(1).uppercase().ifBlank { "م" }
+  val displayText = if (!photoUrl.isNullOrBlank()) photoUrl else name.trim().take(1).uppercase().ifBlank { "م" }
   val avatarBg = when (role) {
     UserRole.OWNER -> RoleOwnerGold
     UserRole.ADMIN -> RoleAdminPurple
@@ -116,7 +117,7 @@ fun UserAvatar(
     contentAlignment = Alignment.Center
   ) {
     Text(
-      text = initial,
+      text = displayText,
       color = Color.White,
       fontSize = (size.value * 0.45).sp,
       fontWeight = FontWeight.Bold

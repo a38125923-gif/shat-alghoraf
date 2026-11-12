@@ -100,6 +100,7 @@ fun RoomsScreen(
   var roomToManage by remember { mutableStateOf<Room?>(null) }
 
   var showProfileDialog by remember { mutableStateOf(false) }
+  var showOwnerMasterPanel by remember { mutableStateOf(false) }
   var showSignOutConfirm by remember { mutableStateOf(false) }
 
   LaunchedEffect(errorMessage) {
@@ -149,6 +150,22 @@ fun RoomsScreen(
           }
         },
         actions = {
+          // Owner Master Control Panel Button
+          if (userProfile?.globalRole == "owner" || userProfile?.email == "a38125923@gmail.com") {
+            Button(
+              onClick = { showOwnerMasterPanel = true },
+              colors = ButtonDefaults.buttonColors(containerColor = RoleOwnerGold),
+              shape = RoundedCornerShape(12.dp),
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+              modifier = Modifier.testTag("owner_control_panel_top_button")
+            ) {
+              Icon(Icons.Default.Star, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("لوحة تحكم المالك 👑", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+          }
+
           // User profile chip
           userProfile?.let { prof ->
             Row(
@@ -164,7 +181,8 @@ fun RoomsScreen(
                 UserAvatar(
                   name = prof.displayName,
                   size = 32.dp,
-                  role = if (prof.globalRole == "owner") UserRole.OWNER else UserRole.MEMBER
+                  role = if (prof.globalRole == "owner") UserRole.OWNER else UserRole.MEMBER,
+                  photoUrl = prof.photoUrl
                 )
                 StatusDot(
                   status = prof.status,
@@ -304,12 +322,24 @@ fun RoomsScreen(
 
   // Edit Profile Dialog
   if (showProfileDialog && userProfile != null) {
-    EditProfileDialog(
+    UserProfileDialog(
       profile = userProfile!!,
       onDismiss = { showProfileDialog = false },
-      onSave = { name, bio, status ->
-        viewModel.updateUserProfile(name, bio, status)
+      onSave = { name, bio, status, photoUrl ->
+        viewModel.updateUserProfile(name, bio, status, photoUrl)
         showProfileDialog = false
+      }
+    )
+  }
+
+  // Owner Master Control Panel
+  if (showOwnerMasterPanel) {
+    OwnerMasterControlDialog(
+      viewModel = viewModel,
+      onDismiss = { showOwnerMasterPanel = false },
+      onEditRoom = { room ->
+        roomToManage = room
+        showManagementDialog = true
       }
     )
   }
@@ -536,91 +566,4 @@ private fun RoomCard(
       }
     }
   }
-}
-
-@Composable
-private fun EditProfileDialog(
-  profile: com.example.data.model.UserProfile,
-  onDismiss: () -> Unit,
-  onSave: (displayName: String, bio: String?, status: String) -> Unit
-) {
-  var name by remember(profile.displayName) { mutableStateOf(profile.displayName) }
-  var bio by remember(profile.bio) { mutableStateOf(profile.bio ?: "") }
-  var status by remember(profile.status) { mutableStateOf(profile.status) }
-
-  AlertDialog(
-    onDismissRequest = onDismiss,
-    title = {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("تعديل الملف الشخصي", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-      }
-    },
-    text = {
-      Column(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-          value = name,
-          onValueChange = { name = it },
-          label = { Text("اسم العرض") },
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("profile_name_input"),
-          singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OutlinedTextField(
-          value = bio,
-          onValueChange = { bio = it },
-          label = { Text("النبذة أو الحالة الشخصية") },
-          placeholder = { Text("مثال: محب للتقنية والألعاب...") },
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("profile_bio_input"),
-          maxLines = 2
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-          text = "الحالة:",
-          fontSize = 13.sp,
-          fontWeight = FontWeight.Bold
-        )
-
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 6.dp),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          listOf("online" to "متصل 🟢", "away" to "بالخارج 🟡", "offline" to "غير متصل ⚪").forEach { (key, label) ->
-            CategoryFilterChip(
-              category = label,
-              selected = status == key,
-              onClick = { status = key }
-            )
-          }
-        }
-      }
-    },
-    confirmButton = {
-      Button(
-        onClick = {
-          onSave(name.trim(), bio.trim().ifBlank { null }, status)
-        },
-        enabled = name.isNotBlank(),
-        modifier = Modifier.testTag("save_profile_button")
-      ) {
-        Text("حفظ")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss) {
-        Text("إلغاء")
-      }
-    }
-  )
 }

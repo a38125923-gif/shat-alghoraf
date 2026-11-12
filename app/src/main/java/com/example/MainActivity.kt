@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
 fun ChatAppRoot() {
   val auth = Firebase.auth
   var currentUser by remember { mutableStateOf(auth.currentUser) }
+  var customSessionUser by remember { mutableStateOf<com.example.data.model.UserProfile?>(null) }
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   val credentialManager = remember { CredentialManager.create(context) }
@@ -70,16 +71,24 @@ fun ChatAppRoot() {
     }
   }
 
-  if (currentUser == null) {
+  if (currentUser == null && customSessionUser == null) {
     AuthScreen(
       onAuthSuccess = {
         currentUser = Firebase.auth.currentUser
+      },
+      onCustomAuthSuccess = { user ->
+        customSessionUser = user
       }
     )
   } else {
-    val uid = currentUser!!.uid
-    key(uid) {
+    val uid = currentUser?.uid ?: customSessionUser?.userId ?: "session_user"
+    androidx.compose.runtime.key(uid) {
       val chatViewModel: ChatViewModel = viewModel(key = uid)
+
+      androidx.compose.runtime.LaunchedEffect(customSessionUser) {
+        customSessionUser?.let { chatViewModel.setCustomSession(it) }
+      }
+
       val selectedRoomId by chatViewModel.selectedRoomId.collectAsState()
       val activeGlobalBan by chatViewModel.activeGlobalBan.collectAsState()
       val profile by chatViewModel.userProfile.collectAsState()
@@ -100,6 +109,7 @@ fun ChatAppRoot() {
               scope = coroutineScope,
               onSignOutComplete = {
                 currentUser = null
+                customSessionUser = null
               }
             )
           }
@@ -113,6 +123,7 @@ fun ChatAppRoot() {
               scope = coroutineScope,
               onSignOutComplete = {
                 currentUser = null
+                customSessionUser = null
               }
             )
           },

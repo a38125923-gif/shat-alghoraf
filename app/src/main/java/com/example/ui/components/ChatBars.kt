@@ -157,10 +157,10 @@ fun ArabicChatHeader(
           contentAlignment = Alignment.Center
         ) {
           Text(
-            text = name.take(1).uppercase(),
+            text = if (!userProfile?.photoUrl.isNullOrBlank()) userProfile!!.photoUrl!! else name.take(1).uppercase(),
             color = GoldenCrown,
             fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+            fontSize = if (!userProfile?.photoUrl.isNullOrBlank()) 20.sp else 16.sp
           )
         }
 

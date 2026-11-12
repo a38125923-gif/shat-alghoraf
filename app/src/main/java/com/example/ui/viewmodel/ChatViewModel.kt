@@ -32,8 +32,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   val currentUser: FirebaseUser?
     get() = auth.currentUser
 
+  private val _customSessionProfile = MutableStateFlow<UserProfile?>(null)
+
+  fun setCustomSession(profile: UserProfile) {
+    _customSessionProfile.value = profile
+    repository.activeGuestSession = profile
+  }
+
   val currentUserId: String
-    get() = auth.currentUser?.uid ?: ""
+    get() = auth.currentUser?.uid ?: _customSessionProfile.value?.userId ?: ""
 
   private val _errorMessage = MutableStateFlow<String?>(null)
   val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -48,13 +55,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   val selectedCategory = MutableStateFlow("الكل")
 
   // User Profile
-  val userProfile: StateFlow<UserProfile?> = if (currentUserId.isNotBlank()) {
-    repository.observeUserProfile(currentUserId)
-      .catch { emit(null) }
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-  } else {
-    MutableStateFlow(null)
-  }
+  val userProfile: StateFlow<UserProfile?> = _customSessionProfile.flatMapLatest { custom ->
+    if (custom != null) {
+      flowOf(custom)
+    } else if (currentUserId.isNotBlank()) {
+      repository.observeUserProfile(currentUserId).catch { emit(null) }
+    } else {
+      flowOf(null)
+    }
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
   // All Rooms
   val rooms: StateFlow<List<Room>> = repository.observeRooms()
@@ -299,12 +308,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun updateUserProfile(displayName: String, bio: String?, status: String) {
+  fun updateUserProfile(displayName: String, bio: String?, status: String, photoUrl: String? = null) {
     val current = userProfile.value ?: return
     val updated = current.copy(
       displayName = displayName.trim().ifBlank { current.displayName },
       bio = bio?.trim(),
-      status = status
+      status = status,
+      photoUrl = photoUrl ?: current.photoUrl
     )
     viewModelScope.launch {
       _isLoading.value = true
