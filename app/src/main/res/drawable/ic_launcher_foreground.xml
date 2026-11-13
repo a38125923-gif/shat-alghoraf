@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/chat_rooms_icon_1794340500133"
+        android:drawable="@drawable/ic_shat_logo"
         android:gravity="center" />
 </layer-list>

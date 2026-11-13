@@ -1,3 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">شات الغرف</string>
+    <string name="app_tagline">أكبر تجمع دردشة كتابية عربية حية</string>
+    <string name="sign_in_with_google">تسجيل الدخول عبر Google</string>
+    <string name="signing_in">جاري تسجيل الدخول...</string>
+    <string name="sign_out">تسجيل الخروج</string>
+    <string name="tab_rooms">الغرف</string>
+    <string name="tab_direct_chats">الخاص</string>
+    <string name="tab_online_users">المتواجدون</string>
+    <string name="tab_profile">حسابي</string>
+    <string name="search_rooms_hint">ابحث عن غرفة أو موضوع...</string>
+    <string name="type_message_hint">اكتب رسالتك هنا...</string>
+    <string name="send_message">إرسال</string>
+    <string name="owner_panel">لوحة المالك</string>
+    <string name="create_room">إنشاء غرفة جديدة</string>
+    <string name="no_messages_yet">لا توجد رسائل بعد. ابدأ المحادثة الآن!</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="rules_button">قوانين وإرشادات الشات</string>
+    <string name="close">إغلاق</string>
 </resources>
