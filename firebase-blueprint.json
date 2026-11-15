@@ -9,7 +9,7 @@
         "displayName": { "type": "string" },
         "email": { "type": "string" },
         "photoUrl": { "type": "string" },
-        "globalRole": { "type": "string", "enum": ["owner", "admin", "moderator", "member"] },
+        "globalRole": { "type": "string", "enum": ["owner", "admin", "moderator", "member", "visitor"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -17,15 +17,29 @@
     },
     "PublicProfile": {
       "title": "PublicProfile",
-      "description": "Public chat identity and online presence without PII",
+      "description": "Public chat identity, CodyChat rank, cosmetics, and online presence without PII",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "displayName": { "type": "string" },
+        "username": { "type": "string" },
         "avatarEmoji": { "type": "string" },
         "photoUrl": { "type": "string" },
         "bio": { "type": "string" },
-        "globalRole": { "type": "string", "enum": ["owner", "admin", "moderator", "member"] },
+        "gender": { "type": "string" },
+        "globalRole": { "type": "string", "enum": ["owner", "admin", "moderator", "member", "visitor"] },
+        "chatRank": {
+          "type": "string",
+          "enum": ["site_owner", "super_owner", "owner", "super_admin", "admin", "general_mod", "royal_vip", "silver_vip", "member", "guest"]
+        },
+        "avatarFrame": { "type": "string" },
+        "nameplateStyle": { "type": "string" },
+        "vipFamily": { "type": "string" },
+        "coins": { "type": "integer" },
+        "isMuted": { "type": "boolean" },
+        "muteReason": { "type": "string" },
+        "isBanned": { "type": "boolean" },
+        "banReason": { "type": "string" },
         "status": { "type": "string", "enum": ["online", "away", "offline"] },
         "isActive": { "type": "boolean" },
         "lastSeenAt": { "type": "string", "format": "date-time" },
@@ -36,7 +50,7 @@
     },
     "Room": {
       "title": "Room",
-      "description": "Arabic text chat room with role lists and moderation state",
+      "description": "Arabic chat room with role lists, mics toggle, and moderation state",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
@@ -47,6 +61,7 @@
         "icon": { "type": "string" },
         "permissionLevel": { "type": "string", "enum": ["PUBLIC", "APPROVAL_ONLY", "PRIVATE"] },
         "isLocked": { "type": "boolean" },
+        "micsEnabled": { "type": "boolean" },
         "isActive": { "type": "boolean" },
         "admins": { "type": "array" },
         "moderators": { "type": "array" },
@@ -65,15 +80,24 @@
     },
     "Message": {
       "title": "Message",
-      "description": "Live text message inside a chat room",
+      "description": "Live message inside a chat room",
       "type": "object",
       "properties": {
         "roomId": { "type": "string" },
         "senderId": { "type": "string" },
         "senderName": { "type": "string" },
-        "senderRole": { "type": "string", "enum": ["owner", "admin", "moderator", "member"] },
+        "senderRole": { "type": "string", "enum": ["owner", "admin", "moderator", "member", "visitor"] },
+        "senderRank": {
+          "type": "string",
+          "enum": ["site_owner", "super_owner", "owner", "super_admin", "admin", "general_mod", "royal_vip", "silver_vip", "member", "guest"]
+        },
         "senderAvatar": { "type": "string" },
+        "senderAvatarUri": { "type": "string" },
+        "senderFrame": { "type": "string" },
+        "senderNameplate": { "type": "string" },
         "content": { "type": "string" },
+        "imageUri": { "type": "string" },
+        "voiceDurationSec": { "type": "integer" },
         "isAnnouncement": { "type": "boolean" },
         "replyToMessageId": { "type": "string" },
         "replyToSenderName": { "type": "string" },
@@ -147,6 +171,54 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["targetUid", "targetName", "reason", "isPermanent", "expiresAtMillis", "bannedByUid", "bannedByName", "isGlobal", "createdAt"]
+    },
+    "WallPost": {
+      "title": "WallPost",
+      "description": "Social wall post shared among chat community members",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorRank": { "type": "string" },
+        "authorEmoji": { "type": "string" },
+        "content": { "type": "string" },
+        "likes": { "type": "integer" },
+        "likedBy": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "authorRank", "content", "likes", "isActive", "createdAt", "updatedAt"]
+    },
+    "ChatNotification": {
+      "title": "ChatNotification",
+      "description": "Announcement or moderation alert notification",
+      "type": "object",
+      "properties": {
+        "audience": { "type": "string" },
+        "createdByUid": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "readBy": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["audience", "createdByUid", "title", "body", "createdAt", "updatedAt"]
+    },
+    "UserReport": {
+      "title": "UserReport",
+      "description": "Abuse report submitted by a user to admins",
+      "type": "object",
+      "properties": {
+        "reporterUid": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "targetName": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterUid", "reporterName", "targetName", "reason", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -164,7 +236,7 @@
     },
     "/rooms/{roomId}/messages/{messageId}": {
       "schema": "Message",
-      "description": "Real-time text messages in a room"
+      "description": "Real-time messages in a room"
     },
     "/rooms/{roomId}/typing/{userId}": {
       "schema": "TypingStatus",
@@ -181,6 +253,18 @@
     "/bans/{banId}": {
       "schema": "BanRecord",
       "description": "Active room and global bans"
+    },
+    "/wall_posts/{postId}": {
+      "schema": "WallPost",
+      "description": "Community wall posts"
+    },
+    "/notifications/{notifId}": {
+      "schema": "ChatNotification",
+      "description": "System and user-targeted notifications"
+    },
+    "/reports/{reportId}": {
+      "schema": "UserReport",
+      "description": "Moderation reports submitted by signed-in users"
     }
   }
 }

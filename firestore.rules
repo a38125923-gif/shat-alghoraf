@@ -38,18 +38,36 @@ service cloud.firestore {
              data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 50 &&
              data.email is string && data.email.size() <= 100 &&
              (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
-             data.globalRole is string && (data.globalRole in ['owner', 'admin', 'moderator', 'member']) &&
+             data.globalRole is string && (data.globalRole in ['owner', 'admin', 'moderator', 'member', 'visitor']) &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidChatRank(rank) {
+      return rank is string && (rank in [
+        'site_owner', 'super_owner', 'owner', 'super_admin', 'admin',
+        'general_mod', 'royal_vip', 'silver_vip', 'member', 'guest'
+      ]);
     }
 
     function isValidPublicProfile(data) {
       return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
              data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 50 &&
+             (!('username' in data) || data.username == null || (data.username is string && data.username.size() <= 40)) &&
              (!('avatarEmoji' in data) || data.avatarEmoji == null || (data.avatarEmoji is string && data.avatarEmoji.size() <= 16)) &&
              (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
              (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 200)) &&
-             data.globalRole is string && (data.globalRole in ['owner', 'admin', 'moderator', 'member']) &&
+             (!('gender' in data) || data.gender == null || (data.gender is string && data.gender.size() <= 20)) &&
+             data.globalRole is string && (data.globalRole in ['owner', 'admin', 'moderator', 'member', 'visitor']) &&
+             (!('chatRank' in data) || isValidChatRank(data.chatRank)) &&
+             (!('avatarFrame' in data) || (data.avatarFrame is string && data.avatarFrame.size() <= 40)) &&
+             (!('nameplateStyle' in data) || (data.nameplateStyle is string && data.nameplateStyle.size() <= 40)) &&
+             (!('vipFamily' in data) || data.vipFamily == null || (data.vipFamily is string && data.vipFamily.size() <= 40)) &&
+             (!('coins' in data) || (data.coins is int && data.coins >= 0 && data.coins <= 10000000)) &&
+             (!('isMuted' in data) || data.isMuted is bool) &&
+             (!('muteReason' in data) || data.muteReason == null || (data.muteReason is string && data.muteReason.size() <= 200)) &&
+             (!('isBanned' in data) || data.isBanned is bool) &&
+             (!('banReason' in data) || data.banReason == null || (data.banReason is string && data.banReason.size() <= 200)) &&
              data.status is string && (data.status in ['online', 'away', 'offline']) &&
              data.isActive is bool &&
              (!('lastSeenAt' in data) || data.lastSeenAt == null || (data.lastSeenAt is timestamp && data.lastSeenAt <= request.time)) &&
@@ -66,6 +84,7 @@ service cloud.firestore {
              (!('icon' in data) || (data.icon is string && data.icon.size() <= 16)) &&
              (!('permissionLevel' in data) || (data.permissionLevel in ['PUBLIC', 'APPROVAL_ONLY', 'PRIVATE'])) &&
              (!('isLocked' in data) || data.isLocked is bool) &&
+             (!('micsEnabled' in data) || data.micsEnabled is bool) &&
              data.isActive is bool &&
              (!('admins' in data) || (data.admins is list && data.admins.size() <= 20 && (data.admins.size() == 0 || data.admins[0] is string))) &&
              (!('moderators' in data) || (data.moderators is list && data.moderators.size() <= 50 && (data.moderators.size() == 0 || data.moderators[0] is string))) &&
@@ -76,7 +95,7 @@ service cloud.firestore {
              (!('lastMessageText' in data) || data.lastMessageText == null || (data.lastMessageText is string && data.lastMessageText.size() <= 160)) &&
              (!('lastMessageSender' in data) || data.lastMessageSender == null || (data.lastMessageSender is string && data.lastMessageSender.size() <= 50)) &&
              (!('lastMessageAt' in data) || data.lastMessageAt == null || (data.lastMessageAt is timestamp && data.lastMessageAt <= request.time)) &&
-             (!('memberCount' in data) || data.memberCount is int) &&
+             (!('memberCount' in data) || (data.memberCount is int && data.memberCount >= 0)) &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
@@ -85,9 +104,15 @@ service cloud.firestore {
       return data.roomId is string && data.roomId.size() > 0 && data.roomId.size() <= 128 &&
              data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128 &&
              data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 50 &&
-             (!('senderRole' in data) || (data.senderRole in ['owner', 'admin', 'moderator', 'member'])) &&
+             (!('senderRole' in data) || (data.senderRole in ['owner', 'admin', 'moderator', 'member', 'visitor'])) &&
+             (!('senderRank' in data) || isValidChatRank(data.senderRank)) &&
              (!('senderAvatar' in data) || data.senderAvatar == null || (data.senderAvatar is string && data.senderAvatar.size() <= 500)) &&
+             (!('senderAvatarUri' in data) || data.senderAvatarUri == null || (data.senderAvatarUri is string && data.senderAvatarUri.size() <= 500)) &&
+             (!('senderFrame' in data) || (data.senderFrame is string && data.senderFrame.size() <= 40)) &&
+             (!('senderNameplate' in data) || (data.senderNameplate is string && data.senderNameplate.size() <= 40)) &&
              data.content is string && data.content.size() >= 1 && data.content.size() <= 1000 &&
+             (!('imageUri' in data) || data.imageUri == null || (data.imageUri is string && data.imageUri.size() <= 500)) &&
+             (!('voiceDurationSec' in data) || (data.voiceDurationSec is int && data.voiceDurationSec >= 0 && data.voiceDurationSec <= 600)) &&
              (!('isAnnouncement' in data) || data.isAnnouncement is bool) &&
              (!('replyToMessageId' in data) || data.replyToMessageId == null || (data.replyToMessageId is string && data.replyToMessageId.size() <= 128)) &&
              (!('replyToSenderName' in data) || data.replyToSenderName == null || (data.replyToSenderName is string && data.replyToSenderName.size() <= 50)) &&
@@ -143,6 +168,39 @@ service cloud.firestore {
              data.createdAt is timestamp && data.createdAt <= request.time;
     }
 
+    function isValidWallPost(data) {
+      return data.authorId is string && data.authorId.size() > 0 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 50 &&
+             isValidChatRank(data.authorRank) &&
+             (!('authorEmoji' in data) || (data.authorEmoji is string && data.authorEmoji.size() <= 16)) &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 500 &&
+             data.likes is int && data.likes >= 0 && data.likes <= 1000000 &&
+             (!('likedBy' in data) || (data.likedBy is list && data.likedBy.size() <= 200 && (data.likedBy.size() == 0 || data.likedBy[0] is string))) &&
+             data.isActive is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidChatNotification(data) {
+      return data.audience is string && data.audience.size() > 0 && data.audience.size() <= 128 &&
+             data.createdByUid is string && data.createdByUid.size() > 0 && data.createdByUid.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+             data.body is string && data.body.size() >= 1 && data.body.size() <= 400 &&
+             (!('readBy' in data) || (data.readBy is list && data.readBy.size() <= 200 && (data.readBy.size() == 0 || data.readBy[0] is string))) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidUserReport(data) {
+      return data.reporterUid is string && data.reporterUid.size() > 0 && data.reporterUid.size() <= 128 &&
+             data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 50 &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 60 &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 300 &&
+             data.status is string && (data.status in ['pending', 'resolved']) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
     function isGlobalStaff() {
       return isGlobalAdmin() || (
         isSignedIn() &&
@@ -183,6 +241,18 @@ service cloud.firestore {
       return roomData != null && ('bannedUsers' in roomData) && roomData.bannedUsers is list && (request.auth.uid in roomData.bannedUsers);
     }
 
+    function isUserMutedGlobally() {
+      return exists(/databases/$(database)/documents/public_profiles/$(request.auth.uid)) &&
+             ('isMuted' in get(/databases/$(database)/documents/public_profiles/$(request.auth.uid)).data) &&
+             get(/databases/$(database)/documents/public_profiles/$(request.auth.uid)).data.isMuted == true;
+    }
+
+    function isUserBannedGlobally() {
+      return exists(/databases/$(database)/documents/public_profiles/$(request.auth.uid)) &&
+             ('isBanned' in get(/databases/$(database)/documents/public_profiles/$(request.auth.uid)).data) &&
+             get(/databases/$(database)/documents/public_profiles/$(request.auth.uid)).data.isBanned == true;
+    }
+
     // --- Private Users Collection (PII protected) ---
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isGlobalAdmin());
@@ -193,7 +263,7 @@ service cloud.firestore {
                        request.auth.uid == userId &&
                        incoming().userId == request.auth.uid &&
                        incoming().email == request.auth.token.email &&
-                       (incoming().globalRole == 'member' || isGlobalAdmin()) &&
+                       (incoming().globalRole in ['member', 'visitor'] || isGlobalAdmin()) &&
                        isValidUserProfile(incoming());
 
       allow update: if isSignedIn() &&
@@ -201,7 +271,11 @@ service cloud.firestore {
                        (request.auth.uid == userId || isGlobalAdmin()) &&
                        incoming().userId == existing().userId &&
                        incoming().createdAt == existing().createdAt &&
-                       (incoming().globalRole == existing().globalRole || isGlobalAdmin()) &&
+                       (
+                         incoming().globalRole == existing().globalRole ||
+                         (existing().globalRole in ['member', 'visitor'] && incoming().globalRole in ['member', 'visitor']) ||
+                         isGlobalAdmin()
+                       ) &&
                        isValidUserProfile(incoming()) &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'displayName', 'photoUrl', 'globalRole', 'updatedAt'
@@ -219,20 +293,59 @@ service cloud.firestore {
                        isValidId(userId) &&
                        request.auth.uid == userId &&
                        incoming().userId == request.auth.uid &&
-                       (incoming().globalRole == 'member' || isGlobalAdmin()) &&
+                       (!('isMuted' in incoming()) || incoming().isMuted == false) &&
+                       (!('isBanned' in incoming()) || incoming().isBanned == false) &&
+                       (
+                         (
+                           (incoming().globalRole in ['member', 'visitor']) &&
+                           (!('chatRank' in incoming()) || (incoming().chatRank in ['member', 'guest']))
+                         ) ||
+                         isGlobalAdmin()
+                       ) &&
                        isValidPublicProfile(incoming());
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
-                       (request.auth.uid == userId || isGlobalAdmin()) &&
                        incoming().userId == existing().userId &&
                        incoming().createdAt == existing().createdAt &&
-                       (incoming().globalRole == existing().globalRole || isGlobalAdmin()) &&
                        isValidPublicProfile(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly([
-                         'displayName', 'avatarEmoji', 'photoUrl', 'bio', 'globalRole',
-                         'status', 'isActive', 'lastSeenAt', 'updatedAt'
-                       ]);
+                       (
+                         // Owner admin can promote/demote any user, mute, ban, etc.
+                         isGlobalAdmin() ||
+                         // Self updating profile / cosmetics / presence (cannot self-escalate rank or unmute/unban self)
+                         (
+                           request.auth.uid == userId &&
+                           (
+                             incoming().globalRole == existing().globalRole ||
+                             (existing().globalRole in ['member', 'visitor'] && incoming().globalRole in ['member', 'visitor'])
+                           ) &&
+                           (
+                             (!('chatRank' in incoming()) && !('chatRank' in existing())) ||
+                             (('chatRank' in incoming()) && ('chatRank' in existing()) && incoming().chatRank == existing().chatRank) ||
+                             (('chatRank' in incoming()) && ('chatRank' in existing()) && existing().chatRank in ['member', 'guest'] && incoming().chatRank in ['member', 'guest'])
+                           ) &&
+                           (!('isMuted' in incoming()) && !('isMuted' in existing()) || ('isMuted' in incoming()) && ('isMuted' in existing()) && incoming().isMuted == existing().isMuted) &&
+                           (!('isBanned' in incoming()) && !('isBanned' in existing()) || ('isBanned' in incoming()) && ('isBanned' in existing()) && incoming().isBanned == existing().isBanned) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'displayName', 'username', 'avatarEmoji', 'photoUrl', 'bio', 'gender',
+                             'globalRole', 'chatRank', 'avatarFrame', 'nameplateStyle', 'vipFamily',
+                             'coins', 'status', 'isActive', 'lastSeenAt', 'updatedAt'
+                           ])
+                         ) ||
+                         // Staff moderating non-owner users (mute / kick offline / ban by high admin)
+                         (
+                           isGlobalStaff() &&
+                           !(existing().globalRole == 'owner') &&
+                           (
+                             isGlobalHighAdmin() ||
+                             (!('isBanned' in incoming()) && !('isBanned' in existing())) ||
+                             (('isBanned' in incoming()) && ('isBanned' in existing()) && incoming().isBanned == existing().isBanned)
+                           ) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'isMuted', 'muteReason', 'isBanned', 'banReason', 'status', 'updatedAt'
+                           ])
+                         )
+                       );
 
       allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isGlobalAdmin());
     }
@@ -248,7 +361,7 @@ service cloud.firestore {
                        (
                          incoming().ownerId == request.auth.uid ||
                          (
-                           roomId in ['general', 'yemen', 'saudi', 'teachers', 'admin_council'] &&
+                           roomId in ['general', 'yemen', 'saudi', 'teachers', 'admin_council', 'poetry', 'games'] &&
                            incoming().ownerId == 'system_owner' &&
                            !exists(/databases/$(database)/documents/rooms/$(roomId))
                          )
@@ -262,26 +375,28 @@ service cloud.firestore {
                        (
                          // Action 1: Room Owner or Global Admin has full control
                          isRoomOwner(existing()) ||
-                         // Action 2: Room Admin / Global Admin can edit room settings, moderate users, pin announcements, lock room
+                         // Action 2: Room Admin / Global High Admin
                          (
                            isRoomAdmin(existing()) &&
                            incoming().diff(existing()).affectedKeys().hasOnly([
                              'name', 'description', 'category', 'icon', 'permissionLevel',
-                             'moderators', 'mutedUsers', 'bannedUsers', 'isLocked',
+                             'moderators', 'mutedUsers', 'bannedUsers', 'isLocked', 'micsEnabled',
                              'pinnedMessage', 'pinnedMessageSender', 'updatedAt'
                            ])
                          ) ||
-                         // Action 3: Room Moderator can mute/ban users and pin messages
+                         // Action 3: Room Moderator
                          (
                            isRoomModerator(existing()) &&
                            incoming().diff(existing()).affectedKeys().hasOnly([
-                             'mutedUsers', 'bannedUsers', 'pinnedMessage', 'pinnedMessageSender', 'updatedAt'
+                             'mutedUsers', 'bannedUsers', 'micsEnabled', 'pinnedMessage', 'pinnedMessageSender', 'updatedAt'
                            ])
                          ) ||
                          // Action 4: Non-banned member posting updates room summary / count
                          (
                            !isRoomBanned(existing()) &&
                            !isRoomMuted(existing()) &&
+                           !isUserMutedGlobally() &&
+                           !isUserBannedGlobally() &&
                            (!existing().isLocked || isRoomModerator(existing())) &&
                            incoming().diff(existing()).affectedKeys().hasOnly([
                              'lastMessageText', 'lastMessageSender', 'lastMessageAt', 'memberCount', 'updatedAt'
@@ -289,7 +404,7 @@ service cloud.firestore {
                          )
                        );
 
-      allow delete: if isSignedIn() && isValidId(roomId) && (isRoomOwner(existing()) || isGlobalAdmin());
+      allow delete: if isSignedIn() && isValidId(roomId) && (isRoomOwner(existing()) || isGlobalHighAdmin());
 
       // --- Room Messages Subcollection ---
       match /messages/{messageId} {
@@ -309,6 +424,8 @@ service cloud.firestore {
                          exists(/databases/$(database)/documents/rooms/$(roomId)) &&
                          !isRoomBanned(get(/databases/$(database)/documents/rooms/$(roomId)).data) &&
                          !isRoomMuted(get(/databases/$(database)/documents/rooms/$(roomId)).data) &&
+                         !isUserMutedGlobally() &&
+                         !isUserBannedGlobally() &&
                          (!get(/databases/$(database)/documents/rooms/$(roomId)).data.isLocked || isRoomModerator(get(/databases/$(database)/documents/rooms/$(roomId)).data)) &&
                          (!('isAnnouncement' in incoming()) || !incoming().isAnnouncement || isRoomModerator(get(/databases/$(database)/documents/rooms/$(roomId)).data) || isGlobalAdmin());
 
@@ -424,6 +541,88 @@ service cloud.firestore {
                            isRoomModerator(get(/databases/$(database)/documents/rooms/$(existing().roomId)).data)
                          )
                        );
+    }
+
+    // --- Community Wall Posts ---
+    match /wall_posts/{postId} {
+      allow get: if isSignedIn() && isValidId(postId);
+      allow list: if isSignedIn() && resource.data.isActive == true;
+
+      allow create: if isSignedIn() &&
+                       isValidId(postId) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().isActive == true &&
+                       incoming().likes == 0 &&
+                       !isUserMutedGlobally() &&
+                       !isUserBannedGlobally() &&
+                       isValidWallPost(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(postId) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidWallPost(incoming()) &&
+                       (
+                         isGlobalAdmin() ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'likedBy', 'updatedAt'])
+                       );
+
+      allow delete: if isSignedIn() &&
+                       isValidId(postId) &&
+                       (existing().authorId == request.auth.uid || isGlobalStaff());
+    }
+
+    // --- Notifications Collection ---
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() &&
+                    isValidId(notifId) &&
+                    (existing().audience == 'all' || existing().audience == request.auth.uid || isGlobalAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.audience == 'all' || resource.data.audience == request.auth.uid || isGlobalAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(notifId) &&
+                       incoming().createdByUid == request.auth.uid &&
+                       isValidChatNotification(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(notifId) &&
+                       incoming().createdByUid == existing().createdByUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidChatNotification(incoming()) &&
+                       (
+                         isGlobalAdmin() ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['readBy', 'updatedAt'])
+                       );
+
+      allow delete: if isSignedIn() && isValidId(notifId) && isGlobalAdmin();
+    }
+
+    // --- Reports Collection ---
+    match /reports/{reportId} {
+      allow get: if isSignedIn() &&
+                    isValidId(reportId) &&
+                    (existing().reporterUid == request.auth.uid || isGlobalAdmin() || isGlobalStaff());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.reporterUid == request.auth.uid || isGlobalAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       incoming().reporterUid == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       isValidUserReport(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       incoming().reporterUid == existing().reporterUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserReport(incoming()) &&
+                       (isGlobalAdmin() || isGlobalStaff()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(reportId) && isGlobalAdmin();
     }
   }
 }

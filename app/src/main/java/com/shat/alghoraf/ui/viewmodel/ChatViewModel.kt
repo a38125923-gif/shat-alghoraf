@@ -3,718 +3,721 @@ package com.shat.alghoraf.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseUser
-import com.shat.alghoraf.data.model.BanRecord
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.shat.alghoraf.data.model.AvatarFrame
+import com.shat.alghoraf.data.model.BottomNavTab
 import com.shat.alghoraf.data.model.ChatMessage
+import com.shat.alghoraf.data.model.ChatNotification
+import com.shat.alghoraf.data.model.ChatRank
 import com.shat.alghoraf.data.model.ChatRoom
-import com.shat.alghoraf.data.model.DirectChat
-import com.shat.alghoraf.data.model.DirectMessage
-import com.shat.alghoraf.data.model.OWNER_ADMIN_EMAIL
-import com.shat.alghoraf.data.model.PublicProfile
-import com.shat.alghoraf.data.model.ReplyTarget
-import com.shat.alghoraf.data.model.RoomPermissionLevel
-import com.shat.alghoraf.data.model.TypingStatus
-import com.shat.alghoraf.data.model.UiState
-import com.shat.alghoraf.data.model.UserRole
-import com.shat.alghoraf.data.remote.unwrapFirestoreException
-import com.shat.alghoraf.data.repository.ChatRepository
+import com.shat.alghoraf.data.model.ChatThemeOption
+import com.shat.alghoraf.data.model.ChatUser
+import com.shat.alghoraf.data.model.NameplateStyle
+import com.shat.alghoraf.data.model.PrivateMessage
+import com.shat.alghoraf.data.model.UserReport
+import com.shat.alghoraf.data.model.VoiceMicSlot
+import com.shat.alghoraf.data.model.WallPost
+import com.shat.alghoraf.data.remote.FirestoreChatRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+data class ChatUiState(
+    val currentUser: ChatUser? = null,
+    val rooms: List<ChatRoom> = emptyList(),
+    val activeRoomId: String = "general",
+    val messages: List<ChatMessage> = emptyList(),
+    val allUsers: List<ChatUser> = emptyList(),
+    val privateMessages: List<PrivateMessage> = emptyList(),
+    val activeDmPartner: ChatUser? = null,
+    val micSlots: List<VoiceMicSlot> = List(5) { idx -> VoiceMicSlot(slotNumber = idx + 1) },
+    val wallPosts: List<WallPost> = emptyList(),
+    val notifications: List<ChatNotification> = emptyList(),
+    val reports: List<UserReport> = emptyList(),
+    val selectedTab: BottomNavTab = BottomNavTab.CHAT,
+    val selectedTheme: ChatThemeOption = ChatThemeOption.WARM_PEACH,
+    val authError: String? = null,
+    val toastMessage: String? = null,
+    val searchRoomQuery: String = "",
+    val isLoadingProfile: Boolean = true
+) {
+    val activeRoom: ChatRoom?
+        get() = rooms.firstOrNull { it.id == activeRoomId } ?: rooms.firstOrNull()
+
+    val unreadNotificationsCount: Int
+        get() = notifications.count { !it.isRead }
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(
-    private val repository: ChatRepository,
-    val currentUserId: String,
-    private val currentUserEmail: String?,
-    private val isEmailVerified: Boolean,
-    private val initialDisplayName: String?,
-    private val initialPhotoUrl: String?
+    private val repository: FirestoreChatRepository,
+    private val currentUserId: String,
+    private val currentUserEmail: String,
+    private val currentUserDisplayName: String,
+    private val currentUserPhotoUrl: String?,
+    private val currentUserEmailVerified: Boolean,
+    initialRoomId: String = "general",
+    initialTheme: ChatThemeOption = ChatThemeOption.WARM_PEACH,
+    private val onSaveRoomId: (String) -> Unit = {},
+    private val onSaveTheme: (ChatThemeOption) -> Unit = {},
+    private val onSignOutRequested: () -> Unit = {}
 ) : ViewModel() {
 
-    val isGlobalOwner: Boolean =
-        currentUserEmail.equals(OWNER_ADMIN_EMAIL, ignoreCase = true) && isEmailVerified
+    private companion object {
+        const val TAG = "ChatViewModel"
+    }
 
-    private val _selectedRoomId = MutableStateFlow<String?>(null)
-    val selectedRoomId: StateFlow<String?> = _selectedRoomId.asStateFlow()
+    private val _uiState = MutableStateFlow(
+        ChatUiState(
+            activeRoomId = initialRoomId,
+            selectedTheme = initialTheme,
+            isLoadingProfile = true
+        )
+    )
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private val _selectedDirectChatId = MutableStateFlow<String?>(null)
-    val selectedDirectChatId: StateFlow<String?> = _selectedDirectChatId.asStateFlow()
+    private val isOwnerEmail: Boolean =
+        currentUserEmail.equals(FirestoreChatRepository.OWNER_EMAIL, ignoreCase = true) && currentUserEmailVerified
 
-    private val _feedbackMessages = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val feedbackMessages = _feedbackMessages.asSharedFlow()
+    init {
+        bootstrapSession()
+        observeCloudData()
+    }
 
-    private var typingResetJob: Job? = null
-    private var lastTypingSentAt: Long = 0L
-
-    val roomsState: StateFlow<UiState<List<ChatRoom>>> =
-        repository.observeRooms()
-            .map<List<ChatRoom>, UiState<List<ChatRoom>>> { UiState.Success(it) }
-            .catch { error ->
-                val fsErr = unwrapFirestoreException(error)
-                if (fsErr == null && error is CancellationException) throw error
-                val root = fsErr ?: error
-                Log.w(TAG, "Error observing rooms", root)
-                emit(UiState.Error(root.localizedMessage ?: "تعذر تحميل غرف الدردشة"))
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = UiState.Loading
+    private fun bootstrapSession() {
+        viewModelScope.launch {
+            repository.seedDefaultRoomsIfNeeded()
+            val profileResult = repository.ensureUserProfiles(
+                uid = currentUserId,
+                email = currentUserEmail,
+                displayName = currentUserDisplayName,
+                photoUrl = currentUserPhotoUrl,
+                emailVerified = currentUserEmailVerified
             )
+            profileResult.fold(
+                onSuccess = { user ->
+                    _uiState.update {
+                        it.copy(
+                            currentUser = user,
+                            isLoadingProfile = false,
+                            authError = null,
+                            toastMessage = if (user.rank == ChatRank.SITE_OWNER) {
+                                "أهلاً بك يا صاحب الموقع ${user.displayName} 👑"
+                            } else {
+                                "أهلاً بك في شات الغرف ${user.displayName} ${user.rank.icon}"
+                            }
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    val root = unwrapFirestoreError(error)
+                    Log.w(TAG, "Failed to initialize user profile", root)
+                    _uiState.update {
+                        it.copy(
+                            isLoadingProfile = false,
+                            authError = root.localizedMessage ?: "تعذر تحميل الحساب من السحابة"
+                        )
+                    }
+                }
+            )
+        }
+    }
 
-    val publicProfilesState: StateFlow<UiState<List<PublicProfile>>> =
+    private fun observeCloudData() {
+        repository.observeCurrentUserProfile(currentUserId)
+            .catch { error -> handleStreamError("profile", error) }
+            .onEach { user ->
+                if (user != null) {
+                    _uiState.update { it.copy(currentUser = user, isLoadingProfile = false) }
+                }
+            }
+            .launchIn(viewModelScope)
+
+        repository.observeActiveRooms()
+            .catch { error -> handleStreamError("rooms", error) }
+            .onEach { rooms ->
+                _uiState.update { state ->
+                    val validRoomId = if (rooms.any { it.id == state.activeRoomId }) {
+                        state.activeRoomId
+                    } else {
+                        rooms.firstOrNull()?.id ?: state.activeRoomId
+                    }
+                    state.copy(rooms = rooms, activeRoomId = validRoomId)
+                }
+            }
+            .launchIn(viewModelScope)
+
         repository.observePublicProfiles()
-            .map<List<PublicProfile>, UiState<List<PublicProfile>>> { UiState.Success(it) }
-            .catch { error ->
-                val fsErr = unwrapFirestoreException(error)
-                if (fsErr == null && error is CancellationException) throw error
-                val root = fsErr ?: error
-                Log.w(TAG, "Error observing public profiles", root)
-                emit(UiState.Error(root.localizedMessage ?: "تعذر تحميل قائمة الأعضاء"))
+            .catch { error -> handleStreamError("public_profiles", error) }
+            .onEach { users ->
+                _uiState.update { it.copy(allUsers = users) }
             }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = UiState.Loading
-            )
+            .launchIn(viewModelScope)
 
-    val currentProfile: StateFlow<PublicProfile> =
-        publicProfilesState
-            .map { state ->
-                val list = (state as? UiState.Success)?.data.orEmpty()
-                list.firstOrNull { it.userId == currentUserId } ?: fallbackProfile()
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = fallbackProfile()
-            )
-
-    val bansState: StateFlow<List<BanRecord>> =
-        repository.observeBans(currentUserId, isGlobalOwner)
-            .catch { error ->
-                val fsErr = unwrapFirestoreException(error)
-                if (fsErr == null && error is CancellationException) throw error
-                Log.w(TAG, "Error observing bans", fsErr ?: error)
-                emit(emptyList())
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = emptyList()
-            )
-
-    val activeGlobalBan: StateFlow<BanRecord?> =
-        bansState
-            .map { bans ->
-                if (isGlobalOwner) return@map null
-                val now = System.currentTimeMillis()
-                bans.firstOrNull {
-                    it.isGlobal &&
-                        it.targetUid == currentUserId &&
-                        (it.isPermanent || it.expiresAtMillis > now)
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = null
-            )
-
-    val activeRoom: StateFlow<ChatRoom?> =
-        combine(roomsState, _selectedRoomId) { state, roomId ->
-            if (roomId == null) null
-            else (state as? UiState.Success)?.data?.firstOrNull { it.id == roomId }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-            initialValue = null
-        )
-
-    val roomMessagesState: StateFlow<UiState<List<ChatMessage>>> =
-        _selectedRoomId
+        _uiState
+            .map { it.activeRoomId }
+            .distinctUntilChanged()
             .flatMapLatest { roomId ->
-                if (roomId == null) {
-                    flowOf(UiState.Success(emptyList()))
+                repository.observeRoomMessages(roomId)
+            }
+            .catch { error -> handleStreamError("messages", error) }
+            .onEach { msgs ->
+                _uiState.update { it.copy(messages = msgs) }
+            }
+            .launchIn(viewModelScope)
+
+        repository.observeWallPosts()
+            .catch { error -> handleStreamError("wall_posts", error) }
+            .onEach { posts ->
+                _uiState.update { it.copy(wallPosts = posts) }
+            }
+            .launchIn(viewModelScope)
+
+        repository.observeNotifications(currentUserId)
+            .catch { error -> handleStreamError("notifications", error) }
+            .onEach { notifs ->
+                _uiState.update { it.copy(notifications = notifs) }
+            }
+            .launchIn(viewModelScope)
+
+        repository.observeReports(currentUserId, isOwnerEmail)
+            .catch { error -> handleStreamError("reports", error) }
+            .onEach { reports ->
+                _uiState.update { it.copy(reports = reports) }
+            }
+            .launchIn(viewModelScope)
+
+        _uiState
+            .map { it.activeDmPartner }
+            .distinctUntilChanged()
+            .flatMapLatest { partner ->
+                if (partner == null) {
+                    flowOf(emptyList())
                 } else {
-                    repository.observeRoomMessages(roomId)
-                        .map<List<ChatMessage>, UiState<List<ChatMessage>>> { UiState.Success(it) }
-                        .catch { error ->
-                            val fsErr = unwrapFirestoreException(error)
-                            if (fsErr == null && error is CancellationException) throw error
-                            val root = fsErr ?: error
-                            Log.w(TAG, "Error observing room messages", root)
-                            emit(UiState.Error(root.localizedMessage ?: "تعذر تحميل رسائل الغرفة"))
-                        }
+                    val chatId = FirestoreChatRepository.directChatId(currentUserId, partner.userKey)
+                    repository.observeDirectMessages(chatId, currentUserId, partner.displayName)
                 }
             }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = UiState.Loading
-            )
-
-    val typingUsers: StateFlow<List<TypingStatus>> =
-        _selectedRoomId
-            .flatMapLatest { roomId ->
-                if (roomId == null) flowOf(emptyList())
-                else repository.observeTypingUsers(roomId).catch { emit(emptyList()) }
+            .catch { error -> handleStreamError("direct_messages", error) }
+            .onEach { dms ->
+                _uiState.update { it.copy(privateMessages = dms) }
             }
-            .map { list ->
-                val cutoff = System.currentTimeMillis() - 7_000L
-                list.filter {
-                    it.userId != currentUserId &&
-                        (it.updatedAt?.toDate()?.time ?: System.currentTimeMillis()) >= cutoff
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = emptyList()
-            )
-
-    val directChatsState: StateFlow<UiState<List<DirectChat>>> =
-        repository.observeDirectChats(currentUserId)
-            .map<List<DirectChat>, UiState<List<DirectChat>>> { UiState.Success(it) }
-            .catch { error ->
-                val fsErr = unwrapFirestoreException(error)
-                if (fsErr == null && error is CancellationException) throw error
-                val root = fsErr ?: error
-                Log.w(TAG, "Error observing direct chats", root)
-                emit(UiState.Error(root.localizedMessage ?: "تعذر تحميل المحادثات الخاصة"))
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = UiState.Loading
-            )
-
-    val activeDirectChat: StateFlow<DirectChat?> =
-        combine(directChatsState, _selectedDirectChatId) { state, chatId ->
-            if (chatId == null) null
-            else (state as? UiState.Success)?.data?.firstOrNull { it.id == chatId }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-            initialValue = null
-        )
-
-    val directMessagesState: StateFlow<UiState<List<DirectMessage>>> =
-        _selectedDirectChatId
-            .flatMapLatest { chatId ->
-                if (chatId == null) {
-                    flowOf(UiState.Success(emptyList()))
-                } else {
-                    repository.observeDirectMessages(chatId, currentUserId)
-                        .map<List<DirectMessage>, UiState<List<DirectMessage>>> { UiState.Success(it) }
-                        .catch { error ->
-                            val fsErr = unwrapFirestoreException(error)
-                            if (fsErr == null && error is CancellationException) throw error
-                            val root = fsErr ?: error
-                            Log.w(TAG, "Error observing direct messages", root)
-                            emit(UiState.Error(root.localizedMessage ?: "تعذر تحميل الرسائل الخاصة"))
-                        }
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                initialValue = UiState.Loading
-            )
-
-    fun reportFeedback(message: String) {
-        _feedbackMessages.tryEmit(message)
+            .launchIn(viewModelScope)
     }
 
-    fun bootstrapSession(firebaseUser: FirebaseUser) {
+    private fun unwrapFirestoreError(error: Throwable): Throwable {
+        val firestoreError = generateSequence(error) { it.cause }
+            .filterIsInstance<FirebaseFirestoreException>()
+            .firstOrNull()
+        if (firestoreError == null && error is CancellationException) throw error
+        return firestoreError ?: error
+    }
+
+    private fun handleStreamError(streamName: String, error: Throwable) {
+        val rootError = unwrapFirestoreError(error)
+        Log.w(TAG, "Error observing $streamName", rootError)
+        _uiState.update {
+            it.copy(toastMessage = rootError.localizedMessage ?: "حدث خطأ في المزامنة ($streamName)")
+        }
+    }
+
+    fun clearAuthError() {
+        _uiState.update { it.copy(authError = null) }
+    }
+
+    fun consumeToast() {
+        _uiState.update { it.copy(toastMessage = null) }
+    }
+
+    fun showToast(message: String) {
+        _uiState.update { it.copy(toastMessage = message) }
+    }
+
+    fun logout() {
         viewModelScope.launch {
-            try {
-                repository.syncCurrentUserProfile(firebaseUser)
-                repository.seedDefaultRoomsIfMissing()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Bootstrap warning", e)
-                _feedbackMessages.tryEmit("تعذر مزامنة البيانات الأولية: ${e.localizedMessage ?: ""}")
+            repository.updatePresence(currentUserId, "offline")
+            _uiState.update { state ->
+                state.copy(
+                    micSlots = state.micSlots.map {
+                        if (it.occupantKey == currentUserId) VoiceMicSlot(it.slotNumber) else it
+                    },
+                    selectedTab = BottomNavTab.CHAT,
+                    activeDmPartner = null
+                )
             }
+            onSignOutRequested()
         }
     }
 
-    fun checkRoomEntry(room: ChatRoom): String? {
-        if (isGlobalOwner || room.ownerId == currentUserId) return null
-
-        val now = System.currentTimeMillis()
-        val roomBan = bansState.value.firstOrNull {
-            !it.isGlobal &&
-                it.roomId == room.id &&
-                it.targetUid == currentUserId &&
-                (it.isPermanent || it.expiresAtMillis > now)
-        }
-        if (roomBan != null || room.bannedUsers.contains(currentUserId)) {
-            return if (roomBan != null) {
-                "أنت محظور من دخول هذه الغرفة — السبب: ${roomBan.reason}"
-            } else {
-                "أنت محظور من دخول هذه الغرفة."
-            }
-        }
-
-        val myRole = currentProfile.value.roleEnum
-        val isStaff = myRole == UserRole.OWNER ||
-            myRole == UserRole.ADMIN ||
-            myRole == UserRole.MODERATOR ||
-            room.admins.contains(currentUserId) ||
-            room.moderators.contains(currentUserId)
-
-        if ((room.isLocked || room.permissionEnum == RoomPermissionLevel.PRIVATE) && !isStaff) {
-            return "هذه الغرفة مغلقة ومخصصة للإدارة والمشرفين فقط 🔒"
-        }
-        return null
+    fun selectTab(tab: BottomNavTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
     }
 
-    fun canManageRoom(room: ChatRoom): Boolean {
-        val myRole = currentProfile.value.roleEnum
-        return isGlobalOwner ||
-            room.ownerId == currentUserId ||
-            myRole == UserRole.OWNER ||
-            myRole == UserRole.ADMIN ||
-            myRole == UserRole.MODERATOR ||
-            room.admins.contains(currentUserId) ||
-            room.moderators.contains(currentUserId)
+    fun updateRoomSearch(query: String) {
+        _uiState.update { it.copy(searchRoomQuery = query) }
     }
 
-    fun isRoomAdminOrOwner(room: ChatRoom): Boolean {
-        val myRole = currentProfile.value.roleEnum
-        return isGlobalOwner ||
-            room.ownerId == currentUserId ||
-            myRole == UserRole.OWNER ||
-            myRole == UserRole.ADMIN ||
-            room.admins.contains(currentUserId)
-    }
-
-    fun isRoomOwnerOrGlobalOwner(room: ChatRoom): Boolean =
-        isGlobalOwner || room.ownerId == currentUserId
-
-    fun enterRoom(roomId: String) {
-        _selectedRoomId.value = roomId
-    }
-
-    fun leaveRoom() {
-        val prevRoom = _selectedRoomId.value
-        _selectedRoomId.value = null
-        typingResetJob?.cancel()
-        if (prevRoom != null) {
-            viewModelScope.launch {
-                repository.setTypingStatus(prevRoom, currentProfile.value.displayName, false)
-            }
+    fun switchRoom(roomId: String) {
+        onSaveRoomId(roomId)
+        _uiState.update {
+            it.copy(
+                activeRoomId = roomId,
+                selectedTab = BottomNavTab.CHAT
+            )
         }
     }
 
-    fun enterDirectChat(chatId: String) {
-        _selectedDirectChatId.value = chatId
-    }
-
-    fun leaveDirectChat() {
-        _selectedDirectChatId.value = null
-    }
-
-    fun startDirectChatWith(otherProfile: PublicProfile, onReady: (String) -> Unit) {
-        viewModelScope.launch {
-            try {
-                val chatId = repository.openOrCreateDirectChat(currentProfile.value, otherProfile)
-                _selectedDirectChatId.value = chatId
-                onReady(chatId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر فتح المحادثة الخاصة")
-            }
+    fun setTheme(theme: ChatThemeOption) {
+        onSaveTheme(theme)
+        _uiState.update {
+            it.copy(selectedTheme = theme, toastMessage = "تم تغيير خلفية الدردشة إلى ${theme.label}")
         }
     }
 
-    fun onRoomInputChanged(roomId: String, text: String) {
-        val now = System.currentTimeMillis()
-        if (text.isBlank()) {
-            typingResetJob?.cancel()
-            lastTypingSentAt = 0L
-            viewModelScope.launch {
-                repository.setTypingStatus(roomId, currentProfile.value.displayName, false)
-            }
+    fun sendTextMessage(text: String, imageUri: String = "", voiceDurationSec: Int = 0) {
+        val me = _uiState.value.currentUser ?: return
+        if (me.isBanned) {
+            showToast("حسابك محظور حالياً")
             return
         }
-
-        if (now - lastTypingSentAt > 2500L) {
-            lastTypingSentAt = now
-            viewModelScope.launch {
-                repository.setTypingStatus(roomId, currentProfile.value.displayName, true)
-            }
-        }
-
-        typingResetJob?.cancel()
-        typingResetJob = viewModelScope.launch {
-            delay(4500L)
-            repository.setTypingStatus(roomId, currentProfile.value.displayName, false)
-        }
-    }
-
-    fun sendRoomMessage(
-        room: ChatRoom,
-        content: String,
-        isAnnouncement: Boolean = false,
-        replyTo: ReplyTarget? = null
-    ) {
-        val trimmed = content.trim()
-        if (trimmed.isEmpty()) return
-        if (!isGlobalOwner && room.mutedUsers.contains(currentUserId)) {
-            _feedbackMessages.tryEmit("أنت مكتوم في هذه الغرفة من قبل الإدارة 🔇")
+        if (me.isMuted) {
+            val reason = me.muteReason.ifBlank { "مخالف للقوانين" }
+            showToast("أنت مكتوم حالياً ولا يمكنك الإرسال ($reason)")
             return
         }
-        if (room.isLocked && !canManageRoom(room)) {
-            _feedbackMessages.tryEmit("هذه الغرفة مغلقة للكتابة حالياً من قبل الإدارة 🔒")
+        val cleanText = text.trim()
+        if (cleanText.isEmpty() && imageUri.isEmpty() && voiceDurationSec <= 0) return
+
+        val finalContent = cleanText.ifEmpty {
+            if (voiceDurationSec > 0) "🎤 رسالة صوتية (${voiceDurationSec} ثانية)" else "🖼️ صورة مرفقة"
+        }
+        val roomId = _uiState.value.activeRoomId
+        viewModelScope.launch {
+            repository.sendRoomMessage(
+                roomId = roomId,
+                sender = me,
+                content = finalContent,
+                imageUri = imageUri,
+                voiceDurationSec = voiceDurationSec
+            ).onFailure { err ->
+                showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر إرسال الرسالة")
+            }
+        }
+    }
+
+    fun toggleMicSlot(slotNumber: Int) {
+        val me = _uiState.value.currentUser ?: return
+        val room = _uiState.value.activeRoom
+        if (room?.micsEnabled == false) {
+            showToast("المايكات معطلة في هذه الغرفة حالياً")
             return
         }
-        typingResetJob?.cancel()
-        lastTypingSentAt = 0L
-        viewModelScope.launch {
-            try {
-                repository.setTypingStatus(room.id, currentProfile.value.displayName, false)
-                repository.sendRoomMessage(
-                    roomId = room.id,
-                    senderProfile = currentProfile.value,
-                    content = trimmed,
-                    isAnnouncement = isAnnouncement,
-                    replyTo = replyTo
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر إرسال الرسالة: ${e.localizedMessage ?: "تحقق من الصلاحيات"}")
-            }
+        if (me.isMuted) {
+            showToast("لا يمكنك الصعود للمايك أثناء الكتم")
+            return
         }
-    }
+        val currentSlots = _uiState.value.micSlots
+        val target = currentSlots.firstOrNull { it.slotNumber == slotNumber } ?: return
 
-    fun sendDirectMessage(
-        chat: DirectChat,
-        content: String,
-        replyTo: ReplyTarget? = null
-    ) {
-        val trimmed = content.trim()
-        if (trimmed.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                repository.sendDirectMessage(
-                    chatId = chat.id,
-                    participantIds = chat.participantIds,
-                    senderProfile = currentProfile.value,
-                    content = trimmed,
-                    replyTo = replyTo
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر إرسال الرسالة الخاصة")
-            }
-        }
-    }
-
-    fun toggleReaction(roomId: String, message: ChatMessage, emoji: String) {
-        viewModelScope.launch {
-            try {
-                repository.toggleMessageReaction(roomId, message, emoji)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر إضافة التفاعل")
-            }
-        }
-    }
-
-    fun deleteMessage(roomId: String, messageId: String) {
-        viewModelScope.launch {
-            try {
-                repository.deleteRoomMessage(roomId, messageId)
-                _feedbackMessages.tryEmit("تم حذف الرسالة")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("لا تملك صلاحية حذف هذه الرسالة")
-            }
-        }
-    }
-
-    fun clearRoomMessages(roomId: String) {
-        viewModelScope.launch {
-            try {
-                repository.clearRoomMessages(roomId)
-                _feedbackMessages.tryEmit("تم مسح رسائل الغرفة")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر مسح رسائل الغرفة")
-            }
-        }
-    }
-
-    fun createRoom(
-        name: String,
-        description: String,
-        category: String,
-        icon: String,
-        permissionLevel: RoomPermissionLevel,
-        isLocked: Boolean
-    ) {
-        viewModelScope.launch {
-            try {
-                repository.createRoom(
-                    name = name,
-                    description = description,
-                    category = category,
-                    icon = icon,
-                    permissionLevel = permissionLevel,
-                    isLocked = isLocked,
-                    creatorName = currentProfile.value.displayName
-                )
-                _feedbackMessages.tryEmit("تم إنشاء الغرفة بنجاح ✨")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر إنشاء الغرفة")
-            }
-        }
-    }
-
-    fun updateRoom(
-        roomId: String,
-        name: String? = null,
-        description: String? = null,
-        category: String? = null,
-        icon: String? = null,
-        permissionLevel: RoomPermissionLevel? = null,
-        isLocked: Boolean? = null,
-        pinnedMessage: String? = null,
-        clearPinnedMessage: Boolean = false
-    ) {
-        viewModelScope.launch {
-            try {
-                repository.updateRoomSettings(
-                    roomId = roomId,
-                    name = name,
-                    description = description,
-                    category = category,
-                    icon = icon,
-                    permissionLevel = permissionLevel,
-                    isLocked = isLocked,
-                    pinnedMessage = pinnedMessage,
-                    pinnedMessageSender = if (pinnedMessage != null) currentProfile.value.displayName else null,
-                    clearPinnedMessage = clearPinnedMessage
-                )
-                _feedbackMessages.tryEmit("تم تحديث إعدادات الغرفة ✅")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر تحديث الغرفة: ${e.localizedMessage ?: ""}")
-            }
-        }
-    }
-
-    fun toggleRoomAdmin(room: ChatRoom, targetUid: String, targetName: String) {
-        viewModelScope.launch {
-            try {
-                val added = repository.toggleRoomAdmin(room, targetUid)
-                _feedbackMessages.tryEmit(
-                    if (added) "تم تعيين $targetName أدمن في الغرفة 🛡️" else "تم سحب صلاحية الأدمن من $targetName"
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("لا تملك صلاحية تعديل أدمن الغرفة")
-            }
-        }
-    }
-
-    fun toggleRoomModerator(room: ChatRoom, targetUid: String, targetName: String) {
-        viewModelScope.launch {
-            try {
-                val added = repository.toggleRoomModerator(room, targetUid)
-                _feedbackMessages.tryEmit(
-                    if (added) "تم تعيين $targetName مشرفاً في الغرفة ⚔️" else "تم سحب الإشراف من $targetName"
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("لا تملك صلاحية تعديل مشرفي الغرفة")
-            }
-        }
-    }
-
-    fun unbanFromRoom(room: ChatRoom, targetUid: String, targetName: String) {
-        viewModelScope.launch {
-            try {
-                repository.unbanUserFromRoom(room, targetUid)
-                val matchingBan = bansState.value.firstOrNull {
-                    !it.isGlobal && it.roomId == room.id && it.targetUid == targetUid
+        val updatedSlots = when {
+            target.occupantKey == me.userKey -> {
+                showToast("نزلت من المايك رقم $slotNumber")
+                currentSlots.map {
+                    if (it.slotNumber == slotNumber) VoiceMicSlot(slotNumber) else it
                 }
-                if (matchingBan != null) {
-                    repository.unbanUser(matchingBan, room)
-                }
-                _feedbackMessages.tryEmit("تم فك حظر $targetName من الغرفة ✅")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر فك الحظر عن العضو")
             }
+            target.occupantKey == null -> {
+                showToast("صعدت على المايك رقم $slotNumber 🎙️")
+                currentSlots.map { slot ->
+                    when {
+                        slot.occupantKey == me.userKey -> VoiceMicSlot(slot.slotNumber)
+                        slot.slotNumber == slotNumber -> VoiceMicSlot(
+                            slotNumber = slotNumber,
+                            occupantKey = me.userKey,
+                            occupantName = me.displayName,
+                            occupantEmoji = me.avatarEmoji,
+                            occupantRank = me.rank,
+                            isMuted = false
+                        )
+                        else -> slot
+                    }
+                }
+            }
+            me.rank.isStaff -> {
+                showToast("تم إنزال ${target.occupantName} من المايك")
+                currentSlots.map {
+                    if (it.slotNumber == slotNumber) VoiceMicSlot(slotNumber) else it
+                }
+            }
+            else -> {
+                showToast("هذا المايك مشغول بواسطة ${target.occupantName}")
+                currentSlots
+            }
+        }
+        _uiState.update { it.copy(micSlots = updatedSlots) }
+    }
+
+    fun toggleMyMicMute() {
+        val me = _uiState.value.currentUser ?: return
+        val onMic = _uiState.value.micSlots.any { it.occupantKey == me.userKey }
+        if (!onMic) {
+            showToast("اصعد على أحد المايكات أولاً")
+            return
+        }
+        _uiState.update { state ->
+            state.copy(
+                micSlots = state.micSlots.map {
+                    if (it.occupantKey == me.userKey) it.copy(isMuted = !it.isMuted) else it
+                }
+            )
+        }
+    }
+
+    fun updateProfile(displayName: String, bio: String, avatarUri: String, vipFamily: String) {
+        val me = _uiState.value.currentUser ?: return
+        if (displayName.trim().length < 2) {
+            showToast("الاسم يجب أن لا يقل عن حرفين")
+            return
+        }
+        viewModelScope.launch {
+            repository.updateProfile(me.userKey, displayName, bio, avatarUri, vipFamily).fold(
+                onSuccess = { showToast("تم حفظ تعديلات الملف الشخصي ✅") },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر حفظ الملف الشخصي") }
+            )
+        }
+    }
+
+    fun equipFrame(frame: AvatarFrame) {
+        val me = _uiState.value.currentUser ?: return
+        if (me.coins < frame.cost && me.avatarFrame != frame) {
+            showToast("رصيدك غير كافٍ (${frame.cost} نقطة)")
+            return
+        }
+        val newCoins = if (me.avatarFrame == frame) me.coins else (me.coins - frame.cost)
+        viewModelScope.launch {
+            repository.updateAppearance(me.userKey, frame, me.nameplateStyle, newCoins).fold(
+                onSuccess = { showToast("تم تفعيل ${frame.arabicName} ✨") },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر التفعيل") }
+            )
+        }
+    }
+
+    fun equipNameplate(style: NameplateStyle) {
+        val me = _uiState.value.currentUser ?: return
+        if (me.coins < style.cost && me.nameplateStyle != style) {
+            showToast("رصيدك غير كافٍ (${style.cost} نقطة)")
+            return
+        }
+        val newCoins = if (me.nameplateStyle == style) me.coins else (me.coins - style.cost)
+        viewModelScope.launch {
+            repository.updateAppearance(me.userKey, me.avatarFrame, style, newCoins).fold(
+                onSuccess = { showToast("تم تفعيل ${style.arabicName} 💎") },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر التفعيل") }
+            )
+        }
+    }
+
+    fun openPrivateChatWith(target: ChatUser) {
+        _uiState.update { it.copy(activeDmPartner = target, selectedTab = BottomNavTab.PRIVATE) }
+    }
+
+    fun sendPrivateMessage(target: ChatUser, text: String) {
+        val me = _uiState.value.currentUser ?: return
+        if (me.isMuted) {
+            showToast("أنت مكتوم حالياً")
+            return
+        }
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch {
+            repository.sendDirectMessage(me, target, clean).onFailure { err ->
+                showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر إرسال الرسالة الخاصة")
+            }
+        }
+    }
+
+    fun publishWallPost(content: String) {
+        val me = _uiState.value.currentUser ?: return
+        val clean = content.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch {
+            repository.publishWallPost(me, clean).fold(
+                onSuccess = { showToast("تم النشر على حائط الأصدقاء 📝") },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر النشر") }
+            )
+        }
+    }
+
+    fun likeWallPost(postId: String) {
+        viewModelScope.launch {
+            repository.likeWallPost(postId, currentUserId)
+        }
+    }
+
+    fun submitReport(targetName: String, reason: String) {
+        val me = _uiState.value.currentUser ?: return
+        if (targetName.isBlank() || reason.isBlank()) return
+        viewModelScope.launch {
+            repository.submitReport(me.userKey, me.displayName, targetName, reason).fold(
+                onSuccess = {
+                    repository.addNotification(
+                        createdByUid = me.userKey,
+                        title = "بلاغ جديد",
+                        body = "تم استلام بلاغ من ${me.displayName} ضد $targetName"
+                    )
+                    showToast("تم إرسال البلاغ للإدارة بنجاح 🛡️")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر إرسال البلاغ")
+                }
+            )
+        }
+    }
+
+    fun markNotificationsRead() {
+        val unreadIds = _uiState.value.notifications.filter { !it.isRead }.map { it.id }
+        if (unreadIds.isEmpty()) return
+        viewModelScope.launch {
+            unreadIds.forEach { id ->
+                repository.markNotificationRead(id, currentUserId)
+            }
+        }
+    }
+
+    fun upgradeGuestToMember(username: String, email: String, password: String): String? = null
+
+    // --- OWNER & STAFF MODERATION ---
+
+    fun createRoom(name: String, description: String, iconEmoji: String) {
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isPrivilegedAdmin) {
+            showToast("تحتاج إلى رتبة أدمن فأعلى لإنشاء غرفة")
+            return
+        }
+        if (name.trim().length < 2) {
+            showToast("أدخل اسم غرفة صحيح")
+            return
+        }
+        viewModelScope.launch {
+            repository.createRoom(name, description, iconEmoji, me).fold(
+                onSuccess = { showToast("تم إنشاء غرفة \"${name.trim()}\" بنجاح 🏠") },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر إنشاء الغرفة") }
+            )
         }
     }
 
     fun deleteRoom(roomId: String) {
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isPrivilegedAdmin) return
+        if (roomId == "general") {
+            showToast("لا يمكن حذف الغرفة العامة")
+            return
+        }
         viewModelScope.launch {
-            try {
-                repository.deleteRoom(roomId)
-                if (_selectedRoomId.value == roomId) _selectedRoomId.value = null
-                _feedbackMessages.tryEmit("تم حذف الغرفة")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر حذف الغرفة")
-            }
+            repository.deleteRoom(roomId).fold(
+                onSuccess = {
+                    if (_uiState.value.activeRoomId == roomId) {
+                        onSaveRoomId("general")
+                        _uiState.update { it.copy(activeRoomId = "general") }
+                    }
+                    showToast("تم حذف الغرفة")
+                },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر حذف الغرفة") }
+            )
         }
     }
 
-    fun toggleMuteUser(room: ChatRoom, targetUid: String, targetName: String) {
+    fun toggleCurrentRoomMics() {
+        val me = _uiState.value.currentUser ?: return
+        val room = _uiState.value.activeRoom ?: return
+        if (!me.rank.isStaff) {
+            showToast("صلاحية إدارة الغرفة متاحة للإدارة والمالك فقط")
+            return
+        }
+        val nextEnabled = !room.micsEnabled
         viewModelScope.launch {
-            try {
-                val nowMuted = repository.toggleMuteUser(room, targetUid)
-                _feedbackMessages.tryEmit(
-                    if (nowMuted) "تم كتم $targetName في الغرفة 🔇" else "تم فك كتم $targetName"
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر تغيير حالة الكتم")
-            }
+            repository.toggleRoomMics(room.id, nextEnabled).fold(
+                onSuccess = {
+                    showToast(if (nextEnabled) "تم تفعيل المايكات في الغرفة 🎙️" else "تم قفل المايكات في الغرفة 🔇")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر تغيير حالة المايكات")
+                }
+            )
         }
     }
 
-    fun setUserGlobalRole(targetUid: String, newRole: UserRole) {
-        viewModelScope.launch {
-            try {
-                repository.setUserGlobalRole(targetUid, newRole)
-                _feedbackMessages.tryEmit("تم تحديث الرتبة إلى ${newRole.arabicLabel} ${newRole.badgeEmoji}")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر تعديل الرتبة")
-            }
+    fun clearCurrentRoomMessages() {
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isStaff) {
+            showToast("صلاحية مسح الرسائل للإدارة والمالك فقط")
+            return
         }
-    }
-
-    fun banUser(
-        targetUid: String,
-        targetName: String,
-        reason: String,
-        isPermanent: Boolean,
-        minutes: Int,
-        isGlobal: Boolean,
-        room: ChatRoom?
-    ) {
+        val roomId = _uiState.value.activeRoomId
         viewModelScope.launch {
-            try {
-                repository.banUser(
-                    targetUid = targetUid,
-                    targetName = targetName,
-                    reason = reason,
-                    isPermanent = isPermanent,
-                    minutes = minutes,
-                    isGlobal = isGlobal,
-                    room = room,
-                    bannedByName = currentProfile.value.displayName
-                )
-                _feedbackMessages.tryEmit("تم تنفيذ الحظر على $targetName")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر تنفيذ الحظر")
-            }
-        }
-    }
-
-    fun unbanUser(ban: BanRecord) {
-        val rooms = (roomsState.value as? UiState.Success)?.data.orEmpty()
-        val room = ban.roomId?.let { id -> rooms.firstOrNull { it.id == id } }
-        viewModelScope.launch {
-            try {
-                repository.unbanUser(ban, room)
-                _feedbackMessages.tryEmit("تم فك الحظر عن ${ban.targetName}")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر فك الحظر")
-            }
+            repository.clearRoomMessages(roomId).fold(
+                onSuccess = {
+                    repository.sendRoomMessage(
+                        roomId = roomId,
+                        sender = me,
+                        content = "🧹 تم مسح رسائل الغرفة بواسطة ${me.displayName}",
+                        isAnnouncement = true
+                    )
+                    showToast("تم تنظيف الغرفة 🧹")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر تنظيف الغرفة")
+                }
+            )
         }
     }
 
     fun broadcastAnnouncement(text: String) {
-        val rooms = (roomsState.value as? UiState.Success)?.data.orEmpty()
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isStaff) return
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        val roomId = _uiState.value.activeRoomId
         viewModelScope.launch {
-            try {
-                repository.broadcastGlobalAnnouncement(rooms, currentProfile.value, text)
-                _feedbackMessages.tryEmit("تم بث الإعلان لجميع الغرف 📢")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit("تعذر إرسال البث العام")
-            }
+            repository.sendRoomMessage(
+                roomId = roomId,
+                sender = me,
+                content = "📢 إعلان إداري: $clean",
+                isAnnouncement = true
+            ).fold(
+                onSuccess = {
+                    repository.addNotification(
+                        createdByUid = me.userKey,
+                        title = "إعلان من ${me.displayName}",
+                        body = clean
+                    )
+                    showToast("تم نشر الإعلان للغرفة 📢")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر نشر الإعلان")
+                }
+            )
         }
     }
 
-    fun updateProfile(displayName: String, bio: String, avatarEmoji: String, status: String) {
+    fun changeUserRank(target: ChatUser, newRank: ChatRank) {
+        val me = _uiState.value.currentUser ?: return
+        if (me.rank.power <= target.rank.power && me.userKey != target.userKey && me.rank != ChatRank.SITE_OWNER) {
+            showToast("لا يمكنك تعديل رتبة عضو أعلى أو مساوٍ لرتبتك")
+            return
+        }
+        if (newRank.power >= me.rank.power && me.rank != ChatRank.SITE_OWNER) {
+            showToast("لا يمكنك منح رتبة أعلى أو مساوية لرتبتك")
+            return
+        }
         viewModelScope.launch {
-            try {
-                repository.updateMyProfile(displayName, bio, avatarEmoji, status)
-                _feedbackMessages.tryEmit("تم حفظ تعديلات الملف الشخصي ✨")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _feedbackMessages.tryEmit(e.localizedMessage ?: "تعذر حفظ الملف الشخصي")
-            }
+            repository.updateUserRank(target.userKey, newRank).fold(
+                onSuccess = {
+                    repository.addNotification(
+                        createdByUid = me.userKey,
+                        title = "تحديث رتبة",
+                        body = "تم ترقية/تعديل رتبة ${target.displayName} إلى ${newRank.arabicLabel} ${newRank.icon}"
+                    )
+                    showToast("تم تحديث رتبة ${target.displayName} إلى ${newRank.arabicLabel} ${newRank.icon}")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر تعديل الرتبة")
+                }
+            )
         }
     }
 
-    fun setPresenceOffline() {
+    fun toggleMuteUser(target: ChatUser, reason: String = "مخالفة آداب الدردشة") {
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isStaff || me.rank.power <= target.rank.power) {
+            showToast("ليس لديك صلاحية لكتم هذا العضو")
+            return
+        }
+        val newMuted = !target.isMuted
         viewModelScope.launch {
-            repository.updatePresenceStatus("offline")
+            repository.setUserMuted(target.userKey, newMuted, reason).fold(
+                onSuccess = {
+                    if (newMuted) {
+                        _uiState.update { state ->
+                            state.copy(
+                                micSlots = state.micSlots.map {
+                                    if (it.occupantKey == target.userKey) VoiceMicSlot(it.slotNumber) else it
+                                }
+                            )
+                        }
+                    }
+                    val actionLabel = if (newMuted) "كتم" else "فك كتم"
+                    showToast("تم $actionLabel ${target.displayName}")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر تحديث حالة الكتم")
+                }
+            )
         }
     }
 
-    private fun fallbackProfile(): PublicProfile = PublicProfile(
-        id = currentUserId,
-        userId = currentUserId,
-        displayName = initialDisplayName?.takeIf { it.length >= 2 }
-            ?: if (isGlobalOwner) "المالك العام" else "عضو الشات",
-        avatarEmoji = if (isGlobalOwner) UserRole.OWNER.badgeEmoji else UserRole.MEMBER.badgeEmoji,
-        photoUrl = initialPhotoUrl,
-        bio = if (isGlobalOwner) "مالك ومؤسس شات الغرف الرسمي" else "عضو في شات الغرف ✨",
-        globalRole = if (isGlobalOwner) UserRole.OWNER.key else UserRole.MEMBER.key,
-        status = "online",
-        isActive = true
-    )
+    fun kickUser(target: ChatUser) {
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isStaff || me.rank.power <= target.rank.power) {
+            showToast("ليس لديك صلاحية لطرد هذا العضو")
+            return
+        }
+        viewModelScope.launch {
+            repository.updatePresence(target.userKey, "offline")
+            repository.sendRoomMessage(
+                roomId = _uiState.value.activeRoomId,
+                sender = me,
+                content = "👢 تم طرد ${target.displayName} من الغرفة بواسطة ${me.displayName}",
+                isAnnouncement = true
+            )
+            showToast("تم طرد ${target.displayName} من الغرفة")
+        }
+    }
 
-    private companion object {
-        const val TAG = "ChatViewModel"
-        const val STOP_TIMEOUT_MILLIS = 5000L
+    fun toggleBanUser(target: ChatUser, reason: String = "مخالفة قوانين الموقع") {
+        val me = _uiState.value.currentUser ?: return
+        if (!me.rank.isPrivilegedAdmin || me.rank.power <= target.rank.power) {
+            showToast("الحظر متاح للأدمن والمالك فقط على الرتب الأدنى")
+            return
+        }
+        val newBanned = !target.isBanned
+        viewModelScope.launch {
+            repository.setUserBanned(target.userKey, newBanned, reason).fold(
+                onSuccess = {
+                    if (newBanned) {
+                        repository.sendRoomMessage(
+                            roomId = _uiState.value.activeRoomId,
+                            sender = me,
+                            content = "⛔ تم حظر ${target.displayName} نهائياً بواسطة ${me.displayName}",
+                            isAnnouncement = true
+                        )
+                    }
+                    showToast(if (newBanned) "تم حظر ${target.displayName} نهائياً" else "تم فك الحظر عن ${target.displayName}")
+                },
+                onFailure = { err ->
+                    showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر تنفيذ الحظر")
+                }
+            )
+        }
+    }
+
+    fun resolveReport(reportId: String) {
+        viewModelScope.launch {
+            repository.resolveReport(reportId).fold(
+                onSuccess = { showToast("تم إغلاق البلاغ ✅") },
+                onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر إغلاق البلاغ") }
+            )
+        }
     }
 }

@@ -2,7 +2,6 @@ package com.shat.alghoraf.data.remote
 
 import android.util.Log
 import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
@@ -21,19 +20,14 @@ enum class OperationType(val value: String) {
 fun handleFirestoreError(
     exception: Throwable,
     operationType: OperationType,
-    path: String?,
-    auth: FirebaseAuth = Firebase.auth
+    path: String?
 ): String {
     val causes = generateSequence(exception) { it.cause }
     val rootError = causes.firstOrNull { it is FirebaseFirestoreException }
         ?: causes.firstOrNull { it !is CancellationException }
         ?: exception
 
-    val currentUser = try {
-        auth.currentUser
-    } catch (_: Exception) {
-        null
-    }
+    val currentUser = runCatching { Firebase.auth.currentUser }.getOrNull()
 
     val providerInfoList = currentUser?.providerData?.map { provider ->
         JSONObject().apply {
@@ -61,8 +55,3 @@ fun handleFirestoreError(
     Log.e("FirestoreError", "Firestore Error: $jsonString")
     return jsonString
 }
-
-fun unwrapFirestoreException(error: Throwable): FirebaseFirestoreException? =
-    generateSequence(error) { it.cause }
-        .filterIsInstance<FirebaseFirestoreException>()
-        .firstOrNull()

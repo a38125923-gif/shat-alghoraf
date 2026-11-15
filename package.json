@@ -1,0 +1,21 @@
+{
+  "name": "arabic-realtime-chat",
+  "version": "1.0.0",
+  "description": "تطبيق شات دردشة عربي حقيقي ومباشر (Real-time) باستخدام Node.js و Express و Socket.io و SQLite و Multer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "lint": "node --check db.js && node --check server.js && node --check public/app.js",
+    "build": "node --check db.js && node --check server.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.8.1"
+  }
+}

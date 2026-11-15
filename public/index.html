@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>شات الغرف المباشر — شات عربي متطور</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- AUTH VIEW -->
+  <main id="authView" class="auth-view">
+    <div class="auth-bg-overlay"></div>
+    <section class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-logo">👑</div>
+        <div>
+          <h1>شات الغرف المباشر</h1>
+          <p>دردشة عربية فورية • مايكات صوتية • رتب وإطارات ملكية</p>
+        </div>
+      </div>
+
+      <div id="firstOwnerNotice" class="first-owner-banner hidden">
+        <span>👑</span>
+        <span>أنت أول مسجل! سيحصل أول حساب يُنشأ على رتبة <strong>صاحب الموقع</strong> تلقائياً.</span>
+      </div>
+
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" data-tab="guest" type="button">دخول الزوار</button>
+        <button class="auth-tab" data-tab="login" type="button">دخول الأعضاء</button>
+        <button class="auth-tab" data-tab="register" type="button">عضوية جديدة</button>
+      </div>
+
+      <div id="authError" class="auth-error hidden"></div>
+
+      <!-- Guest Tab -->
+      <form id="guestForm" class="auth-form">
+        <div class="field-group">
+          <label for="guestNickname">الاسم المستعار</label>
+          <input id="guestNickname" type="text" maxlength="24" placeholder="مثال: فارس الليل" required autocomplete="nickname" />
+          <small class="field-hint">دخول سريع وفوري بشارة <strong>زائر</strong></small>
+        </div>
+        <button type="submit" class="btn btn-royal btn-block">دخول فوري كزائر</button>
+      </form>
+
+      <!-- Login Tab -->
+      <form id="loginForm" class="auth-form hidden">
+        <div class="field-group">
+          <label for="loginIdentifier">اسم المستخدم أو البريد الإلكتروني</label>
+          <input id="loginIdentifier" type="text" placeholder="username أو name@example.com" required autocomplete="username" />
+        </div>
+        <div class="field-group">
+          <label for="loginPassword">كلمة المرور</label>
+          <input id="loginPassword" type="password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-royal btn-block">تسجيل الدخول</button>
+      </form>
+
+      <!-- Register Tab -->
+      <form id="registerForm" class="auth-form hidden">
+        <div class="field-group">
+          <label for="regUsername">اسم المستخدم</label>
+          <input id="regUsername" type="text" maxlength="24" placeholder="اختر اسماً مميزاً" required autocomplete="username" />
+        </div>
+        <div class="field-group">
+          <label for="regEmail">البريد الإلكتروني</label>
+          <input id="regEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="field-group">
+          <label for="regPassword">كلمة المرور</label>
+          <input id="regPassword" type="password" minlength="4" placeholder="4 أحرف على الأقل" required autocomplete="new-password" />
+        </div>
+        <button type="submit" class="btn btn-gold btn-block">إنشاء العضوية والدخول</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- CHAT WORKSPACE (CODYCHAT STYLE) -->
+  <div id="chatView" class="cody-shell hidden">
+
+    <!-- 1. TOP HEADER BAR (#1a45e5) -->
+    <header class="cody-topbar">
+      <!-- Right side: Profile Avatar + Dropdown -->
+      <div class="topbar-profile-wrap">
+        <button id="profileMenuBtn" class="profile-trigger" type="button" title="قائمة الحساب">
+          <div id="topMeAvatar" class="avatar-circle top-avatar"></div>
+          <span class="online-dot"></span>
+        </button>
+
+        <!-- White Profile Dropdown -->
+        <div id="profileDropdown" class="profile-dropdown hidden">
+          <div class="dropdown-user-card">
+            <div id="dropMeAvatar" class="avatar-circle avatar-md"></div>
+            <div class="dropdown-user-info">
+              <div id="dropMeRank" class="dropdown-rank"></div>
+              <div id="dropMeName" class="nameplate-pill"></div>
+              <div id="dropMeCoins" class="dropdown-coins">🪙 1500 نقطة</div>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <button id="dropUpgradeGuestBtn" type="button" class="dropdown-item dropdown-item-gold hidden" data-action="upgrade-guest">
+            <span>👤+</span> تسجيل عضوية
+          </button>
+          <button type="button" class="dropdown-item" data-action="edit-profile"><span>✏️</span> تحرير الملف الشخصي</button>
+          <button type="button" class="dropdown-item" data-action="chat-settings"><span>🎨</span> إعدادات الدردشة</button>
+          <button type="button" class="dropdown-item" data-action="wallet"><span>💰</span> محفظة</button>
+          <button type="button" class="dropdown-item" data-action="room-options"><span>🏠</span> خيارات الغرفة</button>
+          <button id="dropAdminPanelBtn" type="button" class="dropdown-item dropdown-item-gold hidden" data-action="admin-panel">
+            <span>⚙️</span> لوحة التحكم
+          </button>
+          <div class="dropdown-divider"></div>
+          <button type="button" class="dropdown-item" data-action="leave-room"><span>🚪</span> غادر الغرفة</button>
+          <button type="button" class="dropdown-item danger" data-action="logout"><span>⏻</span> خروج</button>
+        </div>
+      </div>
+
+      <!-- Quick White Icon Actions -->
+      <div class="topbar-quick-actions">
+        <button id="topReportBtn" class="top-icon-action" type="button" title="إبلاغ">
+          <span class="tia-icon">🚩</span>
+          <span class="tia-label">إبلاغ</span>
+        </button>
+        <button id="topNotifBtn" class="top-icon-action" type="button" title="إشعار">
+          <span class="tia-icon">🔔<span id="notifDot" class="badge-dot hidden"></span></span>
+          <span class="tia-label">إشعار</span>
+        </button>
+        <button id="topRequestBtn" class="top-icon-action" type="button" title="طلب صداقة">
+          <span class="tia-icon">🤝<span id="reqDot" class="badge-dot hidden"></span></span>
+          <span class="tia-label">طلب</span>
+        </button>
+        <button id="topPmBtn" class="top-icon-action" type="button" title="الرسائل الخاصة">
+          <span class="tia-icon">✉️<span id="pmDot" class="badge-dot hidden"></span></span>
+          <span class="tia-label">رسالة</span>
+        </button>
+      </div>
+
+      <!-- Guest Upgrade Quick Pill -->
+      <button id="topUpgradeGuestBtn" class="upgrade-guest-pill hidden" type="button" title="ترقية حساب الزائر إلى عضو مسجل">
+        👤+ تسجيل عضوية
+      </button>
+
+      <!-- Gold Circular Icons: الأثرياء & الكبار -->
+      <div class="topbar-gold-actions">
+        <button id="topRichBtn" class="gold-circle-action" type="button" title="الأثرياء">
+          <span class="gca-circle">💎</span>
+          <span class="tia-label">الأثرياء</span>
+        </button>
+        <button id="topVipBtn" class="gold-circle-action" type="button" title="الكبار">
+          <span class="gca-circle">👑</span>
+          <span class="tia-label">الكبار</span>
+        </button>
+      </div>
+
+      <!-- Leftmost Hamburger Menu (☰) -->
+      <button id="openDrawerBtn" class="hamburger-btn" type="button" title="القائمة الجانبية">☰</button>
+    </header>
+
+    <!-- White Slide-Over Drawer (Left side in RTL) -->
+    <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
+    <aside id="whiteDrawer" class="white-drawer">
+      <div class="drawer-room-hero">
+        <img id="drawerRoomImg" class="room-avatar room-avatar-lg" src="/assets/rooms/general.svg" alt="صورة الغرفة" />
+        <div class="drawer-room-meta">
+          <small>الغرفة الحالية:</small>
+          <h3 id="drawerRoomName">الغرفة العامة</h3>
+        </div>
+        <button id="closeDrawerBtn" class="drawer-close-btn" type="button">✕</button>
+      </div>
+
+      <nav class="drawer-menu">
+        <button type="button" class="drawer-item" data-drawer="wall"><span>📰</span> حائط الأصدقاء</button>
+        <button type="button" class="drawer-item" data-drawer="news"><span>📢</span> الأخبار</button>
+        <button type="button" class="drawer-item" data-drawer="mics"><span>🎙️</span> تفاعل المايكات</button>
+        <button type="button" class="drawer-item" data-drawer="families"><span>🏰</span> عائلات VIP</button>
+        <button type="button" class="drawer-item" data-drawer="vips"><span>👑</span> قائمة الكبار</button>
+        <button type="button" class="drawer-item" data-drawer="rich"><span>💎</span> قائمة الأثرياء</button>
+        <button type="button" class="drawer-item" data-drawer="rooms"><span>🏠</span> قائمة الغرف</button>
+        <button id="drawerAdminBtn" type="button" class="drawer-item gold hidden" data-drawer="admin">
+          <span>⚙️</span> لوحة التحكم الشاملة
+        </button>
+      </nav>
+    </aside>
+
+    <!-- 2. FLOATING VOICE MICS BAR (1..5) + LIGHT BEIGE/GOLD ROOM CARD -->
+    <section class="mics-and-room-strip">
+      <div class="mics-bar">
+        <div id="micsSlots" class="mics-slots">
+          <!-- Rendered 1..5 by app.js -->
+        </div>
+        <div class="mics-controls-right">
+          <button id="leaveMicBtn" class="mic-leave-chip hidden" type="button">نزول من المايك</button>
+          <button id="micSettingsBtn" class="mic-gear-btn hidden" type="button" title="إعدادات المايكات">⚙️</button>
+        </div>
+      </div>
+
+      <!-- Light Beige/Gold Room Info Card -->
+      <div class="room-banner-card">
+        <div class="room-banner-right">
+          <img id="bannerRoomImg" class="room-avatar" src="/assets/rooms/general.svg" alt="صورة الغرفة" />
+          <div class="room-banner-text">
+            <strong id="bannerRoomName">الغرفة العامة</strong>
+            <span id="bannerRoomDesc">الغرفة الرئيسية للتعارف والدردشة المباشرة</span>
+          </div>
+        </div>
+        <div class="room-banner-left">
+          <span id="bannerOnlineCount" class="room-online-badge">👥 0 متواجد</span>
+          <button id="bannerClearRoomBtn" class="banner-clear-btn hidden" type="button" title="مسح رسائل الغرفة">🧹</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mute Alert Banner -->
+    <div id="muteBanner" class="mute-banner hidden">
+      ⚠️ أنت مكتوم من قبل الإدارة — لا يمكنك إرسال الرسائل أو التحدث حالياً.
+    </div>
+
+    <!-- 3. WARM GRADIENT CHAT STREAM -->
+    <main id="chatStreamWrap" class="chat-stream theme-warm_peach">
+      <div id="messagesFeed" class="messages-feed"></div>
+    </main>
+
+    <!-- Voice Recording Bar -->
+    <div id="recordingBar" class="recording-bar hidden">
+      <div class="rec-indicator">
+        <span class="rec-dot"></span>
+        <span>جاري تسجيل رسالة صوتية...</span>
+        <strong id="recTimer">00:00</strong>
+      </div>
+      <div class="rec-actions">
+        <button id="cancelRecordBtn" class="btn btn-light btn-sm" type="button">إلغاء</button>
+        <button id="sendRecordBtn" class="btn btn-gold btn-sm" type="button">إرسال الصوت</button>
+      </div>
+    </div>
+
+    <!-- Emoji Picker Popover -->
+    <div id="emojiPopover" class="emoji-popover hidden"></div>
+
+    <!-- 4. BOTTOM WHITE INPUT BAR + FIXED ROYAL BLUE (#1a45e5) NAV BAR -->
+    <footer class="cody-bottom-area">
+      <form id="messageForm" class="white-input-bar">
+        <button id="sendBtn" type="submit" class="gold-send-btn">إرسال</button>
+
+        <div class="pill-input-wrap">
+          <input id="messageInput" type="text" maxlength="2000" placeholder="اكتب هنا..." autocomplete="off" />
+          <button id="emojiToggleBtn" class="input-inner-btn" type="button" title="إيموجي">😊</button>
+        </div>
+
+        <input id="imageFileInput" type="file" accept="image/*" class="hidden" />
+        <button id="recordAudioBtn" class="media-bar-btn" type="button" title="رسالة صوتية">🎙️</button>
+        <button id="uploadImageBtn" class="media-bar-btn" type="button" title="إرفاق صورة">📷</button>
+      </form>
+
+      <nav class="cody-bottom-nav">
+        <button id="navFriendsBtn" class="bottom-nav-btn" type="button">
+          <span class="bnb-icon">👥</span>
+          <span class="bnb-label">الأصدقاء</span>
+        </button>
+        <button id="navOnlineBtn" class="bottom-nav-btn" type="button">
+          <span class="bnb-icon">🟢<span id="bottomOnlineNum" class="nav-count-pill">0</span></span>
+          <span class="bnb-label">المتواجدون</span>
+        </button>
+        <button id="navRoomsBtn" class="bottom-nav-btn" type="button">
+          <span class="bnb-icon">🏠</span>
+          <span class="bnb-label">الغرف</span>
+        </button>
+        <button id="navRefreshBtn" class="bottom-nav-btn" type="button">
+          <span class="bnb-icon">🔄</span>
+          <span class="bnb-label">تحديث</span>
+        </button>
+        <button id="navShopBtn" class="bottom-nav-btn" type="button">
+          <span class="bnb-icon">🛍️</span>
+          <span class="bnb-label">المتجر</span>
+        </button>
+      </nav>
+    </footer>
+  </div>
+
+  <!-- MODAL: المتواجدون الآن (مرتبين حسب قوة الرتبة) -->
+  <div id="onlineUsersModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-md light-modal">
+      <div class="modal-header royal">
+        <h3>🟢 المتواجدون الآن (<span id="modalOnlineCount">0</span>)</h3>
+        <button class="icon-btn-light modal-close" data-close="onlineUsersModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <input id="onlineModalSearch" type="text" class="light-input" placeholder="ابحث بالاسم أو الغرفة..." />
+        <ul id="globalOnlineList" class="modal-users-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: الغرف -->
+  <div id="roomsModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-md light-modal">
+      <div class="modal-header royal">
+        <h3>🏠 غرف الدردشة</h3>
+        <div class="modal-header-tools">
+          <button id="roomsModalCreateBtn" class="btn btn-gold btn-xs hidden" type="button">+ غرفة جديدة</button>
+          <button class="icon-btn-light modal-close" data-close="roomsModal" type="button">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <ul id="roomsModalList" class="rooms-modal-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: المتجر (إطارات الصور وخلفيات الأسماء) -->
+  <div id="shopModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-md light-modal">
+      <div class="modal-header royal">
+        <h3>🛍️ متجر الإطارات والزخارف</h3>
+        <button class="icon-btn-light modal-close" data-close="shopModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="wallet-strip">
+          <span>رصيد محفظتك الحالي:</span>
+          <strong id="shopWalletBalance">🪙 1500 نقطة</strong>
+        </div>
+        <div id="shopContent" class="shop-sections"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: تحرير الملف الشخصي / تخصيص حسابي -->
+  <div id="customizeModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card light-modal">
+      <div class="modal-header royal">
+        <h3>✏️ تحرير الملف الشخصي</h3>
+        <button class="icon-btn-light modal-close" data-close="customizeModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="customize-preview">
+          <div id="previewAvatar" class="avatar-circle avatar-lg"></div>
+          <div>
+            <div class="me-name-row">
+              <span id="previewRankBadge"></span>
+              <span id="previewName" class="nameplate-pill">اسمك</span>
+            </div>
+            <small class="field-hint-dark">معاينة ظهورك في المحادثة</small>
+          </div>
+        </div>
+
+        <div class="field-group-light">
+          <label for="customizeDisplayName">الاسم المستعار (Display Name)</label>
+          <input id="customizeDisplayName" class="light-input" type="text" minlength="2" maxlength="28" />
+        </div>
+
+        <div class="field-group-light">
+          <label for="customizeFamily">عائلة VIP (اختياري)</label>
+          <input id="customizeFamily" class="light-input" type="text" maxlength="24" placeholder="مثال: عائلة الملوك" />
+        </div>
+
+        <div class="field-group-light">
+          <label>لون النص</label>
+          <div id="colorSwatches" class="color-swatches">
+            <button type="button" class="swatch" data-color="#ffffff" style="background:#ffffff"></button>
+            <button type="button" class="swatch" data-color="#fef08a" style="background:#fef08a"></button>
+            <button type="button" class="swatch" data-color="#bae6fd" style="background:#bae6fd"></button>
+            <button type="button" class="swatch" data-color="#a7f3d0" style="background:#a7f3d0"></button>
+            <button type="button" class="swatch" data-color="#fbcfe8" style="background:#fbcfe8"></button>
+            <input id="customColorPicker" type="color" value="#ffffff" />
+          </div>
+        </div>
+
+        <div class="field-group-light">
+          <label>صورة البروفايل (Avatar)</label>
+          <div class="avatar-upload-row">
+            <input id="avatarFileInput" type="file" accept="image/*" class="hidden" />
+            <button id="chooseAvatarBtn" type="button" class="btn btn-royal btn-sm">📁 رفع صورة</button>
+            <button id="clearAvatarBtn" type="button" class="btn btn-light btn-sm">إزالة الصورة</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer-light">
+        <button class="btn btn-light" data-close="customizeModal" type="button">إلغاء</button>
+        <button id="saveCustomizeBtn" class="btn btn-gold" type="button">حفظ التعديلات</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: لوحة التحكم الشاملة -->
+  <div id="adminPanelModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-xl light-modal">
+      <div class="modal-header royal">
+        <h3>⚙️ لوحة تحكم المالك والإدارة</h3>
+        <button class="icon-btn-light modal-close" data-close="adminPanelModal" type="button">✕</button>
+      </div>
+
+      <div class="panel-tabs">
+        <button type="button" class="panel-tab active" data-panel-tab="online">المتصلون الآن</button>
+        <button type="button" class="panel-tab" data-panel-tab="members">الأعضاء المسجلون</button>
+        <button type="button" class="panel-tab" data-panel-tab="bans">قائمة المحظورين</button>
+        <button type="button" class="panel-tab" data-panel-tab="rooms">إدارة الغرف</button>
+        <button type="button" class="panel-tab" data-panel-tab="reports">البلاغات</button>
+      </div>
+
+      <div class="panel-toolbar">
+        <input id="adminSearchInput" type="text" class="light-input" placeholder="بحث سريع بالاسم، البريد، أو IP..." />
+        <button id="panelNewRoomBtn" type="button" class="btn btn-gold btn-sm hidden">+ إنشاء غرفة بصورة</button>
+      </div>
+
+      <div class="panel-content">
+        <div id="panelTabOnline" class="panel-pane"></div>
+        <div id="panelTabMembers" class="panel-pane hidden"></div>
+        <div id="panelTabBans" class="panel-pane hidden"></div>
+        <div id="panelTabRooms" class="panel-pane hidden"></div>
+        <div id="panelTabReports" class="panel-pane hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: إنشاء / تعديل غرفة -->
+  <div id="roomEditorModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <form id="roomEditorForm" class="modal-card light-modal">
+      <div class="modal-header royal">
+        <h3 id="roomEditorTitle">➕ إنشاء غرفة جديدة</h3>
+        <button class="icon-btn-light modal-close" data-close="roomEditorModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="room-image-editor">
+          <img id="roomImagePreview" class="room-avatar room-avatar-lg" src="/assets/rooms/default.svg" alt="صورة الغرفة" />
+          <div>
+            <input id="roomImageFileInput" type="file" accept="image/*" class="hidden" />
+            <button id="chooseRoomImageBtn" type="button" class="btn btn-royal btn-sm">🖼️ رفع صورة مخصصة للغرفة</button>
+            <p class="field-hint-dark">تظهر بشكل دائري في الشريط والقائمة</p>
+          </div>
+        </div>
+        <div class="field-group-light">
+          <label for="roomNameInput">اسم الغرفة</label>
+          <input id="roomNameInput" class="light-input" type="text" maxlength="40" required />
+        </div>
+        <div class="field-group-light">
+          <label for="roomDescInput">وصف الغرفة</label>
+          <input id="roomDescInput" class="light-input" type="text" maxlength="120" />
+        </div>
+        <div class="field-group-light">
+          <label for="roomThemeSelect">خلفية منطقة الدردشة</label>
+          <select id="roomThemeSelect" class="light-input">
+            <option value="warm_peach">وردي برتقالي دافئ (الافتراضي)</option>
+            <option value="sunset_rose">غروب وردي ناعم</option>
+            <option value="sky_breeze">سماوي منعش</option>
+            <option value="emerald_mist">أخضر زمردي هادئ</option>
+            <option value="royal_night">ليلي ملكي</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer-light">
+        <button class="btn btn-light" data-close="roomEditorModal" type="button">إلغاء</button>
+        <button type="submit" class="btn btn-gold">حفظ الغرفة</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- MODAL: نافذة تفاعلية عامة (الأصدقاء / الخاص / الحائط / الكبار / الأثرياء / الإشعارات / الإبلاغ / الإعدادات) -->
+  <div id="featureModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-md light-modal">
+      <div class="modal-header royal">
+        <h3 id="featureModalTitle">نافذة</h3>
+        <button class="icon-btn-light modal-close" data-close="featureModal" type="button">✕</button>
+      </div>
+      <div id="featureModalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: ترقية حساب الزائر إلى عضو مسجل من داخل الشات -->
+  <div id="upgradeGuestModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <form id="upgradeGuestForm" class="modal-card light-modal">
+      <div class="modal-header royal">
+        <h3>👤+ تسجيل عضوية وترقية الحساب</h3>
+        <button class="icon-btn-light modal-close" data-close="upgradeGuestModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="panel-meta-sub">قم بترقية حسابك إلى عضو مسجل دون مغادرة غرفة الدردشة، مع إمكانية الاحتفاظ باسمك المستعار الحالي.</p>
+        <div id="upgradeError" class="auth-error hidden"></div>
+        <div class="field-group-light">
+          <label for="upgradeUsername">الاسم المستعار / اسم المستخدم</label>
+          <input id="upgradeUsername" class="light-input" type="text" minlength="2" maxlength="24" required />
+        </div>
+        <div class="field-group-light">
+          <label for="upgradeEmail">البريد الإلكتروني</label>
+          <input id="upgradeEmail" class="light-input" type="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="field-group-light">
+          <label for="upgradePassword">كلمة المرور</label>
+          <input id="upgradePassword" class="light-input" type="password" minlength="4" placeholder="4 أحرف على الأقل" required autocomplete="new-password" />
+        </div>
+      </div>
+      <div class="modal-footer-light">
+        <button class="btn btn-light" data-close="upgradeGuestModal" type="button">إلغاء</button>
+        <button type="submit" class="btn btn-gold">ترقية الحساب الآن</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- MODAL: معاينة الصور -->
+  <div id="imageLightbox" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="lightbox-content">
+      <button id="closeLightboxBtn" class="icon-btn-light lightbox-close" type="button">✕</button>
+      <img id="lightboxImg" src="" alt="صورة مكبرة" />
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

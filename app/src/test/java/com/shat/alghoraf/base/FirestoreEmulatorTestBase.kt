@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE, sdk = [35])
+@Config(sdk = [35], manifest = Config.NONE)
 @LooperMode(LooperMode.Mode.INSTRUMENTATION_TEST)
 abstract class FirestoreEmulatorTestBase {
 
@@ -34,7 +34,11 @@ abstract class FirestoreEmulatorTestBase {
     open fun setUpFirebase() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val resId = context.resources.getIdentifier("firestore_database_id", "string", context.packageName)
-        databaseId = if (resId != 0) context.getString(resId) else "ai-studio-android-34a0c37b-d80d-4f0d-80fc-e6a16720a8bb"
+        databaseId = if (resId != 0) {
+            context.getString(resId)
+        } else {
+            "ai-studio-android-34a0c37b-d80d-4f0d-80fc-e6a16720a8bb"
+        }
 
         val app = if (FirebaseApp.getApps(context).isEmpty()) {
             val newApp = FirebaseApp.initializeApp(
@@ -74,7 +78,7 @@ abstract class FirestoreEmulatorTestBase {
             } catch (unused: FirebaseAuthInvalidUserException) {
                 auth.createUserWithEmailAndPassword(email, DEFAULT_PASSWORD).await()
             }
-            checkNotNull(result.user?.uid) { "Test user auth failed" }
+            checkNotNull(result.user?.uid) { "User auth failed" }
         }
     }
 
