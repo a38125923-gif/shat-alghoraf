@@ -252,7 +252,13 @@ app.use((req, res, next) => {
 });
 
 app.get('/healthz', (_req, res) => {
-  res.status(200).json({ ok: true, status: 'ready' });
+  const storage = db.getStorageStatus();
+  const isReady = Boolean(storage && (storage.ready || storage.initialized));
+  res.status(isReady ? 200 : 503).json({
+    ok: isReady,
+    status: isReady ? 'ready' : 'initializing',
+    storage
+  });
 });
 
 app.use(express.json({ limit: '2mb' }));
@@ -2119,7 +2125,9 @@ io.on('connection', (socket) => {
     const nameplateStyle = entry?.nameplateStyle || socket.user.nameplateStyle || 'default';
 
     liveMsgSeq += 1;
-    const liveId = `live-${Date.now()}-${liveMsgSeq}`;
+    const nowMs = Date.now();
+    const createdAtIso = new Date(nowMs).toISOString();
+    const liveId = `live-${nowMs}-${liveMsgSeq}`;
     const instantMsg = {
       id: liveId,
       client_msg_id: clientMsgId,
@@ -2139,13 +2147,14 @@ io.on('connection', (socket) => {
       msg_type: msgType,
       content,
       media_url: mediaUrl,
-      created_at: new Date().toISOString()
+      created_at: createdAtIso,
+      created_at_ms: nowMs
     };
 
     // Immediate non-blocking broadcast to all connected clients in the room
     io.to(roomId).emit('new_message', instantMsg);
 
-    // Parallel / non-blocking permanent save to SQLite + @mentions
+    // Parallel / non-blocking permanent save to Cloud Firestore + @mentions
     setImmediate(() => {
       try {
         const saved = db.addMessage({
@@ -2164,7 +2173,10 @@ io.on('connection', (socket) => {
           nameplateStyle,
           msgType,
           content,
-          mediaUrl
+          mediaUrl,
+          clientMsgId,
+          createdAt: createdAtIso,
+          createdAtMs: nowMs
         });
 
         if (msgType === 'text' && content.includes('@')) {
@@ -2187,7 +2199,7 @@ io.on('connection', (socket) => {
           }
         }
       } catch (err) {
-        console.error('SQLite message persist error:', err);
+        console.error('Firestore message persist error:', err);
       }
     });
   });
@@ -2781,13 +2793,13 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Allow short 8s grace window for auto-reconnect so idle blips never disrupt user presence
+      // Allow 30s grace window for auto-reconnect so idle blips/tab switches never disrupt user presence
       const hasOtherActiveSocket = [...onlineSockets.values()].some((e) => e.key === entry.key);
       if (!hasOtherActiveSocket) {
         clearReconnectGrace(entry.key);
         const leftRoomId = entry.roomId;
         const leftKey = entry.key;
-        const expiresAt = Date.now() + 8000;
+        const expiresAt = Date.now() + 30000;
         const timer = setTimeout(() => {
           reconnectGrace.delete(leftKey);
           const stillOnline = [...onlineSockets.values()].some((e) => e.key === leftKey);
@@ -2797,7 +2809,7 @@ io.on('connection', (socket) => {
             broadcastRoomsList();
             broadcastGlobalOnlineUsers();
           }
-        }, 8000);
+        }, 30000);
         reconnectGrace.set(leftKey, { roomId: leftRoomId, expiresAt, timer });
       }
       broadcastRoomUsers(entry.roomId);
@@ -2812,6 +2824,54 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: err.message || 'خطأ في الخادم' });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Arabic Realtime Chat listening on http://${HOST}:${PORT}`);
-});
+let isShuttingDown = false;
+async function shutdownGracefully(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Received ${signal}, flushing Firestore writes...`);
+  try {
+    await db.flushWrites();
+  } catch (err) {
+    console.error('Error flushing Firestore writes on shutdown:', err);
+  }
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 4000).unref();
+}
+
+process.on('SIGTERM', () => shutdownGracefully('SIGTERM'));
+process.on('SIGINT', () => shutdownGracefully('SIGINT'));
+
+async function startServer() {
+  try {
+    await db.init({
+      onExternalMessage: (msg) => {
+        if (msg && msg.room_id) {
+          io.to(msg.room_id).emit('new_message', msg);
+        }
+      },
+      onRanksChanged: () => {
+        io.emit('ranks_updated', db.getAllRanks());
+      },
+      onRoomsChanged: () => {
+        broadcastRoomsList();
+      },
+      onSettingsChanged: () => {
+        io.emit('site_settings_updated', db.getSiteSettings());
+      },
+      onEmojisChanged: () => {
+        io.emit('emojis_updated', db.getAllCustomEmojis());
+      }
+    });
+
+    server.listen(PORT, HOST, () => {
+      console.log(`Arabic Realtime Chat listening on http://${HOST}:${PORT} (Firestore: ${db.getStorageStatus().databaseId})`);
+    });
+  } catch (err) {
+    console.error('Failed to initialize Cloud Firestore backend:', err);
+    process.exit(1);
+  }
+}
+
+startServer();

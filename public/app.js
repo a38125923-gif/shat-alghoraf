@@ -1,4 +1,6 @@
 const TOKEN_KEY = 'arabic_chat_token';
+const ROOM_KEY = 'arabic_chat_active_room';
+const USER_CACHE_KEY = 'arabic_chat_user_cache';
 
 const DEFAULT_RANKS_FALLBACK = [
   { key: 'site_owner', label: 'صاحب الموقع', icon: '👑', image_url: '', bg_color: '#b91c1c', text_color: '#fef3c7', power: 100, is_system: true, permissions: { mute: true, kick: true, ban: true, set_rank: true, clear_room: true, manage_rooms: true, access_panel: true } },
@@ -37,7 +39,7 @@ const state = {
   customEmojis: [],
   siteSettings: null,
   rooms: [],
-  activeRoomId: 'general',
+  activeRoomId: localStorage.getItem(ROOM_KEY) || 'general',
   activeRoom: null,
   usersInRoom: [],
   globalOnlineUsers: [],
@@ -694,7 +696,9 @@ async function apiJson(url, options = {}) {
   const res = await fetch(url, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || 'حدث خطأ غير متوقع.');
+    const err = new Error(data.error || 'حدث خطأ غير متوقع.');
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -716,6 +720,11 @@ function enterChatSession(token, user) {
   state.token = token;
   state.user = user;
   localStorage.setItem(TOKEN_KEY, token);
+  try {
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user || null));
+  } catch {
+    // ignore storage quota errors
+  }
 
   authView.classList.add('hidden');
   chatView.classList.remove('hidden');
@@ -741,6 +750,8 @@ function leaveChatSession(reasonMsg) {
   state.token = '';
   state.user = null;
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_CACHE_KEY);
+  localStorage.removeItem(ROOM_KEY);
 
   document.querySelectorAll('.modal-overlay').forEach((m) => m.classList.add('hidden'));
   profileDropdown.classList.add('hidden');
@@ -1162,6 +1173,11 @@ function connectSocket() {
     if (!user) return;
     const prevRole = state.user?.role;
     state.user = user;
+    try {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    } catch {
+      // ignore
+    }
     if (token) {
       state.token = token;
       localStorage.setItem(TOKEN_KEY, token);
@@ -1191,6 +1207,7 @@ function connectSocket() {
   socket.on('room_joined', ({ room, messages, muteInfo, mics }) => {
     state.activeRoomId = room.id;
     state.activeRoom = room;
+    localStorage.setItem(ROOM_KEY, room.id);
     applyActiveRoomBanner(room);
     updateMeUI();
     setMuteState(Boolean(muteInfo));
@@ -3886,10 +3903,29 @@ async function init() {
     }
     if (data.user && state.token) {
       enterChatSession(state.token, data.user);
+    } else if (state.token && !data.user) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_CACHE_KEY);
+      state.token = '';
     }
-  } catch {
-    localStorage.removeItem(TOKEN_KEY);
-    state.token = '';
+  } catch (err) {
+    if (err && (err.status === 401 || err.status === 403)) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_CACHE_KEY);
+      state.token = '';
+      return;
+    }
+    if (state.token) {
+      try {
+        const cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null');
+        if (cachedUser) {
+          enterChatSession(state.token, cachedUser);
+          showToast('🔄 جاري استعادة الاتصال بالسحابة...');
+        }
+      } catch {
+        // ignore JSON parse errors
+      }
+    }
   }
 }
 
