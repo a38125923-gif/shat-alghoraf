@@ -3,6 +3,8 @@ package com.shat.alghoraf.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.shat.alghoraf.data.model.AvatarFrame
 import com.shat.alghoraf.data.model.BottomNavTab
@@ -20,6 +22,7 @@ import com.shat.alghoraf.data.model.WallPost
 import com.shat.alghoraf.data.remote.FirestoreChatRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +35,15 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+
+sealed interface AiUiState {
+    data object Idle : AiUiState
+    data object Loading : AiUiState
+    data class Streaming(val text: String) : AiUiState
+    data class Success(val text: String) : AiUiState
+    data class Error(val message: String) : AiUiState
+}
 
 data class ChatUiState(
     val currentUser: ChatUser? = null,
@@ -50,7 +62,8 @@ data class ChatUiState(
     val authError: String? = null,
     val toastMessage: String? = null,
     val searchRoomQuery: String = "",
-    val isLoadingProfile: Boolean = true
+    val isLoadingProfile: Boolean = true,
+    val aiState: AiUiState = AiUiState.Idle
 ) {
     val activeRoom: ChatRoom?
         get() = rooms.firstOrNull { it.id == activeRoomId } ?: rooms.firstOrNull()
@@ -86,6 +99,10 @@ class ChatViewModel(
         )
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private val geminiModel by lazy {
+        Firebase.ai.generativeModel("gemini-3.8-flash")
+    }
 
     private val isOwnerEmail: Boolean =
         currentUserEmail.equals(FirestoreChatRepository.OWNER_EMAIL, ignoreCase = true) && currentUserEmailVerified
@@ -718,6 +735,65 @@ class ChatViewModel(
                 onSuccess = { showToast("تم إغلاق البلاغ ✅") },
                 onFailure = { err -> showToast(unwrapFirestoreError(err).localizedMessage ?: "تعذر إغلاق البلاغ") }
             )
+        }
+    }
+
+    // --- FIREBASE AI LOGIC (GEMINI ASSISTANT) ---
+
+    fun resetAiState() {
+        _uiState.update { it.copy(aiState = AiUiState.Idle) }
+    }
+
+    fun summarizeActiveRoomWithGemini() {
+        val roomName = _uiState.value.activeRoom?.name ?: "الغرفة العامة"
+        val recent = _uiState.value.messages
+            .takeLast(20)
+            .joinToString("\n") { "${it.senderName}: ${it.content}" }
+        val prompt = if (recent.isBlank()) {
+            "أنت مساعد عربي ودود في تطبيق شات الغرف. لا توجد رسائل بعد في غرفة \"$roomName\". اكتب ترحيباً قصيراً وجذاباً يشجع الأعضاء على بدء الدردشة."
+        } else {
+            "أنت مساعد ذكي باللغة العربية داخل تطبيق شات الغرف. لخص المحادثة الأخيرة في غرفة \"$roomName\" في نقاط موجزة وواضحة بالعربية:\n\n$recent"
+        }
+        askGeminiAssistant(prompt)
+    }
+
+    fun askGeminiAssistant(prompt: String) {
+        val cleanPrompt = prompt.trim()
+        if (cleanPrompt.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(aiState = AiUiState.Loading) }
+            val accumulatedText = StringBuilder()
+            try {
+                withTimeout(60_000L) {
+                    geminiModel.generateContentStream(cleanPrompt).collect { chunk ->
+                        val chunkText = chunk.text.orEmpty()
+                        if (chunkText.isNotEmpty()) {
+                            accumulatedText.append(chunkText)
+                            _uiState.update {
+                                it.copy(aiState = AiUiState.Streaming(accumulatedText.toString()))
+                            }
+                        }
+                    }
+                }
+                if (accumulatedText.isNotBlank()) {
+                    _uiState.update { it.copy(aiState = AiUiState.Success(accumulatedText.toString())) }
+                } else {
+                    _uiState.update { it.copy(aiState = AiUiState.Error("لم يُرجع المساعد الذكي أي رد. حاول صياغة الطلب بشكل مختلف.")) }
+                }
+            } catch (e: TimeoutCancellationException) {
+                Log.e(TAG, "Gemini AI generation timed out", e)
+                _uiState.update {
+                    it.copy(aiState = AiUiState.Error("انتهت مهلة الاتصال بالمساعد الذكي (60 ثانية). يرجى المحاولة مجدداً."))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Firebase AI generation failed", e)
+                _uiState.update {
+                    it.copy(aiState = AiUiState.Error(e.localizedMessage ?: "تعذر الاتصال بخدمة Gemini AI."))
+                }
+            }
         }
     }
 }

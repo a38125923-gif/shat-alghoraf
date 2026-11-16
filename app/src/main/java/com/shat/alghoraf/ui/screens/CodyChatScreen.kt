@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Mic
@@ -37,6 +38,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -93,13 +95,14 @@ import com.shat.alghoraf.ui.components.UserActionDialog
 import com.shat.alghoraf.ui.components.UserAvatarBadge
 import com.shat.alghoraf.ui.components.WallPostsDialog
 import com.shat.alghoraf.ui.theme.CodyColors
+import com.shat.alghoraf.ui.viewmodel.AiUiState
 import com.shat.alghoraf.ui.viewmodel.ChatUiState
 import com.shat.alghoraf.ui.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class ActiveModal {
-    NONE, UPGRADE_GUEST, PROFILE_EDIT, ROOM_OPTIONS, NOTIFICATIONS, WALL, RICH_BOARD, KIBAR_BOARD, REPORT
+    NONE, UPGRADE_GUEST, PROFILE_EDIT, ROOM_OPTIONS, NOTIFICATIONS, WALL, RICH_BOARD, KIBAR_BOARD, REPORT, AI_ASSISTANT
 }
 
 @Composable
@@ -176,6 +179,15 @@ fun CodyChatScreen(
                     label = { Text("📰 الأخبار والإعلانات") },
                     selected = false,
                     onClick = { scope.launch { drawerState.close() }; activeModal = ActiveModal.WALL }
+                )
+                NavigationDrawerItem(
+                    label = { Text("✨ المساعد الذكي (Gemini)") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        viewModel.resetAiState()
+                        activeModal = ActiveModal.AI_ASSISTANT
+                    }
                 )
                 NavigationDrawerItem(
                     label = { Text("🎙️ تفاعل المايكات") },
@@ -272,6 +284,10 @@ fun CodyChatScreen(
                             inspectedUser = state.allUsers.firstOrNull { it.userKey == key }
                         },
                         onPickChatImage = onRequestChatImagePick,
+                        onOpenAiAssistant = {
+                            viewModel.resetAiState()
+                            activeModal = ActiveModal.AI_ASSISTANT
+                        },
                         onEnsureAudioPermission = onEnsureAudioPermission
                     )
                     BottomNavTab.ROOMS -> RoomsTabContent(
@@ -408,8 +424,152 @@ fun CodyChatScreen(
                 }
             )
         }
+        ActiveModal.AI_ASSISTANT -> GeminiAssistantDialog(
+            aiState = state.aiState,
+            roomName = state.activeRoom?.name ?: "الغرفة العامة",
+            onSummarizeRoom = viewModel::summarizeActiveRoomWithGemini,
+            onAskPrompt = viewModel::askGeminiAssistant,
+            onSendToRoom = { text ->
+                viewModel.sendTextMessage(text)
+                activeModal = ActiveModal.NONE
+            },
+            onDismiss = {
+                viewModel.resetAiState()
+                activeModal = ActiveModal.NONE
+            }
+        )
         ActiveModal.NONE -> Unit
     }
+}
+
+@Composable
+private fun GeminiAssistantDialog(
+    aiState: AiUiState,
+    roomName: String,
+    onSummarizeRoom: () -> Unit,
+    onAskPrompt: (String) -> Unit,
+    onSendToRoom: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var customPrompt by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("✨ المساعد الذكي — $roomName") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = false,
+                        onClick = onSummarizeRoom,
+                        label = { Text("📝 تلخيص الغرفة") }
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { onAskPrompt("اكتب ترحيباً عربياً دافئاً وودوداً لأعضاء غرفة \"$roomName\" في سطرين.") },
+                        label = { Text("👋 ترحيب مميز") }
+                    )
+                    FilterChip(
+                        selected = false,
+                        onClick = { onAskPrompt("اقترح سؤالاً ثقافياً ممتعاً ومختصراً لمسابقة في الشات مع الجواب.") },
+                        label = { Text("🎯 سؤال مسابقة") }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = customPrompt,
+                    onValueChange = { customPrompt = it },
+                    label = { Text("اسأل المساعد الذكي أي شيء...") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth().testTag("gemini_prompt_input")
+                )
+
+                when (aiState) {
+                    AiUiState.Idle -> {
+                        Text(
+                            text = "اختر إجراءً سريعاً أو اكتب سؤالك وسيقوم المساعد الذكي بالرد فوراً.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = CodyColors.TextSecondary
+                        )
+                    }
+                    AiUiState.Loading -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            Text("جاري التفكير والكتابة...")
+                        }
+                    }
+                    is AiUiState.Streaming -> {
+                        Surface(
+                            color = Color(0xFFF1F5F9),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = aiState.text,
+                                modifier = Modifier.padding(10.dp),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    is AiUiState.Success -> {
+                        Surface(
+                            color = Color(0xFFEFF6FF),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(text = aiState.text, style = MaterialTheme.typography.bodyMedium)
+                                TextButton(onClick = { onSendToRoom(aiState.text) }) {
+                                    Text("إرسال الرد إلى الغرفة")
+                                }
+                            }
+                        }
+                    }
+                    is AiUiState.Error -> {
+                        Surface(
+                            color = Color(0xFFFEE2E2),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "⚠️ ${aiState.message}",
+                                color = CodyColors.AuthRed,
+                                modifier = Modifier.padding(10.dp),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (customPrompt.isNotBlank()) {
+                        onAskPrompt(customPrompt)
+                    }
+                },
+                enabled = customPrompt.isNotBlank() && aiState !is AiUiState.Loading,
+                colors = ButtonDefaults.buttonColors(containerColor = CodyColors.RoyalBlue),
+                modifier = Modifier.testTag("gemini_ask_button")
+            ) {
+                Text("إرسال للمساعد")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("إغلاق") }
+        }
+    )
 }
 
 @Composable
@@ -419,6 +579,7 @@ private fun ChatRoomTabContent(
     viewModel: ChatViewModel,
     onInspectSender: (String) -> Unit,
     onPickChatImage: () -> Unit,
+    onOpenAiAssistant: () -> Unit,
     onEnsureAudioPermission: (onGranted: () -> Unit) -> Unit
 ) {
     val activeRoom = state.activeRoom
@@ -493,13 +654,25 @@ private fun ChatRoomTabContent(
                         color = Color(0xFF92400E)
                     )
                 }
-                if (me.rank.isStaff) {
-                    IconButton(onClick = viewModel::clearCurrentRoomMessages) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onOpenAiAssistant,
+                        modifier = Modifier.testTag("gemini_assistant_button")
+                    ) {
                         Icon(
-                            Icons.Rounded.CleaningServices,
-                            contentDescription = "تنظيف الغرفة",
-                            tint = CodyColors.AuthRed
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = "المساعد الذكي",
+                            tint = CodyColors.RoyalBlue
                         )
+                    }
+                    if (me.rank.isStaff) {
+                        IconButton(onClick = viewModel::clearCurrentRoomMessages) {
+                            Icon(
+                                Icons.Rounded.CleaningServices,
+                                contentDescription = "تنظيف الغرفة",
+                                tint = CodyColors.AuthRed
+                            )
+                        }
                     }
                 }
             }

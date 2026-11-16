@@ -53,6 +53,7 @@ import com.shat.alghoraf.data.remote.FirestoreChatRepository
 import com.shat.alghoraf.data.remote.GoogleAuthHelper
 import com.shat.alghoraf.data.remote.GoogleSignInOutcome
 import com.shat.alghoraf.data.remote.authStateFlow
+import com.shat.alghoraf.data.remote.configureAppCheck
 import com.shat.alghoraf.ui.screens.CodyChatScreen
 import com.shat.alghoraf.ui.screens.WelcomeScreen
 import com.shat.alghoraf.ui.theme.CodyColors
@@ -63,6 +64,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         setContent {
             ShatAlGhorafTheme {
