@@ -235,6 +235,9 @@ const io = new Server(server, {
   },
   transports: ['websocket', 'polling'],
   allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 45000,
   maxHttpBufferSize: 1e7
 });
 
@@ -717,6 +720,17 @@ app.post('/api/upload/branding', requireAuth, requirePanelAccess, (req, res) => 
 // Active Sockets & Voice Mics State
 const onlineSockets = new Map();
 const roomMics = new Map(); // roomId -> [slot0..slot4]
+const reconnectGrace = new Map(); // userKey -> { roomId, expiresAt, timer }
+let liveMsgSeq = 0;
+
+function clearReconnectGrace(userKey) {
+  const existing = reconnectGrace.get(userKey);
+  if (existing) {
+    clearTimeout(existing.timer);
+    reconnectGrace.delete(userKey);
+  }
+  return existing || null;
+}
 
 function getOrInitMics(roomId) {
   if (!roomMics.has(roomId)) {
@@ -1879,6 +1893,8 @@ io.on('connection', (socket) => {
     db.updateUserIp(user.userId, socket.clientIp);
   }
 
+  let pendingGrace = clearReconnectGrace(user.key);
+
   onlineSockets.set(socket.id, {
     socketId: socket.id,
     key: user.key,
@@ -1899,7 +1915,16 @@ io.on('connection', (socket) => {
     nameplateStyle: user.nameplateStyle,
     coins: user.coins,
     vipFamily: user.vipFamily || '',
-    roomId: null
+    roomId: null,
+    lastHeartbeat: Date.now()
+  });
+
+  socket.on('heartbeat', () => {
+    const entry = onlineSockets.get(socket.id);
+    if (entry) {
+      entry.lastHeartbeat = Date.now();
+    }
+    socket.emit('heartbeat_ack', { ts: Date.now() });
   });
 
   socket.emit('ranks_updated', db.getAllRanks());
@@ -1915,6 +1940,13 @@ io.on('connection', (socket) => {
 
     const currentEntry = onlineSockets.get(socket.id);
     const oldRoomId = currentEntry ? currentEntry.roomId : null;
+    const isSilentReconnect = Boolean(
+      pendingGrace &&
+        pendingGrace.roomId === targetRoomId &&
+        Date.now() <= pendingGrace.expiresAt &&
+        oldRoomId === null
+    );
+    pendingGrace = null;
 
     if (oldRoomId && oldRoomId !== targetRoomId) {
       socket.leave(oldRoomId);
@@ -1935,6 +1967,7 @@ io.on('connection', (socket) => {
       room,
       messages: history,
       muteInfo: activeMute ? { expiresAt: activeMute.expires_at } : null,
+      isReconnect: isSilentReconnect,
       mics: {
         roomId: targetRoomId,
         micsEnabled: room.mics_enabled !== 0,
@@ -1943,20 +1976,20 @@ io.on('connection', (socket) => {
     });
 
     const settings = db.getSiteSettings();
-    if (oldRoomId === null && settings.welcome_message) {
+    if (!isSilentReconnect && oldRoomId === null && settings.welcome_message) {
       socket.emit('system_notice', {
         roomId: targetRoomId,
         text: `👋 ${settings.welcome_message}`
       });
     }
-    if (room.welcome_message) {
+    if (!isSilentReconnect && room.welcome_message) {
       socket.emit('system_notice', {
         roomId: targetRoomId,
         text: `📌 ترحيب الغرفة: ${room.welcome_message}`
       });
     }
 
-    if (oldRoomId !== targetRoomId) {
+    if (!isSilentReconnect && oldRoomId !== targetRoomId) {
       const joinRole = currentEntry?.role || socket.user.role;
       const rankLabel = db.getRankByKey(joinRole)?.label || 'عضو';
       io.to(targetRoomId).emit('system_notice', {
@@ -2068,52 +2101,95 @@ io.on('connection', (socket) => {
     const msgType = ['text', 'image', 'audio'].includes(payload?.msgType) ? payload.msgType : 'text';
     const content = String(payload?.content || '').trim().slice(0, 2000);
     const mediaUrl = String(payload?.mediaUrl || '').trim();
+    const clientMsgId = String(payload?.clientMsgId || '').trim().slice(0, 64);
 
     if (msgType === 'text' && !content) return;
     if ((msgType === 'image' || msgType === 'audio') && !mediaUrl.startsWith('/uploads/')) return;
 
     const senderName = entry?.name || socket.user.name;
-    const saved = db.addMessage({
-      roomId,
-      senderKey: socket.user.key,
-      senderName,
-      senderRole: entry?.role || socket.user.role,
-      nameColor: entry?.nameColor || socket.user.nameColor,
-      textColor: entry?.textColor || socket.user.textColor || '#ffffff',
-      nameBgColor: entry?.nameBgColor || socket.user.nameBgColor || '',
-      neonColor: entry?.neonColor || socket.user.neonColor || '',
-      fontFamily: entry?.fontFamily || socket.user.fontFamily || 'Normal',
-      fontStyle: entry?.fontStyle || socket.user.fontStyle || 'Normal',
-      avatarUrl: entry?.avatarUrl || socket.user.avatarUrl,
-      avatarFrame: entry?.avatarFrame || socket.user.avatarFrame || 'none',
-      nameplateStyle: entry?.nameplateStyle || socket.user.nameplateStyle || 'default',
-      msgType,
+    const senderRole = entry?.role || socket.user.role;
+    const nameColor = entry?.nameColor || socket.user.nameColor;
+    const textColor = entry?.textColor || socket.user.textColor || '#ffffff';
+    const nameBgColor = entry?.nameBgColor || socket.user.nameBgColor || '';
+    const neonColor = entry?.neonColor || socket.user.neonColor || '';
+    const fontFamily = entry?.fontFamily || socket.user.fontFamily || 'Normal';
+    const fontStyle = entry?.fontStyle || socket.user.fontStyle || 'Normal';
+    const avatarUrl = entry?.avatarUrl || socket.user.avatarUrl;
+    const avatarFrame = entry?.avatarFrame || socket.user.avatarFrame || 'none';
+    const nameplateStyle = entry?.nameplateStyle || socket.user.nameplateStyle || 'default';
+
+    liveMsgSeq += 1;
+    const liveId = `live-${Date.now()}-${liveMsgSeq}`;
+    const instantMsg = {
+      id: liveId,
+      client_msg_id: clientMsgId,
+      room_id: roomId,
+      sender_key: socket.user.key,
+      sender_name: senderName,
+      sender_role: senderRole,
+      name_color: nameColor,
+      text_color: textColor,
+      name_bg_color: nameBgColor,
+      neon_color: neonColor,
+      font_family: fontFamily,
+      font_style: fontStyle,
+      avatar_url: avatarUrl,
+      avatar_frame: avatarFrame,
+      nameplate_style: nameplateStyle,
+      msg_type: msgType,
       content,
-      mediaUrl
-    });
+      media_url: mediaUrl,
+      created_at: new Date().toISOString()
+    };
 
-    io.to(roomId).emit('new_message', saved);
+    // Immediate non-blocking broadcast to all connected clients in the room
+    io.to(roomId).emit('new_message', instantMsg);
 
-    // Detect @mentions and trigger mention alert for mentioned online users
-    if (msgType === 'text' && content.includes('@')) {
-      const lowerContent = content.toLowerCase();
-      const notifiedKeys = new Set();
-      for (const [sid, onlineEntry] of onlineSockets.entries()) {
-        if (onlineEntry.key === socket.user.key || notifiedKeys.has(onlineEntry.key)) continue;
-        const n1 = (onlineEntry.name || '').trim().toLowerCase();
-        const n2 = (onlineEntry.username || '').trim().toLowerCase();
-        if ((n1 && lowerContent.includes(`@${n1}`)) || (n2 && lowerContent.includes(`@${n2}`))) {
-          notifiedKeys.add(onlineEntry.key);
-          io.to(sid).emit('mention_alert', {
-            roomId,
-            messageId: saved.id,
-            fromKey: socket.user.key,
-            fromName: senderName,
-            text: content.slice(0, 120)
-          });
+    // Parallel / non-blocking permanent save to SQLite + @mentions
+    setImmediate(() => {
+      try {
+        const saved = db.addMessage({
+          roomId,
+          senderKey: socket.user.key,
+          senderName,
+          senderRole,
+          nameColor,
+          textColor,
+          nameBgColor,
+          neonColor,
+          fontFamily,
+          fontStyle,
+          avatarUrl,
+          avatarFrame,
+          nameplateStyle,
+          msgType,
+          content,
+          mediaUrl
+        });
+
+        if (msgType === 'text' && content.includes('@')) {
+          const lowerContent = content.toLowerCase();
+          const notifiedKeys = new Set();
+          for (const [sid, onlineEntry] of onlineSockets.entries()) {
+            if (onlineEntry.key === socket.user.key || notifiedKeys.has(onlineEntry.key)) continue;
+            const n1 = (onlineEntry.name || '').trim().toLowerCase();
+            const n2 = (onlineEntry.username || '').trim().toLowerCase();
+            if ((n1 && lowerContent.includes(`@${n1}`)) || (n2 && lowerContent.includes(`@${n2}`))) {
+              notifiedKeys.add(onlineEntry.key);
+              io.to(sid).emit('mention_alert', {
+                roomId,
+                messageId: saved?.id || liveId,
+                fromKey: socket.user.key,
+                fromName: senderName,
+                text: content.slice(0, 120)
+              });
+            }
+          }
         }
+      } catch (err) {
+        console.error('SQLite message persist error:', err);
       }
-    }
+    });
   });
 
   // Voice Mics 1..5 Events
@@ -2688,11 +2764,42 @@ io.on('connection', (socket) => {
     socket.emit('action_success', { message: `🗑️ تم حذف غرفة "${target.name}".` });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
     const entry = onlineSockets.get(socket.id);
     onlineSockets.delete(socket.id);
+
+    const isExplicitLeave =
+      reason === 'client namespace disconnect' || reason === 'server namespace disconnect';
+
     if (entry && entry.roomId) {
-      removeUserFromRoomMics(entry.roomId, entry.key);
+      if (isExplicitLeave) {
+        clearReconnectGrace(entry.key);
+        removeUserFromRoomMics(entry.roomId, entry.key);
+        broadcastRoomUsers(entry.roomId);
+        broadcastRoomsList();
+        broadcastGlobalOnlineUsers();
+        return;
+      }
+
+      // Allow short 8s grace window for auto-reconnect so idle blips never disrupt user presence
+      const hasOtherActiveSocket = [...onlineSockets.values()].some((e) => e.key === entry.key);
+      if (!hasOtherActiveSocket) {
+        clearReconnectGrace(entry.key);
+        const leftRoomId = entry.roomId;
+        const leftKey = entry.key;
+        const expiresAt = Date.now() + 8000;
+        const timer = setTimeout(() => {
+          reconnectGrace.delete(leftKey);
+          const stillOnline = [...onlineSockets.values()].some((e) => e.key === leftKey);
+          if (!stillOnline) {
+            removeUserFromRoomMics(leftRoomId, leftKey);
+            broadcastRoomUsers(leftRoomId);
+            broadcastRoomsList();
+            broadcastGlobalOnlineUsers();
+          }
+        }, 8000);
+        reconnectGrace.set(leftKey, { roomId: leftRoomId, expiresAt, timer });
+      }
       broadcastRoomUsers(entry.roomId);
       broadcastRoomsList();
     }

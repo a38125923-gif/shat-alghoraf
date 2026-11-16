@@ -384,6 +384,8 @@ function ensureColumn(tableName, columnName, columnDef) {
 
 db.exec(`
   PRAGMA journal_mode = WAL;
+  PRAGMA synchronous = NORMAL;
+  PRAGMA busy_timeout = 5000;
   PRAGMA foreign_keys = ON;
 
   CREATE TABLE IF NOT EXISTS users (
@@ -1484,10 +1486,11 @@ function addMessage({
   return db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
 }
 
-function getRoomMessages(roomId, limit = 90) {
+function getRoomMessages(roomId, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
   const rows = db
     .prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?')
-    .all(roomId, limit);
+    .all(roomId, safeLimit);
   return rows.reverse();
 }
 

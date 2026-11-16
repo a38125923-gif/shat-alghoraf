@@ -50,6 +50,7 @@ const state = {
   liveMicRecorder: null,
   shopCatalog: { frames: [], nameplates: [] },
   socket: null,
+  heartbeatInterval: null,
   isMuted: false,
   welcomeStripCollapsed: false,
   radioPlaying: false,
@@ -723,8 +724,16 @@ function enterChatSession(token, user) {
   connectSocket();
 }
 
+function clearHeartbeatTimer() {
+  if (state.heartbeatInterval) {
+    clearInterval(state.heartbeatInterval);
+    state.heartbeatInterval = null;
+  }
+}
+
 function leaveChatSession(reasonMsg) {
   stopLiveMicCapture();
+  clearHeartbeatTimer();
   if (state.socket) {
     state.socket.disconnect();
     state.socket = null;
@@ -1056,17 +1065,41 @@ emojiToggleBtn.addEventListener('click', (e) => {
 // SOCKET.IO REAL-TIME CONNECTION
 // ==========================================
 function connectSocket() {
+  clearHeartbeatTimer();
   if (state.socket) {
     state.socket.disconnect();
   }
 
   const socket = io({
-    auth: { token: state.token }
+    auth: { token: state.token },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    transports: ['websocket', 'polling']
   });
   state.socket = socket;
 
+  state.heartbeatInterval = setInterval(() => {
+    if (state.socket && state.socket.connected) {
+      state.socket.emit('heartbeat', { roomId: state.activeRoomId, ts: Date.now() });
+    }
+  }, 15000);
+
   socket.on('connect', () => {
+    socket.emit('heartbeat', { roomId: state.activeRoomId, ts: Date.now() });
     socket.emit('join_room', state.activeRoomId || 'general');
+  });
+
+  socket.on('disconnect', (reason) => {
+    if (reason === 'io server disconnect' && state.token && state.user) {
+      setTimeout(() => {
+        if (state.socket === socket && !socket.connected && state.token && state.user) {
+          socket.connect();
+        }
+      }, 1200);
+    }
   });
 
   socket.on('connect_error', (err) => {
@@ -1573,12 +1606,71 @@ function insertMentionInComposer(targetName) {
   messageInput.focus();
 }
 
+function makeClientMsgId() {
+  return `cmsg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function appendOptimisticOutgoingMessage({ msgType = 'text', content = '', mediaUrl = '', clientMsgId }) {
+  if (!state.user) return;
+  appendMessage(
+    {
+      id: clientMsgId,
+      client_msg_id: clientMsgId,
+      room_id: state.activeRoomId,
+      sender_key: state.user.key,
+      sender_name: state.user.name,
+      sender_role: state.user.role,
+      name_color: state.user.nameColor,
+      text_color: state.user.textColor || '#ffffff',
+      name_bg_color: state.user.nameBgColor || '',
+      neon_color: state.user.neonColor || '',
+      font_family: state.user.fontFamily || 'Normal',
+      font_style: state.user.fontStyle || 'Normal',
+      avatar_url: state.user.avatarUrl || '',
+      avatar_frame: state.user.avatarFrame || 'none',
+      nameplate_style: state.user.nameplateStyle || 'default',
+      msg_type: msgType,
+      content,
+      media_url: mediaUrl,
+      created_at: new Date().toISOString(),
+      isOptimistic: true
+    },
+    true
+  );
+}
+
 function appendMessage(msg, scroll = true) {
   const empty = messagesFeed.querySelector('.empty-feed');
   if (empty) empty.remove();
 
+  // Reconcile optimistic sender message when instant server broadcast returns
+  if (msg.client_msg_id) {
+    const existingOptimistic = [...messagesFeed.children].find(
+      (el) => el.dataset && el.dataset.clientMsgId === String(msg.client_msg_id)
+    );
+    if (existingOptimistic) {
+      if (msg.id) existingOptimistic.dataset.msgId = String(msg.id);
+      existingOptimistic.classList.remove('optimistic-pending');
+      const timeEl = existingOptimistic.querySelector('.msg-time-cody');
+      if (timeEl && msg.created_at) {
+        timeEl.textContent = formatTime(msg.created_at);
+      }
+      return;
+    }
+  }
+
+  // Prevent duplicate renders of already displayed message IDs
+  if (msg.id && !String(msg.id).startsWith('cmsg-')) {
+    const alreadyShown = [...messagesFeed.children].some(
+      (el) => el.dataset && el.dataset.msgId === String(msg.id)
+    );
+    if (alreadyShown) return;
+  }
+
   const row = document.createElement('div');
-  row.className = 'cody-msg-row';
+  row.className = `cody-msg-row${msg.isOptimistic ? ' optimistic-pending' : ''}`;
+  if (msg.id) row.dataset.msgId = String(msg.id);
+  if (msg.client_msg_id) row.dataset.clientMsgId = String(msg.client_msg_id);
   row.dataset.senderKey = msg.sender_key || '';
   row.dataset.senderRole = msg.sender_role || 'member';
 
@@ -1703,13 +1795,22 @@ messageForm.addEventListener('submit', (e) => {
   const content = messageInput.value.trim();
   if (!content) return;
 
-  state.socket.emit('send_message', {
-    roomId: state.activeRoomId,
+  const clientMsgId = makeClientMsgId();
+  appendOptimisticOutgoingMessage({
     msgType: 'text',
-    content
+    content,
+    mediaUrl: '',
+    clientMsgId
   });
   messageInput.value = '';
   messageInput.focus();
+
+  state.socket.emit('send_message', {
+    roomId: state.activeRoomId,
+    msgType: 'text',
+    content,
+    clientMsgId
+  });
 });
 
 uploadImageBtn.addEventListener('click', () => {
@@ -1733,11 +1834,19 @@ imageFileInput.addEventListener('change', async () => {
       method: 'POST',
       body: formData
     });
+    const clientMsgId = makeClientMsgId();
+    appendOptimisticOutgoingMessage({
+      msgType: 'image',
+      content: '',
+      mediaUrl: url,
+      clientMsgId
+    });
     state.socket.emit('send_message', {
       roomId: state.activeRoomId,
       msgType: 'image',
       mediaUrl: url,
-      content: ''
+      content: '',
+      clientMsgId
     });
   } catch (err) {
     showToast(err.message, 'error');
@@ -1806,11 +1915,19 @@ recordAudioBtn.addEventListener('click', async () => {
           method: 'POST',
           body: fd
         });
+        const clientMsgId = makeClientMsgId();
+        appendOptimisticOutgoingMessage({
+          msgType: 'audio',
+          content: '',
+          mediaUrl: url,
+          clientMsgId
+        });
         state.socket.emit('send_message', {
           roomId: state.activeRoomId,
           msgType: 'audio',
           mediaUrl: url,
-          content: ''
+          content: '',
+          clientMsgId
         });
       } catch (err) {
         showToast(err.message, 'error');
@@ -4572,6 +4689,22 @@ adminUserEditorForm.addEventListener('submit', async (e) => {
     await loadAdminOverview();
   } catch (err) {
     showToast(err.message, 'error');
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.token && state.user && state.socket) {
+    if (!state.socket.connected) {
+      state.socket.connect();
+    } else {
+      state.socket.emit('heartbeat', { roomId: state.activeRoomId, ts: Date.now() });
+    }
+  }
+});
+
+window.addEventListener('online', () => {
+  if (state.token && state.user && state.socket && !state.socket.connected) {
+    state.socket.connect();
   }
 });
 
