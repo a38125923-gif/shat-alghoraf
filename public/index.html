@@ -6,7 +6,7 @@
   <title>شات الغرف المباشر — شات عربي متطور</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800;900&family=Changa:wght@500;700&family=Readex+Pro:wght@400;600;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Amita:wght@400;700&family=Cairo:wght@400;600;700;800;900&family=Changa:wght@500;700;800&family=Cinzel:wght@600;800&family=Comic+Neue:ital,wght@0,400;0,700;1,400;1,700&family=Grenze+Gotisch:wght@500;700;800&family=Kalam:wght@400;700&family=Lemonada:wght@400;600;700&family=Merienda:wght@500;700;800&family=Orbitron:wght@500;700;800&family=Quicksand:wght@500;700&family=Readex+Pro:wght@400;600;700&family=Signika:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <style id="cmsCustomCssTag"></style>
 </head>
@@ -112,9 +112,9 @@
             <span>👤+</span> تسجيل عضوية
           </button>
           <button type="button" class="dropdown-item" data-action="edit-profile"><span>✏️</span> تحرير الملف الشخصي</button>
-          <button type="button" class="dropdown-item" data-action="chat-settings"><span>🎨</span> إعدادات الدردشة</button>
+          <button type="button" class="dropdown-item" data-action="text-customizer"><span>🎨</span> تخصيص الخط والألوان والنيون</button>
           <button type="button" class="dropdown-item" data-action="wallet"><span>💰</span> محفظة</button>
-          <button type="button" class="dropdown-item" data-action="room-options"><span>🏠</span> خيارات الغرفة</button>
+          <button id="dropRoomOptionsBtn" type="button" class="dropdown-item" data-action="room-options"><span>🏠</span> خيارات الغرفة</button>
           <button id="dropAdminPanelBtn" type="button" class="dropdown-item dropdown-item-gold hidden" data-action="admin-panel">
             <span>⚙️</span> لوحة التحكم
           </button>
@@ -180,41 +180,57 @@
       <nav class="drawer-menu">
         <button type="button" class="drawer-item" data-drawer="wall"><span>📰</span> حائط الأصدقاء</button>
         <button type="button" class="drawer-item" data-drawer="news"><span>📢</span> الأخبار</button>
+        <button type="button" class="drawer-item" data-drawer="text-customizer"><span>🎨</span> تخصيص النص والنيون</button>
+        <button type="button" class="drawer-item" data-drawer="room-options"><span>🏠</span> خيارات الغرفة</button>
         <button type="button" class="drawer-item" data-drawer="mics"><span>🎙️</span> تفاعل المايكات</button>
         <button type="button" class="drawer-item" data-drawer="families"><span>🏰</span> عائلات VIP</button>
         <button type="button" class="drawer-item" data-drawer="vips"><span>👑</span> قائمة الكبار</button>
         <button type="button" class="drawer-item" data-drawer="rich"><span>💎</span> قائمة الأثرياء</button>
-        <button type="button" class="drawer-item" data-drawer="rooms"><span>🏠</span> قائمة الغرف</button>
+        <button type="button" class="drawer-item" data-drawer="rooms"><span>🗂️</span> قائمة الغرف</button>
         <button id="drawerAdminBtn" type="button" class="drawer-item gold hidden" data-drawer="admin">
           <span>⚙️</span> لوحة التحكم الشاملة
         </button>
       </nav>
     </aside>
 
-    <!-- 2. FLOATING VOICE MICS BAR (1..5) + LIGHT BEIGE/GOLD ROOM CARD -->
+    <!-- 2. FLOATING VOICE MICS BAR (1..5) + WELCOME BANNER + LIGHT BEIGE/GOLD ROOM CARD -->
     <section class="mics-and-room-strip">
       <div class="mics-bar">
+        <div class="mics-controls-side">
+          <button id="micSettingsBtn" class="mic-circle-ctrl hidden" type="button" title="إعدادات المايكات">⚙️</button>
+          <button id="toggleWelcomeStripBtn" class="mic-circle-ctrl" type="button" title="إظهار / إخفاء شريط الترحيب">↕️</button>
+        </div>
         <div id="micsSlots" class="mics-slots">
           <!-- Rendered 1..5 by app.js -->
         </div>
         <div class="mics-controls-right">
           <button id="leaveMicBtn" class="mic-leave-chip hidden" type="button">نزول من المايك</button>
-          <button id="micSettingsBtn" class="mic-gear-btn hidden" type="button" title="إعدادات المايكات">⚙️</button>
         </div>
       </div>
 
+      <!-- Wide Welcome Announcement Strip -->
+      <div id="roomWelcomeBanner" class="room-welcome-banner">
+        <span class="rwb-icon">📣</span>
+        <span id="roomWelcomeText" class="rwb-text">أهلاً وسهلاً بكم في شات الغرف المباشر — نتمنى لكم أمتع الأوقات!</span>
+      </div>
+
       <!-- Light Beige/Gold Room Info Card -->
-      <div class="room-banner-card">
+      <div id="roomBannerCard" class="room-banner-card">
         <div class="room-banner-right">
           <img id="bannerRoomImg" class="room-avatar" src="/assets/rooms/general.svg" alt="صورة الغرفة" />
           <div class="room-banner-text">
-            <strong id="bannerRoomName">الغرفة العامة</strong>
+            <div class="room-banner-title-row">
+              <strong id="bannerRoomName">الغرفة العامة</strong>
+              <span id="bannerRoomOwnerChip" class="room-owner-mini hidden"></span>
+            </div>
             <span id="bannerRoomDesc">الغرفة الرئيسية للتعارف والدردشة المباشرة</span>
           </div>
         </div>
         <div class="room-banner-left">
-          <span id="bannerOnlineCount" class="room-online-badge">👥 0 متواجد</span>
+          <span id="bannerOnlineCount" class="room-online-badge">👥 0</span>
+          <button id="bannerRoomOptionsBtn" class="banner-opt-btn hidden" type="button" title="خيارات الغرفة">⚙️</button>
           <button id="bannerClearRoomBtn" class="banner-clear-btn hidden" type="button" title="مسح رسائل الغرفة">🧹</button>
+          <button id="quickEnterRoomsBtn" class="yellow-arrow-btn" type="button" title="تبديل الغرفة سريعاً">◀</button>
         </div>
       </div>
     </section>
@@ -227,10 +243,38 @@
       ⚠️ أنت مكتوم من قبل الإدارة — لا يمكنك إرسال الرسائل أو التحدث حالياً.
     </div>
 
-    <!-- 3. WARM GRADIENT CHAT STREAM -->
-    <main id="chatStreamWrap" class="chat-stream theme-warm_peach">
-      <div id="messagesFeed" class="messages-feed"></div>
-    </main>
+    <!-- 3. WARM GRADIENT CHAT STREAM + FLOATING PM BOX -->
+    <div class="chat-workspace-body">
+      <!-- FLOATING PRIVATE CHAT BOX (Directly above public chat, below mics/room banner) -->
+      <section id="floatingPmBox" class="floating-pm-box hidden" aria-label="صندوق المحادثة الخاصة">
+        <header class="fpm-header">
+          <div class="fpm-partner-info">
+            <div id="fpmAvatar" class="avatar-circle fpm-avatar"></div>
+            <div class="fpm-partner-meta">
+              <strong id="fpmPartnerName">المحادثة الخاصة</strong>
+              <span id="fpmCallStatus" class="fpm-call-status hidden">🎙️ مكالمة صوتية نشطة</span>
+            </div>
+          </div>
+          <select id="fpmPartnerSelect" class="fpm-partner-select" title="التبديل بين المحادثات"></select>
+          <div class="fpm-actions">
+            <button id="fpmSettingsBtn" class="fpm-btn" type="button" title="إعدادات الخاص وتنسيق الخط">⚙️</button>
+            <button id="fpmCallBtn" class="fpm-btn" type="button" title="مكالمة صوتية خاصة">📞</button>
+            <button id="fpmMinBtn" class="fpm-btn" type="button" title="تصغير">-</button>
+            <button id="fpmMaxBtn" class="fpm-btn" type="button" title="تكبير">⛶</button>
+            <button id="fpmCloseBtn" class="fpm-btn close" type="button" title="إغلاق">×</button>
+          </div>
+        </header>
+        <div id="fpmMessages" class="fpm-messages"></div>
+        <form id="fpmForm" class="fpm-footer">
+          <input id="fpmInput" type="text" maxlength="1000" placeholder="اكتب رسالتك الخاصة هنا..." autocomplete="off" />
+          <button type="submit" class="fpm-send-btn">➤</button>
+        </form>
+      </section>
+
+      <main id="chatStreamWrap" class="chat-stream theme-warm_peach">
+        <div id="messagesFeed" class="messages-feed"></div>
+      </main>
+    </div>
 
     <!-- Voice Recording Bar -->
     <div id="recordingBar" class="recording-bar hidden">
@@ -245,13 +289,20 @@
       </div>
     </div>
 
+    <!-- Composer '+' Quick Popover -->
+    <div id="composerPlusMenu" class="composer-plus-menu hidden">
+      <button id="plusTextCustomizerBtn" type="button" class="cpm-item"><span>🎨</span> تخصيص الخط والألوان والنيون</button>
+      <button id="plusUploadImageBtn" type="button" class="cpm-item"><span>🖼️</span> إرفاق صورة في الدردشة</button>
+      <button id="plusEditProfileBtn" type="button" class="cpm-item"><span>✏️</span> تحرير الملف الشخصي</button>
+    </div>
+
     <!-- Emoji Picker Popover -->
     <div id="emojiPopover" class="emoji-popover hidden"></div>
 
-    <!-- 4. BOTTOM WHITE INPUT BAR + FIXED ROYAL BLUE (#1a45e5) NAV BAR -->
+    <!-- 4. BOTTOM WHITE INPUT BAR + FIXED ROYAL BLUE (#1a45e5) 6-BUTTON NAV BAR -->
     <footer class="cody-bottom-area">
       <form id="messageForm" class="white-input-bar">
-        <button id="sendBtn" type="submit" class="gold-send-btn">إرسال</button>
+        <button id="sendBtn" type="submit" class="gold-send-btn" title="إرسال">➤</button>
 
         <div class="pill-input-wrap">
           <input id="messageInput" type="text" maxlength="2000" placeholder="اكتب هنا..." autocomplete="off" />
@@ -260,10 +311,11 @@
 
         <input id="imageFileInput" type="file" accept="image/*" class="hidden" />
         <button id="recordAudioBtn" class="media-bar-btn" type="button" title="رسالة صوتية">🎙️</button>
-        <button id="uploadImageBtn" class="media-bar-btn" type="button" title="إرفاق صورة">📷</button>
+        <button id="uploadImageBtn" class="media-bar-btn" type="button" title="إرفاق ملف / صورة">📎</button>
+        <button id="composerPlusBtn" class="media-bar-btn" type="button" title="خيارات إضافية وتنسيق الخط">+</button>
       </form>
 
-      <nav class="cody-bottom-nav">
+      <nav class="cody-bottom-nav cody-bottom-nav-6">
         <button id="navFriendsBtn" class="bottom-nav-btn" type="button">
           <span class="bnb-icon">👥</span>
           <span class="bnb-label">الأصدقاء</span>
@@ -284,19 +336,27 @@
           <span class="bnb-icon">🛍️</span>
           <span class="bnb-label">المتجر</span>
         </button>
+        <button id="navRadioBtn" class="bottom-nav-btn" type="button" title="تشغيل / إيقاف الراديو والموسيقى">
+          <span id="navRadioIcon" class="bnb-icon">▶️</span>
+          <span id="navRadioLabel" class="bnb-label">راديو</span>
+        </button>
       </nav>
     </footer>
   </div>
 
-  <!-- MODAL: المتواجدون الآن (مرتبين حسب قوة الرتبة) -->
+  <!-- MODAL: المتواجدون والأعضاء الدائمون (متصل + غير متصل، مرتبون حسب قوة الرتبة) -->
   <div id="onlineUsersModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-card modal-card-md light-modal">
       <div class="modal-header royal">
-        <h3>🟢 المتواجدون الآن (<span id="modalOnlineCount">0</span>)</h3>
+        <h3>👥 قائمة الأعضاء والمتواجدين (<span id="modalOnlineCount">0</span>)</h3>
         <button class="icon-btn-light modal-close" data-close="onlineUsersModal" type="button">✕</button>
       </div>
       <div class="modal-body">
-        <input id="onlineModalSearch" type="text" class="light-input" placeholder="ابحث بالاسم أو الغرفة..." />
+        <div class="members-filter-bar">
+          <button type="button" class="filter-chip active" data-members-filter="all">جميع الأعضاء (متصل + غير متصل)</button>
+          <button type="button" class="filter-chip" data-members-filter="online">المتواجدون الآن فقط 🟢</button>
+        </div>
+        <input id="onlineModalSearch" type="text" class="light-input" placeholder="ابحث بالاسم أو الغرفة أو الرتبة..." />
         <ul id="globalOnlineList" class="modal-users-list"></ul>
       </div>
     </div>
@@ -335,7 +395,7 @@
     </div>
   </div>
 
-  <!-- MODAL: تحرير الملف الشخصي / تخصيص حسابي -->
+  <!-- MODAL: تحرير الملف الشخصي -->
   <div id="customizeModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-card light-modal">
       <div class="modal-header royal">
@@ -365,7 +425,7 @@
         </div>
 
         <div class="field-group-light">
-          <label>لون النص</label>
+          <label>لون الاسم</label>
           <div id="colorSwatches" class="color-swatches">
             <button type="button" class="swatch" data-color="#ffffff" style="background:#ffffff"></button>
             <button type="button" class="swatch" data-color="#fef08a" style="background:#fef08a"></button>
@@ -382,6 +442,7 @@
             <input id="avatarFileInput" type="file" accept="image/*" class="hidden" />
             <button id="chooseAvatarBtn" type="button" class="btn btn-royal btn-sm">📁 رفع صورة</button>
             <button id="clearAvatarBtn" type="button" class="btn btn-light btn-sm">إزالة الصورة</button>
+            <button id="openTcFromProfileBtn" type="button" class="btn btn-gold btn-sm">🎨 ألوان ونيون النص</button>
           </div>
         </div>
       </div>
@@ -389,6 +450,119 @@
         <button class="btn btn-light" data-close="customizeModal" type="button">إلغاء</button>
         <button id="saveCustomizeBtn" class="btn btn-gold" type="button">حفظ التعديلات</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: تخصيص النص والاسم والنيون المتقدم (Text & Name Customizer) -->
+  <div id="textCustomizerModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-md light-modal">
+      <div class="modal-header royal">
+        <h3>🎨 تخصيص الخط والألوان والنيون</h3>
+        <button class="icon-btn-light modal-close" data-close="textCustomizerModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Live Preview -->
+        <div class="tc-preview-stage">
+          <div class="tc-preview-row">
+            <div id="tcPreviewAvatar" class="avatar-circle"></div>
+            <span id="tcPreviewRank"></span>
+            <span id="tcPreviewName" class="nameplate-pill">اسمك</span>
+            <span class="tc-colon">:</span>
+            <span id="tcPreviewText" class="msg-text-cody">مرحباً بكم في الشات! هذا مثال مباشر لنص رسالتك</span>
+          </div>
+        </div>
+
+        <!-- 3 Color Tabs -->
+        <div class="tc-color-tabs">
+          <button type="button" class="tc-tab active" data-tc-tab="text">لون النص</button>
+          <button type="button" class="tc-tab" data-tc-tab="neon">نيون / توهج</button>
+          <button type="button" class="tc-tab" data-tc-tab="bg">خلفية ملونة</button>
+        </div>
+
+        <div id="tcTabText" class="tc-tab-pane">
+          <div id="tcTextSwatches" class="tc-swatch-grid"></div>
+          <div class="tc-picker-row">
+            <label>لون مخصص للنص:</label>
+            <input id="tcTextPicker" type="color" value="#ffffff" />
+            <button id="tcResetTextBtn" type="button" class="btn btn-light btn-xs">افتراضي (أبيض)</button>
+          </div>
+        </div>
+
+        <div id="tcTabNeon" class="tc-tab-pane hidden">
+          <div id="tcNeonSwatches" class="tc-swatch-grid"></div>
+          <div class="tc-picker-row">
+            <label>لون توهج النيون:</label>
+            <input id="tcNeonPicker" type="color" value="#38bdf8" />
+            <button id="tcResetNeonBtn" type="button" class="btn btn-light btn-xs">بدون نيون</button>
+          </div>
+        </div>
+
+        <div id="tcTabBg" class="tc-tab-pane hidden">
+          <div id="tcBgSwatches" class="tc-swatch-grid"></div>
+          <div class="tc-picker-row">
+            <label>خلفية مخصصة للاسم:</label>
+            <input id="tcBgPicker" type="color" value="#1e293b" />
+            <button id="tcResetBgBtn" type="button" class="btn btn-light btn-xs">شفاف افتراضي</button>
+          </div>
+        </div>
+
+        <div class="cms-grid">
+          <div class="field-group-light">
+            <label for="tcFontSelect">نوع الخط</label>
+            <select id="tcFontSelect" class="light-input">
+              <option value="Normal">Normal (الافتراضي)</option>
+              <option value="Cairo">Cairo (عربي عصري)</option>
+              <option value="Tajawal">Tajawal</option>
+              <option value="Amiri">Amiri</option>
+              <option value="Changa">Changa</option>
+              <option value="Readex Pro">Readex Pro</option>
+              <option value="Kalam">Kalam</option>
+              <option value="Signika">Signika</option>
+              <option value="Grandmaster">Grandmaster</option>
+              <option value="Comic neue">Comic neue</option>
+              <option value="Quicksand">Quicksand</option>
+              <option value="Orbitron">Orbitron</option>
+              <option value="Lemonada">Lemonada</option>
+              <option value="Grenze Gotisch">Grenze Gotisch</option>
+              <option value="Merienda">Merienda</option>
+              <option value="Amita">Amita</option>
+            </select>
+          </div>
+          <div class="field-group-light">
+            <label for="tcFontStyleSelect">وزن ونمط الخط</label>
+            <select id="tcFontStyleSelect" class="light-input">
+              <option value="Normal">Normal</option>
+              <option value="Bold">Bold</option>
+              <option value="Heavy">Heavy</option>
+              <option value="Italic">Italic</option>
+              <option value="Bold italic">Bold italic</option>
+              <option value="Heavy italic">Heavy italic</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer-light">
+        <button class="btn btn-light" data-close="textCustomizerModal" type="button">إلغاء</button>
+        <button id="saveTextCustomizerBtn" class="btn btn-royal" type="button">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: خيارات الغرفة (5 أقسام لمالك الغرفة وطاقمها وإدارة الموقع) -->
+  <div id="roomOptionsModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-xl light-modal">
+      <div class="modal-header royal">
+        <h3 id="roomOptionsTitle">🏠 خيارات الغرفة</h3>
+        <button class="icon-btn-light modal-close" data-close="roomOptionsModal" type="button">✕</button>
+      </div>
+      <div class="panel-tabs" id="roomOptionsTabsBar">
+        <button type="button" class="panel-tab ro-tab active" data-ro-tab="settings">1. الإعدادات</button>
+        <button type="button" class="panel-tab ro-tab" data-ro-tab="style">2. ستايل الروم</button>
+        <button type="button" class="panel-tab ro-tab" data-ro-tab="staff">3. إدارة الموظفين</button>
+        <button type="button" class="panel-tab ro-tab" data-ro-tab="mics">4. إعدادات المايكات</button>
+        <button type="button" class="panel-tab ro-tab" data-ro-tab="actions">5. إدارة الإجراءات</button>
+      </div>
+      <div id="roomOptionsBody" class="panel-content"></div>
     </div>
   </div>
 
@@ -402,7 +576,7 @@
 
       <div class="panel-tabs">
         <button type="button" class="panel-tab active" data-panel-tab="online">المتصلون الآن</button>
-        <button type="button" class="panel-tab" data-panel-tab="members">الأعضاء المسجلون</button>
+        <button type="button" class="panel-tab" data-panel-tab="members">الأعضاء والحسابات</button>
         <button type="button" class="panel-tab" data-panel-tab="bans">قائمة المحظورين</button>
         <button type="button" class="panel-tab" data-panel-tab="rooms">إدارة الغرف</button>
         <button type="button" class="panel-tab" data-panel-tab="ranks">إدارة الرتب والصلاحيات</button>
@@ -427,6 +601,56 @@
         <div id="panelTabReports" class="panel-pane hidden"></div>
       </div>
     </div>
+  </div>
+
+  <!-- MODAL: تحرير بيانات حساب عضو بالكامل (للمالك) -->
+  <div id="adminUserEditorModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <form id="adminUserEditorForm" class="modal-card modal-card-md light-modal">
+      <div class="modal-header royal">
+        <h3 id="adminUserEditorTitle">✏️ تعديل بيانات الحساب</h3>
+        <button class="icon-btn-light modal-close" data-close="adminUserEditorModal" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="room-image-editor">
+          <div id="aueAvatarPreview" class="avatar-circle avatar-lg"></div>
+          <div>
+            <input id="aueAvatarFileInput" type="file" accept="image/*" class="hidden" />
+            <div class="avatar-upload-row">
+              <button id="aueChooseAvatarBtn" type="button" class="btn btn-royal btn-sm">📁 رفع صورة من الجهاز</button>
+              <button id="aueClearAvatarBtn" type="button" class="btn btn-light btn-sm">إزالة الصورة</button>
+            </div>
+            <p class="field-hint-dark">تعديل كامل لحساب العضو بواسطة المالك</p>
+          </div>
+        </div>
+
+        <div class="cms-grid">
+          <div class="field-group-light">
+            <label for="aueDisplayName">الاسم الظاهر في الشات</label>
+            <input id="aueDisplayName" class="light-input" type="text" minlength="2" maxlength="28" required />
+          </div>
+          <div class="field-group-light">
+            <label for="aueUsername">اسم المستخدم (لتسجيل الدخول)</label>
+            <input id="aueUsername" class="light-input" type="text" minlength="2" maxlength="24" required />
+          </div>
+          <div class="field-group-light">
+            <label for="aueEmail">البريد الإلكتروني</label>
+            <input id="aueEmail" class="light-input" type="email" required />
+          </div>
+          <div class="field-group-light">
+            <label for="auePassword">كلمة المرور الجديدة (اتركه فارغاً للإبقاء)</label>
+            <input id="auePassword" class="light-input" type="password" minlength="4" placeholder="••••••••" autocomplete="new-password" />
+          </div>
+        </div>
+        <div class="field-group-light">
+          <label for="aueRoleSelect">الرتبة</label>
+          <select id="aueRoleSelect" class="light-input"></select>
+        </div>
+      </div>
+      <div class="modal-footer-light">
+        <button class="btn btn-light" data-close="adminUserEditorModal" type="button">إلغاء</button>
+        <button type="submit" class="btn btn-gold">💾 حفظ كافة التعديلات</button>
+      </div>
+    </form>
   </div>
 
   <!-- MODAL: إنشاء / تعديل غرفة -->
@@ -459,23 +683,29 @@
         </div>
         <div class="cms-grid">
           <div class="field-group-light">
+            <label for="roomOwnerSelect">مالك / مدير الغرفة المعين</label>
+            <select id="roomOwnerSelect" class="light-input"></select>
+          </div>
+          <div class="field-group-light">
             <label for="roomPasswordInput">كلمة مرور الغرفة (اختياري)</label>
             <input id="roomPasswordInput" class="light-input" type="text" maxlength="40" placeholder="اتركه فارغاً لغرفة مفتوحة" />
           </div>
+        </div>
+        <div class="cms-grid">
           <div class="field-group-light">
             <label for="roomMinRankSelect">الحد الأدنى للرتبة المطلوبة</label>
             <select id="roomMinRankSelect" class="light-input"></select>
           </div>
-        </div>
-        <div class="field-group-light">
-          <label for="roomThemeSelect">خلفية منطقة الدردشة الجاهزة</label>
-          <select id="roomThemeSelect" class="light-input">
-            <option value="warm_peach">وردي برتقالي دافئ (الافتراضي)</option>
-            <option value="sunset_rose">غروب وردي ناعم</option>
-            <option value="sky_breeze">سماوي منعش</option>
-            <option value="emerald_mist">أخضر زمردي هادئ</option>
-            <option value="royal_night">ليلي ملكي</option>
-          </select>
+          <div class="field-group-light">
+            <label for="roomThemeSelect">خلفية منطقة الدردشة الجاهزة</label>
+            <select id="roomThemeSelect" class="light-input">
+              <option value="warm_peach">وردي برتقالي دافئ (الافتراضي)</option>
+              <option value="sunset_rose">غروب وردي ناعم</option>
+              <option value="sky_breeze">سماوي منعش</option>
+              <option value="emerald_mist">أخضر زمردي هادئ</option>
+              <option value="royal_night">ليلي ملكي</option>
+            </select>
+          </div>
         </div>
         <div class="field-group-light">
           <label for="roomBgCustomInput">لون أو تدرج مخصص للخلفية (CSS Color / Gradient - اختياري)</label>
@@ -503,7 +733,7 @@
     </form>
   </div>
 
-  <!-- MODAL: نافذة تفاعلية عامة (الأصدقاء / الخاص / الحائط / الكبار / الأثرياء / الإشعارات / الإبلاغ / الإعدادات) -->
+  <!-- MODAL: نافذة تفاعلية عامة -->
   <div id="featureModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-card modal-card-md light-modal">
       <div class="modal-header royal">

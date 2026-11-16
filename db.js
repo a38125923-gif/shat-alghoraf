@@ -13,12 +13,13 @@ const db = new DatabaseSync(DB_PATH);
 const DEFAULT_RANKS = [
   {
     key: 'site_owner',
-    label: 'صاحب الموقع',
+    label: 'Owner / صاحب الموقع',
     icon: '👑',
     image_url: '',
     bg_color: '#b91c1c',
     text_color: '#fef3c7',
     power: 100,
+    tier_order: 10,
     is_system: 1,
     perm_mute: 1,
     perm_kick: 1,
@@ -30,12 +31,13 @@ const DEFAULT_RANKS = [
   },
   {
     key: 'super_owner',
-    label: 'سوبر أونر',
+    label: 'Super Owner',
     icon: '💎',
     image_url: '',
     bg_color: '#d97706',
     text_color: '#fffbeb',
-    power: 90,
+    power: 99,
+    tier_order: 5,
     is_system: 1,
     perm_mute: 1,
     perm_kick: 1,
@@ -46,13 +48,177 @@ const DEFAULT_RANKS = [
     perm_access_panel: 1
   },
   {
+    key: 'vip_owner',
+    label: 'VIP Owner',
+    icon: '🌟',
+    image_url: '',
+    bg_color: '#ea580c',
+    text_color: '#fffbeb',
+    power: 98,
+    tier_order: 5,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 1,
+    perm_set_rank: 1,
+    perm_clear_room: 1,
+    perm_manage_rooms: 1,
+    perm_access_panel: 1
+  },
+  {
+    key: 'master_owner',
+    label: 'Master Owner',
+    icon: '⚜️',
+    image_url: '',
+    bg_color: '#c026d3',
+    text_color: '#ffffff',
+    power: 97,
+    tier_order: 5,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 1,
+    perm_set_rank: 1,
+    perm_clear_room: 1,
+    perm_manage_rooms: 1,
+    perm_access_panel: 1
+  },
+  {
+    key: 'master_super',
+    label: 'Master Super',
+    icon: '🔥',
+    image_url: '',
+    bg_color: '#9333ea',
+    text_color: '#ffffff',
+    power: 96,
+    tier_order: 5,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 1,
+    perm_set_rank: 1,
+    perm_clear_room: 1,
+    perm_manage_rooms: 1,
+    perm_access_panel: 1
+  },
+  {
+    key: 'director',
+    label: 'Director',
+    icon: '🏛️',
+    image_url: '',
+    bg_color: '#4f46e5',
+    text_color: '#ffffff',
+    power: 95,
+    tier_order: 5,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 1,
+    perm_set_rank: 1,
+    perm_clear_room: 1,
+    perm_manage_rooms: 1,
+    perm_access_panel: 1
+  },
+  {
+    key: 'moderator',
+    label: 'Moderator',
+    icon: '🛡️',
+    image_url: '',
+    bg_color: '#2563eb',
+    text_color: '#ffffff',
+    power: 94,
+    tier_order: 5,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 1,
+    perm_set_rank: 0,
+    perm_clear_room: 1,
+    perm_manage_rooms: 0,
+    perm_access_panel: 1
+  },
+  ...[94, 93, 92, 91, 90].map((n) => ({
+    key: `support_${n}`,
+    label: `Support ${n}`,
+    icon: '🎧',
+    image_url: '',
+    bg_color: '#0284c7',
+    text_color: '#ffffff',
+    power: n,
+    tier_order: 0,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: n >= 92 ? 1 : 0,
+    perm_set_rank: 0,
+    perm_clear_room: n >= 93 ? 1 : 0,
+    perm_manage_rooms: 0,
+    perm_access_panel: 1
+  })),
+  {
+    key: 'premium',
+    label: 'Premium',
+    icon: '✨',
+    image_url: '',
+    bg_color: '#f59e0b',
+    text_color: '#1f1300',
+    power: 88,
+    tier_order: 2,
+    is_system: 1,
+    perm_mute: 0,
+    perm_kick: 0,
+    perm_ban: 0,
+    perm_set_rank: 0,
+    perm_clear_room: 0,
+    perm_manage_rooms: 0,
+    perm_access_panel: 0
+  },
+  ...[87, 86, 85, 84, 83, 82, 81, 80].map((n) => ({
+    key: `admin_${n}`,
+    label: `عضو إداري رتبة ${n}`,
+    icon: '🔰',
+    image_url: '',
+    bg_color: '#059669',
+    text_color: '#ffffff',
+    power: n,
+    tier_order: 0,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: n >= 82 ? 1 : 0,
+    perm_ban: n >= 85 ? 1 : 0,
+    perm_set_rank: 0,
+    perm_clear_room: n >= 84 ? 1 : 0,
+    perm_manage_rooms: 0,
+    perm_access_panel: 1
+  })),
+  {
+    key: 'founder_79',
+    label: 'عضو مؤسس رتبة 79',
+    icon: '🏅',
+    image_url: '',
+    bg_color: '#0f766e',
+    text_color: '#ffffff',
+    power: 79,
+    tier_order: 0,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 0,
+    perm_ban: 0,
+    perm_set_rank: 0,
+    perm_clear_room: 0,
+    perm_manage_rooms: 0,
+    perm_access_panel: 1
+  },
+  // Legacy compatibility ranks
+  {
     key: 'owner',
     label: 'أونر',
     icon: '⭐',
     image_url: '',
     bg_color: '#f59e0b',
     text_color: '#1f1300',
-    power: 80,
+    power: 98,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 1,
     perm_kick: 1,
@@ -70,6 +236,7 @@ const DEFAULT_RANKS = [
     bg_color: '#7c3aed',
     text_color: '#ffffff',
     power: 70,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 1,
     perm_kick: 1,
@@ -87,6 +254,7 @@ const DEFAULT_RANKS = [
     bg_color: '#0284c7',
     text_color: '#ffffff',
     power: 60,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 1,
     perm_kick: 1,
@@ -104,6 +272,7 @@ const DEFAULT_RANKS = [
     bg_color: '#059669',
     text_color: '#ffffff',
     power: 50,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 1,
     perm_kick: 1,
@@ -121,6 +290,7 @@ const DEFAULT_RANKS = [
     bg_color: '#ea580c',
     text_color: '#ffffff',
     power: 40,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 0,
     perm_kick: 0,
@@ -138,6 +308,7 @@ const DEFAULT_RANKS = [
     bg_color: '#94a3b8',
     text_color: '#0f172a',
     power: 30,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 0,
     perm_kick: 0,
@@ -147,6 +318,24 @@ const DEFAULT_RANKS = [
     perm_manage_rooms: 0,
     perm_access_panel: 0
   },
+  ...[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => ({
+    key: `participant_${n}`,
+    label: `عضو مشارك رتبة ${n}`,
+    icon: '🎗️',
+    image_url: '',
+    bg_color: '#475569',
+    text_color: '#f8fafc',
+    power: 10 + n,
+    tier_order: 0,
+    is_system: 1,
+    perm_mute: 0,
+    perm_kick: 0,
+    perm_ban: 0,
+    perm_set_rank: 0,
+    perm_clear_room: 0,
+    perm_manage_rooms: 0,
+    perm_access_panel: 0
+  })),
   {
     key: 'member',
     label: 'عضو',
@@ -154,7 +343,8 @@ const DEFAULT_RANKS = [
     image_url: '',
     bg_color: '#334155',
     text_color: '#f8fafc',
-    power: 10,
+    power: 5,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 0,
     perm_kick: 0,
@@ -172,6 +362,7 @@ const DEFAULT_RANKS = [
     bg_color: '#64748b',
     text_color: '#ffffff',
     power: 0,
+    tier_order: 0,
     is_system: 1,
     perm_mute: 0,
     perm_kick: 0,
@@ -367,6 +558,14 @@ db.exec(`
     is_read INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS room_staff (
+    room_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    staff_role TEXT NOT NULL DEFAULT 'مشرف غرفة',
+    assigned_by TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (room_id, user_id)
+  );
 `);
 
 // Safe column migrations for pre-existing tables
@@ -376,6 +575,11 @@ ensureColumn('users', 'password_hash', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('users', 'role', "TEXT NOT NULL DEFAULT 'member'");
 ensureColumn('users', 'display_name', "TEXT DEFAULT ''");
 ensureColumn('users', 'name_color', "TEXT NOT NULL DEFAULT '#ffffff'");
+ensureColumn('users', 'text_color', "TEXT NOT NULL DEFAULT '#ffffff'");
+ensureColumn('users', 'name_bg_color', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('users', 'neon_color', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('users', 'font_family', "TEXT NOT NULL DEFAULT 'Normal'");
+ensureColumn('users', 'font_style', "TEXT NOT NULL DEFAULT 'Normal'");
 ensureColumn('users', 'avatar_url', "TEXT DEFAULT ''");
 ensureColumn('users', 'last_ip', "TEXT DEFAULT ''");
 ensureColumn('users', 'avatar_frame', "TEXT NOT NULL DEFAULT 'none'");
@@ -396,10 +600,21 @@ ensureColumn('rooms', 'welcome_message', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('rooms', 'room_password', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('rooms', 'min_rank_power', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('rooms', 'mics_enabled', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('rooms', 'owner_user_id', 'INTEGER DEFAULT NULL');
+ensureColumn('rooms', 'owner_name', "TEXT DEFAULT ''");
+ensureColumn('rooms', 'card_bg_color', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('rooms', 'card_text_color', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('rooms', 'created_by', "TEXT DEFAULT 'system'");
 
 ensureColumn('messages', 'avatar_frame', "TEXT NOT NULL DEFAULT 'none'");
 ensureColumn('messages', 'nameplate_style', "TEXT NOT NULL DEFAULT 'default'");
+ensureColumn('messages', 'text_color', "TEXT NOT NULL DEFAULT '#ffffff'");
+ensureColumn('messages', 'name_bg_color', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('messages', 'neon_color', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('messages', 'font_family', "TEXT NOT NULL DEFAULT 'Normal'");
+ensureColumn('messages', 'font_style', "TEXT NOT NULL DEFAULT 'Normal'");
+
+ensureColumn('private_messages', 'is_read', 'INTEGER NOT NULL DEFAULT 0');
 
 ensureColumn('bans', 'email', "TEXT DEFAULT ''");
 ensureColumn('bans', 'ip_address', "TEXT DEFAULT ''");
@@ -407,6 +622,7 @@ ensureColumn('bans', 'ip_address', "TEXT DEFAULT ''");
 ensureColumn('ranks', 'image_url', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('ranks', 'bg_color', "TEXT NOT NULL DEFAULT '#334155'");
 ensureColumn('ranks', 'text_color', "TEXT NOT NULL DEFAULT '#ffffff'");
+ensureColumn('ranks', 'tier_order', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('ranks', 'perm_mute', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('ranks', 'perm_kick', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('ranks', 'perm_ban', 'INTEGER NOT NULL DEFAULT 0');
@@ -418,9 +634,9 @@ ensureColumn('ranks', 'perm_access_panel', 'INTEGER NOT NULL DEFAULT 0');
 // Seed default ranks idempotently
 const seedRankStmt = db.prepare(`
   INSERT OR IGNORE INTO ranks (
-    key, label, icon, image_url, bg_color, text_color, power, is_system,
+    key, label, icon, image_url, bg_color, text_color, power, tier_order, is_system,
     perm_mute, perm_kick, perm_ban, perm_set_rank, perm_clear_room, perm_manage_rooms, perm_access_panel
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 for (const r of DEFAULT_RANKS) {
   seedRankStmt.run(
@@ -431,6 +647,7 @@ for (const r of DEFAULT_RANKS) {
     r.bg_color,
     r.text_color,
     r.power,
+    r.tier_order || 0,
     r.is_system,
     r.perm_mute,
     r.perm_kick,
@@ -442,8 +659,14 @@ for (const r of DEFAULT_RANKS) {
   );
 }
 
-// Seed default site_settings row id = 1 idempotently
+// Keep top leadership labels & powers aligned with 1-100 hierarchy without overwriting custom user-edited ranks
+db.prepare("UPDATE ranks SET label = 'Owner / صاحب الموقع', power = 100, tier_order = 10 WHERE key = 'site_owner' AND label = 'صاحب الموقع'").run();
+db.prepare("UPDATE ranks SET label = 'Super Owner', power = 99, tier_order = 5 WHERE key = 'super_owner' AND label = 'سوبر أونر'").run();
+db.prepare("UPDATE ranks SET tier_order = 5 WHERE key IN ('vip_owner','master_owner','master_super','director','moderator')").run();
+
+// Seed default site_settings row id = 1 idempotently & ensure maintenance_mode is disabled by default on boot
 db.prepare('INSERT OR IGNORE INTO site_settings (id) VALUES (1)').run();
+db.prepare('UPDATE site_settings SET maintenance_mode = 0 WHERE id = 1').run();
 
 // Upgrade legacy first 'owner' account to 'site_owner' safely
 const siteOwnerCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'site_owner'").get().count;
@@ -515,6 +738,7 @@ function mapRankRow(row) {
     bg_color: row.bg_color || '#334155',
     text_color: row.text_color || '#ffffff',
     power: Number(row.power) || 0,
+    tier_order: Number(row.tier_order) || 0,
     is_system: row.is_system === 1,
     permissions: {
       mute: row.perm_mute === 1,
@@ -529,19 +753,27 @@ function mapRankRow(row) {
 }
 
 function getAllRanks() {
-  return db.prepare('SELECT * FROM ranks ORDER BY power DESC, created_at ASC').all().map(mapRankRow);
+  return db
+    .prepare('SELECT * FROM ranks ORDER BY power DESC, tier_order DESC, created_at ASC')
+    .all()
+    .map(mapRankRow);
 }
 
 function getRankByKey(key) {
   const row = db.prepare('SELECT * FROM ranks WHERE key = ?').get(key);
   if (row) return mapRankRow(row);
   const member = db.prepare("SELECT * FROM ranks WHERE key = 'member'").get();
-  return mapRankRow(member) || DEFAULT_RANKS[8];
+  return mapRankRow(member) || DEFAULT_RANKS.find((r) => r.key === 'member');
 }
 
 function getRankPower(role) {
-  const row = db.prepare('SELECT power FROM ranks WHERE key = ?').get(role);
+  const row = db.prepare('SELECT power, tier_order FROM ranks WHERE key = ?').get(role);
   return row ? Number(row.power) || 0 : 0;
+}
+
+function getRankSortWeight(role) {
+  const row = db.prepare('SELECT power, tier_order FROM ranks WHERE key = ?').get(role);
+  return row ? (Number(row.power) || 0) * 100 + (Number(row.tier_order) || 0) : 0;
 }
 
 function isValidRank(role) {
@@ -838,21 +1070,114 @@ function updateUserIp(userId, ipAddress) {
   db.prepare('UPDATE users SET last_ip = ? WHERE id = ?').run(ipAddress, userId);
 }
 
-function updateUserCustomization(userId, { displayName, nameColor, avatarUrl, avatarFrame, nameplateStyle, vipFamily }) {
+function updateUserCustomization(
+  userId,
+  { displayName, nameColor, textColor, nameBgColor, neonColor, fontFamily, fontStyle, avatarUrl, avatarFrame, nameplateStyle, vipFamily }
+) {
   const current = findUserById(userId);
   if (!current) return null;
   const nextDisplay = displayName !== undefined && displayName.trim() ? displayName.trim() : getEffectiveName(current);
   const nextColor = nameColor || current.name_color;
+  const nextTextColor = textColor !== undefined ? textColor || '#ffffff' : current.text_color || '#ffffff';
+  const nextNameBg = nameBgColor !== undefined ? String(nameBgColor || '').trim().slice(0, 30) : current.name_bg_color || '';
+  const nextNeon = neonColor !== undefined ? String(neonColor || '').trim().slice(0, 30) : current.neon_color || '';
+  const nextFont = fontFamily !== undefined ? String(fontFamily || 'Normal').trim().slice(0, 40) : current.font_family || 'Normal';
+  const nextFontStyle = fontStyle !== undefined ? String(fontStyle || 'Normal').trim().slice(0, 30) : current.font_style || 'Normal';
   const nextAvatar = avatarUrl !== undefined ? avatarUrl : current.avatar_url;
   const nextFrame = avatarFrame || current.avatar_frame || 'none';
   const nextPlate = nameplateStyle || current.nameplate_style || 'default';
   const nextFamily = vipFamily !== undefined ? vipFamily.trim().slice(0, 24) : current.vip_family || '';
 
   db.prepare(
-    'UPDATE users SET display_name = ?, name_color = ?, avatar_url = ?, avatar_frame = ?, nameplate_style = ?, vip_family = ? WHERE id = ?'
-  ).run(nextDisplay, nextColor, nextAvatar, nextFrame, nextPlate, nextFamily, userId);
+    `UPDATE users SET
+      display_name = ?, name_color = ?, text_color = ?, name_bg_color = ?, neon_color = ?,
+      font_family = ?, font_style = ?, avatar_url = ?, avatar_frame = ?, nameplate_style = ?, vip_family = ?
+     WHERE id = ?`
+  ).run(
+    nextDisplay,
+    nextColor,
+    nextTextColor,
+    nextNameBg,
+    nextNeon,
+    nextFont,
+    nextFontStyle,
+    nextAvatar,
+    nextFrame,
+    nextPlate,
+    nextFamily,
+    userId
+  );
 
   return findUserById(userId);
+}
+
+function adminCreateUser({ username, displayName, email, passwordHash, role }) {
+  const cleanUser = String(username || '').trim().slice(0, 24);
+  const cleanDisplay = String(displayName || cleanUser).trim().slice(0, 28) || cleanUser;
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const safeRole = isValidRank(role) ? role : 'member';
+
+  const existing = db
+    .prepare('SELECT id, username, email FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)')
+    .get(cleanUser, cleanEmail);
+  if (existing) {
+    if (existing.username.toLowerCase() === cleanUser.toLowerCase()) {
+      return { error: 'اسم المستخدم مسجل مسبقاً.' };
+    }
+    return { error: 'البريد الإلكتروني مسجل مسبقاً.' };
+  }
+
+  const res = db
+    .prepare(
+      `INSERT INTO users (username, email, password_hash, role, display_name, name_color, text_color, avatar_frame, nameplate_style, coins)
+       VALUES (?, ?, ?, ?, ?, '#ffffff', '#ffffff', 'none', 'default', 1500)`
+    )
+    .run(cleanUser, cleanEmail, passwordHash, safeRole, cleanDisplay);
+  return { user: findUserById(res.lastInsertRowid) };
+}
+
+function adminUpdateUserAccount(userId, { displayName, username, email, passwordHash, avatarUrl, role }) {
+  const current = findUserById(userId);
+  if (!current) return { error: 'الحساب غير موجود.' };
+
+  const nextDisplay =
+    displayName !== undefined && String(displayName).trim()
+      ? String(displayName).trim().slice(0, 28)
+      : getEffectiveName(current);
+  const nextUsername =
+    username !== undefined && String(username).trim()
+      ? String(username).trim().slice(0, 24)
+      : current.username;
+  const nextEmail =
+    email !== undefined && String(email).trim() ? String(email).trim().toLowerCase() : current.email;
+  const nextPasswordHash = passwordHash || current.password_hash;
+  const nextAvatar = avatarUrl !== undefined ? avatarUrl : current.avatar_url;
+  const nextRole = role !== undefined && isValidRank(role) ? role : current.role;
+
+  const conflict = db
+    .prepare('SELECT id, username, email FROM users WHERE id != ? AND (LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?))')
+    .get(userId, nextUsername, nextEmail);
+  if (conflict) {
+    if (conflict.username.toLowerCase() === nextUsername.toLowerCase()) {
+      return { error: 'اسم المستخدم مستخدم لحساب آخر.' };
+    }
+    return { error: 'البريد الإلكتروني مستخدم لحساب آخر.' };
+  }
+
+  db.prepare(
+    `UPDATE users SET
+      username = ?, display_name = ?, email = ?, password_hash = ?, avatar_url = ?, role = ?
+     WHERE id = ?`
+  ).run(nextUsername, nextDisplay, nextEmail, nextPasswordHash, nextAvatar, nextRole, userId);
+
+  db.prepare('UPDATE messages SET sender_name = ?, sender_role = ?, avatar_url = ? WHERE sender_key = ?').run(
+    nextDisplay,
+    nextRole,
+    nextAvatar || '',
+    `user:${userId}`
+  );
+
+  return { user: findUserById(userId) };
 }
 
 function spendUserCoins(userId, cost) {
@@ -881,11 +1206,11 @@ function forceChangeUserDisplayName(userId, newDisplayName) {
 function getAllRegisteredUsers() {
   const rows = db
     .prepare(
-      `SELECT id, username, email, role, display_name, name_color, avatar_url, avatar_frame, nameplate_style, coins, vip_family, last_ip, is_banned, ban_reason, created_at
+      `SELECT id, username, email, role, display_name, name_color, text_color, name_bg_color, neon_color, font_family, font_style, avatar_url, avatar_frame, nameplate_style, coins, vip_family, last_ip, is_banned, ban_reason, created_at
        FROM users ORDER BY id ASC`
     )
     .all();
-  return rows.sort((a, b) => getRankPower(b.role) - getRankPower(a.role) || a.id - b.id);
+  return rows.sort((a, b) => getRankSortWeight(b.role) - getRankSortWeight(a.role) || a.id - b.id);
 }
 
 function getAllRooms() {
@@ -896,13 +1221,80 @@ function getRoomById(roomId) {
   return db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId);
 }
 
+function getRoomStaff(roomId) {
+  return db
+    .prepare(
+      `SELECT rs.room_id, rs.user_id, rs.staff_role, rs.assigned_by, u.username, u.display_name, u.role, u.avatar_url
+       FROM room_staff rs
+       JOIN users u ON u.id = rs.user_id
+       WHERE rs.room_id = ?
+       ORDER BY rs.created_at ASC`
+    )
+    .all(roomId)
+    .map((r) => ({
+      roomId: r.room_id,
+      userId: r.user_id,
+      name: (r.display_name || '').trim() || r.username,
+      role: r.role,
+      avatarUrl: r.avatar_url || '',
+      staffRole: r.staff_role || 'مشرف غرفة',
+      assignedBy: r.assigned_by || ''
+    }));
+}
+
+function setRoomOwner(roomId, ownerUserId) {
+  const uid = ownerUserId ? Number(ownerUserId) : null;
+  if (!uid || Number.isNaN(uid)) {
+    db.prepare("UPDATE rooms SET owner_user_id = NULL, owner_name = '' WHERE id = ?").run(roomId);
+    return getRoomById(roomId);
+  }
+  const u = findUserById(uid);
+  if (!u) return null;
+  const ownerName = getEffectiveName(u);
+  db.prepare('UPDATE rooms SET owner_user_id = ?, owner_name = ? WHERE id = ?').run(uid, ownerName, roomId);
+  return getRoomById(roomId);
+}
+
+function addRoomStaff(roomId, userId, staffRole = 'مشرف غرفة', assignedBy = '') {
+  const uid = Number(userId);
+  if (!roomId || Number.isNaN(uid) || !findUserById(uid)) return null;
+  db.prepare(
+    `INSERT INTO room_staff (room_id, user_id, staff_role, assigned_by)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(room_id, user_id) DO UPDATE SET staff_role = excluded.staff_role, assigned_by = excluded.assigned_by`
+  ).run(roomId, uid, String(staffRole || 'مشرف غرفة').slice(0, 30), assignedBy);
+  return getRoomStaff(roomId);
+}
+
+function removeRoomStaff(roomId, userId) {
+  db.prepare('DELETE FROM room_staff WHERE room_id = ? AND user_id = ?').run(roomId, Number(userId));
+  return getRoomStaff(roomId);
+}
+
+function isRoomStaffMember(roomId, userId) {
+  if (!roomId || !userId) return false;
+  const row = db.prepare('SELECT user_id FROM room_staff WHERE room_id = ? AND user_id = ?').get(roomId, Number(userId));
+  return Boolean(row);
+}
+
+function isRoomManager(roomId, userId, userRole) {
+  if (userRole === 'site_owner' || hasPermission(userRole, 'manage_rooms')) return true;
+  if (!roomId || !userId) return false;
+  const room = getRoomById(roomId);
+  if (room && room.owner_user_id && Number(room.owner_user_id) === Number(userId)) return true;
+  return isRoomStaffMember(roomId, userId);
+}
+
 function sanitizeRoomForPublic(room) {
   if (!room) return null;
   const { room_password, ...rest } = room;
   return {
     ...rest,
     hasPassword: Boolean(room_password && room_password.trim()),
-    min_rank_power: Number(room.min_rank_power) || 0
+    min_rank_power: Number(room.min_rank_power) || 0,
+    owner_user_id: room.owner_user_id ? Number(room.owner_user_id) : null,
+    owner_name: room.owner_name || '',
+    staff: getRoomStaff(room.id)
   };
 }
 
@@ -915,17 +1307,29 @@ function createRoom({
   bgTheme,
   wallpaperUrl,
   bgCustom,
+  cardBgColor,
+  cardTextColor,
   welcomeMessage,
   roomPassword,
   minRankPower,
+  ownerUserId,
   createdBy
 }) {
+  let resolvedOwnerId = null;
+  let resolvedOwnerName = '';
+  if (ownerUserId) {
+    const ownerRow = findUserById(Number(ownerUserId));
+    if (ownerRow) {
+      resolvedOwnerId = ownerRow.id;
+      resolvedOwnerName = getEffectiveName(ownerRow);
+    }
+  }
   db.prepare(`
     INSERT INTO rooms (
       id, name, description, icon, image_url, bg_theme,
-      wallpaper_url, bg_custom, welcome_message, room_password, min_rank_power,
-      mics_enabled, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      wallpaper_url, bg_custom, card_bg_color, card_text_color, welcome_message, room_password, min_rank_power,
+      owner_user_id, owner_name, mics_enabled, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
   `).run(
     id,
     name,
@@ -935,9 +1339,13 @@ function createRoom({
     bgTheme || 'warm_peach',
     wallpaperUrl || '',
     bgCustom || '',
+    sanitizeHexColor(cardBgColor, ''),
+    sanitizeHexColor(cardTextColor, ''),
     String(welcomeMessage || '').trim().slice(0, 250),
     String(roomPassword || '').trim().slice(0, 40),
     Math.max(0, Math.min(100, Number(minRankPower) || 0)),
+    resolvedOwnerId,
+    resolvedOwnerName,
     createdBy || 'owner'
   );
   return getRoomById(id);
@@ -945,7 +1353,22 @@ function createRoom({
 
 function updateRoom(
   roomId,
-  { name, description, icon, imageUrl, bgTheme, wallpaperUrl, bgCustom, welcomeMessage, roomPassword, minRankPower, micsEnabled }
+  {
+    name,
+    description,
+    icon,
+    imageUrl,
+    bgTheme,
+    wallpaperUrl,
+    bgCustom,
+    cardBgColor,
+    cardTextColor,
+    welcomeMessage,
+    roomPassword,
+    minRankPower,
+    ownerUserId,
+    micsEnabled
+  }
 ) {
   const current = getRoomById(roomId);
   if (!current) return null;
@@ -956,6 +1379,8 @@ function updateRoom(
   const nextBg = bgTheme !== undefined && String(bgTheme).trim() ? String(bgTheme).trim() : current.bg_theme || 'warm_peach';
   const nextWallpaper = wallpaperUrl !== undefined ? String(wallpaperUrl).trim() : current.wallpaper_url || '';
   const nextBgCustom = bgCustom !== undefined ? String(bgCustom).trim().slice(0, 180) : current.bg_custom || '';
+  const nextCardBg = cardBgColor !== undefined ? (cardBgColor ? sanitizeHexColor(cardBgColor, '') : '') : current.card_bg_color || '';
+  const nextCardText = cardTextColor !== undefined ? (cardTextColor ? sanitizeHexColor(cardTextColor, '') : '') : current.card_text_color || '';
   const nextWelcome =
     welcomeMessage !== undefined ? String(welcomeMessage).trim().slice(0, 250) : current.welcome_message || '';
   const nextPass = roomPassword !== undefined ? String(roomPassword).trim().slice(0, 40) : current.room_password || '';
@@ -963,11 +1388,27 @@ function updateRoom(
     minRankPower !== undefined ? Math.max(0, Math.min(100, Number(minRankPower) || 0)) : Number(current.min_rank_power) || 0;
   const nextMics = micsEnabled !== undefined ? (micsEnabled ? 1 : 0) : current.mics_enabled;
 
+  let nextOwnerId = current.owner_user_id;
+  let nextOwnerName = current.owner_name || '';
+  if (ownerUserId !== undefined) {
+    if (!ownerUserId) {
+      nextOwnerId = null;
+      nextOwnerName = '';
+    } else {
+      const ownerRow = findUserById(Number(ownerUserId));
+      if (ownerRow) {
+        nextOwnerId = ownerRow.id;
+        nextOwnerName = getEffectiveName(ownerRow);
+      }
+    }
+  }
+
   db.prepare(`
     UPDATE rooms SET
       name = ?, description = ?, icon = ?, image_url = ?, bg_theme = ?,
-      wallpaper_url = ?, bg_custom = ?, welcome_message = ?, room_password = ?, min_rank_power = ?,
-      mics_enabled = ?
+      wallpaper_url = ?, bg_custom = ?, card_bg_color = ?, card_text_color = ?,
+      welcome_message = ?, room_password = ?, min_rank_power = ?,
+      owner_user_id = ?, owner_name = ?, mics_enabled = ?
     WHERE id = ?
   `).run(
     nextName,
@@ -977,9 +1418,13 @@ function updateRoom(
     nextBg,
     nextWallpaper,
     nextBgCustom,
+    nextCardBg,
+    nextCardText,
     nextWelcome,
     nextPass,
     nextMinRank,
+    nextOwnerId,
+    nextOwnerName,
     nextMics,
     roomId
   );
@@ -987,6 +1432,7 @@ function updateRoom(
 }
 
 function deleteRoom(roomId) {
+  db.prepare('DELETE FROM room_staff WHERE room_id = ?').run(roomId);
   db.prepare('DELETE FROM messages WHERE room_id = ?').run(roomId);
   db.prepare('DELETE FROM mutes WHERE room_id = ?').run(roomId);
   db.prepare('DELETE FROM rooms WHERE id = ?').run(roomId);
@@ -998,6 +1444,11 @@ function addMessage({
   senderName,
   senderRole,
   nameColor,
+  textColor,
+  nameBgColor,
+  neonColor,
+  fontFamily,
+  fontStyle,
   avatarUrl,
   avatarFrame,
   nameplateStyle,
@@ -1007,8 +1458,10 @@ function addMessage({
 }) {
   const result = db
     .prepare(
-      `INSERT INTO messages (room_id, sender_key, sender_name, sender_role, name_color, avatar_url, avatar_frame, nameplate_style, msg_type, content, media_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO messages (
+        room_id, sender_key, sender_name, sender_role, name_color, text_color, name_bg_color, neon_color, font_family, font_style,
+        avatar_url, avatar_frame, nameplate_style, msg_type, content, media_url
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       roomId,
@@ -1016,6 +1469,11 @@ function addMessage({
       senderName,
       senderRole,
       nameColor || '#ffffff',
+      textColor || '#ffffff',
+      nameBgColor || '',
+      neonColor || '',
+      fontFamily || 'Normal',
+      fontStyle || 'Normal',
       avatarUrl || '',
       avatarFrame || 'none',
       nameplateStyle || 'default',
@@ -1160,8 +1618,8 @@ function isTargetBanned(input) {
 function addPrivateMessage({ fromKey, fromName, fromRole, fromAvatar, toKey, toName, content }) {
   const result = db
     .prepare(
-      `INSERT INTO private_messages (from_key, from_name, from_role, from_avatar, to_key, to_name, content)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO private_messages (from_key, from_name, from_role, from_avatar, to_key, to_name, content, is_read)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
     )
     .run(fromKey, fromName, fromRole, fromAvatar || '', toKey, toName, content);
   return db.prepare('SELECT * FROM private_messages WHERE id = ?').get(result.lastInsertRowid);
@@ -1172,9 +1630,17 @@ function getPrivateMessagesForUser(userKey) {
     .prepare(
       `SELECT * FROM private_messages
        WHERE from_key = ? OR to_key = ?
-       ORDER BY id DESC LIMIT 80`
+       ORDER BY id DESC LIMIT 120`
     )
     .all(userKey, userKey);
+}
+
+function markPrivateMessagesRead(readerKey, partnerKey) {
+  if (!readerKey || !partnerKey) return 0;
+  const info = db
+    .prepare('UPDATE private_messages SET is_read = 1 WHERE to_key = ? AND from_key = ? AND is_read = 0')
+    .run(readerKey, partnerKey);
+  return info.changes || 0;
 }
 
 function sendFriendRequest({ fromUser, toKey, toName, toRole, toAvatar }) {
@@ -1289,6 +1755,7 @@ module.exports = {
   getAllRanks,
   getRankByKey,
   getRankPower,
+  getRankSortWeight,
   isValidRank,
   hasPermission,
   createRank,
@@ -1306,12 +1773,20 @@ module.exports = {
   findUserById,
   updateUserIp,
   updateUserCustomization,
+  adminCreateUser,
+  adminUpdateUserAccount,
   spendUserCoins,
   updateUserRole,
   forceChangeUserDisplayName,
   getAllRegisteredUsers,
   getAllRooms,
   getRoomById,
+  getRoomStaff,
+  setRoomOwner,
+  addRoomStaff,
+  removeRoomStaff,
+  isRoomStaffMember,
+  isRoomManager,
   sanitizeRoomForPublic,
   createRoom,
   updateRoom,
@@ -1328,6 +1803,7 @@ module.exports = {
   isTargetBanned,
   addPrivateMessage,
   getPrivateMessagesForUser,
+  markPrivateMessagesRead,
   sendFriendRequest,
   respondFriendRequest,
   getFriendsForUser,

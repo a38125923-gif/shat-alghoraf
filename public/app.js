@@ -41,6 +41,8 @@ const state = {
   activeRoom: null,
   usersInRoom: [],
   globalOnlineUsers: [],
+  persistentMembers: [],
+  membersFilter: 'all',
   micSlots: [null, null, null, null, null],
   micsEnabled: true,
   myMicSlot: null,
@@ -49,6 +51,27 @@ const state = {
   shopCatalog: { frames: [], nameplates: [] },
   socket: null,
   isMuted: false,
+  welcomeStripCollapsed: false,
+  radioPlaying: false,
+  radioAudioCtx: null,
+  radioTimer: null,
+  fpmPartner: null,
+  fpmMessagesCache: [],
+  fpmMinimized: false,
+  fpmMaximized: false,
+  fpmVoiceActive: false,
+  fpmVoiceStream: null,
+  fpmVoiceRecorder: null,
+  tcDraftText: '#ffffff',
+  tcDraftNeon: '',
+  tcDraftBg: '',
+  tcDraftFont: 'Normal',
+  tcDraftStyle: 'Normal',
+  roActiveTab: 'settings',
+  roDraftImg: '',
+  roDraftWall: '',
+  editingAdminUserId: null,
+  aueDraftAvatarUrl: '',
   draftColor: '#ffffff',
   draftAvatarUrl: '',
   roomEditorMode: 'create',
@@ -90,6 +113,7 @@ const dropMeCoins = document.getElementById('dropMeCoins');
 const dropUpgradeGuestBtn = document.getElementById('dropUpgradeGuestBtn');
 const topUpgradeGuestBtn = document.getElementById('topUpgradeGuestBtn');
 const dropAdminPanelBtn = document.getElementById('dropAdminPanelBtn');
+const dropRoomOptionsBtn = document.getElementById('dropRoomOptionsBtn');
 
 const openDrawerBtn = document.getElementById('openDrawerBtn');
 const closeDrawerBtn = document.getElementById('closeDrawerBtn');
@@ -102,16 +126,37 @@ const drawerAdminBtn = document.getElementById('drawerAdminBtn');
 const micsSlotsEl = document.getElementById('micsSlots');
 const leaveMicBtn = document.getElementById('leaveMicBtn');
 const micSettingsBtn = document.getElementById('micSettingsBtn');
+const toggleWelcomeStripBtn = document.getElementById('toggleWelcomeStripBtn');
+const roomWelcomeBanner = document.getElementById('roomWelcomeBanner');
+const roomWelcomeText = document.getElementById('roomWelcomeText');
 
+const bannerRoomCard = document.getElementById('bannerRoomCard');
 const bannerRoomImg = document.getElementById('bannerRoomImg');
 const bannerRoomName = document.getElementById('bannerRoomName');
+const bannerRoomOwnerChip = document.getElementById('bannerRoomOwnerChip');
 const bannerRoomDesc = document.getElementById('bannerRoomDesc');
 const bannerOnlineCount = document.getElementById('bannerOnlineCount');
+const bannerRoomOptionsBtn = document.getElementById('bannerRoomOptionsBtn');
 const bannerClearRoomBtn = document.getElementById('bannerClearRoomBtn');
+const quickEnterRoomsBtn = document.getElementById('quickEnterRoomsBtn');
 
 const chatStreamWrap = document.getElementById('chatStreamWrap');
 const messagesFeed = document.getElementById('messagesFeed');
 const muteBanner = document.getElementById('muteBanner');
+
+const floatingPmBox = document.getElementById('floatingPmBox');
+const fpmAvatar = document.getElementById('fpmAvatar');
+const fpmPartnerName = document.getElementById('fpmPartnerName');
+const fpmCallStatus = document.getElementById('fpmCallStatus');
+const fpmPartnerSelect = document.getElementById('fpmPartnerSelect');
+const fpmSettingsBtn = document.getElementById('fpmSettingsBtn');
+const fpmCallBtn = document.getElementById('fpmCallBtn');
+const fpmMinBtn = document.getElementById('fpmMinBtn');
+const fpmMaxBtn = document.getElementById('fpmMaxBtn');
+const fpmCloseBtn = document.getElementById('fpmCloseBtn');
+const fpmMessages = document.getElementById('fpmMessages');
+const fpmForm = document.getElementById('fpmForm');
+const fpmInput = document.getElementById('fpmInput');
 
 const messageForm = document.getElementById('messageForm');
 const messageInput = document.getElementById('messageInput');
@@ -119,6 +164,11 @@ const emojiToggleBtn = document.getElementById('emojiToggleBtn');
 const emojiPopover = document.getElementById('emojiPopover');
 const uploadImageBtn = document.getElementById('uploadImageBtn');
 const imageFileInput = document.getElementById('imageFileInput');
+const composerPlusBtn = document.getElementById('composerPlusBtn');
+const composerPlusMenu = document.getElementById('composerPlusMenu');
+const plusTextCustomizerBtn = document.getElementById('plusTextCustomizerBtn');
+const plusUploadImageBtn = document.getElementById('plusUploadImageBtn');
+const plusEditProfileBtn = document.getElementById('plusEditProfileBtn');
 const recordAudioBtn = document.getElementById('recordAudioBtn');
 const recordingBar = document.getElementById('recordingBar');
 const recTimer = document.getElementById('recTimer');
@@ -130,6 +180,9 @@ const modalOnlineCount = document.getElementById('modalOnlineCount');
 const onlineUsersModal = document.getElementById('onlineUsersModal');
 const onlineModalSearch = document.getElementById('onlineModalSearch');
 const globalOnlineList = document.getElementById('globalOnlineList');
+const navRadioBtn = document.getElementById('navRadioBtn');
+const navRadioIcon = document.getElementById('navRadioIcon');
+const navRadioLabel = document.getElementById('navRadioLabel');
 
 const roomsModal = document.getElementById('roomsModal');
 const roomsModalList = document.getElementById('roomsModalList');
@@ -150,6 +203,43 @@ const avatarFileInput = document.getElementById('avatarFileInput');
 const chooseAvatarBtn = document.getElementById('chooseAvatarBtn');
 const clearAvatarBtn = document.getElementById('clearAvatarBtn');
 const saveCustomizeBtn = document.getElementById('saveCustomizeBtn');
+const openTcFromProfileBtn = document.getElementById('openTcFromProfileBtn');
+
+const textCustomizerModal = document.getElementById('textCustomizerModal');
+const tcPreviewAvatar = document.getElementById('tcPreviewAvatar');
+const tcPreviewRank = document.getElementById('tcPreviewRank');
+const tcPreviewName = document.getElementById('tcPreviewName');
+const tcPreviewText = document.getElementById('tcPreviewText');
+const tcTextSwatches = document.getElementById('tcTextSwatches');
+const tcNeonSwatches = document.getElementById('tcNeonSwatches');
+const tcBgSwatches = document.getElementById('tcBgSwatches');
+const tcTextPicker = document.getElementById('tcTextPicker');
+const tcNeonPicker = document.getElementById('tcNeonPicker');
+const tcBgPicker = document.getElementById('tcBgPicker');
+const tcResetTextBtn = document.getElementById('tcResetTextBtn');
+const tcResetNeonBtn = document.getElementById('tcResetNeonBtn');
+const tcResetBgBtn = document.getElementById('tcResetBgBtn');
+const tcFontSelect = document.getElementById('tcFontSelect');
+const tcFontStyleSelect = document.getElementById('tcFontStyleSelect');
+const saveTextCustomizerBtn = document.getElementById('saveTextCustomizerBtn');
+
+const roomOptionsModal = document.getElementById('roomOptionsModal');
+const roomOptionsTitle = document.getElementById('roomOptionsTitle');
+const roomOptionsTabsBar = document.getElementById('roomOptionsTabsBar');
+const roomOptionsBody = document.getElementById('roomOptionsBody');
+
+const adminUserEditorModal = document.getElementById('adminUserEditorModal');
+const adminUserEditorForm = document.getElementById('adminUserEditorForm');
+const adminUserEditorTitle = document.getElementById('adminUserEditorTitle');
+const aueAvatarPreview = document.getElementById('aueAvatarPreview');
+const aueAvatarFileInput = document.getElementById('aueAvatarFileInput');
+const aueChooseAvatarBtn = document.getElementById('aueChooseAvatarBtn');
+const aueClearAvatarBtn = document.getElementById('aueClearAvatarBtn');
+const aueDisplayName = document.getElementById('aueDisplayName');
+const aueUsername = document.getElementById('aueUsername');
+const aueEmail = document.getElementById('aueEmail');
+const auePassword = document.getElementById('auePassword');
+const aueRoleSelect = document.getElementById('aueRoleSelect');
 
 const authBrandLogo = document.getElementById('authBrandLogo');
 const authSiteName = document.getElementById('authSiteName');
@@ -180,6 +270,7 @@ const chooseRoomImageBtn = document.getElementById('chooseRoomImageBtn');
 const roomNameInput = document.getElementById('roomNameInput');
 const roomDescInput = document.getElementById('roomDescInput');
 const roomWelcomeInput = document.getElementById('roomWelcomeInput');
+const roomOwnerSelect = document.getElementById('roomOwnerSelect');
 const roomPasswordInput = document.getElementById('roomPasswordInput');
 const roomMinRankSelect = document.getElementById('roomMinRankSelect');
 const roomThemeSelect = document.getElementById('roomThemeSelect');
@@ -302,13 +393,157 @@ function renderAvatarInto(el, name, avatarUrl, nameColor, role = 'member', frame
   }
 }
 
-function applyNameplate(el, name, style, color) {
+function applyNameplate(el, name, style, color, bgColor = '') {
   el.textContent = name;
   el.className = `nameplate-pill plate-${style || 'default'}`;
-  if (color && (!style || style === 'default')) {
-    el.style.color = color;
+  el.style.color = color && (!style || style === 'default') ? color : '';
+  if (bgColor && (!style || style === 'default')) {
+    el.style.background = bgColor;
   } else {
-    el.style.color = '';
+    el.style.background = '';
+  }
+}
+
+function resolveCssFontFamily(fontName) {
+  const f = (fontName || 'Normal').trim();
+  if (!f || f === 'Normal') return '';
+  if (f === 'Grandmaster') return "'Cinzel', 'Cairo', serif";
+  if (f === 'Comic neue') return "'Comic Neue', 'Cairo', cursive";
+  return `'${f}', 'Cairo', sans-serif`;
+}
+
+function resolveFontWeightAndStyle(styleName) {
+  switch (styleName) {
+    case 'Bold':
+      return { fontWeight: '800', fontStyle: 'normal' };
+    case 'Heavy':
+      return { fontWeight: '900', fontStyle: 'normal' };
+    case 'Italic':
+      return { fontWeight: '700', fontStyle: 'italic' };
+    case 'Bold italic':
+      return { fontWeight: '800', fontStyle: 'italic' };
+    case 'Heavy italic':
+      return { fontWeight: '900', fontStyle: 'italic' };
+    default:
+      return { fontWeight: '700', fontStyle: 'normal' };
+  }
+}
+
+function applyMessageStylingToEl(el, { textColor, neonColor, fontFamily, fontStyle } = {}) {
+  el.style.color = textColor || '#ffffff';
+  const cssFont = resolveCssFontFamily(fontFamily);
+  el.style.fontFamily = cssFont || '';
+  const ws = resolveFontWeightAndStyle(fontStyle);
+  el.style.fontWeight = ws.fontWeight;
+  el.style.fontStyle = ws.fontStyle;
+  if (neonColor) {
+    el.style.textShadow = `0 0 6px ${neonColor}, 0 0 14px ${neonColor}, 0 1px 2px rgba(0,0,0,0.8)`;
+  } else {
+    el.style.textShadow = '0 1px 3px rgba(0, 0, 0, 0.65)';
+  }
+}
+
+function isCurrentUserRoomManager(room = state.activeRoom) {
+  if (!state.user || !room) return false;
+  if (state.user.role === 'site_owner' || hasPerm('manage_rooms')) return true;
+  if (room.owner_user_id && state.user.userId && Number(room.owner_user_id) === Number(state.user.userId)) return true;
+  if (Array.isArray(room.staff) && state.user.userId) {
+    return room.staff.some((s) => Number(s.user_id) === Number(state.user.userId));
+  }
+  return false;
+}
+
+function playMentionChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const notes = [880, 1174.66];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.11);
+      gain.gain.setValueAtTime(0.001, now + i * 0.11);
+      gain.gain.exponentialRampToValueAtTime(0.16, now + i * 0.11 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.11 + 0.24);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + i * 0.11);
+      osc.stop(now + i * 0.11 + 0.26);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 800);
+  } catch {
+    // ignore audio autoplay block
+  }
+}
+
+function stopAmbientRadio() {
+  if (state.radioTimer) {
+    clearInterval(state.radioTimer);
+    state.radioTimer = null;
+  }
+  if (state.radioAudioCtx) {
+    state.radioAudioCtx.close().catch(() => {});
+    state.radioAudioCtx = null;
+  }
+  state.radioPlaying = false;
+  navRadioBtn.classList.remove('playing');
+  navRadioIcon.textContent = '▶️';
+  navRadioLabel.textContent = 'راديو';
+}
+
+function toggleRadioPlayer() {
+  if (state.radioPlaying) {
+    stopAmbientRadio();
+    showToast('⏹️ تم إيقاف تشغيل الراديو');
+    return;
+  }
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      showToast('متصفحك لا يدعم تشغيل صوت الراديو.', 'error');
+      return;
+    }
+    const ctx = new AudioCtx();
+    state.radioAudioCtx = ctx;
+    state.radioPlaying = true;
+    navRadioBtn.classList.add('playing');
+    navRadioIcon.textContent = '⏸️';
+    navRadioLabel.textContent = 'إيقاف';
+
+    const chords = [
+      [261.63, 329.63, 392.0],
+      [293.66, 349.23, 440.0],
+      [246.94, 329.63, 392.0],
+      [220.0, 261.63, 329.63]
+    ];
+    let step = 0;
+    const playChord = () => {
+      if (!state.radioPlaying || !state.radioAudioCtx) return;
+      const chord = chords[step % chords.length];
+      step += 1;
+      const now = ctx.currentTime;
+      chord.forEach((f) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(0.03, now + 0.45);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 2.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 2.4);
+      });
+    };
+    playChord();
+    state.radioTimer = setInterval(playChord, 2500);
+    showToast('🎶 تم تشغيل موسيقى الراديو الهادئة');
+  } catch {
+    stopAmbientRadio();
   }
 }
 
@@ -327,6 +562,10 @@ function applySiteSettings(settings) {
   }
 
   maintenanceNoticeBanner.classList.toggle('hidden', settings.maintenance_mode !== 1);
+
+  if (state.activeRoom && !state.activeRoom.welcome_message && settings.welcome_message) {
+    roomWelcomeText.textContent = settings.welcome_message;
+  }
 
   const rootStyle = document.documentElement.style;
   if (settings.top_bar_color) {
@@ -358,12 +597,32 @@ function applySiteSettings(settings) {
   }
 }
 
+function appendSegmentWithMentions(parentEl, segment) {
+  if (!segment) return;
+  const mentionRegex = /(@[^\s@:،,!؟?()[\]{}"']+)/g;
+  let last = 0;
+  let m;
+  while ((m = mentionRegex.exec(segment)) !== null) {
+    if (m.index > last) {
+      parentEl.appendChild(document.createTextNode(segment.slice(last, m.index)));
+    }
+    const chip = document.createElement('span');
+    chip.className = 'mention-chip';
+    chip.textContent = m[0];
+    parentEl.appendChild(chip);
+    last = mentionRegex.lastIndex;
+  }
+  if (last < segment.length) {
+    parentEl.appendChild(document.createTextNode(segment.slice(last)));
+  }
+}
+
 function renderTextWithCustomEmojis(targetEl, text) {
   targetEl.innerHTML = '';
   if (!text) return;
   const emojis = state.customEmojis || [];
   if (emojis.length === 0) {
-    targetEl.textContent = text;
+    appendSegmentWithMentions(targetEl, text);
     return;
   }
 
@@ -377,7 +636,7 @@ function renderTextWithCustomEmojis(targetEl, text) {
   let match;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      targetEl.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      appendSegmentWithMentions(targetEl, text.slice(lastIndex, match.index));
     }
     const found = byCode.get(match[0].toLowerCase());
     if (found) {
@@ -388,12 +647,12 @@ function renderTextWithCustomEmojis(targetEl, text) {
       img.className = 'custom-chat-emoji';
       targetEl.appendChild(img);
     } else {
-      targetEl.appendChild(document.createTextNode(match[0]));
+      appendSegmentWithMentions(targetEl, match[0]);
     }
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) {
-    targetEl.appendChild(document.createTextNode(text.slice(lastIndex)));
+    appendSegmentWithMentions(targetEl, text.slice(lastIndex));
   }
 }
 
@@ -489,20 +748,23 @@ function updateMeUI() {
   renderAvatarInto(topMeAvatar, u.name, u.avatarUrl, u.nameColor, u.role, u.avatarFrame);
   renderAvatarInto(dropMeAvatar, u.name, u.avatarUrl, u.nameColor, u.role, u.avatarFrame);
   dropMeRank.innerHTML = roleBadgeHTML(u.role);
-  applyNameplate(dropMeName, u.name, u.nameplateStyle, u.nameColor);
+  applyNameplate(dropMeName, u.name, u.nameplateStyle, u.nameColor, u.nameBgColor);
   dropMeCoins.textContent = `🪙 ${u.coins ?? 1500} نقطة`;
   shopWalletBalance.textContent = `🪙 ${u.coins ?? 1500} نقطة`;
 
   const isGuest = u.role === 'guest' || u.type === 'guest';
   const hasPanel = hasPanelAccess(u.role);
   const canManageRooms = hasPerm('manage_rooms', u.role);
-  const canClearRoom = hasPerm('clear_room', u.role);
+  const roomMgr = isCurrentUserRoomManager(state.activeRoom);
+  const canClearRoom = hasPerm('clear_room', u.role) || roomMgr;
 
   topUpgradeGuestBtn.classList.toggle('hidden', !isGuest);
   dropUpgradeGuestBtn.classList.toggle('hidden', !isGuest);
   dropAdminPanelBtn.classList.toggle('hidden', !hasPanel);
+  dropRoomOptionsBtn.classList.toggle('hidden', !roomMgr);
+  bannerRoomOptionsBtn.classList.toggle('hidden', !roomMgr);
   drawerAdminBtn.classList.toggle('hidden', !hasPanel);
-  micSettingsBtn.classList.toggle('hidden', !hasPanel);
+  micSettingsBtn.classList.toggle('hidden', !hasPanel && !roomMgr);
   bannerClearRoomBtn.classList.toggle('hidden', !canClearRoom);
   roomsModalCreateBtn.classList.toggle('hidden', !canManageRooms);
   panelNewRoomBtn.classList.toggle('hidden', !canManageRooms);
@@ -615,6 +877,9 @@ document.addEventListener('click', (e) => {
   if (!emojiPopover.contains(e.target) && e.target !== emojiToggleBtn) {
     emojiPopover.classList.add('hidden');
   }
+  if (!composerPlusMenu.contains(e.target) && e.target !== composerPlusBtn) {
+    composerPlusMenu.classList.add('hidden');
+  }
 });
 
 function openDrawer() {
@@ -637,7 +902,8 @@ profileDropdown.querySelectorAll('[data-action]').forEach((btn) => {
     const act = btn.dataset.action;
     if (act === 'upgrade-guest') openUpgradeGuestModal();
     else if (act === 'edit-profile') openCustomizeModal();
-    else if (act === 'chat-settings' || act === 'room-options') openRoomOptionsFeature();
+    else if (act === 'text-customizer') openTextCustomizerModal();
+    else if (act === 'chat-settings' || act === 'room-options') openRoomOptionsModal();
     else if (act === 'wallet') openWalletFeature();
     else if (act === 'admin-panel') openAdminPanel();
     else if (act === 'leave-room') openRoomsModal();
@@ -651,6 +917,8 @@ document.querySelectorAll('[data-drawer]').forEach((btn) => {
     const target = btn.dataset.drawer;
     if (target === 'wall') openWallModal();
     else if (target === 'news') openNewsModal();
+    else if (target === 'text-customizer') openTextCustomizerModal();
+    else if (target === 'room-options') openRoomOptionsModal();
     else if (target === 'mics') openMicsModal();
     else if (target === 'families') openLeaderboardsModal('families');
     else if (target === 'vips') openLeaderboardsModal('vips');
@@ -672,12 +940,43 @@ document.getElementById('topRequestBtn').addEventListener('click', () => {
 });
 document.getElementById('topPmBtn').addEventListener('click', () => {
   pmDot.classList.add('hidden');
-  openPrivateMessagesModal();
+  openFloatingPm(state.fpmPartner);
 });
 document.getElementById('topRichBtn').addEventListener('click', () => openLeaderboardsModal('rich'));
 document.getElementById('topVipBtn').addEventListener('click', () => openLeaderboardsModal('vips'));
 
-// Bottom 5 Nav Buttons
+// Mics welcome strip toggle, yellow arrow rooms switch, & room options
+toggleWelcomeStripBtn.addEventListener('click', () => {
+  state.welcomeStripCollapsed = !state.welcomeStripCollapsed;
+  roomWelcomeBanner.classList.toggle('collapsed', state.welcomeStripCollapsed);
+});
+
+quickEnterRoomsBtn.addEventListener('click', openRoomsModal);
+bannerRoomOptionsBtn.addEventListener('click', () => openRoomOptionsModal());
+
+// Composer '+' popover
+composerPlusBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  composerPlusMenu.classList.toggle('hidden');
+});
+plusTextCustomizerBtn.addEventListener('click', () => {
+  composerPlusMenu.classList.add('hidden');
+  openTextCustomizerModal();
+});
+plusUploadImageBtn.addEventListener('click', () => {
+  composerPlusMenu.classList.add('hidden');
+  uploadImageBtn.click();
+});
+plusEditProfileBtn.addEventListener('click', () => {
+  composerPlusMenu.classList.add('hidden');
+  openCustomizeModal();
+});
+openTcFromProfileBtn.addEventListener('click', () => {
+  customizeModal.classList.add('hidden');
+  openTextCustomizerModal();
+});
+
+// Bottom 6 Nav Buttons
 document.getElementById('navFriendsBtn').addEventListener('click', () => openFriendsModal('friends'));
 document.getElementById('navOnlineBtn').addEventListener('click', () => {
   onlineModalSearch.value = '';
@@ -692,6 +991,7 @@ document.getElementById('navRefreshBtn').addEventListener('click', () => {
   }
 });
 document.getElementById('navShopBtn').addEventListener('click', openShopModal);
+navRadioBtn.addEventListener('click', toggleRadioPlayer);
 
 // Emoji Picker Setup (Standard + Custom Uploaded Stickers)
 function rebuildEmojiPopover() {
@@ -847,7 +1147,11 @@ function connectSocket() {
   socket.on('rooms_list', (rooms) => {
     state.rooms = rooms;
     const active = rooms.find((r) => r.id === state.activeRoomId);
-    if (active) applyActiveRoomBanner(active);
+    if (active) {
+      state.activeRoom = active;
+      applyActiveRoomBanner(active);
+      updateMeUI();
+    }
     if (!roomsModal.classList.contains('hidden')) renderRoomsModalList();
   });
 
@@ -855,6 +1159,7 @@ function connectSocket() {
     state.activeRoomId = room.id;
     state.activeRoom = room;
     applyActiveRoomBanner(room);
+    updateMeUI();
     setMuteState(Boolean(muteInfo));
     renderMessages(messages);
     if (mics) {
@@ -872,6 +1177,10 @@ function connectSocket() {
     if (room.id === state.activeRoomId) {
       state.activeRoom = room;
       applyActiveRoomBanner(room);
+      updateMeUI();
+    }
+    if (!roomOptionsModal.classList.contains('hidden')) {
+      renderRoomOptionsTab();
     }
   });
 
@@ -889,7 +1198,17 @@ function connectSocket() {
   socket.on('online_users_global', (users) => {
     state.globalOnlineUsers = users || [];
     bottomOnlineNum.textContent = String(state.globalOnlineUsers.length);
-    modalOnlineCount.textContent = String(state.globalOnlineUsers.length);
+    modalOnlineCount.textContent = String(
+      state.persistentMembers.length ? state.persistentMembers.length : state.globalOnlineUsers.length
+    );
+    if (!onlineUsersModal.classList.contains('hidden')) {
+      renderGlobalOnlineModal();
+    }
+  });
+
+  socket.on('persistent_members', (members) => {
+    state.persistentMembers = members || [];
+    modalOnlineCount.textContent = String(state.persistentMembers.length || state.globalOnlineUsers.length);
     if (!onlineUsersModal.classList.contains('hidden')) {
       renderGlobalOnlineModal();
     }
@@ -926,6 +1245,11 @@ function connectSocket() {
     appendMessage(msg);
   });
 
+  socket.on('mention_alert', ({ fromName, text }) => {
+    playMentionChime();
+    showToast(`🔔 منشن من ${fromName}: ${text || ''}`);
+  });
+
   socket.on('room_cleared', ({ roomId, message }) => {
     if (roomId !== state.activeRoomId) return;
     messagesFeed.innerHTML = '';
@@ -958,9 +1282,62 @@ function connectSocket() {
   });
 
   socket.on('new_pm', (pm) => {
+    if (!pm) return;
     if (pm.from_key !== state.user?.key) {
       pmDot.classList.remove('hidden');
       showToast(`✉️ رسالة خاصة من ${pm.from_name}`);
+    }
+    if (!floatingPmBox.classList.contains('hidden')) {
+      state.fpmMessagesCache.push(pm);
+      renderFloatingPmMessages();
+      if (state.fpmPartner && pm.from_key === state.fpmPartner.key) {
+        state.socket?.emit('pm_mark_read', { partnerKey: state.fpmPartner.key });
+      }
+    }
+  });
+
+  socket.on('pm_read_receipt', ({ readerKey }) => {
+    if (!readerKey) return;
+    state.fpmMessagesCache.forEach((m) => {
+      if (m.from_key === state.user?.key && m.to_key === readerKey) {
+        m.is_read = 1;
+      }
+    });
+    if (!floatingPmBox.classList.contains('hidden')) {
+      renderFloatingPmMessages();
+    }
+  });
+
+  socket.on('pm_voice_call', ({ fromKey, fromName, action }) => {
+    if (!fromKey || fromKey === state.user?.key) return;
+    if (action === 'end') {
+      if (state.fpmPartner?.key === fromKey) {
+        stopFloatingPmVoice();
+      }
+      showToast(`📞 انتهت المكالمة الخاصة مع ${fromName}`);
+      return;
+    }
+    openFloatingPm({ key: fromKey, name: fromName });
+    if (action === 'offer') {
+      showToast(`📞 مكالمة صوتية خاصة واردة من ${fromName}`);
+      fpmCallStatus.textContent = '📞 يتصل بك... اضغط 📞 للرد';
+      fpmCallStatus.classList.remove('hidden');
+    } else if (action === 'accept') {
+      fpmCallStatus.textContent = '🎙️ مكالمة صوتية متصلة الآن';
+      fpmCallStatus.classList.remove('hidden');
+    }
+  });
+
+  socket.on('pm_voice_chunk', ({ fromKey, audioData }) => {
+    if (!audioData || !fromKey) return;
+    if (state.fpmPartner?.key === fromKey && !floatingPmBox.classList.contains('hidden')) {
+      try {
+        const audio = new Audio(audioData);
+        audio.volume = 0.9;
+        audio.play().catch(() => {});
+      } catch {
+        // ignore audio restriction
+      }
     }
   });
 
@@ -1013,6 +1390,24 @@ function applyActiveRoomBanner(room) {
   if (typeof room.onlineCount === 'number') {
     bannerOnlineCount.textContent = `👥 ${room.onlineCount} متواجد`;
   }
+
+  const wText =
+    (room.welcome_message || '').trim() ||
+    (state.siteSettings?.welcome_message || '').trim() ||
+    `أهلاً وسهلاً بكم في "${room.name}" — نتمنى لكم أمتع الأوقات!`;
+  roomWelcomeText.textContent = wText;
+
+  if (room.owner_name) {
+    bannerRoomOwnerChip.textContent = `👑 ${room.owner_name}`;
+    bannerRoomOwnerChip.classList.remove('hidden');
+  } else {
+    bannerRoomOwnerChip.textContent = '';
+    bannerRoomOwnerChip.classList.add('hidden');
+  }
+
+  bannerRoomCard.style.background = room.card_bg_color || '';
+  bannerRoomCard.style.color = room.card_text_color || '';
+
   const theme = room.bg_theme || 'warm_peach';
   chatStreamWrap.className = `chat-stream theme-${theme}`;
   chatStreamWrap.style.backgroundImage = '';
@@ -1169,6 +1564,15 @@ function appendSystemNotice(text) {
   chatStreamWrap.scrollTop = chatStreamWrap.scrollHeight;
 }
 
+function insertMentionInComposer(targetName) {
+  if (!targetName) return;
+  const tag = `@${targetName} `;
+  const cur = messageInput.value;
+  const prefix = cur && !cur.endsWith(' ') ? ' ' : '';
+  messageInput.value = `${cur}${prefix}${tag}`;
+  messageInput.focus();
+}
+
 function appendMessage(msg, scroll = true) {
   const empty = messagesFeed.querySelector('.empty-feed');
   if (empty) empty.remove();
@@ -1180,6 +1584,7 @@ function appendMessage(msg, scroll = true) {
 
   const av = document.createElement('div');
   av.className = 'avatar-circle clickable-user-trigger';
+  av.title = `اضغط لعمل منشن لـ ${msg.sender_name}`;
   renderAvatarInto(av, msg.sender_name, msg.avatar_url, msg.name_color, msg.sender_role, msg.avatar_frame);
 
   const body = document.createElement('div');
@@ -1188,17 +1593,24 @@ function appendMessage(msg, scroll = true) {
   const inline = document.createElement('div');
   inline.className = 'cody-msg-inline';
 
-  inline.insertAdjacentHTML('beforeend', `<span class="msg-rank-slot">${roleBadgeHTML(msg.sender_role)}</span>`);
+  const rankSlot = document.createElement('span');
+  rankSlot.className = 'msg-rank-slot clickable-user-trigger';
+  rankSlot.title = 'عرض ملف العضو وخيارات الإدارة';
+  rankSlot.innerHTML = roleBadgeHTML(msg.sender_role);
+  inline.appendChild(rankSlot);
 
   const nameplate = document.createElement('span');
-  applyNameplate(nameplate, msg.sender_name, msg.nameplate_style, msg.name_color);
+  applyNameplate(nameplate, msg.sender_name, msg.nameplate_style, msg.name_color, msg.name_bg_color || '');
   nameplate.classList.add('clickable-user-trigger');
+  nameplate.title = `اضغط لعمل منشن @${msg.sender_name}`;
   inline.appendChild(nameplate);
 
   const openSenderCard = () => {
     const sk = row.dataset.senderKey;
     if (!sk) return;
-    const match = state.globalOnlineUsers.find((u) => u.key === sk);
+    const match =
+      state.persistentMembers.find((u) => u.key === sk) ||
+      state.globalOnlineUsers.find((u) => u.key === sk);
     if (match) {
       openQuickUserModal(match);
       return;
@@ -1210,6 +1622,7 @@ function appendMessage(msg, scroll = true) {
       name: nameplate.textContent || msg.sender_name,
       role: row.dataset.senderRole || msg.sender_role,
       nameColor: msg.name_color,
+      nameBgColor: msg.name_bg_color,
       avatarUrl: msg.avatar_url,
       avatarFrame: msg.avatar_frame,
       nameplateStyle: msg.nameplate_style,
@@ -1217,12 +1630,30 @@ function appendMessage(msg, scroll = true) {
       isMuted: false
     });
   };
-  av.addEventListener('click', openSenderCard);
-  nameplate.addEventListener('click', openSenderCard);
+
+  // Click-to-Mention when clicking avatar or nameplate; rank badge opens user card
+  const mentionHandler = () => {
+    const cleanName = nameplate.textContent || msg.sender_name;
+    insertMentionInComposer(cleanName);
+  };
+  av.addEventListener('click', mentionHandler);
+  nameplate.addEventListener('click', mentionHandler);
+  rankSlot.addEventListener('click', openSenderCard);
 
   if (msg.content) {
+    const colon = document.createElement('span');
+    colon.className = 'msg-colon';
+    colon.textContent = ':';
+    inline.appendChild(colon);
+
     const txt = document.createElement('span');
     txt.className = 'msg-text-cody';
+    applyMessageStylingToEl(txt, {
+      textColor: msg.text_color || '#ffffff',
+      neonColor: msg.neon_color || '',
+      fontFamily: msg.font_family || 'Normal',
+      fontStyle: msg.font_style || 'Normal'
+    });
     renderTextWithCustomEmojis(txt, msg.content);
     inline.appendChild(txt);
   }
@@ -1420,29 +1851,54 @@ sendRecordBtn.addEventListener('click', () => {
 });
 
 bannerClearRoomBtn.addEventListener('click', () => {
-  if (!state.socket || !hasPerm('clear_room')) return;
+  if (!state.socket || (!hasPerm('clear_room') && !isCurrentUserRoomManager())) return;
   if (confirm('هل تريد مسح جميع رسائل هذه الغرفة؟')) {
     state.socket.emit('admin_clear_room', { roomId: state.activeRoomId });
   }
 });
 
 // ==========================================
-// ONLINE USERS MODAL & ROOMS MODAL
+// PERSISTENT MEMBERS & ONLINE USERS MODAL + ROOMS MODAL
 // ==========================================
+document.querySelectorAll('[data-members-filter]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-members-filter]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.membersFilter = btn.dataset.membersFilter || 'all';
+    renderGlobalOnlineModal();
+  });
+});
+
 function renderGlobalOnlineModal() {
   const q = onlineModalSearch.value.trim().toLowerCase();
-  const filtered = state.globalOnlineUsers.filter(
-    (u) => !q || u.name.toLowerCase().includes(q) || (u.roomName || '').toLowerCase().includes(q)
-  );
+  const baseList =
+    state.membersFilter === 'online'
+      ? state.globalOnlineUsers
+      : state.persistentMembers.length > 0
+        ? state.persistentMembers
+        : state.globalOnlineUsers;
+
+  const filtered = baseList.filter((u) => {
+    const rLabel = getRankInfo(u.role)?.label || '';
+    return (
+      !q ||
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.roomName || '').toLowerCase().includes(q) ||
+      rLabel.toLowerCase().includes(q)
+    );
+  });
+
+  modalOnlineCount.textContent = String(filtered.length);
   globalOnlineList.innerHTML = '';
   if (filtered.length === 0) {
-    globalOnlineList.innerHTML = '<li class="panel-empty">لا يوجد متصلون مطابقون.</li>';
+    globalOnlineList.innerHTML = '<li class="panel-empty">لا يوجد أعضاء مطابقون.</li>';
     return;
   }
 
   for (const u of filtered) {
+    const isOnline = u.isOnline !== false;
     const li = document.createElement('li');
-    li.className = 'user-row-light';
+    li.className = `user-row-light ${isOnline ? '' : 'is-offline'}`;
 
     const top = document.createElement('div');
     top.className = 'user-row-top';
@@ -1456,14 +1912,18 @@ function renderGlobalOnlineModal() {
 
     const info = document.createElement('div');
     info.className = 'clickable-user-trigger';
+    const statusDotHtml = `<span class="status-dot-inline ${isOnline ? 'online' : 'offline'}" title="${isOnline ? 'متصل الآن' : 'غير متصل'}"></span>`;
+    const statusText = isOnline ? `متصل الآن • ${u.roomName || 'الغرفة العامة'}` : '⚫ غير متصل حالياً';
     info.innerHTML = `
       <div class="me-name-row">
+        ${statusDotHtml}
         ${roleBadgeHTML(u.role)}
         <span class="nameplate-pill plate-${u.nameplateStyle || 'default'}"></span>
       </div>
-      <div class="panel-meta-sub">${u.roomName || ''} ${u.isMuted ? '• 🔇 مكتوم' : ''}</div>
+      <div class="panel-meta-sub">${escapeHtml(statusText)} ${u.isMuted ? '• 🔇 مكتوم' : ''}</div>
     `;
-    info.querySelector('.nameplate-pill').textContent = u.name;
+    const np = info.querySelector('.nameplate-pill');
+    applyNameplate(np, u.name, u.nameplateStyle, u.nameColor, u.nameBgColor || '');
 
     const inspectHandler = () => openQuickUserModal(u);
     av.addEventListener('click', inspectHandler);
@@ -1484,7 +1944,7 @@ function renderGlobalOnlineModal() {
       pmBtn.textContent = '✉️ خاص';
       pmBtn.addEventListener('click', () => {
         onlineUsersModal.classList.add('hidden');
-        openPrivateMessagesModal(u);
+        openFloatingPm(u);
       });
 
       const addFriendBtn = document.createElement('button');
@@ -1598,7 +2058,7 @@ function openQuickUserModal(u) {
       pmBtn.onclick = () => {
         featureModal.classList.add('hidden');
         onlineUsersModal.classList.add('hidden');
-        openPrivateMessagesModal(u);
+        openFloatingPm(u);
       };
     }
 
@@ -1886,6 +2346,32 @@ function syncWallpaperPreview(url) {
   }
 }
 
+function populateRoomOwnerSelect(selectedOwnerId = null) {
+  if (!roomOwnerSelect) return;
+  roomOwnerSelect.innerHTML = '';
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '';
+  noneOpt.textContent = 'بدون مالك معين (إدارة الموقع فقط)';
+  roomOwnerSelect.appendChild(noneOpt);
+
+  const sourceMembers = (
+    state.adminOverview?.registeredUsers ||
+    state.persistentMembers.filter((m) => m.userId) ||
+    []
+  );
+  const seen = new Set();
+  for (const m of sourceMembers) {
+    const uid = m.id || m.userId;
+    if (!uid || seen.has(uid)) continue;
+    seen.add(uid);
+    const opt = document.createElement('option');
+    opt.value = String(uid);
+    opt.textContent = `👑 ${m.name} (@${m.username || m.name})`;
+    roomOwnerSelect.appendChild(opt);
+  }
+  roomOwnerSelect.value = selectedOwnerId ? String(selectedOwnerId) : '';
+}
+
 function openRoomEditorModal(mode, room = null) {
   state.roomEditorMode = mode;
   state.editingRoomId = room ? room.id : null;
@@ -1896,6 +2382,7 @@ function openRoomEditorModal(mode, room = null) {
   roomNameInput.value = room ? room.name : '';
   roomDescInput.value = room ? room.description || '' : '';
   roomWelcomeInput.value = room ? room.welcome_message || '' : '';
+  populateRoomOwnerSelect(room ? room.owner_user_id : null);
   roomPasswordInput.value = room ? room.room_password || '' : '';
   populateRoomMinRankSelect(room ? Number(room.min_rank_power) || 0 : 0);
   roomThemeSelect.value = room?.bg_theme || 'warm_peach';
@@ -1958,6 +2445,7 @@ roomEditorForm.addEventListener('submit', (e) => {
     name: roomNameInput.value.trim(),
     description: roomDescInput.value.trim(),
     welcomeMessage: roomWelcomeInput.value.trim(),
+    ownerUserId: roomOwnerSelect.value ? Number(roomOwnerSelect.value) : null,
     roomPassword: roomPasswordInput.value.trim(),
     minRankPower: Number(roomMinRankSelect.value) || 0,
     imageUrl: state.draftRoomImageUrl,
@@ -2590,13 +3078,80 @@ function renderAdminPanelContent() {
     }
   }
 
-  // Registered Members Tab
+  // Registered Members Tab (Full Owner Account Management: Create + Full Edit)
   panelTabMembers.innerHTML = '';
+  if (state.user?.role === 'site_owner' || canSetRank) {
+    const createCard = document.createElement('form');
+    createCard.className = 'cms-section-card';
+    const myPower = getRankPower(state.user.role);
+    const amOwner = state.user.role === 'site_owner';
+    const selectableRanks = (data.ranks || state.ranks || []).filter(
+      (r) => r.key !== 'guest' && (amOwner || getRankPower(r.key) < myPower)
+    );
+    const rankOpts = selectableRanks
+      .map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === 'member' ? 'selected' : ''}>${escapeHtml(r.icon || '⭐')} ${escapeHtml(r.label)}</option>`)
+      .join('');
+
+    createCard.innerHTML = `
+      <div class="cms-section-title">➕ إنشاء حساب عضو جديد يدوياً</div>
+      <div class="cms-grid">
+        <div class="field-group-light">
+          <label>الاسم الظاهر</label>
+          <input id="adminNewDisplay" class="light-input" type="text" maxlength="28" placeholder="مثال: الأمير محمد" />
+        </div>
+        <div class="field-group-light">
+          <label>اسم المستخدم (للدخول)</label>
+          <input id="adminNewUsername" class="light-input" type="text" minlength="2" maxlength="24" required placeholder="mohamed_vip" />
+        </div>
+        <div class="field-group-light">
+          <label>البريد الإلكتروني</label>
+          <input id="adminNewEmail" class="light-input" type="email" required placeholder="user@example.com" />
+        </div>
+        <div class="field-group-light">
+          <label>كلمة المرور</label>
+          <input id="adminNewPass" class="light-input" type="password" minlength="4" required placeholder="••••" />
+        </div>
+      </div>
+      <div class="cms-grid">
+        <div class="field-group-light">
+          <label>الرتبة المبدئية</label>
+          <select id="adminNewRole" class="light-input">${rankOpts}</select>
+        </div>
+        <div class="field-group-light" style="justify-content:flex-end;">
+          <button type="submit" class="btn btn-gold btn-sm">➕ إنشاء الحساب فوراً</button>
+        </div>
+      </div>
+    `;
+    createCard.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const res = await apiJson('/api/admin/users', {
+          method: 'POST',
+          body: JSON.stringify({
+            displayName: createCard.querySelector('#adminNewDisplay').value.trim(),
+            username: createCard.querySelector('#adminNewUsername').value.trim(),
+            email: createCard.querySelector('#adminNewEmail').value.trim(),
+            password: createCard.querySelector('#adminNewPass').value,
+            role: createCard.querySelector('#adminNewRole').value
+          })
+        });
+        showToast(res.message);
+        await loadAdminOverview();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    panelTabMembers.appendChild(createCard);
+  }
+
   const memFiltered = (data.registeredUsers || []).filter(
     (u) => !q || u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
   );
   if (memFiltered.length === 0) {
-    panelTabMembers.innerHTML = '<div class="panel-empty">لا يوجد أعضاء مسجلون.</div>';
+    const emp = document.createElement('div');
+    emp.className = 'panel-empty';
+    emp.textContent = 'لا يوجد أعضاء مطابقون.';
+    panelTabMembers.appendChild(emp);
   } else {
     for (const u of memFiltered) {
       const card = document.createElement('div');
@@ -2607,7 +3162,7 @@ function renderAdminPanelContent() {
             <div class="avatar-circle"></div>
             <div>
               <div class="me-name-row"><strong></strong> ${roleBadgeHTML(u.role)}</div>
-              <div class="panel-meta-sub">@${u.username} • ${u.email}${u.ipAddress ? ` • IP: ${u.ipAddress}` : ''}</div>
+              <div class="panel-meta-sub">@${escapeHtml(u.username)} • ${escapeHtml(u.email)}${u.ipAddress ? ` • IP: ${escapeHtml(u.ipAddress)}` : ''}</div>
             </div>
           </div>
         </div>
@@ -2615,49 +3170,65 @@ function renderAdminPanelContent() {
       renderAvatarInto(card.querySelector('.avatar-circle'), u.name, u.avatarUrl, u.nameColor, u.role, u.avatarFrame);
       card.querySelector('strong').textContent = u.name;
 
-      if (canModerateTarget(u.role, u.key)) {
+      const canEditAccount =
+        state.user?.role === 'site_owner' ||
+        (canSetRank && (u.id === state.user?.userId || getRankPower(u.role) < getRankPower(state.user?.role)));
+
+      if (canModerateTarget(u.role, u.key) || canEditAccount) {
         const actions = document.createElement('div');
         actions.className = 'panel-actions-row';
-        if (canSetRank) {
-          actions.appendChild(buildRankSelect(u.role, u.id));
-          const rBtn = document.createElement('button');
-          rBtn.type = 'button';
-          rBtn.className = 'mod-btn';
-          rBtn.textContent = '✏️ تغيير الاسم';
-          rBtn.onclick = () => {
-            const n = prompt(`الاسم الجديد للعضو "${u.name}":`, u.name);
-            if (n && n.trim().length >= 2) state.socket.emit('admin_rename_user', { targetKey: u.key, newName: n.trim() });
-          };
-          actions.appendChild(rBtn);
-        }
-        if (canMute) {
-          const mBtn = document.createElement('button');
-          mBtn.type = 'button';
-          mBtn.className = 'mod-btn warn';
-          mBtn.textContent = u.isMuted ? '🔊 فك الكتم' : '🔇 كتم';
-          mBtn.onclick = () => state.socket.emit('admin_mute', { targetKey: u.key, roomId: '*', minutes: u.isMuted ? 0 : 60 });
-          actions.appendChild(mBtn);
+
+        if (canEditAccount && (u.role !== 'site_owner' || state.user?.role === 'site_owner')) {
+          const fullEditBtn = document.createElement('button');
+          fullEditBtn.type = 'button';
+          fullEditBtn.className = 'mod-btn success';
+          fullEditBtn.textContent = '✏️ تعديل الحساب';
+          fullEditBtn.onclick = () => openAdminUserEditorModal(u);
+          actions.appendChild(fullEditBtn);
         }
 
-        if (canBan) {
-          if (u.isBanned) {
-            const ub = document.createElement('button');
-            ub.type = 'button';
-            ub.className = 'mod-btn success';
-            ub.textContent = '🔓 فك الحظر';
-            ub.onclick = () => state.socket.emit('admin_unban', { targetKey: u.key });
-            actions.appendChild(ub);
-          } else {
-            const bBtn = document.createElement('button');
-            bBtn.type = 'button';
-            bBtn.className = 'mod-btn danger';
-            bBtn.textContent = '⛔ حظر';
-            bBtn.onclick = () => {
-              if (confirm(`حظر "${u.name}" نهائياً؟`)) {
-                state.socket.emit('admin_ban', { targetKey: u.key, targetName: u.name, reason: 'حظر نهائي من لوحة التحكم' });
-              }
+        if (canModerateTarget(u.role, u.key)) {
+          if (canSetRank) {
+            actions.appendChild(buildRankSelect(u.role, u.id));
+            const rBtn = document.createElement('button');
+            rBtn.type = 'button';
+            rBtn.className = 'mod-btn';
+            rBtn.textContent = '✏️ تغيير الاسم';
+            rBtn.onclick = () => {
+              const n = prompt(`الاسم الجديد للعضو "${u.name}":`, u.name);
+              if (n && n.trim().length >= 2) state.socket.emit('admin_rename_user', { targetKey: u.key, newName: n.trim() });
             };
-            actions.appendChild(bBtn);
+            actions.appendChild(rBtn);
+          }
+          if (canMute) {
+            const mBtn = document.createElement('button');
+            mBtn.type = 'button';
+            mBtn.className = 'mod-btn warn';
+            mBtn.textContent = u.isMuted ? '🔊 فك الكتم' : '🔇 كتم';
+            mBtn.onclick = () => state.socket.emit('admin_mute', { targetKey: u.key, roomId: '*', minutes: u.isMuted ? 0 : 60 });
+            actions.appendChild(mBtn);
+          }
+
+          if (canBan) {
+            if (u.isBanned) {
+              const ub = document.createElement('button');
+              ub.type = 'button';
+              ub.className = 'mod-btn success';
+              ub.textContent = '🔓 فك الحظر';
+              ub.onclick = () => state.socket.emit('admin_unban', { targetKey: u.key });
+              actions.appendChild(ub);
+            } else {
+              const bBtn = document.createElement('button');
+              bBtn.type = 'button';
+              bBtn.className = 'mod-btn danger';
+              bBtn.textContent = '⛔ حظر';
+              bBtn.onclick = () => {
+                if (confirm(`حظر "${u.name}" نهائياً؟`)) {
+                  state.socket.emit('admin_ban', { targetKey: u.key, targetName: u.name, reason: 'حظر نهائي من لوحة التحكم' });
+                }
+              };
+              actions.appendChild(bBtn);
+            }
           }
         }
         card.appendChild(actions);
@@ -2880,7 +3451,10 @@ async function openFriendsModal(defaultMode = 'friends') {
         pmBtn.type = 'button';
         pmBtn.className = 'mod-btn';
         pmBtn.textContent = '✉️ مراسلة';
-        pmBtn.onclick = () => openPrivateMessagesModal({ key: f.friend_key, name: f.friend_name });
+        pmBtn.onclick = () => {
+          featureModal.classList.add('hidden');
+          openFloatingPm({ key: f.friend_key, name: f.friend_name, avatarUrl: f.friend_avatar, role: f.friend_role });
+        };
         acts.appendChild(pmBtn);
       }
       featureModalBody.appendChild(div);
@@ -3187,6 +3761,7 @@ async function init() {
     if (data.siteSettings) applySiteSettings(data.siteSettings);
     if (data.shop) state.shopCatalog = data.shop;
     if (data.rooms) state.rooms = data.rooms;
+    if (data.persistentMembers) state.persistentMembers = data.persistentMembers;
     if (data.userCount === 0) firstOwnerNotice.classList.remove('hidden');
     if (data.bannedReason) {
       leaveChatSession(`⛔ تم حظرك نهائياً: ${data.bannedReason}`);
@@ -3200,5 +3775,804 @@ async function init() {
     state.token = '';
   }
 }
+
+// ==========================================
+// 1. FLOATING PRIVATE CHAT BOX (PM + VOICE CALL + READ TICK)
+// ==========================================
+async function openFloatingPm(preselectUser = null) {
+  if (!state.user) return;
+  pmDot.classList.add('hidden');
+  floatingPmBox.classList.remove('hidden', 'minimized');
+  state.fpmMinimized = false;
+
+  const candidates = [];
+  const seenKeys = new Set();
+  const pushCandidate = (u) => {
+    if (!u || !u.key || u.key === state.user?.key || seenKeys.has(u.key)) return;
+    seenKeys.add(u.key);
+    candidates.push(u);
+  };
+  if (preselectUser) pushCandidate(preselectUser);
+  state.globalOnlineUsers.forEach(pushCandidate);
+  state.persistentMembers.forEach(pushCandidate);
+
+  if (!state.fpmPartner || (preselectUser && preselectUser.key)) {
+    state.fpmPartner = preselectUser || candidates[0] || null;
+  }
+
+  try {
+    const socialData = await apiJson('/api/social/state');
+    state.fpmMessagesCache = socialData.privateMessages || [];
+    if (!state.fpmPartner && state.fpmMessagesCache.length > 0) {
+      const last = state.fpmMessagesCache[state.fpmMessagesCache.length - 1];
+      const pKey = last.from_key === state.user.key ? last.to_key : last.from_key;
+      const pName = last.from_key === state.user.key ? last.to_name : last.from_name;
+      state.fpmPartner = { key: pKey, name: pName };
+      pushCandidate(state.fpmPartner);
+    }
+  } catch {
+    // ignore fetch error
+  }
+
+  fpmPartnerSelect.innerHTML = '';
+  if (candidates.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'لا يوجد أعضاء للمراسلة';
+    fpmPartnerSelect.appendChild(opt);
+  } else {
+    candidates.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.key;
+      opt.textContent = `${c.isOnline === false ? '⚫' : '🟢'} ${c.name}`;
+      if (state.fpmPartner && state.fpmPartner.key === c.key) opt.selected = true;
+      fpmPartnerSelect.appendChild(opt);
+    });
+  }
+
+  syncFloatingPmHeader();
+  renderFloatingPmMessages();
+  if (state.fpmPartner?.key) {
+    state.socket?.emit('pm_mark_read', { partnerKey: state.fpmPartner.key });
+  }
+}
+
+function syncFloatingPmHeader() {
+  const p = state.fpmPartner;
+  if (!p) {
+    fpmPartnerName.textContent = 'اختر عضواً للخاص';
+    renderAvatarInto(fpmAvatar, '?', '', '#ffffff', 'member', 'none');
+    return;
+  }
+  const full =
+    state.persistentMembers.find((u) => u.key === p.key) ||
+    state.globalOnlineUsers.find((u) => u.key === p.key) ||
+    p;
+  fpmPartnerName.textContent = full.name || p.name;
+  renderAvatarInto(fpmAvatar, full.name, full.avatarUrl || '', full.nameColor || '#ffffff', full.role || 'member', full.avatarFrame || 'none');
+}
+
+function renderFloatingPmMessages() {
+  fpmMessages.innerHTML = '';
+  const p = state.fpmPartner;
+  if (!p || !p.key) {
+    fpmMessages.innerHTML = '<div class="panel-empty">اختر عضواً من القائمة لبدء المحادثة الخاصة.</div>';
+    return;
+  }
+  const thread = (state.fpmMessagesCache || []).filter(
+    (m) =>
+      (m.from_key === state.user?.key && m.to_key === p.key) ||
+      (m.from_key === p.key && m.to_key === state.user?.key)
+  );
+  if (thread.length === 0) {
+    fpmMessages.innerHTML = '<div class="panel-empty">ابدأ محادثتك الخاصة الآن!</div>';
+    return;
+  }
+  thread.forEach((m) => {
+    const isMine = m.from_key === state.user?.key;
+    const row = document.createElement('div');
+    row.className = `fpm-msg-row ${isMine ? 'sent' : 'received'}`;
+
+    const bubble = document.createElement('div');
+    bubble.className = `fpm-bubble ${isMine ? 'sent' : 'received'}`;
+    bubble.textContent = m.content;
+
+    const meta = document.createElement('div');
+    meta.className = 'fpm-meta';
+    const tickHtml = isMine
+      ? `<span class="fpm-read-tick ${m.is_read ? 'read' : ''}">${m.is_read ? '✓✓' : '✓'}</span>`
+      : '';
+    meta.innerHTML = `${tickHtml}<span>${formatTime(m.created_at)}</span>`;
+
+    row.appendChild(bubble);
+    row.appendChild(meta);
+    fpmMessages.appendChild(row);
+  });
+  fpmMessages.scrollTop = fpmMessages.scrollHeight;
+}
+
+fpmPartnerSelect.addEventListener('change', () => {
+  const k = fpmPartnerSelect.value;
+  if (!k) return;
+  const found =
+    state.persistentMembers.find((u) => u.key === k) ||
+    state.globalOnlineUsers.find((u) => u.key === k);
+  state.fpmPartner = found || { key: k, name: fpmPartnerSelect.options[fpmPartnerSelect.selectedIndex]?.textContent || k };
+  syncFloatingPmHeader();
+  renderFloatingPmMessages();
+  state.socket?.emit('pm_mark_read', { partnerKey: state.fpmPartner.key });
+});
+
+fpmForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const content = fpmInput.value.trim();
+  if (!content || !state.fpmPartner?.key) return;
+  fpmInput.value = '';
+  try {
+    const { pm } = await apiJson('/api/social/pm', {
+      method: 'POST',
+      body: JSON.stringify({
+        toKey: state.fpmPartner.key,
+        toName: state.fpmPartner.name,
+        content
+      })
+    });
+    if (pm && !state.fpmMessagesCache.some((m) => m.id === pm.id)) {
+      state.fpmMessagesCache.push(pm);
+    }
+    renderFloatingPmMessages();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+fpmSettingsBtn.addEventListener('click', openTextCustomizerModal);
+fpmMinBtn.addEventListener('click', () => {
+  state.fpmMinimized = !state.fpmMinimized;
+  floatingPmBox.classList.toggle('minimized', state.fpmMinimized);
+  if (state.fpmMinimized) {
+    state.fpmMaximized = false;
+    floatingPmBox.classList.remove('maximized');
+  }
+});
+fpmMaxBtn.addEventListener('click', () => {
+  state.fpmMaximized = !state.fpmMaximized;
+  state.fpmMinimized = false;
+  floatingPmBox.classList.remove('minimized');
+  floatingPmBox.classList.toggle('maximized', state.fpmMaximized);
+});
+fpmCloseBtn.addEventListener('click', () => {
+  stopFloatingPmVoice();
+  floatingPmBox.classList.add('hidden');
+  floatingPmBox.classList.remove('minimized', 'maximized');
+});
+
+function stopFloatingPmVoice(notifyPartner = false) {
+  if (notifyPartner && state.fpmPartner?.key) {
+    state.socket?.emit('pm_voice_call', { toKey: state.fpmPartner.key, action: 'end' });
+  }
+  if (state.fpmVoiceRecorder && state.fpmVoiceRecorder.state !== 'inactive') {
+    try {
+      state.fpmVoiceRecorder.stop();
+    } catch {
+      // ignore
+    }
+  }
+  state.fpmVoiceRecorder = null;
+  if (state.fpmVoiceStream) {
+    state.fpmVoiceStream.getTracks().forEach((t) => t.stop());
+    state.fpmVoiceStream = null;
+  }
+  state.fpmVoiceActive = false;
+  fpmCallBtn.classList.remove('active-call');
+  fpmCallStatus.classList.add('hidden');
+}
+
+fpmCallBtn.addEventListener('click', async () => {
+  if (!state.fpmPartner?.key) return;
+  if (state.fpmVoiceActive) {
+    stopFloatingPmVoice(true);
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('متصفحك لا يدعم المكالمات الصوتية.', 'error');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.fpmVoiceStream = stream;
+    const rec = new MediaRecorder(stream);
+    state.fpmVoiceRecorder = rec;
+    state.fpmVoiceActive = true;
+    fpmCallBtn.classList.add('active-call');
+    fpmCallStatus.textContent = '🎙️ مكالمة صوتية نشطة الآن';
+    fpmCallStatus.classList.remove('hidden');
+
+    state.socket?.emit('pm_voice_call', { toKey: state.fpmPartner.key, action: 'offer' });
+    rec.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0 && state.fpmVoiceActive && state.fpmPartner?.key) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          state.socket?.emit('pm_voice_chunk', {
+            toKey: state.fpmPartner.key,
+            audioData: reader.result
+          });
+        };
+        reader.readAsDataURL(ev.data);
+      }
+    };
+    rec.start(1400);
+  } catch {
+    showToast('تعذر تشغيل الميكروفون للمكالمة الخاصة.', 'error');
+  }
+});
+
+// ==========================================
+// 2. ADVANCED TEXT, NAME & NEON CUSTOMIZER
+// ==========================================
+const TC_SWATCHES_TEXT = ['#ffffff', '#fef08a', '#bae6fd', '#a7f3d0', '#fbcfe8', '#fda4af', '#c4b5fd', '#fed7aa', '#0f172a', '#fde047', '#38bdf8', '#f472b6'];
+const TC_SWATCHES_NEON = ['', '#38bdf8', '#f472b6', '#facc15', '#4ade80', '#a855f7', '#fb7185', '#f97316', '#ef4444', '#22d3ee'];
+const TC_SWATCHES_BG = ['', '#1e293b', '#1a45e5', '#7c3aed', '#b91c1c', '#059669', '#d97706', '#db2777', '#0f766e', '#000000'];
+
+function buildTcSwatches(container, colors, getCur, onPick) {
+  container.innerHTML = '';
+  colors.forEach((col) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `tc-swatch ${getCur() === col ? 'active' : ''}`;
+    if (!col) {
+      b.style.background = 'linear-gradient(135deg,#fff 45%,#ef4444 48%,#fff 52%)';
+      b.title = 'بدون / افتراضي';
+    } else {
+      b.style.background = col;
+    }
+    b.addEventListener('click', () => {
+      onPick(col);
+      syncTextCustomizerPreview();
+      buildTcSwatches(container, colors, getCur, onPick);
+    });
+    container.appendChild(b);
+  });
+}
+
+function syncTextCustomizerPreview() {
+  if (!state.user) return;
+  renderAvatarInto(tcPreviewAvatar, state.user.name, state.user.avatarUrl, state.user.nameColor, state.user.role, state.user.avatarFrame);
+  tcPreviewRank.innerHTML = roleBadgeHTML(state.user.role);
+  applyNameplate(tcPreviewName, state.user.name, state.user.nameplateStyle, state.user.nameColor, state.tcDraftBg);
+  applyMessageStylingToEl(tcPreviewText, {
+    textColor: state.tcDraftText,
+    neonColor: state.tcDraftNeon,
+    fontFamily: state.tcDraftFont,
+    fontStyle: state.tcDraftStyle
+  });
+  tcFontSelect.value = state.tcDraftFont || 'Normal';
+  tcFontStyleSelect.value = state.tcDraftStyle || 'Normal';
+  if (/^#[0-9a-fA-F]{6}$/.test(state.tcDraftText)) tcTextPicker.value = state.tcDraftText;
+  if (/^#[0-9a-fA-F]{6}$/.test(state.tcDraftNeon)) tcNeonPicker.value = state.tcDraftNeon;
+  if (/^#[0-9a-fA-F]{6}$/.test(state.tcDraftBg)) tcBgPicker.value = state.tcDraftBg;
+}
+
+function openTextCustomizerModal() {
+  if (!state.user) return;
+  state.tcDraftText = state.user.textColor || '#ffffff';
+  state.tcDraftNeon = state.user.neonColor || '';
+  state.tcDraftBg = state.user.nameBgColor || '';
+  state.tcDraftFont = state.user.fontFamily || 'Normal';
+  state.tcDraftStyle = state.user.fontStyle || 'Normal';
+
+  buildTcSwatches(tcTextSwatches, TC_SWATCHES_TEXT, () => state.tcDraftText, (c) => { state.tcDraftText = c || '#ffffff'; });
+  buildTcSwatches(tcNeonSwatches, TC_SWATCHES_NEON, () => state.tcDraftNeon, (c) => { state.tcDraftNeon = c; });
+  buildTcSwatches(tcBgSwatches, TC_SWATCHES_BG, () => state.tcDraftBg, (c) => { state.tcDraftBg = c; });
+
+  syncTextCustomizerPreview();
+  textCustomizerModal.classList.remove('hidden');
+}
+
+document.querySelectorAll('[data-tc-tab]').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-tc-tab]').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    const key = tab.dataset.tcTab;
+    document.getElementById('tcTabText').classList.toggle('hidden', key !== 'text');
+    document.getElementById('tcTabNeon').classList.toggle('hidden', key !== 'neon');
+    document.getElementById('tcTabBg').classList.toggle('hidden', key !== 'bg');
+  });
+});
+
+tcTextPicker.addEventListener('input', (e) => {
+  state.tcDraftText = e.target.value;
+  syncTextCustomizerPreview();
+});
+tcNeonPicker.addEventListener('input', (e) => {
+  state.tcDraftNeon = e.target.value;
+  syncTextCustomizerPreview();
+});
+tcBgPicker.addEventListener('input', (e) => {
+  state.tcDraftBg = e.target.value;
+  syncTextCustomizerPreview();
+});
+tcResetTextBtn.addEventListener('click', () => {
+  state.tcDraftText = '#ffffff';
+  syncTextCustomizerPreview();
+});
+tcResetNeonBtn.addEventListener('click', () => {
+  state.tcDraftNeon = '';
+  syncTextCustomizerPreview();
+});
+tcResetBgBtn.addEventListener('click', () => {
+  state.tcDraftBg = '';
+  syncTextCustomizerPreview();
+});
+tcFontSelect.addEventListener('change', (e) => {
+  state.tcDraftFont = e.target.value;
+  syncTextCustomizerPreview();
+});
+tcFontStyleSelect.addEventListener('change', (e) => {
+  state.tcDraftStyle = e.target.value;
+  syncTextCustomizerPreview();
+});
+
+saveTextCustomizerBtn.addEventListener('click', async () => {
+  try {
+    const data = await apiJson('/api/profile/customize', {
+      method: 'POST',
+      body: JSON.stringify({
+        textColor: state.tcDraftText,
+        neonColor: state.tcDraftNeon,
+        nameBgColor: state.tcDraftBg,
+        fontFamily: state.tcDraftFont,
+        fontStyle: state.tcDraftStyle
+      })
+    });
+    state.user = data.user;
+    state.token = data.token;
+    localStorage.setItem(TOKEN_KEY, data.token);
+    updateMeUI();
+    textCustomizerModal.classList.add('hidden');
+    showToast('✅ تم حفظ تنسيق النص والخط والنيون فوراً!');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+// ==========================================
+// 3. ROOM OPTIONS MODAL (5 SECTIONS FOR ROOM OWNERS/STAFF/ADMINS)
+// ==========================================
+function openRoomOptionsModal() {
+  if (!state.activeRoom) return;
+  if (!isCurrentUserRoomManager(state.activeRoom)) {
+    openRoomOptionsFeature();
+    return;
+  }
+  state.roActiveTab = 'settings';
+  state.roDraftImg = state.activeRoom.image_url || '/assets/rooms/default.svg';
+  state.roDraftWall = state.activeRoom.wallpaper_url || '';
+  roomOptionsTitle.textContent = `🏠 خيارات غرفة: ${state.activeRoom.name}`;
+  document.querySelectorAll('.ro-tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.roTab === state.roActiveTab);
+  });
+  renderRoomOptionsTab();
+  roomOptionsModal.classList.remove('hidden');
+}
+
+document.querySelectorAll('.ro-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.ro-tab').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    state.roActiveTab = tab.dataset.roTab;
+    renderRoomOptionsTab();
+  });
+});
+
+function renderRoomOptionsTab() {
+  const r = state.activeRoom;
+  if (!r) return;
+  roomOptionsBody.innerHTML = '';
+
+  if (state.roActiveTab === 'settings') {
+    const form = document.createElement('form');
+    form.className = 'cms-section-card';
+    const powerOpts = [
+      '<option value="0">مفتوحة للجميع (بما في ذلك الزوار)</option>',
+      ...[...(state.ranks || [])]
+        .filter((rk) => rk.key !== 'guest')
+        .sort((a, b) => a.power - b.power)
+        .map((rk) => `<option value="${rk.power}" ${Number(r.min_rank_power) === Number(rk.power) ? 'selected' : ''}>${escapeHtml(rk.icon || '⭐')} ${escapeHtml(rk.label)} (${rk.power}+)</option>`)
+    ].join('');
+
+    form.innerHTML = `
+      <div class="cms-section-title">1. إعدادات الغرفة الأساسية</div>
+      <div class="room-image-editor">
+        <img id="roImgPreview" class="room-avatar room-avatar-lg" src="${escapeHtml(state.roDraftImg)}" alt="" />
+        <div>
+          <input id="roImgInp" type="file" accept="image/*" class="hidden" />
+          <button id="roUploadImgBtn" type="button" class="btn btn-royal btn-sm">🖼️ تغيير صورة الغرفة</button>
+        </div>
+      </div>
+      <div class="cms-grid">
+        <div class="field-group-light">
+          <label>اسم الغرفة</label>
+          <input id="roName" class="light-input" type="text" maxlength="40" required value="${escapeHtml(r.name)}" />
+        </div>
+        <div class="field-group-light">
+          <label>وصف الغرفة</label>
+          <input id="roDesc" class="light-input" type="text" maxlength="120" value="${escapeHtml(r.description || '')}" />
+        </div>
+      </div>
+      <div class="field-group-light">
+        <label>شريط الترحيب والإعلان داخل الغرفة</label>
+        <input id="roWelcome" class="light-input" type="text" maxlength="250" value="${escapeHtml(r.welcome_message || '')}" placeholder="أهلاً بالجميع في الغرفة..." />
+      </div>
+      <div class="cms-grid">
+        <div class="field-group-light">
+          <label>كلمة مرور الغرفة (اتركه فارغاً بدون تغيير)</label>
+          <input id="roPass" class="light-input" type="text" maxlength="40" placeholder="••••" />
+        </div>
+        <div class="field-group-light">
+          <label>صلاحية الدخول (أقل قوة رتبة)</label>
+          <select id="roMinPower" class="light-input">${powerOpts}</select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-gold btn-sm">💾 حفظ إعدادات الغرفة</button>
+    `;
+
+    const imgInp = form.querySelector('#roImgInp');
+    form.querySelector('#roUploadImgBtn').onclick = () => imgInp.click();
+    imgInp.addEventListener('change', async () => {
+      const f = imgInp.files?.[0];
+      imgInp.value = '';
+      if (!f) return;
+      const fd = new FormData();
+      fd.append('file', f);
+      try {
+        const { url } = await apiJson(`/api/upload/room?roomId=${encodeURIComponent(r.id)}`, { method: 'POST', body: fd });
+        state.roDraftImg = url;
+        form.querySelector('#roImgPreview').src = url;
+        showToast('✅ تم رفع صورة الغرفة');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const body = {
+        name: form.querySelector('#roName').value.trim(),
+        description: form.querySelector('#roDesc').value.trim(),
+        welcomeMessage: form.querySelector('#roWelcome').value.trim(),
+        minRankPower: Number(form.querySelector('#roMinPower').value) || 0,
+        imageUrl: state.roDraftImg
+      };
+      const passVal = form.querySelector('#roPass').value.trim();
+      if (passVal) body.roomPassword = passVal;
+      try {
+        const res = await apiJson(`/api/rooms/${encodeURIComponent(r.id)}/options`, {
+          method: 'PUT',
+          body: JSON.stringify(body)
+        });
+        state.activeRoom = res.room;
+        applyActiveRoomBanner(res.room);
+        showToast(res.message);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    roomOptionsBody.appendChild(form);
+    return;
+  }
+
+  if (state.roActiveTab === 'style') {
+    const form = document.createElement('form');
+    form.className = 'cms-section-card';
+    form.innerHTML = `
+      <div class="cms-section-title">2. ستايل الروم (الخلفيات وألوان البطاقة)</div>
+      <div class="cms-grid">
+        <div class="field-group-light">
+          <label>قالب خلفية الغرفة</label>
+          <select id="roBgTheme" class="light-input">
+            <option value="warm_peach" ${r.bg_theme === 'warm_peach' ? 'selected' : ''}>وردي برتقالي دافئ</option>
+            <option value="sunset_rose" ${r.bg_theme === 'sunset_rose' ? 'selected' : ''}>غروب وردي</option>
+            <option value="sky_breeze" ${r.bg_theme === 'sky_breeze' ? 'selected' : ''}>سماوي منعش</option>
+            <option value="emerald_mist" ${r.bg_theme === 'emerald_mist' ? 'selected' : ''}>أخضر زمردي</option>
+            <option value="royal_night" ${r.bg_theme === 'royal_night' ? 'selected' : ''}>ليلي ملكي</option>
+          </select>
+        </div>
+        <div class="field-group-light">
+          <label>لون / تدرج CSS مخصص للخلفية</label>
+          <input id="roBgCustom" class="light-input" type="text" value="${escapeHtml(r.bg_custom || '')}" placeholder="مثال: linear-gradient(135deg,#1e3a8a,#7c3aed)" />
+        </div>
+        <div class="field-group-light">
+          <label>لون بطاقة الغرفة العلوية</label>
+          <input id="roCardBg" class="light-input" type="color" value="${escapeHtml(r.card_bg_color || '#fef9ec')}" />
+        </div>
+        <div class="field-group-light">
+          <label>لون نص بطاقة الغرفة</label>
+          <input id="roCardText" class="light-input" type="color" value="${escapeHtml(r.card_text_color || '#78350f')}" />
+        </div>
+      </div>
+      <div class="field-group-light">
+        <label>صورة خلفية مخصصة للغرفة</label>
+        <div class="avatar-upload-row">
+          <input id="roWallInp" type="file" accept="image/*" class="hidden" />
+          <button id="roUploadWallBtn" type="button" class="btn btn-royal btn-sm">🌄 رفع صورة خلفية</button>
+          <button id="roClearWallBtn" type="button" class="btn btn-light btn-sm">إزالة الخلفية</button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-gold btn-sm">🎨 تطبيق الستايل الآن</button>
+    `;
+    const wallInp = form.querySelector('#roWallInp');
+    form.querySelector('#roUploadWallBtn').onclick = () => wallInp.click();
+    form.querySelector('#roClearWallBtn').onclick = () => {
+      state.roDraftWall = '';
+      showToast('تم تحديد إزالة الخلفية، اضغط تطبيق للحفظ.');
+    };
+    wallInp.addEventListener('change', async () => {
+      const f = wallInp.files?.[0];
+      wallInp.value = '';
+      if (!f) return;
+      const fd = new FormData();
+      fd.append('file', f);
+      try {
+        const { url } = await apiJson(`/api/upload/wallpaper?roomId=${encodeURIComponent(r.id)}`, { method: 'POST', body: fd });
+        state.roDraftWall = url;
+        showToast('✅ تم رفع صورة الخلفية، اضغط تطبيق الستايل.');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      try {
+        const res = await apiJson(`/api/rooms/${encodeURIComponent(r.id)}/options`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            bgTheme: form.querySelector('#roBgTheme').value,
+            bgCustom: form.querySelector('#roBgCustom').value.trim(),
+            cardBgColor: form.querySelector('#roCardBg').value,
+            cardTextColor: form.querySelector('#roCardText').value,
+            wallpaperUrl: state.roDraftWall
+          })
+        });
+        state.activeRoom = res.room;
+        applyActiveRoomBanner(res.room);
+        showToast(res.message);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    roomOptionsBody.appendChild(form);
+    return;
+  }
+
+  if (state.roActiveTab === 'staff') {
+    const registeredCandidates = state.persistentMembers.filter((m) => m.userId);
+    const memberOpts = registeredCandidates
+      .map((m) => `<option value="${m.userId}">${escapeHtml(m.name)} (${escapeHtml(getRankInfo(m.role).label)})</option>`)
+      .join('');
+    const card = document.createElement('div');
+    card.className = 'cms-section-card';
+    card.innerHTML = `
+      <div class="cms-section-title">3. إدارة موظفي ومشرفي الغرفة</div>
+      <div class="panel-meta-sub">👑 المالك المعين للغرفة: <strong>${escapeHtml(r.owner_name || 'إدارة الموقع')}</strong></div>
+      <form id="roAddStaffForm" class="cms-grid">
+        <div class="field-group-light">
+          <label>اختر عضواً مسجلاً</label>
+          <select id="roStaffUserSel" class="light-input" required>${memberOpts}</select>
+        </div>
+        <div class="field-group-light">
+          <label>المسمى داخل الغرفة</label>
+          <select id="roStaffRoleSel" class="light-input">
+            <option value="مشرف غرفة">مشرف غرفة</option>
+            <option value="مراقب مايكات">مراقب مايكات</option>
+            <option value="مساعد مالك الغرفة">مساعد مالك الغرفة</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-gold btn-sm">➕ تعيين في طاقم الغرفة</button>
+      </form>
+      <div id="roStaffList" style="display:flex;flex-direction:column;gap:7px;"></div>
+    `;
+    const staffListEl = card.querySelector('#roStaffList');
+    const staffArr = Array.isArray(r.staff) ? r.staff : [];
+    if (staffArr.length === 0) {
+      staffListEl.innerHTML = '<div class="panel-empty">لا يوجد موظفون إضافيون لهذه الغرفة حالياً.</div>';
+    } else {
+      staffArr.forEach((st) => {
+        const item = document.createElement('div');
+        item.className = 'panel-card';
+        item.innerHTML = `
+          <div class="panel-card-top">
+            <div>
+              <strong>${escapeHtml(st.display_name || st.username)}</strong>
+              <div class="panel-meta-sub">${escapeHtml(st.staff_role || 'مشرف غرفة')}</div>
+            </div>
+            <button type="button" class="mod-btn danger">🗑️ إزالة</button>
+          </div>
+        `;
+        item.querySelector('button').onclick = async () => {
+          try {
+            const res = await apiJson(`/api/rooms/${encodeURIComponent(r.id)}/staff/${st.user_id}`, { method: 'DELETE' });
+            state.activeRoom = res.room;
+            renderRoomOptionsTab();
+            showToast(res.message);
+          } catch (err) {
+            showToast(err.message, 'error');
+          }
+        };
+        staffListEl.appendChild(item);
+      });
+    }
+
+    card.querySelector('#roAddStaffForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const userId = Number(card.querySelector('#roStaffUserSel').value);
+      const staffRole = card.querySelector('#roStaffRoleSel').value;
+      if (!userId) return;
+      try {
+        const res = await apiJson(`/api/rooms/${encodeURIComponent(r.id)}/staff`, {
+          method: 'POST',
+          body: JSON.stringify({ userId, staffRole, action: 'add_staff' })
+        });
+        state.activeRoom = res.room;
+        renderRoomOptionsTab();
+        showToast(res.message);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    roomOptionsBody.appendChild(card);
+    return;
+  }
+
+  if (state.roActiveTab === 'mics') {
+    const card = document.createElement('div');
+    card.className = 'cms-section-card';
+    const slotsHTML = state.micSlots
+      .map((s, idx) => `
+        <div class="user-row-light">
+          <div class="user-row-top">
+            <strong>🎙️ المايك #${idx + 1}: ${s ? escapeHtml(s.name) : 'متاح'}</strong>
+            ${s ? `<button type="button" class="mod-btn danger" data-ro-kick-mic="${idx + 1}">إنزال</button>` : ''}
+          </div>
+        </div>
+      `)
+      .join('');
+    card.innerHTML = `
+      <div class="cms-section-title">4. إعدادات المايكات داخل الغرفة</div>
+      <div class="panel-card-top">
+        <strong>حالة المايكات الصوتية: ${state.micsEnabled ? 'مفتوحة 🎙️' : 'مغلقة 🔇'}</strong>
+        <button id="roToggleMicsBtn" type="button" class="btn btn-gold btn-sm">${state.micsEnabled ? 'إغلاق المايكات في الغرفة' : 'فتح المايكات في الغرفة'}</button>
+      </div>
+      ${slotsHTML}
+    `;
+    card.querySelector('#roToggleMicsBtn').onclick = () => {
+      state.socket?.emit('mic_toggle_enabled', { roomId: r.id, enabled: !state.micsEnabled });
+    };
+    card.querySelectorAll('[data-ro-kick-mic]').forEach((b) => {
+      b.onclick = () => state.socket?.emit('mic_kick_slot', { roomId: r.id, slot: Number(b.dataset.roKickMic) });
+    });
+    roomOptionsBody.appendChild(card);
+    return;
+  }
+
+  // Section 5: Room Moderation Actions
+  const actionsCard = document.createElement('div');
+  actionsCard.className = 'cms-section-card';
+  actionsCard.innerHTML = `
+    <div class="cms-section-title">5. إدارة الإجراءات الفورية داخل الغرفة</div>
+    <div class="panel-actions-row">
+      <button id="roClearMsgsBtn" type="button" class="btn btn-danger btn-sm">🧹 مسح جميع رسائل الغرفة</button>
+    </div>
+    <div id="roUsersActionsList" style="display:flex;flex-direction:column;gap:7px;"></div>
+  `;
+  actionsCard.querySelector('#roClearMsgsBtn').onclick = () => {
+    if (confirm(`مسح كل رسائل غرفة "${r.name}"؟`)) {
+      state.socket?.emit('admin_clear_room', { roomId: r.id });
+    }
+  };
+  const uListEl = actionsCard.querySelector('#roUsersActionsList');
+  const othersInRoom = state.usersInRoom.filter((u) => u.key !== state.user?.key);
+  if (othersInRoom.length === 0) {
+    uListEl.innerHTML = '<div class="panel-empty">لا يوجد أعضاء آخرون داخل الغرفة حالياً.</div>';
+  } else {
+    othersInRoom.forEach((u) => {
+      const row = document.createElement('div');
+      row.className = 'user-row-light';
+      row.innerHTML = `
+        <div class="user-row-top">
+          <div class="me-name-row">${roleBadgeHTML(u.role)} <strong>${escapeHtml(u.name)}</strong> ${u.isMuted ? '<span class="muted-tag">مكتوم</span>' : ''}</div>
+          <div class="owner-actions">
+            <button type="button" class="mod-btn warn ro-mute-btn">${u.isMuted ? '🔊 فك كتم' : '🔇 كتم'}</button>
+            <button type="button" class="mod-btn danger ro-kick-btn">👢 طرد من الغرفة</button>
+          </div>
+        </div>
+      `;
+      row.querySelector('.ro-mute-btn').onclick = () => {
+        state.socket?.emit('admin_mute', { targetKey: u.key, roomId: r.id, minutes: u.isMuted ? 0 : 60 });
+      };
+      row.querySelector('.ro-kick-btn').onclick = () => {
+        state.socket?.emit('room_kick_member', { roomId: r.id, targetKey: u.key });
+      };
+      uListEl.appendChild(row);
+    });
+  }
+  roomOptionsBody.appendChild(actionsCard);
+}
+
+// ==========================================
+// 4. OWNER FULL USER ACCOUNT EDITOR MODAL
+// ==========================================
+function openAdminUserEditorModal(userObj) {
+  if (!userObj) return;
+  state.editingAdminUserId = userObj.id;
+  state.aueDraftAvatarUrl = userObj.avatarUrl || '';
+  adminUserEditorTitle.textContent = `✏️ تعديل حساب: ${userObj.name}`;
+  aueDisplayName.value = userObj.name || '';
+  aueUsername.value = userObj.username || '';
+  aueEmail.value = userObj.email || '';
+  auePassword.value = '';
+
+  aueRoleSelect.innerHTML = '';
+  const amOwner = state.user?.role === 'site_owner';
+  const myPower = getRankPower(state.user?.role);
+  const rankList = (state.adminOverview?.ranks || state.ranks || []).filter((r) => r.key !== 'guest');
+  rankList
+    .filter((r) => amOwner || getRankPower(r.key) < myPower || r.key === userObj.role)
+    .forEach((r) => {
+      const opt = document.createElement('option');
+      opt.value = r.key;
+      opt.textContent = `${r.icon || '⭐'} ${r.label}`;
+      if (r.key === userObj.role) opt.selected = true;
+      aueRoleSelect.appendChild(opt);
+    });
+
+  renderAvatarInto(aueAvatarPreview, userObj.name, state.aueDraftAvatarUrl, userObj.nameColor, userObj.role, userObj.avatarFrame);
+  adminUserEditorModal.classList.remove('hidden');
+}
+
+aueChooseAvatarBtn.addEventListener('click', () => aueAvatarFileInput.click());
+aueClearAvatarBtn.addEventListener('click', () => {
+  state.aueDraftAvatarUrl = '';
+  renderAvatarInto(aueAvatarPreview, aueDisplayName.value || '?', '', '#ffffff', aueRoleSelect.value, 'none');
+});
+aueAvatarFileInput.addEventListener('change', async () => {
+  const f = aueAvatarFileInput.files?.[0];
+  aueAvatarFileInput.value = '';
+  if (!f) return;
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    showToast('جاري رفع صورة العضو...');
+    const { url } = await apiJson('/api/upload/admin-avatar', { method: 'POST', body: fd });
+    state.aueDraftAvatarUrl = url;
+    renderAvatarInto(aueAvatarPreview, aueDisplayName.value || '?', url, '#ffffff', aueRoleSelect.value, 'none');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+adminUserEditorForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!state.editingAdminUserId) return;
+  const payload = {
+    displayName: aueDisplayName.value.trim(),
+    username: aueUsername.value.trim(),
+    email: aueEmail.value.trim(),
+    avatarUrl: state.aueDraftAvatarUrl,
+    role: aueRoleSelect.value
+  };
+  if (auePassword.value) payload.password = auePassword.value;
+  try {
+    const res = await apiJson(`/api/admin/users/${state.editingAdminUserId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    showToast(res.message);
+    adminUserEditorModal.classList.add('hidden');
+    await loadAdminOverview();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
 
 init();
