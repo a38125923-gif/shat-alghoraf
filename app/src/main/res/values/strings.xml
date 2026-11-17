@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">شات الغرف المباشر</string>
+    <string name="auth_subtitle">شات الغرف العربي الاحترافي</string>
+    <string name="auth_google_button">تسجيل الدخول بحساب Google</string>
+    <string name="auth_loading">جاري التحقق من الحساب...</string>
+    <string name="auth_cancelled">تم إلغاء تسجيل الدخول، يرجى اختيار حساب للمتابعة.</string>
+    <string name="room_welcome_default">أهلاً وسهلاً بكم في شات الغرف المباشر — نتمنى لكم أجمل الأوقات</string>
+    <string name="msg_placeholder">اكتب رسالتك هنا...</string>
+</resources>
