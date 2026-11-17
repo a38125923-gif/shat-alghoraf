@@ -1,6 +1,35 @@
 const TOKEN_KEY = 'arabic_chat_token';
 const ROOM_KEY = 'arabic_chat_active_room';
 const USER_CACHE_KEY = 'arabic_chat_user_cache';
+const PRIMARY_OWNER_EMAIL = 'a38125923@gmail.com';
+
+function isPrimaryOwnerEmail(email) {
+  return String(email || '').trim().toLowerCase() === PRIMARY_OWNER_EMAIL;
+}
+
+function isAmPrimaryOwner() {
+  return Boolean(state.user && (state.user.isSupremeOwner || isPrimaryOwnerEmail(state.user.email)));
+}
+
+function isTargetSupremeOwner(targetKey, targetEmail = '') {
+  if (isPrimaryOwnerEmail(targetEmail)) return true;
+  if (!targetKey) return false;
+  const pools = [
+    state.usersInRoom,
+    state.globalOnlineUsers,
+    state.persistentMembers,
+    state.adminOverview?.onlineUsers,
+    state.adminOverview?.registeredUsers
+  ];
+  for (const list of pools) {
+    if (!Array.isArray(list)) continue;
+    const found = list.find((item) => item && (item.key === targetKey || `user:${item.id}` === targetKey));
+    if (found && (found.isSupremeOwner || isPrimaryOwnerEmail(found.email))) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const DEFAULT_RANKS_FALLBACK = [
   { key: 'site_owner', label: 'صاحب الموقع', icon: '👑', image_url: '', bg_color: '#b91c1c', text_color: '#fef3c7', power: 100, is_system: true, permissions: { mute: true, kick: true, ban: true, set_rank: true, clear_room: true, manage_rooms: true, access_panel: true } },
@@ -342,6 +371,7 @@ function getRankPower(role) {
 function hasPerm(permName, role = state.user?.role) {
   if (!role) return false;
   if (role === 'site_owner') return true;
+  if (role === state.user?.role && isAmPrimaryOwner()) return true;
   const info = getRankInfo(role);
   return Boolean(info?.permissions?.[permName]);
 }
@@ -350,9 +380,13 @@ function hasPanelAccess(role = state.user?.role) {
   return hasPerm('access_panel', role);
 }
 
-function canModerateTarget(targetRole, targetKey) {
+function canModerateTarget(targetRole, targetKey, targetEmail = '') {
   if (!state.user || !targetKey || targetKey === state.user.key) return false;
-  if (state.user.role === 'site_owner') return true;
+  if (isTargetSupremeOwner(targetKey, targetEmail)) return false;
+  if (targetRole === 'site_owner' && !isAmPrimaryOwner()) return false;
+  if (isAmPrimaryOwner()) return true;
+  if (state.user.role === 'site_owner') return targetRole !== 'site_owner';
+  if (targetRole === 'site_owner') return false;
   if (!hasPanelAccess(state.user.role)) return false;
   return getRankPower(state.user.role) > getRankPower(targetRole);
 }
@@ -822,8 +856,8 @@ upgradeGuestForm.addEventListener('submit', async (e) => {
     }
     updateMeUI();
     upgradeGuestModal.classList.add('hidden');
-    if (data.isFirstOwner) {
-      showToast('👑 تم ترقية حسابك كأول عضو وحصلت على رتبة صاحب الموقع!');
+    if (data.isFirstOwner || data.isSupremeOwner) {
+      showToast('👑 مرحباً بك! تم ترقية حسابك وتفعيل رتبة صاحب الموقع (المالك الأعلى) بكامل الصلاحيات!');
     } else {
       showToast('✅ تم تسجيل عضويتك بنجاح مع بقائك داخل الغرفة!');
     }
@@ -875,8 +909,8 @@ registerForm.addEventListener('submit', async (e) => {
       method: 'POST',
       body: JSON.stringify({ username, email, password })
     });
-    if (data.isFirstOwner) {
-      showToast('👑 تم تسجيلك كأول حساب وحصلت تلقائياً على رتبة صاحب الموقع!');
+    if (data.isFirstOwner || data.isSupremeOwner) {
+      showToast('👑 مرحباً بك! تم تفعيل حسابك برتبة صاحب الموقع (المالك الأعلى) تلقائياً!');
     }
     enterChatSession(data.token, data.user);
   } catch (err) {
@@ -2100,7 +2134,7 @@ function renderGlobalOnlineModal() {
       actions.appendChild(pmBtn);
       actions.appendChild(addFriendBtn);
 
-      if (hasPerm('set_rank') && u.userId && canModerateTarget(u.role, u.key)) {
+      if (hasPerm('set_rank') && u.userId && canModerateTarget(u.role, u.key, u.email)) {
         const rankWrap = document.createElement('div');
         rankWrap.className = 'rank-control-wrap';
         const lbl = document.createElement('span');
@@ -2111,7 +2145,7 @@ function renderGlobalOnlineModal() {
         actions.appendChild(rankWrap);
       }
 
-      if (canModerateTarget(u.role, u.key)) {
+      if (canModerateTarget(u.role, u.key, u.email)) {
         if (hasPerm('mute')) {
           const muteBtn = document.createElement('button');
           muteBtn.type = 'button';
@@ -2161,8 +2195,8 @@ function renderGlobalOnlineModal() {
 function openQuickUserModal(u) {
   if (!u || !state.user) return;
   openFeatureModal(`👤 ملف ${u.name}`, (body) => {
-    const canRank = hasPerm('set_rank') && u.userId && canModerateTarget(u.role, u.key);
-    const canMod = canModerateTarget(u.role, u.key);
+    const canRank = hasPerm('set_rank') && u.userId && canModerateTarget(u.role, u.key, u.email);
+    const canMod = canModerateTarget(u.role, u.key, u.email);
     body.innerHTML = `
       <div class="panel-card">
         <div class="user-left">
@@ -2656,12 +2690,12 @@ function buildRankSelect(currentRole, targetUserId) {
   const select = document.createElement('select');
   select.className = 'rank-select';
   const myPower = getRankPower(state.user.role);
-  const amSiteOwner = state.user.role === 'site_owner';
+  const amPrimary = isAmPrimaryOwner();
   const sourceRanks = (state.adminOverview?.ranks || state.ranks || DEFAULT_RANKS_FALLBACK).filter(
     (r) => r.key !== 'guest'
   );
   const availableRanks = sourceRanks.filter(
-    (r) => amSiteOwner || getRankPower(r.key) < myPower || r.key === currentRole
+    (r) => (r.key === 'site_owner' ? amPrimary : amPrimary || getRankPower(r.key) < myPower) || r.key === currentRole
   );
   for (const r of availableRanks) {
     const opt = document.createElement('option');
@@ -2826,7 +2860,7 @@ function renderRanksTab() {
         <div class="panel-actions-row rank-row-btns"></div>
       </div>
     `;
-    if (canEditRanks) {
+    if (canEditRanks && (r.key !== 'site_owner' || isAmPrimaryOwner())) {
       const btns = card.querySelector('.rank-row-btns');
       const eBtn = document.createElement('button');
       eBtn.type = 'button';
@@ -3218,9 +3252,9 @@ function renderAdminPanelContent() {
     const createCard = document.createElement('form');
     createCard.className = 'cms-section-card';
     const myPower = getRankPower(state.user.role);
-    const amOwner = state.user.role === 'site_owner';
+    const amOwner = isAmPrimaryOwner();
     const selectableRanks = (data.ranks || state.ranks || []).filter(
-      (r) => r.key !== 'guest' && (amOwner || getRankPower(r.key) < myPower)
+      (r) => r.key !== 'guest' && (r.key === 'site_owner' ? amOwner : amOwner || getRankPower(r.key) < myPower)
     );
     const rankOpts = selectableRanks
       .map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === 'member' ? 'selected' : ''}>${escapeHtml(r.icon || '⭐')} ${escapeHtml(r.label)}</option>`)
@@ -3304,15 +3338,19 @@ function renderAdminPanelContent() {
       renderAvatarInto(card.querySelector('.avatar-circle'), u.name, u.avatarUrl, u.nameColor, u.role, u.avatarFrame);
       card.querySelector('strong').textContent = u.name;
 
+      const isTargetProtected = isPrimaryOwnerEmail(u.email);
       const canEditAccount =
-        state.user?.role === 'site_owner' ||
-        (canSetRank && (u.id === state.user?.userId || getRankPower(u.role) < getRankPower(state.user?.role)));
+        isAmPrimaryOwner() ||
+        (!isTargetProtected &&
+          u.role !== 'site_owner' &&
+          (state.user?.role === 'site_owner' ||
+            (canSetRank && (u.id === state.user?.userId || getRankPower(u.role) < getRankPower(state.user?.role)))));
 
-      if (canModerateTarget(u.role, u.key) || canEditAccount) {
+      if (canModerateTarget(u.role, u.key, u.email) || canEditAccount) {
         const actions = document.createElement('div');
         actions.className = 'panel-actions-row';
 
-        if (canEditAccount && (u.role !== 'site_owner' || state.user?.role === 'site_owner')) {
+        if (canEditAccount) {
           const fullEditBtn = document.createElement('button');
           fullEditBtn.type = 'button';
           fullEditBtn.className = 'mod-btn success';
@@ -3321,7 +3359,7 @@ function renderAdminPanelContent() {
           actions.appendChild(fullEditBtn);
         }
 
-        if (canModerateTarget(u.role, u.key)) {
+        if (canModerateTarget(u.role, u.key, u.email)) {
           if (canSetRank) {
             actions.appendChild(buildRankSelect(u.role, u.id));
             const rBtn = document.createElement('button');
@@ -3896,7 +3934,7 @@ async function init() {
     if (data.shop) state.shopCatalog = data.shop;
     if (data.rooms) state.rooms = data.rooms;
     if (data.persistentMembers) state.persistentMembers = data.persistentMembers;
-    if (data.userCount === 0) firstOwnerNotice.classList.remove('hidden');
+    firstOwnerNotice.classList.add('hidden');
     if (data.bannedReason) {
       leaveChatSession(`⛔ تم حظرك نهائياً: ${data.bannedReason}`);
       return;
@@ -4666,11 +4704,12 @@ function openAdminUserEditorModal(userObj) {
   auePassword.value = '';
 
   aueRoleSelect.innerHTML = '';
-  const amOwner = state.user?.role === 'site_owner';
+  const amPrimary = isAmPrimaryOwner();
+  const targetIsPrimary = isPrimaryOwnerEmail(userObj.email);
   const myPower = getRankPower(state.user?.role);
   const rankList = (state.adminOverview?.ranks || state.ranks || []).filter((r) => r.key !== 'guest');
   rankList
-    .filter((r) => amOwner || getRankPower(r.key) < myPower || r.key === userObj.role)
+    .filter((r) => (r.key === 'site_owner' ? amPrimary || targetIsPrimary : amPrimary || getRankPower(r.key) < myPower) || r.key === userObj.role)
     .forEach((r) => {
       const opt = document.createElement('option');
       opt.value = r.key;
@@ -4678,6 +4717,8 @@ function openAdminUserEditorModal(userObj) {
       if (r.key === userObj.role) opt.selected = true;
       aueRoleSelect.appendChild(opt);
     });
+  aueRoleSelect.disabled = targetIsPrimary;
+  aueEmail.disabled = targetIsPrimary;
 
   renderAvatarInto(aueAvatarPreview, userObj.name, state.aueDraftAvatarUrl, userObj.nameColor, userObj.role, userObj.avatarFrame);
   adminUserEditorModal.classList.remove('hidden');

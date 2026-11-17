@@ -106,6 +106,7 @@ function mapUserRow(row) {
     name: db.getEffectiveName(row),
     email: row.email,
     role: row.role,
+    isSupremeOwner: db.isSupremeOwnerEmail(row.email),
     nameColor: row.name_color || '#ffffff',
     textColor: row.text_color || '#ffffff',
     nameBgColor: row.name_bg_color || '',
@@ -125,8 +126,12 @@ function resolveSessionUser(token, ipAddress = '') {
   if (!payload) return null;
 
   if (payload.type === 'user' && payload.userId) {
-    const userRow = db.findUserById(payload.userId);
+    let userRow = db.findUserById(payload.userId);
     if (!userRow) return null;
+    if (db.isSupremeOwnerEmail(userRow.email)) {
+      userRow = db.ensureSupremeOwnerAccount(userRow.id) || userRow;
+      return { banned: false, user: mapUserRow(userRow) };
+    }
     const key = `user:${userRow.id}`;
     const ban = db.isTargetBanned({
       targetKey: key,
@@ -302,8 +307,10 @@ function requirePermission(permName, errMessage) {
   };
 }
 
-function canModerate(actorRole, targetRole, actorKey, targetKey) {
+function canModerate(actorRole, targetRole, actorKey, targetKey, actorEmail = '', targetEmail = '') {
   if (actorKey && targetKey && actorKey === targetKey) return false;
+  if (db.isSupremeOwnerEmail(targetEmail) || db.isProtectedSupremeOwnerKey(targetKey)) return false;
+  if (db.isSupremeOwnerEmail(actorEmail)) return true;
   if (actorRole === 'site_owner') return true;
   if (targetRole === 'site_owner') return false;
   if (
@@ -410,15 +417,15 @@ app.post('/api/auth/guest', (req, res) => {
 
 // Register New Member
 app.post('/api/auth/register', (req, res) => {
-  const isFirstAccount = db.getUserCount() === 0;
-  if (!isFirstAccount && isMaintenanceBlocked('member')) {
-    return res.status(503).json({ error: '🛠️ الشات في وضع الصيانة المؤقتة حالياً — التسجيل متاح للإدارة فقط.' });
-  }
-
   const username = String(req.body?.username || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   const ip = getClientIp(req);
+  const isSupremeAccount = db.isSupremeOwnerEmail(email);
+
+  if (!isSupremeAccount && isMaintenanceBlocked('member')) {
+    return res.status(503).json({ error: '🛠️ الشات في وضع الصيانة المؤقتة حالياً — التسجيل متاح للإدارة فقط.' });
+  }
 
   if (username.length < 2 || username.length > 24) {
     return res.status(400).json({ error: 'يجب أن يكون اسم المستخدم بين 2 و 24 حرفاً.' });
@@ -431,7 +438,7 @@ app.post('/api/auth/register', (req, res) => {
   }
 
   const preBan = db.isTargetBanned({ email, ipAddress: ip });
-  if (preBan && db.getUserCount() > 0) {
+  if (!isSupremeAccount && preBan && db.getUserCount() > 0) {
     return res.status(403).json({ error: `تم حظر هذا البريد أو العنوان نهائياً: ${preBan.reason}` });
   }
 
@@ -455,7 +462,8 @@ app.post('/api/auth/register', (req, res) => {
     res.status(201).json({
       token,
       user,
-      isFirstOwner: row.role === 'site_owner'
+      isFirstOwner: row.role === 'site_owner',
+      isSupremeOwner: isSupremeAccount
     });
     broadcastGlobalOnlineUsers();
   } catch (err) {
@@ -474,24 +482,31 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.' });
   }
 
-  const row = db.findUserByIdentifier(identifier);
+  let row = db.findUserByIdentifier(identifier);
   if (!row || !bcrypt.compareSync(password, row.password_hash)) {
     return res.status(401).json({ error: 'بيانات الدخول غير صحيحة.' });
   }
 
-  if (isMaintenanceBlocked(row.role)) {
+  const isSupremeAccount = db.isSupremeOwnerEmail(row.email);
+  if (isSupremeAccount) {
+    row = db.ensureSupremeOwnerAccount(row.id) || row;
+  }
+
+  if (!isSupremeAccount && isMaintenanceBlocked(row.role)) {
     return res.status(503).json({ error: '🛠️ الشات في وضع الصيانة حالياً — الدخول متاح للإدارة والمالك فقط.' });
   }
 
   const key = `user:${row.id}`;
-  const ban = db.isTargetBanned({
-    targetKey: key,
-    email: row.email,
-    ipAddress: row.role === 'site_owner' ? '' : ip
-  });
-  if (ban || row.is_banned === 1) {
-    const reason = (ban && ban.reason) || row.ban_reason || 'حظر نهائي من الإدارة';
-    return res.status(403).json({ error: `تم حظر حسابك نهائياً: ${reason}` });
+  if (!isSupremeAccount) {
+    const ban = db.isTargetBanned({
+      targetKey: key,
+      email: row.email,
+      ipAddress: row.role === 'site_owner' ? '' : ip
+    });
+    if (ban || row.is_banned === 1) {
+      const reason = (ban && ban.reason) || row.ban_reason || 'حظر نهائي من الإدارة';
+      return res.status(403).json({ error: `تم حظر حسابك نهائياً: ${reason}` });
+    }
   }
 
   db.updateUserIp(row.id, ip);
@@ -517,6 +532,7 @@ app.post('/api/auth/upgrade-guest', requireAuth, (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   const ip = req.clientIp || getClientIp(req);
+  const isSupremeAccount = db.isSupremeOwnerEmail(email);
 
   if (username.length < 2 || username.length > 24) {
     return res.status(400).json({ error: 'يجب أن يكون الاسم بين 2 و 24 حرفاً.' });
@@ -529,7 +545,7 @@ app.post('/api/auth/upgrade-guest', requireAuth, (req, res) => {
   }
 
   const preBan = db.isTargetBanned({ email, ipAddress: ip });
-  if (preBan && db.getUserCount() > 0) {
+  if (!isSupremeAccount && preBan && db.getUserCount() > 0) {
     return res.status(403).json({ error: `تم حظر هذا البريد أو العنوان نهائياً: ${preBan.reason}` });
   }
 
@@ -813,6 +829,7 @@ function buildGlobalOnlineUsers() {
       email: entry.email,
       ipAddress: entry.ipAddress,
       role: entry.role,
+      isSupremeOwner: db.isSupremeOwnerEmail(entry.email),
       nameColor: entry.nameColor,
       textColor: entry.textColor || '#ffffff',
       nameBgColor: entry.nameBgColor || '',
@@ -843,7 +860,10 @@ function buildPersistentMembersList() {
     }
   }
 
-  const combined = [...onlineByKey.values()];
+  const combined = [...onlineByKey.values()].map((u) => {
+    const { email: _em, ipAddress: _ip, ...pub } = u;
+    return pub;
+  });
   const registered = db.getAllRegisteredUsers().filter((u) => u.is_banned !== 1);
   for (const r of registered) {
     const k = `user:${r.id}`;
@@ -854,6 +874,7 @@ function buildPersistentMembersList() {
         username: r.username,
         name: db.getEffectiveName(r),
         role: r.role,
+        isSupremeOwner: db.isSupremeOwnerEmail(r.email),
         nameColor: r.name_color || '#ffffff',
         textColor: r.text_color || '#ffffff',
         nameBgColor: r.name_bg_color || '',
@@ -885,6 +906,7 @@ function broadcastGlobalOnlineUsers() {
     username: u.username,
     name: u.name,
     role: u.role,
+    isSupremeOwner: Boolean(u.isSupremeOwner),
     nameColor: u.nameColor,
     textColor: u.textColor,
     nameBgColor: u.nameBgColor,
@@ -917,6 +939,7 @@ function broadcastRoomUsers(roomId) {
         username: entry.username || entry.name,
         name: entry.name,
         role: entry.role,
+        isSupremeOwner: db.isSupremeOwnerEmail(entry.email),
         nameColor: entry.nameColor,
         textColor: entry.textColor || '#ffffff',
         nameBgColor: entry.nameBgColor || '',
@@ -1513,6 +1536,7 @@ app.get('/api/admin/overview', requireAuth, requirePanelAccess, (req, res) => {
     name: db.getEffectiveName(u),
     email: u.email,
     role: u.role,
+    isSupremeOwner: db.isSupremeOwnerEmail(u.email),
     nameColor: u.name_color,
     textColor: u.text_color || '#ffffff',
     nameBgColor: u.name_bg_color || '',
@@ -1562,6 +1586,9 @@ app.post('/api/admin/users', requireAuth, requirePanelAccess, (req, res) => {
   if (password.length < 4) {
     return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 4 أحرف على الأقل.' });
   }
+  if (role === 'site_owner' && !db.isSupremeOwnerEmail(req.authUser.email)) {
+    return res.status(403).json({ error: 'منح رتبة صاحب الموقع متاح للمالك الأعلى فقط.' });
+  }
   if (req.authUser.role !== 'site_owner' && db.getRankSortWeight(role) >= db.getRankSortWeight(req.authUser.role)) {
     return res.status(403).json({ error: 'لا يمكنك إنشاء حساب برتبة مساوية لرتبتك أو أعلى منها.' });
   }
@@ -1585,10 +1612,17 @@ app.put('/api/admin/users/:id', requireAuth, requirePanelAccess, (req, res) => {
   const targetRow = Number.isNaN(targetId) ? null : db.findUserById(targetId);
   if (!targetRow) return res.status(404).json({ error: 'الحساب غير موجود.' });
 
-  if (targetRow.role === 'site_owner' && req.authUser.role !== 'site_owner') {
+  const actorIsSupreme = db.isSupremeOwnerEmail(req.authUser.email);
+  const targetIsSupreme = db.isSupremeOwnerEmail(targetRow.email);
+
+  if (targetIsSupreme && !actorIsSupreme) {
+    return res.status(403).json({ error: '⛔ لا يمكن تعديل حساب المالك الأعلى للموقع.' });
+  }
+  if (targetRow.role === 'site_owner' && !actorIsSupreme && req.authUser.role !== 'site_owner') {
     return res.status(403).json({ error: 'لا يمكن تعديل حساب صاحب الموقع.' });
   }
   if (
+    !actorIsSupreme &&
     req.authUser.role !== 'site_owner' &&
     targetRow.id !== req.authUser.userId &&
     db.getRankSortWeight(targetRow.role) >= db.getRankSortWeight(req.authUser.role)
@@ -1623,7 +1657,13 @@ app.put('/api/admin/users/:id', requireAuth, requirePanelAccess, (req, res) => {
   }
   if (nextRole !== undefined) {
     if (!db.isValidRank(nextRole)) return res.status(400).json({ error: 'الرتبة المختارة غير صالحة.' });
-    if (req.authUser.role !== 'site_owner' && db.getRankSortWeight(nextRole) >= db.getRankSortWeight(req.authUser.role)) {
+    if (targetIsSupreme && nextRole !== 'site_owner') {
+      return res.status(403).json({ error: '⛔ لا يمكن تخفيض رتبة المالك الأعلى للموقع.' });
+    }
+    if (nextRole === 'site_owner' && !actorIsSupreme && !targetIsSupreme) {
+      return res.status(403).json({ error: 'منح رتبة صاحب الموقع متاح للمالك الأعلى فقط.' });
+    }
+    if (!actorIsSupreme && req.authUser.role !== 'site_owner' && db.getRankSortWeight(nextRole) >= db.getRankSortWeight(req.authUser.role)) {
       return res.status(403).json({ error: 'لا يمكنك منح رتبة أعلى من رتبتك أو مساوية لها.' });
     }
   }
@@ -1691,8 +1731,8 @@ app.put('/api/admin/ranks/:key', requireAuth, requirePanelAccess, (req, res) => 
     return res.status(403).json({ error: 'تعديل الرتب متاح للمالك ولمن لديه صلاحية إدارة الرتب فقط.' });
   }
   const key = String(req.params.key || '').trim();
-  if (key === 'site_owner' && req.authUser.role !== 'site_owner') {
-    return res.status(403).json({ error: 'لا يمكن تعديل رتبة صاحب الموقع.' });
+  if (key === 'site_owner' && !db.isSupremeOwnerEmail(req.authUser.email)) {
+    return res.status(403).json({ error: 'لا يمكن تعديل رتبة صاحب الموقع الأعلى إلا من قِبل المالك الأساسي.' });
   }
   const existingPower = db.getRankPower(key);
   if (req.authUser.role !== 'site_owner' && existingPower >= db.getRankPower(req.authUser.role)) {
@@ -2270,6 +2310,11 @@ io.on('connection', (socket) => {
     const slots = getOrInitMics(roomId);
     if (slots[idx]) {
       const removedKey = slots[idx].key;
+      const meta = getTargetMetadata(removedKey);
+      if ((db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(removedKey)) && !db.isSupremeOwnerEmail(socket.user.email)) {
+        socket.emit('action_error', { message: '🛡️ لا يمكن إنزال صاحب الموقع الأعلى من المايك.' });
+        return;
+      }
       slots[idx] = null;
       broadcastRoomMics(roomId);
       for (const [sid, e] of onlineSockets.entries()) {
@@ -2362,12 +2407,16 @@ io.on('connection', (socket) => {
     }
     if (!targetKey) return;
     const meta = getTargetMetadata(targetKey);
+    if (db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) {
+      socket.emit('action_error', { message: '⛔ لا يمكن كتم المالك الأعلى للموقع.' });
+      return;
+    }
     if (!canDo(myRole, 'mute') && isRoomMgr) {
       if (meta.targetRole === 'site_owner' || targetKey === socket.user.key) {
         socket.emit('action_error', { message: 'لا يمكنك كتم هذا العضو.' });
         return;
       }
-    } else if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey)) {
+    } else if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey, socket.user.email, meta.email)) {
       socket.emit('action_error', { message: 'لا يمكنك كتم مستخدم برتبة أعلى منك أو مساوية لك.' });
       return;
     }
@@ -2394,6 +2443,10 @@ io.on('connection', (socket) => {
 
     const mins = Math.min(10080, Math.max(1, Number(minutes) || 60));
     const expiresAt = db.setMute(targetKey, !canDo(myRole, 'mute') && isRoomMgr ? roomId : '*', mins * 60 * 1000, socket.user.name);
+    if (!expiresAt) {
+      socket.emit('action_error', { message: '⛔ لا يمكن كتم المالك الأعلى للموقع.' });
+      return;
+    }
     for (const [sid, e] of onlineSockets.entries()) {
       if (e.key === targetKey) {
         if (e.roomId) removeUserFromRoomMics(e.roomId, targetKey);
@@ -2419,7 +2472,11 @@ io.on('connection', (socket) => {
     }
     if (!targetKey) return;
     const meta = getTargetMetadata(targetKey);
-    if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey)) {
+    if (db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) {
+      socket.emit('action_error', { message: '⛔ لا يمكن طرد المالك الأعلى للموقع.' });
+      return;
+    }
+    if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey, socket.user.email, meta.email)) {
       socket.emit('action_error', { message: 'لا يمكنك طرد مستخدم برتبة أعلى منك أو مساوية لك.' });
       return;
     }
@@ -2447,8 +2504,13 @@ io.on('connection', (socket) => {
       return;
     }
     const meta = getTargetMetadata(targetKey);
-    if (meta.targetRole === 'site_owner' || targetKey === socket.user.key) {
-      socket.emit('action_error', { message: 'لا يمكنك طرد هذا العضو.' });
+    if (
+      db.isSupremeOwnerEmail(meta.email) ||
+      db.isProtectedSupremeOwnerKey(targetKey) ||
+      (meta.targetRole === 'site_owner' && !db.isSupremeOwnerEmail(socket.user.email)) ||
+      targetKey === socket.user.key
+    ) {
+      socket.emit('action_error', { message: '⛔ لا يمكنك طرد هذا العضو.' });
       return;
     }
     const fallback = db.getAllRooms().find((r) => r.id !== targetRoom) || db.getRoomById('general');
@@ -2488,13 +2550,17 @@ io.on('connection', (socket) => {
     }
     if (!targetKey) return;
     const meta = getTargetMetadata(targetKey);
-    if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey)) {
+    if (db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) {
+      socket.emit('action_error', { message: '⛔ لا يمكن حظر المالك الأعلى للموقع.' });
+      return;
+    }
+    if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey, socket.user.email, meta.email)) {
       socket.emit('action_error', { message: 'لا يمكنك حظر مستخدم برتبة أعلى منك أو مساوية لك.' });
       return;
     }
 
     const cleanReason = String(reason || '').trim() || 'حظر نهائي بواسطة الإدارة';
-    db.banTarget({
+    const banned = db.banTarget({
       targetKey,
       targetName: targetName || meta.targetName,
       email: meta.email,
@@ -2502,6 +2568,10 @@ io.on('connection', (socket) => {
       reason: cleanReason,
       bannedBy: socket.user.name
     });
+    if (!banned) {
+      socket.emit('action_error', { message: '⛔ لا يمكن حظر المالك الأعلى للموقع.' });
+      return;
+    }
 
     const noticeRoom = onlineSockets.get(socket.id)?.roomId;
     disconnectTargetSockets(targetKey, 'banned_forever', { reason: cleanReason });
@@ -2536,7 +2606,8 @@ io.on('connection', (socket) => {
 
   function handleSetRole({ targetUserId, newRole }) {
     const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'set_rank')) {
+    const actorIsSupreme = db.isSupremeOwnerEmail(socket.user.email);
+    if (!canDo(myRole, 'set_rank') && !actorIsSupreme) {
       socket.emit('action_error', { message: 'ليس لديك صلاحية منح أو تعديل الرتب.' });
       return;
     }
@@ -2558,7 +2629,17 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (myRole !== 'site_owner') {
+    if (db.isSupremeOwnerEmail(targetRow.email)) {
+      socket.emit('action_error', { message: '⛔ لا يمكن تغيير أو تخفيض رتبة المالك الأعلى للموقع.' });
+      return;
+    }
+
+    if (newRole === 'site_owner' && !actorIsSupreme) {
+      socket.emit('action_error', { message: 'منح رتبة صاحب الموقع متاح للمالك الأعلى فقط.' });
+      return;
+    }
+
+    if (!actorIsSupreme && myRole !== 'site_owner') {
       if (db.getRankSortWeight(targetRow.role) >= db.getRankSortWeight(myRole)) {
         socket.emit('action_error', { message: 'لا يمكنك تعديل رتبة مستخدم أعلى منك أو مساوٍ لك.' });
         return;
@@ -2570,7 +2651,10 @@ io.on('connection', (socket) => {
     }
 
     const updated = db.updateUserRole(uid, newRole);
-    if (!updated) return;
+    if (!updated) {
+      socket.emit('action_error', { message: 'تعذر تحديث رتبة هذا المستخدم.' });
+      return;
+    }
 
     syncUserAcrossSockets(targetKey, { role: updated.role });
     io.emit('user_rank_updated', {
@@ -2589,7 +2673,8 @@ io.on('connection', (socket) => {
 
   socket.on('admin_rename_user', ({ targetKey, newName }) => {
     const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'set_rank') && myRole !== 'site_owner') {
+    const actorIsSupreme = db.isSupremeOwnerEmail(socket.user.email);
+    if (!canDo(myRole, 'set_rank') && myRole !== 'site_owner' && !actorIsSupreme) {
       socket.emit('action_error', { message: 'تغيير أسماء المستخدمين متاح لمن يملك صلاحية الرتب والمالك فقط.' });
       return;
     }
@@ -2599,7 +2684,11 @@ io.on('connection', (socket) => {
       return;
     }
     const meta = getTargetMetadata(targetKey);
-    if (myRole !== 'site_owner' && targetKey !== socket.user.key && db.getRankSortWeight(meta.targetRole) >= db.getRankSortWeight(myRole)) {
+    if ((db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) && targetKey !== socket.user.key) {
+      socket.emit('action_error', { message: '⛔ لا يمكن تغيير اسم المالك الأعلى للموقع.' });
+      return;
+    }
+    if (!actorIsSupreme && myRole !== 'site_owner' && targetKey !== socket.user.key && db.getRankSortWeight(meta.targetRole) >= db.getRankSortWeight(myRole)) {
       socket.emit('action_error', { message: 'لا يمكنك تغيير اسم مستخدم برتبة أعلى منك أو مساوية لك.' });
       return;
     }
