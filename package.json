@@ -1,7 +1,7 @@
 {
   "name": "arabic-realtime-chat",
   "version": "1.0.0",
-  "description": "تطبيق شات دردشة عربي حقيقي ومباشر (Real-time) باستخدام Node.js و Express و Socket.io و SQLite و Multer",
+  "description": "تطبيق شات دردشة عربي حقيقي ومباشر (Real-time) بنمط CodyChat الاحترافي مع Firebase Cloud Firestore",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

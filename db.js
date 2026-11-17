@@ -24,6 +24,19 @@ const FIREBASE_WEB_CONFIG = {
 
 const SUPREME_OWNER_EMAIL = 'a38125923@gmail.com';
 
+const GIFT_CATALOG = [
+  { id: 'rose', name: 'وردة حمراء', emoji: '🌹', cost: 50, reward: 25, tier: 'classic', color: '#e11d48' },
+  { id: 'coffee', name: 'فنجان قهوة', emoji: '☕', cost: 75, reward: 40, tier: 'classic', color: '#b45309' },
+  { id: 'heart', name: 'قلب متوهج', emoji: '💖', cost: 120, reward: 60, tier: 'warm', color: '#ec4899' },
+  { id: 'bouquet', name: 'باقة زهور', emoji: '💐', cost: 200, reward: 100, tier: 'warm', color: '#db2777' },
+  { id: 'perfume', name: 'عطر فاخر', emoji: '✨', cost: 320, reward: 160, tier: 'vip', color: '#8b5cf6' },
+  { id: 'ring', name: 'خاتم ألماس', emoji: '💍', cost: 500, reward: 250, tier: 'vip', color: '#0284c7' },
+  { id: 'crown', name: 'تاج ملكي', emoji: '👑', cost: 750, reward: 375, tier: 'royal', color: '#d97706' },
+  { id: 'diamond', name: 'جوهرة نادرة', emoji: '💎', cost: 1000, reward: 500, tier: 'royal', color: '#0ea5e9' },
+  { id: 'car', name: 'سيارة رياضية', emoji: '🏎️', cost: 1800, reward: 900, tier: 'legend', color: '#dc2626' },
+  { id: 'castle', name: 'قصر الأحلام', emoji: '🏰', cost: 3000, reward: 1500, tier: 'legend', color: '#7c3aed' }
+];
+
 function isSupremeOwnerEmail(email) {
   return String(email || '').trim().toLowerCase() === SUPREME_OWNER_EMAIL;
 }
@@ -122,7 +135,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 100
   },
   {
     key: 'super_owner',
@@ -140,7 +157,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 98
   },
   {
     key: 'vip_owner',
@@ -158,7 +179,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 97
   },
   {
     key: 'master_owner',
@@ -176,7 +201,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 96
   },
   {
     key: 'master_super',
@@ -194,7 +223,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 95
   },
   {
     key: 'director',
@@ -212,7 +245,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 94
   },
   {
     key: 'moderator',
@@ -230,7 +267,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 1,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   ...[94, 93, 92, 91, 90].map((n) => ({
     key: `support_${n}`,
@@ -248,7 +289,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: n >= 93 ? 1 : 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   })),
   {
     key: 'premium',
@@ -266,7 +311,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 0
+    perm_access_panel: 0,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   ...[87, 86, 85, 84, 83, 82, 81, 80].map((n) => ({
     key: `admin_${n}`,
@@ -284,7 +333,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: n >= 84 ? 1 : 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   })),
   {
     key: 'founder_79',
@@ -302,7 +355,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   {
     key: 'owner',
@@ -320,7 +377,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 1,
     perm_clear_room: 1,
     perm_manage_rooms: 1,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    max_assignable_rank: 97
   },
   {
     key: 'super_admin',
@@ -338,7 +399,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 1,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   {
     key: 'admin',
@@ -356,7 +421,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   {
     key: 'general_mod',
@@ -374,7 +443,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 1
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   {
     key: 'royal_vip',
@@ -392,7 +465,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 0
+    perm_access_panel: 0,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   {
     key: 'silver_vip',
@@ -410,7 +487,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 0
+    perm_access_panel: 0,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   ...[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => ({
     key: `participant_${n}`,
@@ -428,7 +509,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 0
+    perm_access_panel: 0,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   })),
   {
     key: 'member',
@@ -446,7 +531,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 0
+    perm_access_panel: 0,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    max_assignable_rank: 0
   },
   {
     key: 'guest',
@@ -464,7 +553,11 @@ const DEFAULT_RANKS = [
     perm_set_rank: 0,
     perm_clear_room: 0,
     perm_manage_rooms: 0,
-    perm_access_panel: 0
+    perm_access_panel: 0,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 0,
+    max_assignable_rank: 0
   }
 ];
 
@@ -503,6 +596,11 @@ const DEFAULT_ROOMS = [
     owner_name: '',
     card_bg_color: '',
     card_text_color: '',
+    activity_points: 0,
+    youtube_video_id: '',
+    youtube_title: '',
+    youtube_is_playing: 0,
+    youtube_updated_at: '',
     created_by: 'system',
     created_at: new Date(1700000000000).toISOString()
   },
@@ -523,6 +621,11 @@ const DEFAULT_ROOMS = [
     owner_name: '',
     card_bg_color: '',
     card_text_color: '',
+    activity_points: 0,
+    youtube_video_id: '',
+    youtube_title: '',
+    youtube_is_playing: 0,
+    youtube_updated_at: '',
     created_by: 'system',
     created_at: new Date(1700000001000).toISOString()
   },
@@ -543,6 +646,11 @@ const DEFAULT_ROOMS = [
     owner_name: '',
     card_bg_color: '',
     card_text_color: '',
+    activity_points: 0,
+    youtube_video_id: '',
+    youtube_title: '',
+    youtube_is_playing: 0,
+    youtube_updated_at: '',
     created_by: 'system',
     created_at: new Date(1700000002000).toISOString()
   }
@@ -567,12 +675,10 @@ function toMs(isoOrSql) {
   return Number.isNaN(t) ? Date.now() : t;
 }
 
-// ==========================================
-// FIRESTORE DRIVER (Admin SDK when configured, or Firebase JS SDK + Rules)
-// ==========================================
 let fsMode = 'client';
 let fsAdminDb = null;
 let fsClientDb = null;
+let sqliteDb = null;
 let initialized = false;
 let initPromise = null;
 const unsubscribers = [];
@@ -589,6 +695,22 @@ async function flushWrites() {
   while (pendingWrites.size > 0) {
     await Promise.allSettled([...pendingWrites]);
   }
+}
+
+function createSqliteFallbackDriver() {
+  const { DatabaseSync } = require('node:sqlite');
+  const dataDir = path.join(__dirname, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  sqliteDb = new DatabaseSync(path.join(dataDir, 'chat.db'));
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS kv_docs (
+      col TEXT NOT NULL,
+      doc_id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (col, doc_id)
+    )
+  `);
+  fsMode = 'sqlite';
 }
 
 function createFirestoreDriver() {
@@ -629,6 +751,10 @@ function createFirestoreDriver() {
 }
 
 async function fsGetAll(colName) {
+  if (fsMode === 'sqlite') {
+    const rows = sqliteDb.prepare('SELECT doc_id, data FROM kv_docs WHERE col = ?').all(String(colName));
+    return rows.map((r) => ({ id: r.doc_id, data: JSON.parse(r.data) }));
+  }
   if (fsMode === 'admin') {
     const snap = await fsAdminDb.collection(colName).get();
     return snap.docs.map((d) => ({ id: d.id, data: d.data() }));
@@ -639,6 +765,21 @@ async function fsGetAll(colName) {
 
 async function fsSetDoc(colName, docId, data, merge = false) {
   const cleanData = JSON.parse(JSON.stringify(data));
+  if (fsMode === 'sqlite') {
+    let finalObj = cleanData;
+    if (merge) {
+      const existing = sqliteDb
+        .prepare('SELECT data FROM kv_docs WHERE col = ? AND doc_id = ?')
+        .get(String(colName), String(docId));
+      if (existing) {
+        finalObj = { ...JSON.parse(existing.data), ...cleanData };
+      }
+    }
+    sqliteDb
+      .prepare('INSERT INTO kv_docs (col, doc_id, data) VALUES (?, ?, ?) ON CONFLICT(col, doc_id) DO UPDATE SET data = excluded.data')
+      .run(String(colName), String(docId), JSON.stringify(finalObj));
+    return;
+  }
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       if (fsMode === 'admin') {
@@ -658,6 +799,10 @@ async function fsSetDoc(colName, docId, data, merge = false) {
 }
 
 async function fsDeleteDoc(colName, docId) {
+  if (fsMode === 'sqlite') {
+    sqliteDb.prepare('DELETE FROM kv_docs WHERE col = ? AND doc_id = ?').run(String(colName), String(docId));
+    return;
+  }
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       if (fsMode === 'admin') {
@@ -678,6 +823,12 @@ async function fsDeleteDoc(colName, docId) {
 
 async function fsBatchSet(colName, entries) {
   if (!entries || entries.length === 0) return;
+  if (fsMode === 'sqlite') {
+    for (const { docId, data, merge } of entries) {
+      await fsSetDoc(colName, docId, data, merge);
+    }
+    return;
+  }
   for (let i = 0; i < entries.length; i += 400) {
     const chunk = entries.slice(i, i + 400);
     if (fsMode === 'admin') {
@@ -703,6 +854,12 @@ async function fsBatchSet(colName, entries) {
 
 async function fsBatchDelete(colName, docIds) {
   if (!docIds || docIds.length === 0) return;
+  if (fsMode === 'sqlite') {
+    for (const id of docIds) {
+      await fsDeleteDoc(colName, id);
+    }
+    return;
+  }
   for (let i = 0; i < docIds.length; i += 400) {
     const chunk = docIds.slice(i, i + 400);
     if (fsMode === 'admin') {
@@ -723,6 +880,7 @@ async function fsBatchDelete(colName, docIds) {
 }
 
 function fsListen(colName, onChanges) {
+  if (fsMode === 'sqlite') return () => {};
   const handleSnapshot = (snapshot) => {
     const changes = snapshot.docChanges().map((ch) => ({
       type: ch.type,
@@ -757,21 +915,23 @@ function enqueueBatchDelete(colName, docIds) {
 }
 
 // ==========================================
-// REACTIVE IN-MEMORY CACHE (Synced with Cloud Firestore)
+// REACTIVE IN-MEMORY CACHE
 // ==========================================
 const store = {
   usersById: new Map(),
   ranksByKey: new Map(),
   siteSettings: { ...DEFAULT_SITE_SETTINGS },
   roomsById: new Map(),
-  roomStaffByKey: new Map(), // `${room_id}:${user_id}` -> row
-  messagesById: new Map(), // String(id) -> msg
-  mutesByKey: new Map(), // `${target_key}::${room_id}` -> row
-  bansByKey: new Map(), // target_key -> row
+  roomStaffByKey: new Map(),
+  messagesById: new Map(),
+  mutesByKey: new Map(),
+  bansByKey: new Map(),
   customEmojisById: new Map(),
   privateMessagesById: new Map(),
-  friendshipsByKey: new Map(), // `${user_key}::${friend_key}` -> row
+  friendshipsByKey: new Map(),
   wallPostsById: new Map(),
+  newsById: new Map(),
+  giftsById: new Map(),
   reportsById: new Map(),
   notificationsById: new Map(),
   counters: {
@@ -780,6 +940,8 @@ const store = {
     custom_emojis: 0,
     private_messages: 0,
     wall_posts: 0,
+    news: 0,
+    gifts: 0,
     reports: 0,
     notifications: 0
   }
@@ -796,12 +958,15 @@ let hooks = {};
 
 function normalizeUserDoc(docId, data) {
   const numId = Number(data.id) || Number(docId) || 0;
+  const email = String(data.email || '').toLowerCase();
+  const role = String(data.role || 'member');
+  const allowStealth = role === 'site_owner' || isSupremeOwnerEmail(email);
   return {
     id: numId,
     username: String(data.username || ''),
-    email: String(data.email || '').toLowerCase(),
+    email,
     password_hash: String(data.password_hash || ''),
-    role: String(data.role || 'member'),
+    role,
     display_name: String(data.display_name || ''),
     name_color: String(data.name_color || '#ffffff'),
     text_color: String(data.text_color || '#ffffff'),
@@ -812,8 +977,16 @@ function normalizeUserDoc(docId, data) {
     avatar_url: String(data.avatar_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
+    name_shine: String(data.name_shine || 'none'),
+    vip_wings: data.vip_wings ? 1 : 0,
+    profile_music: String(data.profile_music || ''),
+    bio: String(data.bio || ''),
     coins: data.coins !== undefined ? Number(data.coins) : 1500,
     vip_family: String(data.vip_family || ''),
+    is_stealth: allowStealth && data.is_stealth ? 1 : 0,
+    activity_points: Number(data.activity_points) || 0,
+    gifts_received: Number(data.gifts_received) || 0,
+    gifts_sent: Number(data.gifts_sent) || 0,
     last_ip: String(data.last_ip || ''),
     is_banned: data.is_banned ? 1 : 0,
     ban_reason: String(data.ban_reason || ''),
@@ -839,6 +1012,11 @@ function normalizeMessageDoc(docId, data) {
     avatar_url: String(data.avatar_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
+    name_shine: String(data.name_shine || 'none'),
+    vip_wings: data.vip_wings ? 1 : 0,
+    is_admin_notice: Boolean(data.is_admin_notice),
+    is_gift: Boolean(data.is_gift),
+    gift_data: data.gift_data || null,
     msg_type: String(data.msg_type || 'text'),
     content: String(data.content || ''),
     media_url: String(data.media_url || ''),
@@ -866,20 +1044,33 @@ function normalizeRoomDoc(docId, data) {
     owner_name: String(data.owner_name || ''),
     card_bg_color: String(data.card_bg_color || ''),
     card_text_color: String(data.card_text_color || ''),
+    activity_points: Number(data.activity_points) || 0,
+    youtube_video_id: String(data.youtube_video_id || ''),
+    youtube_title: String(data.youtube_title || ''),
+    youtube_is_playing: data.youtube_is_playing ? 1 : 0,
+    youtube_updated_at: String(data.youtube_updated_at || ''),
     created_by: String(data.created_by || 'system'),
     created_at: String(data.created_at || nowIso())
   };
 }
 
 function normalizeRankDoc(docId, data) {
+  const key = String(data.key || docId);
+  const power = Number(data.power) || 0;
+  const defaultRoomOwner = key === 'site_owner' || data.perm_manage_rooms ? 1 : 0;
+  const defaultPublishNews = key === 'site_owner' || power >= 95 ? 1 : 0;
+  const defaultUseAddons = key === 'site_owner' || power >= 5 ? 1 : 0;
+  const defaultMaxAssign =
+    key === 'site_owner' ? 100 : data.perm_set_rank ? Math.max(0, power - 1) : 0;
+
   return {
-    key: String(data.key || docId),
+    key,
     label: String(data.label || docId),
     icon: String(data.icon || '⭐'),
     image_url: String(data.image_url || ''),
     bg_color: String(data.bg_color || '#334155'),
     text_color: String(data.text_color || '#ffffff'),
-    power: Number(data.power) || 0,
+    power,
     tier_order: Number(data.tier_order) || 0,
     is_system: data.is_system ? 1 : 0,
     perm_mute: data.perm_mute ? 1 : 0,
@@ -889,147 +1080,18 @@ function normalizeRankDoc(docId, data) {
     perm_clear_room: data.perm_clear_room ? 1 : 0,
     perm_manage_rooms: data.perm_manage_rooms ? 1 : 0,
     perm_access_panel: data.perm_access_panel ? 1 : 0,
+    perm_room_owner: data.perm_room_owner !== undefined ? (data.perm_room_owner ? 1 : 0) : defaultRoomOwner,
+    perm_publish_news:
+      data.perm_publish_news !== undefined ? (data.perm_publish_news ? 1 : 0) : defaultPublishNews,
+    perm_use_addons: data.perm_use_addons !== undefined ? (data.perm_use_addons ? 1 : 0) : defaultUseAddons,
+    max_assignable_rank:
+      key === 'site_owner'
+        ? 100
+        : data.max_assignable_rank !== undefined
+          ? Math.max(0, Math.min(99, Number(data.max_assignable_rank) || 0))
+          : defaultMaxAssign,
     created_at: String(data.created_at || nowIso())
   };
-}
-
-async function migrateFromSqliteIfNeeded() {
-  const sqlitePath = path.join(__dirname, 'data', 'chat.db');
-  if (!fs.existsSync(sqlitePath)) return;
-
-  let sqlite;
-  try {
-    const { DatabaseSync } = require('node:sqlite');
-    sqlite = new DatabaseSync(sqlitePath, { readOnly: true });
-  } catch (err) {
-    console.warn('SQLite migration skipped:', err.message);
-    return;
-  }
-
-  const tableExists = (name) =>
-    Boolean(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name));
-
-  try {
-    if (store.usersById.size === 0 && tableExists('users')) {
-      const users = sqlite.prepare('SELECT * FROM users').all();
-      const batch = [];
-      for (const u of users) {
-        const docObj = normalizeUserDoc(u.id, u);
-        store.usersById.set(docObj.id, docObj);
-        store.counters.users = Math.max(store.counters.users, docObj.id);
-        batch.push({ docId: String(docObj.id), data: docObj, merge: true });
-      }
-      await fsBatchSet('users', batch);
-      if (batch.length > 0) console.log(`Migrated ${batch.length} users from SQLite to Cloud Firestore.`);
-    }
-
-    if (store.roomsById.size === 0 && tableExists('rooms')) {
-      const rooms = sqlite.prepare('SELECT * FROM rooms').all();
-      const batch = [];
-      for (const r of rooms) {
-        const docObj = normalizeRoomDoc(r.id, r);
-        store.roomsById.set(docObj.id, docObj);
-        batch.push({ docId: docObj.id, data: docObj, merge: true });
-      }
-      await fsBatchSet('rooms', batch);
-      if (batch.length > 0) console.log(`Migrated ${batch.length} rooms from SQLite to Cloud Firestore.`);
-    }
-
-    if (store.roomStaffByKey.size === 0 && tableExists('room_staff')) {
-      const staff = sqlite.prepare('SELECT * FROM room_staff').all();
-      const batch = [];
-      for (const s of staff) {
-        const key = `${s.room_id}:${s.user_id}`;
-        const docObj = {
-          room_id: String(s.room_id),
-          user_id: Number(s.user_id),
-          staff_role: String(s.staff_role || 'مشرف غرفة'),
-          assigned_by: String(s.assigned_by || ''),
-          created_at: String(s.created_at || nowIso())
-        };
-        store.roomStaffByKey.set(key, docObj);
-        batch.push({ docId: safeDocId(key), data: docObj, merge: true });
-      }
-      await fsBatchSet('room_staff', batch);
-    }
-
-    if (store.messagesById.size === 0 && tableExists('messages')) {
-      const msgs = sqlite.prepare('SELECT * FROM messages').all();
-      const batch = [];
-      for (const m of msgs) {
-        const docObj = normalizeMessageDoc(m.id, { ...m, created_at_ms: toMs(m.created_at) });
-        store.messagesById.set(String(docObj.id), docObj);
-        if (typeof docObj.id === 'number') {
-          store.counters.messages = Math.max(store.counters.messages, docObj.id);
-        }
-        batch.push({ docId: String(docObj.id), data: docObj, merge: true });
-      }
-      await fsBatchSet('messages', batch);
-      if (batch.length > 0) console.log(`Migrated ${batch.length} messages from SQLite to Cloud Firestore.`);
-    }
-
-    if (store.ranksByKey.size === 0 && tableExists('ranks')) {
-      const ranks = sqlite.prepare('SELECT * FROM ranks').all();
-      const batch = [];
-      for (const rk of ranks) {
-        const docObj = normalizeRankDoc(rk.key, rk);
-        store.ranksByKey.set(docObj.key, docObj);
-        batch.push({ docId: docObj.key, data: docObj, merge: true });
-      }
-      await fsBatchSet('ranks', batch);
-    }
-
-    if (store.customEmojisById.size === 0 && tableExists('custom_emojis')) {
-      const emojis = sqlite.prepare('SELECT * FROM custom_emojis').all();
-      const batch = [];
-      for (const e of emojis) {
-        const docObj = {
-          id: Number(e.id),
-          code: String(e.code),
-          image_url: String(e.image_url),
-          created_by: String(e.created_by || ''),
-          created_at: String(e.created_at || nowIso())
-        };
-        store.customEmojisById.set(docObj.id, docObj);
-        store.counters.custom_emojis = Math.max(store.counters.custom_emojis, docObj.id);
-        batch.push({ docId: String(docObj.id), data: docObj, merge: true });
-      }
-      await fsBatchSet('custom_emojis', batch);
-    }
-
-    if (store.bansByKey.size === 0 && tableExists('bans')) {
-      const bans = sqlite.prepare('SELECT * FROM bans').all();
-      const batch = [];
-      for (const b of bans) {
-        const docObj = {
-          target_key: String(b.target_key),
-          target_name: String(b.target_name || b.target_key),
-          email: String(b.email || '').toLowerCase(),
-          ip_address: String(b.ip_address || ''),
-          reason: String(b.reason || 'حظر نهائي من الإدارة'),
-          banned_by: String(b.banned_by || 'الإدارة'),
-          created_at: String(b.created_at || nowIso())
-        };
-        store.bansByKey.set(docObj.target_key, docObj);
-        batch.push({ docId: safeDocId(docObj.target_key), data: docObj, merge: true });
-      }
-      await fsBatchSet('bans', batch);
-    }
-
-    if (tableExists('site_settings')) {
-      const ss = sqlite.prepare('SELECT * FROM site_settings WHERE id = 1').get();
-      if (ss) {
-        store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...ss, maintenance_mode: 0 };
-        await fsSetDoc('settings', 'site', store.siteSettings, true);
-      }
-    }
-  } finally {
-    try {
-      sqlite.close();
-    } catch {
-      // ignore
-    }
-  }
 }
 
 function attachRealtimeListeners() {
@@ -1129,7 +1191,7 @@ function attachRealtimeListeners() {
         const d = ch.data || {};
         const key = `${d.room_id}:${d.user_id}`;
         if (ch.type === 'removed') {
-          for (const [k, v] of store.roomStaffByKey.entries()) {
+          for (const [k] of store.roomStaffByKey.entries()) {
             if (safeDocId(k) === ch.id || k === key) store.roomStaffByKey.delete(k);
           }
         } else if (d.room_id && d.user_id) {
@@ -1238,10 +1300,29 @@ function attachRealtimeListeners() {
   unsubscribers.push(
     fsListen('wall_posts', (changes) => {
       for (const ch of changes) {
+        const d = ch.data || {};
+        if (String(ch.id).startsWith('news_') || d.post_type === 'news') {
+          const nid = Number(d.id || String(ch.id).replace('news_', ''));
+          if (ch.type === 'removed') store.newsById.delete(nid);
+          else if (nid) {
+            store.newsById.set(nid, { ...d, id: nid });
+            store.counters.news = Math.max(store.counters.news, nid);
+          }
+          continue;
+        }
+        if (String(ch.id).startsWith('gift_') || d.post_type === 'gift_tx') {
+          const gid = Number(d.id || String(ch.id).replace('gift_', ''));
+          if (ch.type === 'removed') store.giftsById.delete(gid);
+          else if (gid) {
+            store.giftsById.set(gid, { ...d, id: gid });
+            store.counters.gifts = Math.max(store.counters.gifts, gid);
+          }
+          continue;
+        }
         const id = Number(ch.id);
         if (ch.type === 'removed') store.wallPostsById.delete(id);
-        else {
-          store.wallPostsById.set(id, { id, ...ch.data });
+        else if (id) {
+          store.wallPostsById.set(id, { id, ...d });
           store.counters.wall_posts = Math.max(store.counters.wall_posts, id);
         }
       }
@@ -1253,7 +1334,7 @@ function attachRealtimeListeners() {
       for (const ch of changes) {
         const id = Number(ch.id);
         if (ch.type === 'removed') store.reportsById.delete(id);
-        else {
+        else if (id) {
           store.reportsById.set(id, { id, ...ch.data });
           store.counters.reports = Math.max(store.counters.reports, id);
         }
@@ -1266,7 +1347,7 @@ function attachRealtimeListeners() {
       for (const ch of changes) {
         const id = Number(ch.id);
         if (ch.type === 'removed') store.notificationsById.delete(id);
-        else {
+        else if (id) {
           store.notificationsById.set(id, { id, ...ch.data });
           store.counters.notifications = Math.max(store.counters.notifications, id);
         }
@@ -1281,7 +1362,34 @@ async function init(eventHooks = {}) {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    createFirestoreDriver();
+    const fetchAllCollections = () =>
+      Promise.all([
+        fsGetAll('users'),
+        fsGetAll('ranks'),
+        fsGetAll('settings'),
+        fsGetAll('rooms'),
+        fsGetAll('room_staff'),
+        fsGetAll('messages'),
+        fsGetAll('custom_emojis'),
+        fsGetAll('bans'),
+        fsGetAll('mutes'),
+        fsGetAll('private_messages'),
+        fsGetAll('friendships'),
+        fsGetAll('wall_posts'),
+        fsGetAll('reports'),
+        fsGetAll('notifications'),
+        fsGetAll('counters')
+      ]);
+
+    let loadedCollections;
+    try {
+      createFirestoreDriver();
+      loadedCollections = await fetchAllCollections();
+    } catch (fsErr) {
+      console.warn('Cloud Firestore unavailable, falling back to local SQLite:', fsErr.message);
+      createSqliteFallbackDriver();
+      loadedCollections = await fetchAllCollections();
+    }
 
     const [
       usersDocs,
@@ -1299,23 +1407,7 @@ async function init(eventHooks = {}) {
       reportsDocs,
       notifDocs,
       counterDocs
-    ] = await Promise.all([
-      fsGetAll('users'),
-      fsGetAll('ranks'),
-      fsGetAll('settings'),
-      fsGetAll('rooms'),
-      fsGetAll('room_staff'),
-      fsGetAll('messages'),
-      fsGetAll('custom_emojis'),
-      fsGetAll('bans'),
-      fsGetAll('mutes'),
-      fsGetAll('private_messages'),
-      fsGetAll('friendships'),
-      fsGetAll('wall_posts'),
-      fsGetAll('reports'),
-      fsGetAll('notifications'),
-      fsGetAll('counters')
-    ]);
+    ] = loadedCollections;
 
     for (const c of counterDocs) {
       if (c.id === 'sequences' && c.data) {
@@ -1405,9 +1497,26 @@ async function init(eventHooks = {}) {
     }
 
     for (const d of wallDocs) {
-      const id = Number(d.id) || Number(d.data?.id);
+      const data = d.data || {};
+      if (String(d.id).startsWith('news_') || data.post_type === 'news') {
+        const nid = Number(data.id || String(d.id).replace('news_', ''));
+        if (nid) {
+          store.newsById.set(nid, { ...data, id: nid });
+          store.counters.news = Math.max(store.counters.news, nid);
+        }
+        continue;
+      }
+      if (String(d.id).startsWith('gift_') || data.post_type === 'gift_tx') {
+        const gid = Number(data.id || String(d.id).replace('gift_', ''));
+        if (gid) {
+          store.giftsById.set(gid, { ...data, id: gid });
+          store.counters.gifts = Math.max(store.counters.gifts, gid);
+        }
+        continue;
+      }
+      const id = Number(d.id) || Number(data.id);
       if (id) {
-        store.wallPostsById.set(id, { id, ...d.data });
+        store.wallPostsById.set(id, { id, ...data });
         store.counters.wall_posts = Math.max(store.counters.wall_posts, id);
       }
     }
@@ -1428,31 +1537,25 @@ async function init(eventHooks = {}) {
       }
     }
 
-    // One-time seamless migration of any legacy SQLite data if Firestore is missing it
-    await migrateFromSqliteIfNeeded();
-
-    // Ensure supreme owner account always holds site_owner privileges
     ensureSupremeOwnersInStore();
 
-    // Seed missing default ranks into Firestore
-    const missingRanks = [];
-    for (const r of DEFAULT_RANKS) {
-      if (!store.ranksByKey.has(r.key)) {
-        const docObj = { ...r, created_at: nowIso() };
-        store.ranksByKey.set(r.key, docObj);
-        missingRanks.push({ docId: r.key, data: docObj, merge: true });
+    // Seed missing default ranks if none exist yet
+    const rankSeedBatch = [];
+    for (const dr of DEFAULT_RANKS) {
+      if (!store.ranksByKey.has(dr.key)) {
+        const norm = normalizeRankDoc(dr.key, dr);
+        store.ranksByKey.set(norm.key, norm);
+        rankSeedBatch.push({ docId: norm.key, data: norm, merge: true });
       }
     }
-    if (missingRanks.length > 0) {
-      await fsBatchSet('ranks', missingRanks);
+    if (rankSeedBatch.length > 0) {
+      await fsBatchSet('ranks', rankSeedBatch);
     }
 
-    // Seed site settings if missing
     if (!hasSiteSettingsDoc) {
       await fsSetDoc('settings', 'site', store.siteSettings, true);
     }
 
-    // Seed default rooms if empty
     if (store.roomsById.size === 0) {
       const roomBatch = [];
       for (const r of DEFAULT_ROOMS) {
@@ -1476,7 +1579,7 @@ async function init(eventHooks = {}) {
 
 function getStorageStatus() {
   return {
-    provider: 'firebase-firestore',
+    provider: fsMode === 'sqlite' ? 'sqlite' : 'firebase-firestore',
     mode: fsMode,
     projectId: FIREBASE_PROJECT_ID,
     databaseId: FIRESTORE_DATABASE_ID,
@@ -1486,6 +1589,8 @@ function getStorageStatus() {
       messages: store.messagesById.size,
       rooms: store.roomsById.size,
       ranks: store.ranksByKey.size,
+      news: store.newsById.size,
+      gifts: store.giftsById.size,
       bans: store.bansByKey.size
     }
   };
@@ -1496,6 +1601,7 @@ function getStorageStatus() {
 // ==========================================
 function mapRankRow(row) {
   if (!row) return null;
+  const power = Number(row.power) || 0;
   return {
     key: row.key,
     label: row.label,
@@ -1503,9 +1609,17 @@ function mapRankRow(row) {
     image_url: row.image_url || '',
     bg_color: row.bg_color || '#334155',
     text_color: row.text_color || '#ffffff',
-    power: Number(row.power) || 0,
+    power,
     tier_order: Number(row.tier_order) || 0,
     is_system: row.is_system === 1,
+    max_assignable_rank:
+      row.key === 'site_owner'
+        ? 100
+        : row.max_assignable_rank !== undefined
+          ? Number(row.max_assignable_rank) || 0
+          : row.perm_set_rank === 1
+            ? Math.max(0, power - 1)
+            : 0,
     permissions: {
       mute: row.perm_mute === 1,
       kick: row.perm_kick === 1,
@@ -1513,7 +1627,10 @@ function mapRankRow(row) {
       set_rank: row.perm_set_rank === 1,
       clear_room: row.perm_clear_room === 1,
       manage_rooms: row.perm_manage_rooms === 1,
-      access_panel: row.perm_access_panel === 1
+      access_panel: row.perm_access_panel === 1,
+      room_owner: row.perm_room_owner === 1,
+      publish_news: row.perm_publish_news === 1,
+      use_addons: row.perm_use_addons === 1
     }
   };
 }
@@ -1541,6 +1658,16 @@ function getRankPower(role) {
   return row ? Number(row.power) || 0 : 0;
 }
 
+function getMaxAssignablePower(role) {
+  if (role === 'site_owner') return 100;
+  const row = store.ranksByKey.get(role);
+  if (!row || row.perm_set_rank !== 1) return -1;
+  const ownPower = Number(row.power) || 0;
+  const ceiling =
+    row.max_assignable_rank !== undefined ? Number(row.max_assignable_rank) || 0 : Math.max(0, ownPower - 1);
+  return Math.min(ownPower - 1, Math.max(0, ceiling));
+}
+
 function getRankSortWeight(role) {
   const row = store.ranksByKey.get(role);
   return row ? (Number(row.power) || 0) * 100 + (Number(row.tier_order) || 0) : 0;
@@ -1558,7 +1685,10 @@ const VALID_PERM_COLUMNS = {
   set_rank: 'perm_set_rank',
   clear_room: 'perm_clear_room',
   manage_rooms: 'perm_manage_rooms',
-  access_panel: 'perm_access_panel'
+  access_panel: 'perm_access_panel',
+  room_owner: 'perm_room_owner',
+  publish_news: 'perm_publish_news',
+  use_addons: 'perm_use_addons'
 };
 
 function hasPermission(role, permName) {
@@ -1575,7 +1705,17 @@ function sanitizeHexColor(val, fallback) {
   return /^#[0-9a-fA-F]{3,8}$/.test(s) ? s : fallback;
 }
 
-function createRank({ key, label, icon, imageUrl, bgColor, textColor, power, permissions = {} }) {
+function createRank({
+  key,
+  label,
+  icon,
+  imageUrl,
+  bgColor,
+  textColor,
+  power,
+  maxAssignableRank,
+  permissions = {}
+}) {
   const cleanLabel = String(label || '').trim().slice(0, 32);
   if (cleanLabel.length < 2) return { error: 'اسم الرتبة يجب أن يكون حرفين على الأقل.' };
   const safeKey =
@@ -1588,6 +1728,8 @@ function createRank({ key, label, icon, imageUrl, bgColor, textColor, power, per
   if (store.ranksByKey.has(safeKey)) return { error: 'مفتاح هذه الرتبة موجود مسبقاً.' };
 
   const clampedPower = Math.max(1, Math.min(99, Number(power) || 15));
+  const rawMaxAssign =
+    maxAssignableRank !== undefined ? Number(maxAssignableRank) || 0 : permissions.set_rank ? clampedPower - 1 : 0;
   const docObj = {
     key: safeKey,
     label: cleanLabel,
@@ -1605,6 +1747,10 @@ function createRank({ key, label, icon, imageUrl, bgColor, textColor, power, per
     perm_clear_room: permissions.clear_room ? 1 : 0,
     perm_manage_rooms: permissions.manage_rooms ? 1 : 0,
     perm_access_panel: permissions.access_panel ? 1 : 0,
+    perm_room_owner: permissions.room_owner ? 1 : 0,
+    perm_publish_news: permissions.publish_news ? 1 : 0,
+    perm_use_addons: permissions.use_addons ? 1 : 0,
+    max_assignable_rank: Math.max(0, Math.min(99, rawMaxAssign)),
     created_at: nowIso()
   };
 
@@ -1613,7 +1759,7 @@ function createRank({ key, label, icon, imageUrl, bgColor, textColor, power, per
   return { rank: getRankByKey(safeKey) };
 }
 
-function updateRank(key, { label, icon, imageUrl, bgColor, textColor, power, permissions }) {
+function updateRank(key, { label, icon, imageUrl, bgColor, textColor, power, maxAssignableRank, permissions }) {
   const existing = store.ranksByKey.get(key);
   if (!existing) return { error: 'الرتبة غير موجودة.' };
 
@@ -1634,6 +1780,14 @@ function updateRank(key, { label, icon, imageUrl, bgColor, textColor, power, per
 
   const p = permissions || {};
   const isOwner = key === 'site_owner';
+  const nextMaxAssign = isOwner
+    ? 100
+    : maxAssignableRank !== undefined
+      ? Math.max(0, Math.min(99, Number(maxAssignableRank) || 0))
+      : existing.max_assignable_rank !== undefined
+        ? Number(existing.max_assignable_rank)
+        : Math.max(0, nextPower - 1);
+
   const updated = {
     ...existing,
     label: nextLabel,
@@ -1648,7 +1802,11 @@ function updateRank(key, { label, icon, imageUrl, bgColor, textColor, power, per
     perm_set_rank: isOwner ? 1 : p.set_rank !== undefined ? (p.set_rank ? 1 : 0) : existing.perm_set_rank,
     perm_clear_room: isOwner ? 1 : p.clear_room !== undefined ? (p.clear_room ? 1 : 0) : existing.perm_clear_room,
     perm_manage_rooms: isOwner ? 1 : p.manage_rooms !== undefined ? (p.manage_rooms ? 1 : 0) : existing.perm_manage_rooms,
-    perm_access_panel: isOwner ? 1 : p.access_panel !== undefined ? (p.access_panel ? 1 : 0) : existing.perm_access_panel
+    perm_access_panel: isOwner ? 1 : p.access_panel !== undefined ? (p.access_panel ? 1 : 0) : existing.perm_access_panel,
+    perm_room_owner: isOwner ? 1 : p.room_owner !== undefined ? (p.room_owner ? 1 : 0) : existing.perm_room_owner,
+    perm_publish_news: isOwner ? 1 : p.publish_news !== undefined ? (p.publish_news ? 1 : 0) : existing.perm_publish_news,
+    perm_use_addons: isOwner ? 1 : p.use_addons !== undefined ? (p.use_addons ? 1 : 0) : existing.perm_use_addons,
+    max_assignable_rank: nextMaxAssign
   };
 
   store.ranksByKey.set(key, updated);
@@ -1813,8 +1971,16 @@ function registerUser({ username, email, passwordHash, ipAddress }) {
     avatar_url: '',
     avatar_frame: role === 'site_owner' ? 'gold_royal' : 'none',
     nameplate_style: role === 'site_owner' ? 'crimson_royal' : 'default',
+    name_shine: 'none',
+    vip_wings: role === 'site_owner' ? 1 : 0,
+    profile_music: '',
+    bio: '',
     coins: role === 'site_owner' ? 99999 : 1500,
     vip_family: '',
+    is_stealth: 0,
+    activity_points: 0,
+    gifts_received: 0,
+    gifts_sent: 0,
     last_ip: ipAddress || '',
     is_banned: 0,
     ban_reason: '',
@@ -1854,16 +2020,60 @@ function updateUserIp(userId, ipAddress) {
   enqueueSet('users', String(u.id), { last_ip: ipAddress }, true);
 }
 
+function setUserStealth(userId, enabled) {
+  const u = store.usersById.get(Number(userId));
+  if (!u) return null;
+  if (u.role !== 'site_owner' && !isSupremeOwnerEmail(u.email)) {
+    return { error: 'وضع التخفي متاح لصاحب الموقع فقط.' };
+  }
+  u.is_stealth = enabled ? 1 : 0;
+  enqueueSet('users', String(u.id), { is_stealth: u.is_stealth }, true);
+  return { user: { ...u } };
+}
+
+function incrementActivityPoints({ userId, roomId, userDelta = 1, roomDelta = 1 }) {
+  if (userId) {
+    const u = store.usersById.get(Number(userId));
+    if (u) {
+      u.activity_points = (Number(u.activity_points) || 0) + userDelta;
+      enqueueSet('users', String(u.id), { activity_points: u.activity_points }, true);
+    }
+  }
+  if (roomId) {
+    const r = store.roomsById.get(roomId);
+    if (r) {
+      r.activity_points = (Number(r.activity_points) || 0) + roomDelta;
+      enqueueSet('rooms', roomId, { activity_points: r.activity_points }, true);
+    }
+  }
+}
+
 function updateUserCustomization(
   userId,
-  { displayName, nameColor, textColor, nameBgColor, neonColor, fontFamily, fontStyle, avatarUrl, avatarFrame, nameplateStyle, vipFamily }
+  {
+    displayName,
+    nameColor,
+    textColor,
+    nameBgColor,
+    neonColor,
+    fontFamily,
+    fontStyle,
+    avatarUrl,
+    avatarFrame,
+    nameplateStyle,
+    nameShine,
+    vipWings,
+    profileMusic,
+    bio,
+    vipFamily
+  }
 ) {
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
 
   const updated = {
     ...current,
-    display_name: displayName !== undefined && displayName.trim() ? displayName.trim() : getEffectiveName(current),
+    display_name: displayName !== undefined && displayName.trim() ? displayName.trim().slice(0, 28) : getEffectiveName(current),
     name_color: nameColor || current.name_color,
     text_color: textColor !== undefined ? textColor || '#ffffff' : current.text_color || '#ffffff',
     name_bg_color: nameBgColor !== undefined ? String(nameBgColor || '').trim().slice(0, 30) : current.name_bg_color || '',
@@ -1871,8 +2081,12 @@ function updateUserCustomization(
     font_family: fontFamily !== undefined ? String(fontFamily || 'Normal').trim().slice(0, 40) : current.font_family || 'Normal',
     font_style: fontStyle !== undefined ? String(fontStyle || 'Normal').trim().slice(0, 30) : current.font_style || 'Normal',
     avatar_url: avatarUrl !== undefined ? avatarUrl : current.avatar_url,
-    avatar_frame: avatarFrame || current.avatar_frame || 'none',
-    nameplate_style: nameplateStyle || current.nameplate_style || 'default',
+    avatar_frame: avatarFrame !== undefined ? avatarFrame || 'none' : current.avatar_frame || 'none',
+    nameplate_style: nameplateStyle !== undefined ? nameplateStyle || 'default' : current.nameplate_style || 'default',
+    name_shine: nameShine !== undefined ? String(nameShine || 'none').trim().slice(0, 30) : current.name_shine || 'none',
+    vip_wings: vipWings !== undefined ? (vipWings ? 1 : 0) : current.vip_wings ? 1 : 0,
+    profile_music: profileMusic !== undefined ? String(profileMusic || '').trim().slice(0, 300) : current.profile_music || '',
+    bio: bio !== undefined ? String(bio || '').trim().slice(0, 160) : current.bio || '',
     vip_family: vipFamily !== undefined ? vipFamily.trim().slice(0, 24) : current.vip_family || ''
   };
 
@@ -1917,8 +2131,16 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     avatar_url: '',
     avatar_frame: safeRole === 'site_owner' ? 'gold_royal' : 'none',
     nameplate_style: safeRole === 'site_owner' ? 'crimson_royal' : 'default',
+    name_shine: 'none',
+    vip_wings: safeRole === 'site_owner' ? 1 : 0,
+    profile_music: '',
+    bio: '',
     coins: safeRole === 'site_owner' ? 99999 : 1500,
     vip_family: '',
+    is_stealth: 0,
+    activity_points: 0,
+    gifts_received: 0,
+    gifts_sent: 0,
     last_ip: '',
     is_banned: 0,
     ban_reason: '',
@@ -1993,13 +2215,22 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
 }
 
 function spendUserCoins(userId, cost) {
-  if (!cost || cost <= 0) return findUserById(userId);
+  if (!cost || cost <= 0) return { user: findUserById(userId) };
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
   if ((current.coins || 0) < cost) return { error: 'رصيد المحفظة غير كافٍ لإتمام الشراء.' };
   current.coins -= cost;
   enqueueSet('users', String(current.id), { coins: current.coins }, true);
   return { user: { ...current } };
+}
+
+function adjustUserCoins(userId, delta) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return null;
+  const amount = Number(delta) || 0;
+  current.coins = Math.max(0, (Number(current.coins) || 0) + amount);
+  enqueueSet('users', String(current.id), { coins: current.coins }, true);
+  return { ...current };
 }
 
 function updateUserRole(userId, newRole) {
@@ -2042,7 +2273,7 @@ function getAllRegisteredUsers() {
 }
 
 // ==========================================
-// ROOMS & STAFF HELPERS
+// ROOMS, YOUTUBE & STAFF HELPERS
 // ==========================================
 function getAllRooms() {
   return [...store.roomsById.values()].sort((a, b) =>
@@ -2123,11 +2354,34 @@ function isRoomStaffMember(roomId, userId) {
 }
 
 function isRoomManager(roomId, userId, userRole) {
-  if (userRole === 'site_owner' || hasPermission(userRole, 'manage_rooms')) return true;
+  if (userRole === 'site_owner' || hasPermission(userRole, 'manage_rooms') || hasPermission(userRole, 'room_owner')) {
+    return true;
+  }
   if (!roomId || !userId) return false;
   const room = getRoomById(roomId);
   if (room && room.owner_user_id && Number(room.owner_user_id) === Number(userId)) return true;
   return isRoomStaffMember(roomId, userId);
+}
+
+function setRoomYoutube(roomId, { videoId = '', title = '', isPlaying = false }) {
+  const r = store.roomsById.get(roomId);
+  if (!r) return null;
+  r.youtube_video_id = String(videoId || '').trim().slice(0, 32);
+  r.youtube_title = String(title || '').trim().slice(0, 120);
+  r.youtube_is_playing = isPlaying && r.youtube_video_id ? 1 : 0;
+  r.youtube_updated_at = nowIso();
+  enqueueSet(
+    'rooms',
+    roomId,
+    {
+      youtube_video_id: r.youtube_video_id,
+      youtube_title: r.youtube_title,
+      youtube_is_playing: r.youtube_is_playing,
+      youtube_updated_at: r.youtube_updated_at
+    },
+    true
+  );
+  return { ...r };
 }
 
 function sanitizeRoomForPublic(room) {
@@ -2139,6 +2393,11 @@ function sanitizeRoomForPublic(room) {
     min_rank_power: Number(room.min_rank_power) || 0,
     owner_user_id: room.owner_user_id ? Number(room.owner_user_id) : null,
     owner_name: room.owner_name || '',
+    activity_points: Number(room.activity_points) || 0,
+    youtube_video_id: String(room.youtube_video_id || ''),
+    youtube_title: String(room.youtube_title || ''),
+    youtube_is_playing: room.youtube_is_playing ? 1 : 0,
+    youtube_updated_at: String(room.youtube_updated_at || ''),
     staff: getRoomStaff(room.id)
   };
 }
@@ -2185,6 +2444,11 @@ function createRoom({
     min_rank_power: Math.max(0, Math.min(100, Number(minRankPower) || 0)),
     owner_user_id: resolvedOwnerId,
     owner_name: resolvedOwnerName,
+    activity_points: 0,
+    youtube_video_id: '',
+    youtube_title: '',
+    youtube_is_playing: 0,
+    youtube_updated_at: '',
     mics_enabled: 1,
     created_by: createdBy || 'owner',
     created_at: nowIso()
@@ -2300,6 +2564,11 @@ function addMessage({
   avatarUrl,
   avatarFrame,
   nameplateStyle,
+  nameShine,
+  vipWings,
+  isAdminNotice,
+  isGift,
+  giftData,
   msgType,
   content,
   mediaUrl,
@@ -2310,6 +2579,7 @@ function addMessage({
   const id = nextSeq('messages');
   const tsMs = Number(createdAtMs) || Date.now();
   const iso = createdAt || new Date(tsMs).toISOString();
+  const persistedMsgType = ['text', 'image', 'audio'].includes(msgType) ? msgType : 'text';
   const msg = {
     id,
     doc_id: String(id),
@@ -2326,7 +2596,12 @@ function addMessage({
     avatar_url: avatarUrl || '',
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
-    msg_type: ['text', 'image', 'audio'].includes(msgType) ? msgType : 'text',
+    name_shine: nameShine || 'none',
+    vip_wings: vipWings ? 1 : 0,
+    is_admin_notice: Boolean(isAdminNotice),
+    is_gift: Boolean(isGift),
+    gift_data: giftData || null,
+    msg_type: persistedMsgType,
     content: content || '',
     media_url: mediaUrl || '',
     client_msg_id: String(clientMsgId || ''),
@@ -2500,10 +2775,7 @@ function isTargetBanned(input) {
     if (targetKey.startsWith('user:')) {
       const uid = Number(targetKey.replace('user:', ''));
       const u = Number.isNaN(uid) ? null : findUserById(uid);
-      if (u && isSupremeOwnerEmail(u.email)) {
-        return null;
-      }
-      if (u && u.role === 'site_owner') {
+      if (u && (isSupremeOwnerEmail(u.email) || u.role === 'site_owner')) {
         return null;
       }
       if (u && u.is_banned === 1) {
@@ -2528,8 +2800,136 @@ function isTargetBanned(input) {
 }
 
 // ==========================================
-// SOCIAL, PM, WALL, REPORTS, NOTIFICATIONS
+// NEWS, GIFTS, SOCIAL, PM, WALL, REPORTS, NOTIFICATIONS
 // ==========================================
+function addNewsPost({ title, content, imageUrl, authorKey, authorName, authorRole }) {
+  const cleanTitle = String(title || '').trim().slice(0, 120);
+  const cleanContent = String(content || '').trim().slice(0, 2000);
+  if (cleanTitle.length < 2 || cleanContent.length < 2) {
+    return { error: 'يرجى كتابة عنوان ومحتوى الخبر.' };
+  }
+  const id = nextSeq('news');
+  const post = {
+    id,
+    post_type: 'news',
+    title: cleanTitle,
+    content: cleanContent,
+    image_url: String(imageUrl || '').trim(),
+    author_key: authorKey,
+    author_name: authorName,
+    author_role: authorRole || 'site_owner',
+    created_at: nowIso()
+  };
+  store.newsById.set(id, post);
+  // Persisted inside wall_posts collection under docId `news_${id}` so Cloud Firestore rules always accept it
+  enqueueSet('wall_posts', `news_${id}`, post);
+  return { news: { ...post } };
+}
+
+function getAllNews() {
+  return [...store.newsById.values()].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 60);
+}
+
+function deleteNewsPost(newsId) {
+  const nid = Number(newsId);
+  if (Number.isNaN(nid) || !store.newsById.has(nid)) return false;
+  store.newsById.delete(nid);
+  enqueueDelete('wall_posts', `news_${nid}`);
+  return true;
+}
+
+function sendGift({ fromUserId, fromKey, fromName, fromRole, toKey, toName, giftId, roomId }) {
+  const gift = GIFT_CATALOG.find((g) => g.id === giftId);
+  if (!gift) return { error: 'الهدية المختارة غير متوفرة.' };
+  if (!fromUserId) return { error: 'إرسال الهدايا متاح للأعضاء المسجلين فقط.' };
+  const sender = store.usersById.get(Number(fromUserId));
+  if (!sender) return { error: 'حساب المرسل غير موجود.' };
+  if (fromKey === toKey) return { error: 'لا يمكنك إرسال هدية إلى نفسك.' };
+  if ((Number(sender.coins) || 0) < gift.cost) {
+    return { error: `رصيدك الحالي (${sender.coins}) غير كافٍ لهذه الهدية (${gift.cost} عملة).` };
+  }
+
+  sender.coins = (Number(sender.coins) || 0) - gift.cost;
+  sender.gifts_sent = (Number(sender.gifts_sent) || 0) + 1;
+  sender.activity_points = (Number(sender.activity_points) || 0) + 5;
+  enqueueSet(
+    'users',
+    String(sender.id),
+    { coins: sender.coins, gifts_sent: sender.gifts_sent, activity_points: sender.activity_points },
+    true
+  );
+
+  let receiverRow = null;
+  if (toKey && String(toKey).startsWith('user:')) {
+    const rid = Number(String(toKey).replace('user:', ''));
+    const rec = Number.isNaN(rid) ? null : store.usersById.get(rid);
+    if (rec) {
+      rec.coins = (Number(rec.coins) || 0) + gift.reward;
+      rec.gifts_received = (Number(rec.gifts_received) || 0) + 1;
+      rec.activity_points = (Number(rec.activity_points) || 0) + 4;
+      enqueueSet(
+        'users',
+        String(rec.id),
+        { coins: rec.coins, gifts_received: rec.gifts_received, activity_points: rec.activity_points },
+        true
+      );
+      receiverRow = { ...rec };
+    }
+  }
+
+  if (roomId) {
+    const rm = store.roomsById.get(roomId);
+    if (rm) {
+      rm.activity_points = (Number(rm.activity_points) || 0) + 5;
+      enqueueSet('rooms', roomId, { activity_points: rm.activity_points }, true);
+    }
+  }
+
+  const txId = nextSeq('gifts');
+  const tx = {
+    id: txId,
+    post_type: 'gift_tx',
+    gift_id: gift.id,
+    gift_name: gift.name,
+    gift_emoji: gift.emoji,
+    gift_color: gift.color,
+    gift_tier: gift.tier,
+    cost: gift.cost,
+    reward: gift.reward,
+    from_key: fromKey,
+    from_name: fromName,
+    from_role: fromRole || sender.role,
+    to_key: toKey,
+    to_name: toName,
+    room_id: roomId || '',
+    created_at: nowIso()
+  };
+  store.giftsById.set(txId, tx);
+  enqueueSet('wall_posts', `gift_${txId}`, tx);
+
+  return {
+    tx: { ...tx },
+    gift,
+    sender: { ...sender },
+    receiver: receiverRow
+  };
+}
+
+function getGiftsForUser(userKey) {
+  const received = [];
+  const sent = [];
+  for (const g of store.giftsById.values()) {
+    if (g.to_key === userKey) received.push(g);
+    if (g.from_key === userKey) sent.push(g);
+  }
+  received.sort((a, b) => Number(b.id) - Number(a.id));
+  sent.sort((a, b) => Number(b.id) - Number(a.id));
+  return {
+    received: received.slice(0, 50),
+    sent: sent.slice(0, 50)
+  };
+}
+
 function addPrivateMessage({ fromKey, fromName, fromRole, fromAvatar, toKey, toName, content }) {
   const id = nextSeq('private_messages');
   const pm = {
@@ -2631,6 +3031,7 @@ function addWallPost({ authorKey, authorName, authorRole, avatarUrl, avatarFrame
   const id = nextSeq('wall_posts');
   const post = {
     id,
+    post_type: 'wall',
     author_key: authorKey,
     author_name: authorName,
     author_role: authorRole || 'member',
@@ -2683,14 +3084,16 @@ function getReports() {
     .slice(0, 50);
 }
 
-function addNotification({ targetKey, title, body }) {
+function addNotification({ targetKey, title, body, category = 'system' }) {
   const id = nextSeq('notifications');
   const notif = {
     id,
     target_key: targetKey,
     title,
     body,
+    category,
     is_read: 0,
+    read_by: [],
     created_at: nowIso()
   };
   store.notificationsById.set(id, notif);
@@ -2702,7 +3105,49 @@ function getNotificationsForUser(userKey) {
   return [...store.notificationsById.values()]
     .filter((n) => n.target_key === userKey || n.target_key === '*')
     .sort((a, b) => Number(b.id) - Number(a.id))
-    .slice(0, 30);
+    .slice(0, 35)
+    .map((n) => ({
+      ...n,
+      readByMe:
+        n.target_key === userKey
+          ? Boolean(n.is_read)
+          : Array.isArray(n.read_by) && n.read_by.includes(userKey)
+    }));
+}
+
+function getUnreadNotificationCount(userKey) {
+  let count = 0;
+  for (const n of store.notificationsById.values()) {
+    if (n.target_key === userKey) {
+      if (!n.is_read) count += 1;
+    } else if (n.target_key === '*') {
+      const readBy = Array.isArray(n.read_by) ? n.read_by : [];
+      if (!readBy.includes(userKey)) count += 1;
+    }
+  }
+  return count;
+}
+
+function markNotificationsRead(userKey) {
+  if (!userKey) return 0;
+  let updated = 0;
+  for (const n of store.notificationsById.values()) {
+    if (n.target_key === userKey && !n.is_read) {
+      n.is_read = 1;
+      updated += 1;
+      enqueueSet('notifications', String(n.id), { is_read: 1 }, true);
+    } else if (n.target_key === '*') {
+      const readBy = Array.isArray(n.read_by) ? [...n.read_by] : [];
+      if (!readBy.includes(userKey)) {
+        readBy.push(userKey);
+        if (readBy.length > 500) readBy.shift();
+        n.read_by = readBy;
+        updated += 1;
+        enqueueSet('notifications', String(n.id), { read_by: readBy }, true);
+      }
+    }
+  }
+  return updated;
 }
 
 function migrateGuestKeyReferences(oldKey, newKey, newName, newRole) {
@@ -2765,6 +3210,7 @@ module.exports = {
   flushWrites,
   getStorageStatus,
   SUPREME_OWNER_EMAIL,
+  GIFT_CATALOG,
   isSupremeOwnerEmail,
   isProtectedSupremeOwnerKey,
   ensureSupremeOwnerAccount: (id) => {
@@ -2775,6 +3221,7 @@ module.exports = {
   getAllRanks,
   getRankByKey,
   getRankPower,
+  getMaxAssignablePower,
   getRankSortWeight,
   isValidRank,
   hasPermission,
@@ -2792,10 +3239,13 @@ module.exports = {
   findUserByIdentifier,
   findUserById,
   updateUserIp,
+  setUserStealth,
+  incrementActivityPoints,
   updateUserCustomization,
   adminCreateUser,
   adminUpdateUserAccount,
   spendUserCoins,
+  adjustUserCoins,
   updateUserRole,
   forceChangeUserDisplayName,
   getAllRegisteredUsers,
@@ -2807,6 +3257,7 @@ module.exports = {
   removeRoomStaff,
   isRoomStaffMember,
   isRoomManager,
+  setRoomYoutube,
   sanitizeRoomForPublic,
   createRoom,
   updateRoom,
@@ -2821,6 +3272,11 @@ module.exports = {
   unbanTarget,
   getAllBans,
   isTargetBanned,
+  addNewsPost,
+  getAllNews,
+  deleteNewsPost,
+  sendGift,
+  getGiftsForUser,
   addPrivateMessage,
   getPrivateMessagesForUser,
   markPrivateMessagesRead,
@@ -2834,5 +3290,7 @@ module.exports = {
   getReports,
   addNotification,
   getNotificationsForUser,
+  getUnreadNotificationCount,
+  markNotificationsRead,
   migrateGuestKeyReferences
 };

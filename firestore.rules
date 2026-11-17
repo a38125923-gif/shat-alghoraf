@@ -7,7 +7,7 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 160;
     }
 
-    // Registered Users Collection (persists accounts, emails, passwords, ranks, colors, avatars)
+    // Registered Users Collection (persists accounts, emails, passwords, ranks, colors, avatars, addons, stealth, activity)
     match /users/{userId} {
       allow read: if true;
       allow create, update: if isValidId(userId) &&
@@ -19,18 +19,18 @@ service cloud.firestore {
       allow delete: if isValidId(userId);
     }
 
-    // Chat Room Messages Collection (persists text, image, audio messages permanently)
+    // Chat Room Messages Collection
     match /messages/{messageId} {
       allow read: if true;
       allow create, update: if isValidId(messageId) &&
                                request.resource.data.room_id is string &&
                                request.resource.data.sender_key is string &&
                                request.resource.data.sender_name is string &&
-                               request.resource.data.msg_type in ['text', 'image', 'audio'];
+                               request.resource.data.msg_type in ['text', 'image', 'audio', 'gift', 'admin_notice', 'system'];
       allow delete: if isValidId(messageId);
     }
 
-    // Chat Rooms Collection (persists rooms, themes, wallpapers, passwords, ownership)
+    // Chat Rooms Collection
     match /rooms/{roomId} {
       allow read: if true;
       allow create, update: if isValidId(roomId) &&
@@ -40,19 +40,16 @@ service cloud.firestore {
       allow delete: if isValidId(roomId);
     }
 
-    // Room Staff Collection
     match /room_staff/{staffId} {
       allow read: if true;
       allow write: if isValidId(staffId);
     }
 
-    // Site Settings & CMS Collection
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isValidId(settingId);
     }
 
-    // Custom & System Ranks Collection
     match /ranks/{rankKey} {
       allow read: if true;
       allow create, update: if isValidId(rankKey) &&
@@ -61,61 +58,61 @@ service cloud.firestore {
       allow delete: if isValidId(rankKey);
     }
 
-    // Custom Emojis & Stickers Collection
     match /custom_emojis/{emojiId} {
       allow read: if true;
       allow write: if isValidId(emojiId);
     }
 
-    // Bans Collection
     match /bans/{banId} {
       allow read: if true;
       allow write: if isValidId(banId);
     }
 
-    // Mutes Collection
     match /mutes/{muteId} {
       allow read: if true;
       allow write: if isValidId(muteId);
     }
 
-    // Private Messages Collection
     match /private_messages/{pmId} {
       allow read: if true;
       allow write: if isValidId(pmId);
     }
 
-    // Friendships Collection
     match /friendships/{friendshipId} {
       allow read: if true;
       allow write: if isValidId(friendshipId);
     }
 
-    // Wall Posts Collection
     match /wall_posts/{postId} {
       allow read: if true;
       allow write: if isValidId(postId);
     }
 
-    // Reports Collection
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isValidId(newsId);
+    }
+
+    match /gifts/{giftId} {
+      allow read: if true;
+      allow write: if isValidId(giftId);
+    }
+
     match /reports/{reportId} {
       allow read: if true;
       allow write: if isValidId(reportId);
     }
 
-    // Notifications Collection
     match /notifications/{notifId} {
       allow read: if true;
       allow write: if isValidId(notifId);
     }
 
-    // Sequence Counters Collection
     match /counters/{counterId} {
       allow read: if true;
       allow write: if isValidId(counterId);
     }
 
-    // Default deny for any unknown collection
     match /{document=**} {
       allow read, write: if false;
     }

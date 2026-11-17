@@ -4,396 +4,633 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const express = require('express');
 const { Server } = require('socket.io');
-const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 const db = require('./db');
 
-const isAiStudioNginx = Boolean(process.env.NGINX_PORT && process.env.DEFAULT_APP_PORT && process.env.STANDALONE_CLOUD_RUN !== '1');
-const PORT = Number(process.env.CHAT_PORT) || (isAiStudioNginx ? Number(process.env.DEFAULT_APP_PORT) : Number(process.env.PORT) || 3000);
-const HOST = '0.0.0.0';
+const rawEnvPort = Number(process.env.PORT);
+const nginxEnvPort = Number(process.env.NGINX_PORT || 0);
+const PORT =
+  Number(process.env.APP_PORT) ||
+  (rawEnvPort && rawEnvPort !== nginxEnvPort ? rawEnvPort : Number(process.env.DEFAULT_APP_PORT || 3000));
+const TOKEN_SECRET =
+  process.env.CHAT_TOKEN_SECRET || 'arabic-chat-super-secret-token-key-2026-v3';
 
-const DATA_DIR = path.join(__dirname, 'data');
-const SECRET_FILE = path.join(DATA_DIR, '.session_secret');
-let SESSION_SECRET = process.env.SESSION_SECRET || '';
-if (!SESSION_SECRET) {
-  if (fs.existsSync(SECRET_FILE)) {
-    SESSION_SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
-  } else {
-    SESSION_SECRET = crypto.randomBytes(32).toString('hex');
-    fs.writeFileSync(SECRET_FILE, SESSION_SECRET, { mode: 0o600 });
-  }
-}
-
-const UPLOADS_ROOT = path.join(__dirname, 'uploads');
-const UPLOAD_SUBDIRS = ['images', 'audio', 'avatars', 'rooms', 'ranks', 'emojis', 'wallpapers', 'branding'];
+const UPLOAD_ROOT = path.join(__dirname, 'data', 'uploads');
+const UPLOAD_SUBDIRS = ['avatars', 'images', 'audio', 'wallpapers', 'emojis', 'rank_icons', 'news'];
 for (const sub of UPLOAD_SUBDIRS) {
-  const dir = path.join(UPLOADS_ROOT, sub);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  fs.mkdirSync(path.join(UPLOAD_ROOT, sub), { recursive: true });
 }
 
 const SHOP_FRAMES = [
-  { id: 'none', name: 'بدون إطار', cost: 0 },
-  { id: 'gold_royal', name: 'الإطار الملكي الذهبي', cost: 0 },
-  { id: 'fire_gold', name: 'إطار اللهب الذهبي', cost: 350 },
-  { id: 'diamond_ring', name: 'الإطار الماسي المتوهج', cost: 600 },
-  { id: 'emerald_crown', name: 'إطار الزمرد الفاخر', cost: 450 }
+  { id: 'none', label: 'بدون إطار', price: 0, tier: 'free', preview: '#64748b' },
+  { id: 'gold_royal', label: 'الإطار الذهبي الملكي', price: 0, tier: 'vip', preview: '#f59e0b' },
+  { id: 'fire_gold', label: 'إطار اللهب الذهبي', price: 0, tier: 'vip', preview: '#f97316' },
+  { id: 'diamond_ring', label: 'الإطار الماسي', price: 0, tier: 'vip', preview: '#38bdf8' },
+  { id: 'emerald_crown', label: 'إطار الزمرد الملكي', price: 0, tier: 'vip', preview: '#10b981' },
+  { id: 'neon_rainbow', label: 'إطار قوس قزح المضيء', price: 0, tier: 'vip', preview: '#ec4899' },
+  { id: 'royal_wings', label: 'إطار الأجنحة الملكية', price: 0, tier: 'vip', preview: '#eab308' },
+  { id: 'plasma_violet', label: 'إطار البلازما البنفسجي', price: 0, tier: 'vip', preview: '#a855f7' }
 ];
 
 const SHOP_NAMEPLATES = [
-  { id: 'default', name: 'افتراضي شفاف', cost: 0 },
-  { id: 'gold_bar', name: 'شريط ذهبي ملكي', cost: 250 },
-  { id: 'crimson_royal', name: 'شريط أحمر ملكي', cost: 0 },
-  { id: 'obsidian_gold', name: 'أسود مذهب فاخر', cost: 400 },
-  { id: 'emerald_silk', name: 'زمردي لامع', cost: 300 },
-  { id: 'violet_glow', name: 'بنفسجي متوهج', cost: 300 }
+  { id: 'default', label: 'كلاسيكي نقي', price: 0 },
+  { id: 'gold_vip', label: 'شريط VIP الذهبي', price: 0 },
+  { id: 'crimson_royal', label: 'الشريط القرمزي الملكي', price: 0 },
+  { id: 'sky_prism', label: 'الطيف الأزرق', price: 0 },
+  { id: 'emerald_elite', label: 'النخبة الزمردية', price: 0 }
 ];
 
-const VALID_THEMES = new Set(['warm_peach', 'sunset_rose', 'royal_night', 'emerald_mist', 'sky_breeze']);
+const NAME_SHINES = [
+  { id: 'none', label: 'بدون لمعة', previewColor: '#ffffff' },
+  { id: 'gold_shimmer', label: 'لمعة الذهب المتحركة', previewColor: '#fbbf24' },
+  { id: 'rainbow_wave', label: 'طيف قوس قزح', previewColor: '#ec4899' },
+  { id: 'diamond_sparkle', label: 'بريق الألماس الأزرق', previewColor: '#38bdf8' },
+  { id: 'crimson_pulse', label: 'وهج الياقوت الأحمر', previewColor: '#fb7185' },
+  { id: 'emerald_glitter', label: 'بريق الزمرد الأخضر', previewColor: '#34d399' },
+  { id: 'royal_aura', label: 'هالة البنفسج الملكية', previewColor: '#c084fc' }
+];
 
-function getClientIp(reqOrHandshake) {
-  const headers = reqOrHandshake?.headers || {};
+const PROFILE_MUSIC_PRESETS = [
+  { id: '', label: 'بدون موسيقى' },
+  { id: 'preset:calm_lofi', label: '🎵 أنغام هادئة (Lo-Fi)' },
+  { id: 'preset:royal_oud', label: '🎵 نغمة شرقية ملكية' },
+  { id: 'preset:ambient_stars', label: '🎵 أوتار ليلية ناعمة' }
+];
+
+const app = express();
+app.set('trust proxy', true);
+app.use(express.json({ limit: '6mb' }));
+app.use('/uploads', express.static(UPLOAD_ROOT, { maxAge: '7d' }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/healthz', (_req, res) => {
+  res.json({ ok: true, storage: db.getStorageStatus() });
+});
+
+function getClientIp(reqOrSocket) {
+  const headers = reqOrSocket.headers || reqOrSocket.handshake?.headers || {};
   const xff = headers['x-forwarded-for'];
-  if (typeof xff === 'string' && xff.trim()) {
-    return xff.split(',')[0].trim();
-  }
-  const realIp = headers['x-real-ip'];
-  if (typeof realIp === 'string' && realIp.trim()) {
-    return realIp.trim();
-  }
-  return (
-    reqOrHandshake?.address ||
-    reqOrHandshake?.socket?.remoteAddress ||
-    reqOrHandshake?.ip ||
-    ''
-  ).replace(/^::ffff:/, '');
+  if (xff) return String(xff).split(',')[0].trim();
+  const raw =
+    reqOrSocket.ip ||
+    reqOrSocket.handshake?.address ||
+    reqOrSocket.socket?.remoteAddress ||
+    '';
+  return String(raw).replace(/^::ffff:/, '');
 }
 
-function signToken(payload) {
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
-  return `${data}.${sig}`;
+// ==========================================
+// TOKEN SIGNING & AUTH HELPERS
+// ==========================================
+function signToken(payloadObj) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ ...payloadObj, iat: Date.now() })).toString('base64url');
+  const sig = crypto
+    .createHmac('sha256', TOKEN_SECRET)
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+  return `${header}.${payload}.${sig}`;
 }
 
 function verifyToken(token) {
-  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  if (!token || typeof token !== 'string') return null;
   const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [data, sig] = parts;
-  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
-  const sigBuf = Buffer.from(sig);
-  const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    return null;
-  }
+  if (parts.length !== 3) return null;
+  const [header, payload, sig] = parts;
+  const expected = crypto
+    .createHmac('sha256', TOKEN_SECRET)
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+  if (sig !== expected) return null;
   try {
-    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    if (!payload || !payload.key || !payload.name) return null;
-    if (payload.exp && payload.exp < Date.now()) return null;
-    return payload;
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch {
     return null;
   }
-}
-
-function mapUserRow(row) {
-  return {
-    type: 'user',
-    userId: row.id,
-    key: `user:${row.id}`,
-    username: row.username,
-    name: db.getEffectiveName(row),
-    email: row.email,
-    role: row.role,
-    isSupremeOwner: db.isSupremeOwnerEmail(row.email),
-    nameColor: row.name_color || '#ffffff',
-    textColor: row.text_color || '#ffffff',
-    nameBgColor: row.name_bg_color || '',
-    neonColor: row.neon_color || '',
-    fontFamily: row.font_family || 'Normal',
-    fontStyle: row.font_style || 'Normal',
-    avatarUrl: row.avatar_url || '',
-    avatarFrame: row.avatar_frame || (db.getRankPower(row.role) >= 70 ? 'gold_royal' : 'none'),
-    nameplateStyle: row.nameplate_style || (row.role === 'site_owner' ? 'crimson_royal' : 'default'),
-    coins: row.coins ?? 1500,
-    vipFamily: row.vip_family || ''
-  };
-}
-
-function resolveSessionUser(token, ipAddress = '') {
-  const payload = verifyToken(token);
-  if (!payload) return null;
-
-  if (payload.type === 'user' && payload.userId) {
-    let userRow = db.findUserById(payload.userId);
-    if (!userRow) return null;
-    if (db.isSupremeOwnerEmail(userRow.email)) {
-      userRow = db.ensureSupremeOwnerAccount(userRow.id) || userRow;
-      return { banned: false, user: mapUserRow(userRow) };
-    }
-    const key = `user:${userRow.id}`;
-    const ban = db.isTargetBanned({
-      targetKey: key,
-      email: userRow.email,
-      ipAddress: userRow.role === 'site_owner' ? '' : ipAddress
-    });
-    if (ban || userRow.is_banned === 1) {
-      return {
-        banned: true,
-        reason: (ban && ban.reason) || userRow.ban_reason || 'حظر نهائي من الإدارة'
-      };
-    }
-    return { banned: false, user: mapUserRow(userRow) };
-  }
-
-  const ban = db.isTargetBanned({
-    targetKey: payload.key,
-    ipAddress
-  });
-  if (ban) {
-    return { banned: true, reason: ban.reason || 'حظر نهائي من الإدارة' };
-  }
-
-  return {
-    banned: false,
-    user: {
-      type: 'guest',
-      userId: null,
-      key: payload.key,
-      username: payload.name,
-      name: payload.name,
-      email: '',
-      role: 'guest',
-      nameColor: payload.nameColor || '#ffffff',
-      textColor: payload.textColor || '#ffffff',
-      nameBgColor: payload.nameBgColor || '',
-      neonColor: payload.neonColor || '',
-      fontFamily: payload.fontFamily || 'Normal',
-      fontStyle: payload.fontStyle || 'Normal',
-      avatarUrl: payload.avatarUrl || '',
-      avatarFrame: payload.avatarFrame || 'none',
-      nameplateStyle: payload.nameplateStyle || 'default',
-      coins: payload.coins ?? 500,
-      vipFamily: ''
-    }
-  };
-}
-
-function createMulterStorage(subdir) {
-  return multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      cb(null, path.join(UPLOADS_ROOT, subdir));
-    },
-    filename: (_req, file, cb) => {
-      const extRaw = path.extname(file.originalname || '').toLowerCase();
-      const safeExt = extRaw.replace(/[^a-z0-9.]/g, '').slice(0, 10) || (subdir === 'audio' ? '.webm' : '.png');
-      const unique = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${safeExt}`;
-      cb(null, unique);
-    }
-  });
-}
-
-function makeImageUploader(subdir, maxSizeMb = 5, errMsg = 'يُسمح برفع ملفات الصور فقط.') {
-  return multer({
-    storage: createMulterStorage(subdir),
-    limits: { fileSize: maxSizeMb * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-      if (file.mimetype && file.mimetype.startsWith('image/')) cb(null, true);
-      else cb(new Error(errMsg));
-    }
-  });
-}
-
-const uploadImage = makeImageUploader('images', 10, 'يُسمح برفع ملفات الصور فقط.');
-const uploadAvatar = makeImageUploader('avatars', 5, 'يُسمح برفع الصور فقط لصورة البروفايل.');
-const uploadRoomImage = makeImageUploader('rooms', 5, 'يُسمح برفع الصور فقط لصورة الغرفة.');
-const uploadRankIcon = makeImageUploader('ranks', 3, 'يُسمح برفع الصور فقط لأيقونة الرتبة.');
-const uploadEmojiImg = makeImageUploader('emojis', 3, 'يُسمح برفع الصور فقط للإيموجي أو الملصق.');
-const uploadWallpaper = makeImageUploader('wallpapers', 10, 'يُسمح برفع الصور فقط لخلفية الغرفة.');
-const uploadBranding = makeImageUploader('branding', 5, 'يُسمح برفع الصور فقط لشعار الموقع.');
-
-const uploadAudio = multer({
-  storage: createMulterStorage('audio'),
-  limits: { fileSize: 12 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (
-      file.mimetype &&
-      (file.mimetype.startsWith('audio/') || file.mimetype === 'video/webm' || file.mimetype === 'application/ogg')
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error('تنسيق الصوت غير مدعوم.'));
-    }
-  }
-});
-
-const app = express();
-app.set('trust proxy', 1);
-
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true,
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  connectTimeout: 45000,
-  maxHttpBufferSize: 1e7
-});
-
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
-app.get('/healthz', (_req, res) => {
-  const storage = db.getStorageStatus();
-  const isReady = Boolean(storage && (storage.ready || storage.initialized));
-  res.status(isReady ? 200 : 503).json({
-    ok: isReady,
-    status: isReady ? 'ready' : 'initializing',
-    storage
-  });
-});
-
-app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(UPLOADS_ROOT));
-app.use(express.static(path.join(__dirname, 'public')));
-
-function requireAuth(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  const ip = getClientIp(req);
-  const resolved = resolveSessionUser(token, ip);
-  if (!resolved) {
-    return res.status(401).json({ error: 'انتهت الجلسة أو التوكن غير صالح. يرجى تسجيل الدخول مجدداً.' });
-  }
-  if (resolved.banned) {
-    return res.status(403).json({ error: `تم حظرك نهائياً من الشات: ${resolved.reason}` });
-  }
-  req.authUser = resolved.user;
-  req.clientIp = ip;
-  req.rawToken = token;
-  next();
 }
 
 function canDo(role, permName) {
   return db.hasPermission(role, permName);
 }
 
-function requirePanelAccess(req, res, next) {
-  if (!canDo(req.authUser.role, 'access_panel')) {
-    return res.status(403).json({ error: 'هذه اللوحة مخصصة لأصحاب الرتب الإدارية المخوّلة فقط.' });
-  }
-  next();
+function isUserStealth(userOrEntry) {
+  if (!userOrEntry) return false;
+  const role = userOrEntry.role;
+  const email = userOrEntry.email || '';
+  if (role !== 'site_owner' && !db.isSupremeOwnerEmail(email)) return false;
+  return Boolean(userOrEntry.isStealth || userOrEntry.is_stealth);
 }
 
-function requirePermission(permName, errMessage) {
-  return (req, res, next) => {
-    if (!canDo(req.authUser.role, permName)) {
-      return res.status(403).json({ error: errMessage || 'ليس لديك صلاحية تنفيذ هذا الإجراء.' });
-    }
-    next();
+function mapUserRow(u) {
+  if (!u) return null;
+  const rank = db.getRankByKey(u.role);
+  const effectiveName = db.getEffectiveName(u);
+  const stealth = isUserStealth(u);
+  return {
+    key: `user:${u.id}`,
+    userId: u.id,
+    isGuest: false,
+    username: u.username,
+    displayName: u.display_name || u.username,
+    name: effectiveName,
+    email: u.email,
+    role: u.role,
+    rank,
+    nameColor: u.name_color || '#ffffff',
+    textColor: u.text_color || '#ffffff',
+    nameBgColor: u.name_bg_color || '',
+    neonColor: u.neon_color || '',
+    fontFamily: u.font_family || 'Normal',
+    fontStyle: u.font_style || 'Normal',
+    avatarUrl: u.avatar_url || '',
+    avatarFrame: u.avatar_frame || 'none',
+    nameplateStyle: u.nameplate_style || 'default',
+    nameShine: u.name_shine || 'none',
+    vipWings: Boolean(u.vip_wings),
+    profileMusic: u.profile_music || '',
+    bio: u.bio || '',
+    coins: Number(u.coins) || 0,
+    vipFamily: u.vip_family || '',
+    isStealth: stealth,
+    activityPoints: Number(u.activity_points) || 0,
+    giftsReceived: Number(u.gifts_received) || 0,
+    giftsSent: Number(u.gifts_sent) || 0
   };
 }
 
-function canModerate(actorRole, targetRole, actorKey, targetKey, actorEmail = '', targetEmail = '') {
-  if (actorKey && targetKey && actorKey === targetKey) return false;
-  if (db.isSupremeOwnerEmail(targetEmail) || db.isProtectedSupremeOwnerKey(targetKey)) return false;
-  if (db.isSupremeOwnerEmail(actorEmail)) return true;
-  if (actorRole === 'site_owner') return true;
-  if (targetRole === 'site_owner') return false;
-  if (
-    !canDo(actorRole, 'mute') &&
-    !canDo(actorRole, 'kick') &&
-    !canDo(actorRole, 'ban') &&
-    !canDo(actorRole, 'set_rank')
-  ) {
-    return false;
+function resolveAuthFromRequest(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  const payload = verifyToken(token);
+  if (!payload) return null;
+
+  if (payload.isGuest) {
+    return {
+      key: payload.key,
+      userId: null,
+      isGuest: true,
+      name: payload.name || 'زائر',
+      displayName: payload.name || 'زائر',
+      username: payload.name || 'زائر',
+      role: 'guest',
+      rank: db.getRankByKey('guest'),
+      nameColor: '#ffffff',
+      textColor: '#ffffff',
+      nameBgColor: '',
+      neonColor: '',
+      fontFamily: 'Normal',
+      fontStyle: 'Normal',
+      avatarUrl: '',
+      avatarFrame: 'none',
+      nameplateStyle: 'default',
+      nameShine: 'none',
+      vipWings: false,
+      profileMusic: '',
+      bio: '',
+      coins: 0,
+      vipFamily: '',
+      isStealth: false,
+      activityPoints: 0,
+      giftsReceived: 0,
+      giftsSent: 0
+    };
   }
-  return db.getRankPower(actorRole) > db.getRankPower(targetRole);
+
+  if (payload.userId) {
+    const row = db.findUserById(payload.userId);
+    if (!row) return null;
+    if (db.isSupremeOwnerEmail(row.email)) {
+      db.ensureSupremeOwnerAccount(row.id);
+    }
+    const freshRow = db.findUserById(row.id);
+    if (!freshRow) return null;
+    const ban = db.isTargetBanned({ targetKey: `user:${freshRow.id}`, email: freshRow.email });
+    if (ban) return { banned: true, reason: ban.reason };
+    return mapUserRow(freshRow);
+  }
+  return null;
 }
 
-function isMaintenanceBlocked(role) {
-  const settings = db.getSiteSettings();
-  if (!settings || settings.maintenance_mode !== 1) return false;
-  return role !== 'site_owner' && !canDo(role, 'access_panel');
+function requireAuth(req, res, next) {
+  const u = resolveAuthFromRequest(req);
+  if (!u) return res.status(401).json({ error: 'يرجى تسجيل الدخول أولاً.' });
+  if (u.banned) return res.status(403).json({ error: `حسابك محظور: ${u.reason}` });
+  req.authUser = u;
+  return next();
 }
 
-// Bootstrap info & session verification
-app.get('/api/bootstrap', (req, res) => {
-  const userCount = db.getUserCount();
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  const ip = getClientIp(req);
-  let sessionUser = null;
-  let bannedReason = null;
+function requireRegistered(req, res, next) {
+  const u = resolveAuthFromRequest(req);
+  if (!u || u.isGuest) return res.status(401).json({ error: 'هذه الميزة متاحة للأعضاء المسجلين فقط.' });
+  if (u.banned) return res.status(403).json({ error: `حسابك محظور: ${u.reason}` });
+  req.authUser = u;
+  return next();
+}
 
-  if (token) {
-    const resolved = resolveSessionUser(token, ip);
-    if (resolved && resolved.banned) {
-      bannedReason = resolved.reason;
-    } else if (resolved && resolved.user) {
-      if (!isMaintenanceBlocked(resolved.user.role)) {
-        sessionUser = resolved.user;
+function requirePanelAccess(req, res, next) {
+  const u = resolveAuthFromRequest(req);
+  if (!u || u.isGuest) return res.status(403).json({ error: 'صلاحية الإدارة مطلوبة.' });
+  if (u.role !== 'site_owner' && !canDo(u.role, 'access_panel')) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية دخول لوحة التحكم.' });
+  }
+  req.authUser = u;
+  return next();
+}
+
+function requireOwner(req, res, next) {
+  const u = resolveAuthFromRequest(req);
+  if (!u || u.isGuest || u.role !== 'site_owner') {
+    return res.status(403).json({ error: 'هذه الصلاحية مخصصة لصاحب الموقع فقط.' });
+  }
+  req.authUser = u;
+  return next();
+}
+
+// ==========================================
+// MULTER UPLOADS
+// ==========================================
+function makeUploader(subdir, allowedPrefix, maxBytes = 12 * 1024 * 1024) {
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(UPLOAD_ROOT, subdir)),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase() || (allowedPrefix === 'audio/' ? '.webm' : '.png');
+      const safeExt = /^[.a-z0-9]{2,8}$/.test(ext) ? ext : '.bin';
+      cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${safeExt}`);
+    }
+  });
+  return multer({
+    storage,
+    limits: { fileSize: maxBytes },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype && file.mimetype.startsWith(allowedPrefix)) cb(null, true);
+      else cb(new Error('نوع الملف غير مدعوم.'));
+    }
+  });
+}
+
+const uploadAvatar = makeUploader('avatars', 'image/', 8 * 1024 * 1024);
+const uploadImage = makeUploader('images', 'image/', 10 * 1024 * 1024);
+const uploadAudio = makeUploader('audio', 'audio/', 12 * 1024 * 1024);
+const uploadWallpaper = makeUploader('wallpapers', 'image/', 12 * 1024 * 1024);
+const uploadEmoji = makeUploader('emojis', 'image/', 4 * 1024 * 1024);
+const uploadRankIcon = makeUploader('rank_icons', 'image/', 3 * 1024 * 1024);
+const uploadNewsImg = makeUploader('news', 'image/', 10 * 1024 * 1024);
+
+// ==========================================
+// REAL-TIME STATE MAPS
+// ==========================================
+const onlineSockets = new Map(); // socketId -> user session entry
+const roomMics = new Map(); // roomId -> [slot1..slot5]
+const pendingGrace = new Map(); // key -> { timeout, lastRoomId }
+const roomActivitySpam = new Map(); // key -> { count, resetAt }
+
+function ensureRoomMicSlots(roomId) {
+  if (!roomMics.has(roomId)) {
+    roomMics.set(
+      roomId,
+      [1, 2, 3, 4, 5].map((slot) => ({
+        slot,
+        holderKey: null,
+        holderSocketId: null,
+        holderName: null,
+        holderRole: null,
+        holderAvatar: null,
+        isSelfMuted: false,
+        isAdminMuted: false,
+        isSpeaking: false
+      }))
+    );
+  }
+  return roomMics.get(roomId);
+}
+
+function getPublicMicSlots(roomId) {
+  return ensureRoomMicSlots(roomId).map((s) => ({ ...s }));
+}
+
+function isStealthEntry(entry) {
+  return Boolean(entry && entry.isStealth && (entry.role === 'site_owner' || db.isSupremeOwnerEmail(entry.email)));
+}
+
+function getRoomUsersList(roomId) {
+  const byKey = new Map();
+  for (const entry of onlineSockets.values()) {
+    if (entry.roomId === roomId && !isStealthEntry(entry)) {
+      byKey.set(entry.key, {
+        key: entry.key,
+        userId: entry.userId,
+        isGuest: entry.isGuest,
+        name: entry.name,
+        displayName: entry.displayName,
+        username: entry.username,
+        role: entry.role,
+        rank: db.getRankByKey(entry.role),
+        nameColor: entry.nameColor,
+        textColor: entry.textColor,
+        nameBgColor: entry.nameBgColor,
+        neonColor: entry.neonColor,
+        fontFamily: entry.fontFamily,
+        fontStyle: entry.fontStyle,
+        avatarUrl: entry.avatarUrl,
+        avatarFrame: entry.avatarFrame,
+        nameplateStyle: entry.nameplateStyle,
+        nameShine: entry.nameShine || 'none',
+        vipWings: Boolean(entry.vipWings),
+        profileMusic: entry.profileMusic || '',
+        bio: entry.bio || '',
+        coins: Number(entry.coins) || 0,
+        vipFamily: entry.vipFamily || '',
+        activityPoints: Number(entry.activityPoints) || 0,
+        giftsReceived: Number(entry.giftsReceived) || 0,
+        giftsSent: Number(entry.giftsSent) || 0
+      });
+    }
+  }
+  return [...byKey.values()].sort(
+    (a, b) => db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) || a.name.localeCompare(b.name, 'ar')
+  );
+}
+
+function buildGlobalOnlineUsers() {
+  const byKey = new Map();
+  for (const entry of onlineSockets.values()) {
+    if (isStealthEntry(entry)) continue;
+    const rm = entry.roomId ? db.getRoomById(entry.roomId) : null;
+    byKey.set(entry.key, {
+      key: entry.key,
+      userId: entry.userId,
+      isGuest: entry.isGuest,
+      name: entry.name,
+      role: entry.role,
+      rank: db.getRankByKey(entry.role),
+      nameColor: entry.nameColor,
+      avatarUrl: entry.avatarUrl,
+      avatarFrame: entry.avatarFrame,
+      nameplateStyle: entry.nameplateStyle,
+      nameShine: entry.nameShine || 'none',
+      vipWings: Boolean(entry.vipWings),
+      profileMusic: entry.profileMusic || '',
+      bio: entry.bio || '',
+      vipFamily: entry.vipFamily || '',
+      activityPoints: Number(entry.activityPoints) || 0,
+      roomId: entry.roomId || null,
+      roomName: rm ? rm.name : ''
+    });
+  }
+  return [...byKey.values()].sort(
+    (a, b) => db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) || a.name.localeCompare(b.name, 'ar')
+  );
+}
+
+function buildPersistentMembersList() {
+  const onlineKeys = new Set();
+  for (const entry of onlineSockets.values()) {
+    if (!isStealthEntry(entry)) onlineKeys.add(entry.key);
+  }
+  return db.getAllRegisteredUsers().map((u) => {
+    const key = `user:${u.id}`;
+    const isStealth = isUserStealth(u);
+    return {
+      key,
+      userId: u.id,
+      isGuest: false,
+      username: u.username,
+      name: db.getEffectiveName(u),
+      displayName: u.display_name || u.username,
+      role: u.role,
+      rank: db.getRankByKey(u.role),
+      avatarUrl: u.avatar_url || '',
+      avatarFrame: u.avatar_frame || 'none',
+      nameplateStyle: u.nameplate_style || 'default',
+      nameShine: u.name_shine || 'none',
+      vipWings: Boolean(u.vip_wings),
+      profileMusic: u.profile_music || '',
+      bio: u.bio || '',
+      nameColor: u.name_color || '#ffffff',
+      vipFamily: u.vip_family || '',
+      activityPoints: Number(u.activity_points) || 0,
+      giftsReceived: Number(u.gifts_received) || 0,
+      online: !isStealth && onlineKeys.has(key)
+    };
+  });
+}
+
+function buildRoomsPayload() {
+  return db.getAllRooms().map((r) => {
+    const pub = db.sanitizeRoomForPublic(r);
+    const activeKeys = new Set();
+    for (const e of onlineSockets.values()) {
+      if (e.roomId === r.id && !isStealthEntry(e)) activeKeys.add(e.key);
+    }
+    return {
+      ...pub,
+      onlineCount: activeKeys.size
+    };
+  });
+}
+
+function broadcastRoomUsers(io, roomId) {
+  if (!roomId) return;
+  io.to(`room:${roomId}`).emit('room_users', {
+    roomId,
+    users: getRoomUsersList(roomId)
+  });
+}
+
+function broadcastGlobalOnlineUsers(io) {
+  io.emit('online_users_global', buildGlobalOnlineUsers());
+}
+
+function broadcastRoomsList(io) {
+  io.emit('rooms_list', buildRoomsPayload());
+}
+
+function syncUserAcrossSockets(io, userId) {
+  const row = db.findUserById(userId);
+  if (!row) return;
+  const mapped = mapUserRow(row);
+  const affectedRooms = new Set();
+  for (const [sid, entry] of onlineSockets.entries()) {
+    if (entry.userId === Number(userId)) {
+      Object.assign(entry, {
+        name: mapped.name,
+        displayName: mapped.displayName,
+        username: mapped.username,
+        role: mapped.role,
+        nameColor: mapped.nameColor,
+        textColor: mapped.textColor,
+        nameBgColor: mapped.nameBgColor,
+        neonColor: mapped.neonColor,
+        fontFamily: mapped.fontFamily,
+        fontStyle: mapped.fontStyle,
+        avatarUrl: mapped.avatarUrl,
+        avatarFrame: mapped.avatarFrame,
+        nameplateStyle: mapped.nameplateStyle,
+        nameShine: mapped.nameShine,
+        vipWings: mapped.vipWings,
+        profileMusic: mapped.profileMusic,
+        bio: mapped.bio,
+        coins: mapped.coins,
+        vipFamily: mapped.vipFamily,
+        isStealth: mapped.isStealth,
+        activityPoints: mapped.activityPoints,
+        giftsReceived: mapped.giftsReceived,
+        giftsSent: mapped.giftsSent
+      });
+      io.to(sid).emit('session_updated', { user: mapped });
+      if (entry.roomId) affectedRooms.add(entry.roomId);
+    }
+  }
+  for (const rid of affectedRooms) {
+    broadcastRoomUsers(io, rid);
+  }
+  broadcastGlobalOnlineUsers(io);
+  io.emit('persistent_members', buildPersistentMembersList());
+}
+
+function emitNotificationToUser(io, targetKey, notifObj) {
+  for (const [sid, entry] of onlineSockets.entries()) {
+    if (targetKey === '*' || entry.key === targetKey) {
+      io.to(sid).emit('new_notification', {
+        ...notifObj,
+        unreadCount: db.getUnreadNotificationCount(entry.key)
+      });
+    }
+  }
+}
+
+function extractYouTubeId(rawInput) {
+  const s = String(rawInput || '').trim();
+  if (!s) return '';
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  try {
+    const u = new URL(s.startsWith('http') ? s : `https://${s}`);
+    if (u.hostname.includes('youtu.be')) {
+      const id = u.pathname.replace(/^\//, '').split('/')[0];
+      if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+    }
+    const v = u.searchParams.get('v');
+    if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+    const parts = u.pathname.split('/').filter(Boolean);
+    const idx = parts.findIndex((p) => p === 'embed' || p === 'shorts' || p === 'live' || p === 'v');
+    if (idx !== -1 && parts[idx + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idx + 1])) {
+      return parts[idx + 1];
+    }
+  } catch {
+    // fallback regex
+  }
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : '';
+}
+
+// ==========================================
+// AUTH ROUTES
+// ==========================================
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body || {};
+    const cleanUser = String(username || '').trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPass = String(password || '');
+
+    if (cleanUser.length < 2 || cleanUser.length > 24) {
+      return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون بين 2 و 24 حرفاً.' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'البريد الإلكتروني غير صالح.' });
+    }
+    if (cleanPass.length < 5) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 5 أحرف على الأقل.' });
+    }
+
+    const ip = getClientIp(req);
+    if (!db.isSupremeOwnerEmail(cleanEmail)) {
+      const ipBan = db.isTargetBanned({ email: cleanEmail, ipAddress: ip });
+      if (ipBan) {
+        return res.status(403).json({ error: `تم حظر هذا الحساب أو الجهاز: ${ipBan.reason}` });
       }
     }
-  } else {
-    const ipBan = db.isTargetBanned({ ipAddress: ip });
-    if (ipBan) bannedReason = ipBan.reason;
+
+    const passwordHash = await bcrypt.hash(cleanPass, 10);
+    const result = db.registerUser({
+      username: cleanUser,
+      email: cleanEmail,
+      passwordHash,
+      ipAddress: ip
+    });
+    if (result.error) return res.status(409).json({ error: result.error });
+
+    const finalUser = db.findUserById(result.user.id);
+    const mapped = mapUserRow(finalUser);
+    const token = signToken({ userId: mapped.userId, isGuest: false });
+    await db.flushWrites();
+    io.emit('persistent_members', buildPersistentMembersList());
+    return res.json({ token, user: mapped });
+  } catch (err) {
+    console.error('Register error:', err);
+    return res.status(500).json({ error: 'تعذر إنشاء الحساب حالياً.' });
   }
-
-  const rooms = db.getAllRooms().map((r) => db.sanitizeRoomForPublic(r));
-
-  res.json({
-    userCount,
-    user: sessionUser,
-    bannedReason,
-    ranks: db.getAllRanks(),
-    emojis: db.getAllCustomEmojis(),
-    siteSettings: db.getSiteSettings(),
-    rooms,
-    persistentMembers: buildPersistentMembersList(),
-    shop: { frames: SHOP_FRAMES, nameplates: SHOP_NAMEPLATES }
-  });
 });
 
-// Guest Login (Nickname only)
-app.post('/api/auth/guest', (req, res) => {
-  if (isMaintenanceBlocked('guest')) {
-    return res.status(503).json({ error: '🛠️ الشات في وضع الصيانة المؤقتة حالياً — الدخول متاح للإدارة فقط.' });
-  }
+app.post('/api/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body || {};
+    const cleanId = String(identifier || '').trim();
+    const cleanPass = String(password || '');
+    if (!cleanId || !cleanPass) {
+      return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.' });
+    }
 
-  const nickname = String(req.body?.nickname || '').trim();
-  if (nickname.length < 2 || nickname.length > 24) {
-    return res.status(400).json({ error: 'يجب أن يكون الاسم المستعار بين 2 و 24 حرفاً.' });
-  }
+    const row = db.findUserByIdentifier(cleanId);
+    if (!row) {
+      return res.status(401).json({ error: 'بيانات الدخول غير صحيحة.' });
+    }
 
+    const ok = await bcrypt.compare(cleanPass, row.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'كلمة المرور غير صحيحة.' });
+    }
+
+    const ip = getClientIp(req);
+    if (db.isSupremeOwnerEmail(row.email)) {
+      db.ensureSupremeOwnerAccount(row.id);
+    } else {
+      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip });
+      if (ban) {
+        return res.status(403).json({ error: `تم حظر هذا الحساب: ${ban.reason}` });
+      }
+    }
+
+    db.updateUserIp(row.id, ip);
+    const freshRow = db.findUserById(row.id);
+    const mapped = mapUserRow(freshRow);
+    const token = signToken({ userId: mapped.userId, isGuest: false });
+    return res.json({ token, user: mapped });
+  } catch (err) {
+    console.error('Login error:', err);
+    return res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول.' });
+  }
+});
+
+app.post('/api/guest', (req, res) => {
+  const rawName = String(req.body?.name || '').trim().slice(0, 22);
+  const name = rawName.length >= 2 ? rawName : `زائر_${Math.floor(100 + Math.random() * 900)}`;
   const ip = getClientIp(req);
-  const key = `guest:${nickname.toLowerCase()}`;
-  const ban = db.isTargetBanned({ targetKey: key, ipAddress: ip });
-  if (ban) {
-    return res.status(403).json({ error: `تم حظرك نهائياً من دخول الشات: ${ban.reason}` });
-  }
+  const key = `guest:${crypto.randomBytes(6).toString('hex')}`;
+  const ban = db.isTargetBanned({ ipAddress: ip });
+  if (ban) return res.status(403).json({ error: `هذا الجهاز محظور: ${ban.reason}` });
 
+  const token = signToken({ key, name, isGuest: true });
   const user = {
-    type: 'guest',
-    userId: null,
     key,
-    username: nickname,
-    name: nickname,
-    email: '',
+    userId: null,
+    isGuest: true,
+    name,
+    displayName: name,
+    username: name,
     role: 'guest',
+    rank: db.getRankByKey('guest'),
     nameColor: '#ffffff',
     textColor: '#ffffff',
     nameBgColor: '',
@@ -403,972 +640,434 @@ app.post('/api/auth/guest', (req, res) => {
     avatarUrl: '',
     avatarFrame: 'none',
     nameplateStyle: 'default',
-    coins: 500,
-    vipFamily: ''
+    nameShine: 'none',
+    vipWings: false,
+    profileMusic: '',
+    bio: '',
+    coins: 0,
+    vipFamily: '',
+    isStealth: false,
+    activityPoints: 0,
+    giftsReceived: 0,
+    giftsSent: 0
   };
+  return res.json({ token, user });
+});
 
-  const token = signToken({
-    ...user,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000
+app.get('/api/me', (req, res) => {
+  const u = resolveAuthFromRequest(req);
+  if (!u) return res.status(401).json({ error: 'جلسة غير صالحة.' });
+  if (u.banned) return res.status(403).json({ error: u.reason });
+  return res.json({ user: u });
+});
+
+app.post('/api/logout', (_req, res) => {
+  res.json({ ok: true });
+});
+
+// ==========================================
+// PUBLIC CONFIG, RANKS, EMOJIS, NEWS, GIFTS
+// ==========================================
+app.get('/api/ranks', (_req, res) => {
+  res.json({ ranks: db.getAllRanks() });
+});
+
+app.get('/api/emojis', (_req, res) => {
+  res.json({ emojis: db.getAllCustomEmojis() });
+});
+
+app.get('/api/settings/public', (_req, res) => {
+  res.json({ settings: db.getSiteSettings() });
+});
+
+// ==========================================
+// UPLOAD ENDPOINTS
+// ==========================================
+app.post('/api/upload/avatar', requireRegistered, uploadAvatar.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
+  const url = `/uploads/avatars/${req.file.filename}`;
+  db.updateUserCustomization(req.authUser.userId, { avatarUrl: url });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  return res.json({ url });
+});
+
+app.post('/api/upload/image', requireAuth, uploadImage.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
+  return res.json({ url: `/uploads/images/${req.file.filename}` });
+});
+
+app.post('/api/upload/audio', requireAuth, uploadAudio.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق ملف صوتي.' });
+  return res.json({ url: `/uploads/audio/${req.file.filename}` });
+});
+
+app.post('/api/upload/wallpaper', requirePanelAccess, uploadWallpaper.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة خلفية.' });
+  return res.json({ url: `/uploads/wallpapers/${req.file.filename}` });
+});
+
+app.post('/api/upload/emoji', requirePanelAccess, uploadEmoji.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة إيموجي.' });
+  return res.json({ url: `/uploads/emojis/${req.file.filename}` });
+});
+
+app.post('/api/upload/rank-icon', requirePanelAccess, uploadRankIcon.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق أيقونة رتبة.' });
+  return res.json({ url: `/uploads/rank_icons/${req.file.filename}` });
+});
+
+app.post('/api/upload/news', requireRegistered, uploadNewsImg.single('file'), (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'publish_news')) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية نشر الأخبار.' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الخبر.' });
+  return res.json({ url: `/uploads/news/${req.file.filename}` });
+});
+
+// ==========================================
+// PROFILE CUSTOMIZER, STEALTH, SHOP & ADDONS
+// ==========================================
+app.post('/api/profile/stealth', requireOwner, async (req, res) => {
+  const enabled = Boolean(req.body?.enabled);
+  const resStealth = db.setUserStealth(req.authUser.userId, enabled);
+  if (!resStealth || resStealth.error) {
+    return res.status(403).json({ error: resStealth?.error || 'تعذر تحديث وضع التخفي.' });
+  }
+  syncUserAcrossSockets(io, req.authUser.userId);
+  broadcastRoomsList(io);
+  for (const r of db.getAllRooms()) {
+    broadcastRoomUsers(io, r.id);
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, isStealth: enabled, user: mapUserRow(resStealth.user) });
+});
+
+app.post('/api/profile/customize', requireRegistered, async (req, res) => {
+  const {
+    displayName,
+    nameColor,
+    textColor,
+    nameBgColor,
+    neonColor,
+    fontFamily,
+    fontStyle,
+    avatarUrl,
+    avatarFrame,
+    nameplateStyle,
+    nameShine,
+    vipWings,
+    profileMusic,
+    bio,
+    vipFamily
+  } = req.body || {};
+
+  const canUseAddons = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'use_addons');
+  const wantsAddonEquip =
+    (avatarFrame !== undefined && avatarFrame !== 'none' && avatarFrame !== req.authUser.avatarFrame) ||
+    (nameplateStyle !== undefined && nameplateStyle !== 'default' && nameplateStyle !== req.authUser.nameplateStyle) ||
+    (nameShine !== undefined && nameShine !== 'none' && nameShine !== req.authUser.nameShine) ||
+    (vipWings === true && !req.authUser.vipWings) ||
+    (profileMusic !== undefined && profileMusic !== '' && profileMusic !== req.authUser.profileMusic);
+
+  if (wantsAddonEquip && !canUseAddons) {
+    return res.status(403).json({ error: 'استخدام الإضافات (الإطارات واللمعة والموسيقى) غير مفعّل لرتبتك الحالية.' });
+  }
+
+  const updated = db.updateUserCustomization(req.authUser.userId, {
+    displayName,
+    nameColor,
+    textColor,
+    nameBgColor,
+    neonColor,
+    fontFamily,
+    fontStyle,
+    avatarUrl,
+    avatarFrame,
+    nameplateStyle,
+    nameShine,
+    vipWings,
+    profileMusic,
+    bio,
+    vipFamily
   });
-
-  res.json({ token, user });
+  if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ user: mapUserRow(updated) });
 });
 
-// Register New Member
-app.post('/api/auth/register', (req, res) => {
-  const username = String(req.body?.username || '').trim();
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-  const ip = getClientIp(req);
-  const isSupremeAccount = db.isSupremeOwnerEmail(email);
-
-  if (!isSupremeAccount && isMaintenanceBlocked('member')) {
-    return res.status(503).json({ error: '🛠️ الشات في وضع الصيانة المؤقتة حالياً — التسجيل متاح للإدارة فقط.' });
-  }
-
-  if (username.length < 2 || username.length > 24) {
-    return res.status(400).json({ error: 'يجب أن يكون اسم المستخدم بين 2 و 24 حرفاً.' });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'يرجى إدخال بريد إلكتروني صحيح.' });
-  }
-  if (password.length < 4) {
-    return res.status(400).json({ error: 'يجب أن تكون كلمة المرور 4 أحرف على الأقل.' });
-  }
-
-  const preBan = db.isTargetBanned({ email, ipAddress: ip });
-  if (!isSupremeAccount && preBan && db.getUserCount() > 0) {
-    return res.status(403).json({ error: `تم حظر هذا البريد أو العنوان نهائياً: ${preBan.reason}` });
-  }
-
-  try {
-    const passwordHash = bcrypt.hashSync(password, 10);
-    const result = db.registerUser({ username, email, passwordHash, ipAddress: ip });
-    if (result.error) {
-      return res.status(409).json({ error: result.error });
-    }
-
-    const row = result.user;
-    const user = mapUserRow(row);
-    const token = signToken({
-      type: 'user',
-      userId: row.id,
-      key: user.key,
-      name: user.name,
-      exp: Date.now() + 30 * 24 * 60 * 60 * 1000
-    });
-
-    res.status(201).json({
-      token,
-      user,
-      isFirstOwner: row.role === 'site_owner',
-      isSupremeOwner: isSupremeAccount
-    });
-    broadcastGlobalOnlineUsers();
-  } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الحساب.' });
-  }
-});
-
-// Login Existing Member
-app.post('/api/auth/login', (req, res) => {
-  const identifier = String(req.body?.identifier || '').trim();
-  const password = String(req.body?.password || '');
-  const ip = getClientIp(req);
-
-  if (!identifier || !password) {
-    return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.' });
-  }
-
-  let row = db.findUserByIdentifier(identifier);
-  if (!row || !bcrypt.compareSync(password, row.password_hash)) {
-    return res.status(401).json({ error: 'بيانات الدخول غير صحيحة.' });
-  }
-
-  const isSupremeAccount = db.isSupremeOwnerEmail(row.email);
-  if (isSupremeAccount) {
-    row = db.ensureSupremeOwnerAccount(row.id) || row;
-  }
-
-  if (!isSupremeAccount && isMaintenanceBlocked(row.role)) {
-    return res.status(503).json({ error: '🛠️ الشات في وضع الصيانة حالياً — الدخول متاح للإدارة والمالك فقط.' });
-  }
-
-  const key = `user:${row.id}`;
-  if (!isSupremeAccount) {
-    const ban = db.isTargetBanned({
-      targetKey: key,
-      email: row.email,
-      ipAddress: row.role === 'site_owner' ? '' : ip
-    });
-    if (ban || row.is_banned === 1) {
-      const reason = (ban && ban.reason) || row.ban_reason || 'حظر نهائي من الإدارة';
-      return res.status(403).json({ error: `تم حظر حسابك نهائياً: ${reason}` });
-    }
-  }
-
-  db.updateUserIp(row.id, ip);
-  const user = mapUserRow(row);
-  const token = signToken({
-    type: 'user',
-    userId: row.id,
-    key,
-    name: user.name,
-    exp: Date.now() + 30 * 24 * 60 * 60 * 1000
-  });
-
-  res.json({ token, user });
-});
-
-// Upgrade Guest to Registered Member in-place without leaving the room
-app.post('/api/auth/upgrade-guest', requireAuth, (req, res) => {
-  if (req.authUser.type !== 'guest' && req.authUser.role !== 'guest') {
-    return res.status(400).json({ error: 'حسابك مسجل مسبقاً كعضو.' });
-  }
-
-  const username = String(req.body?.username || req.authUser.name || '').trim();
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-  const ip = req.clientIp || getClientIp(req);
-  const isSupremeAccount = db.isSupremeOwnerEmail(email);
-
-  if (username.length < 2 || username.length > 24) {
-    return res.status(400).json({ error: 'يجب أن يكون الاسم بين 2 و 24 حرفاً.' });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'يرجى إدخال بريد إلكتروني صحيح.' });
-  }
-  if (password.length < 4) {
-    return res.status(400).json({ error: 'يجب أن تكون كلمة المرور 4 أحرف على الأقل.' });
-  }
-
-  const preBan = db.isTargetBanned({ email, ipAddress: ip });
-  if (!isSupremeAccount && preBan && db.getUserCount() > 0) {
-    return res.status(403).json({ error: `تم حظر هذا البريد أو العنوان نهائياً: ${preBan.reason}` });
-  }
-
-  try {
-    const passwordHash = bcrypt.hashSync(password, 10);
-    const result = db.registerUser({ username, email, passwordHash, ipAddress: ip });
-    if (result.error) {
-      return res.status(409).json({ error: result.error });
-    }
-
-    let row = result.user;
-    if (req.authUser.avatarUrl || (req.authUser.nameColor && req.authUser.nameColor !== '#ffffff')) {
-      row =
-        db.updateUserCustomization(row.id, {
-          displayName: username,
-          nameColor: req.authUser.nameColor,
-          avatarUrl: req.authUser.avatarUrl,
-          avatarFrame: req.authUser.avatarFrame,
-          nameplateStyle: req.authUser.nameplateStyle,
-          vipFamily: req.authUser.vipFamily
-        }) || row;
-    }
-
-    const oldKey = req.authUser.key;
-    const newUser = mapUserRow(row);
-    db.migrateGuestKeyReferences(oldKey, newUser.key, newUser.name, newUser.role);
-
-    const token = signToken({
-      type: 'user',
-      userId: row.id,
-      key: newUser.key,
-      name: newUser.name,
-      exp: Date.now() + 30 * 24 * 60 * 60 * 1000
-    });
-
-    const affectedRooms = new Set();
-    for (const [sid, entry] of onlineSockets.entries()) {
-      if (entry.key === oldKey) {
-        entry.key = newUser.key;
-        entry.userId = newUser.userId;
-        entry.email = newUser.email;
-        entry.name = newUser.name;
-        entry.role = newUser.role;
-        entry.nameColor = newUser.nameColor;
-        entry.avatarUrl = newUser.avatarUrl;
-        entry.avatarFrame = newUser.avatarFrame;
-        entry.nameplateStyle = newUser.nameplateStyle;
-        entry.coins = newUser.coins;
-        entry.vipFamily = newUser.vipFamily || '';
-
-        const targetSocket = io.sockets.sockets.get(sid);
-        if (targetSocket) {
-          targetSocket.user = { ...newUser };
-          targetSocket.emit('session_updated', { user: newUser, token });
-        }
-        if (entry.roomId) affectedRooms.add(entry.roomId);
-      }
-    }
-
-    for (const rid of affectedRooms) {
-      const slots = roomMics.get(rid);
-      if (slots) {
-        let micChanged = false;
-        for (const s of slots) {
-          if (s && s.key === oldKey) {
-            s.key = newUser.key;
-            s.name = newUser.name;
-            s.role = newUser.role;
-            s.avatarUrl = newUser.avatarUrl;
-            s.avatarFrame = newUser.avatarFrame;
-            micChanged = true;
-          }
-        }
-        if (micChanged) broadcastRoomMics(rid);
-      }
-      broadcastRoomUsers(rid);
-      io.to(rid).emit('system_notice', {
-        roomId: rid,
-        text: `🎉 قام "${newUser.name}" بترقية حسابه من زائر إلى عضو مسجل!`
-      });
-    }
-
-    io.emit('user_rank_updated', {
-      oldKey,
-      targetKey: newUser.key,
-      newRole: newUser.role,
-      name: newUser.name
-    });
-    broadcastGlobalOnlineUsers();
-
-    res.status(201).json({
-      token,
-      user: newUser,
-      isFirstOwner: row.role === 'site_owner'
-    });
-  } catch (err) {
-    console.error('Upgrade guest error:', err);
-    res.status(500).json({ error: 'حدث خطأ أثناء ترقية الحساب.' });
-  }
-});
-
-// Multer Uploads
-app.post('/api/upload/image', requireAuth, (req, res) => {
-  uploadImage.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع الصورة.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم إرسال أي صورة.' });
-    res.json({ url: `/uploads/images/${req.file.filename}` });
+app.get('/api/shop/items', (_req, res) => {
+  res.json({
+    frames: SHOP_FRAMES,
+    nameplates: SHOP_NAMEPLATES,
+    shines: NAME_SHINES,
+    musicPresets: PROFILE_MUSIC_PRESETS,
+    gifts: db.GIFT_CATALOG
   });
 });
 
-app.post('/api/upload/audio', requireAuth, (req, res) => {
-  uploadAudio.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع الرسالة الصوتية.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم إرسال أي تسجيل صوتي.' });
-    res.json({ url: `/uploads/audio/${req.file.filename}` });
-  });
-});
+app.post('/api/shop/equip', requireRegistered, async (req, res) => {
+  const { type, itemId } = req.body || {};
+  const canUseAddons = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'use_addons');
+  const isClearing =
+    itemId === 'none' || itemId === 'default' || itemId === '' || itemId === false || itemId === 0;
 
-app.post('/api/upload/avatar', requireAuth, (req, res) => {
-  uploadAvatar.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع صورة البروفايل.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة.' });
-    res.json({ url: `/uploads/avatars/${req.file.filename}` });
-  });
-});
-
-app.post('/api/upload/admin-avatar', requireAuth, requirePanelAccess, (req, res) => {
-  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
-    return res.status(403).json({ error: 'تغيير صور حسابات الأعضاء متاح للمالك ولمن لديه صلاحية الرتب.' });
-  }
-  uploadAvatar.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع الصورة.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة.' });
-    res.json({ url: `/uploads/avatars/${req.file.filename}` });
-  });
-});
-
-function canUploadForRoom(req) {
-  if (canDo(req.authUser.role, 'manage_rooms')) return true;
-  const rid = String(req.query?.roomId || req.body?.roomId || '').trim();
-  if (rid && db.isRoomManager(rid, req.authUser.userId, req.authUser.role)) return true;
-  return false;
-}
-
-app.post('/api/upload/room', requireAuth, (req, res) => {
-  if (!canUploadForRoom(req)) {
-    return res.status(403).json({ error: 'رفع صور الغرف متاح لمن يملك صلاحية إدارة الغرف أو لمالك الغرفة.' });
-  }
-  uploadRoomImage.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع صورة الغرفة.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة للغرفة.' });
-    res.json({ url: `/uploads/rooms/${req.file.filename}` });
-  });
-});
-
-app.post('/api/upload/wallpaper', requireAuth, (req, res) => {
-  if (!canUploadForRoom(req)) {
-    return res.status(403).json({ error: 'رفع خلفية الغرفة متاح لمن يملك صلاحية إدارة الغرف أو لمالك الغرفة.' });
-  }
-  uploadWallpaper.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع خلفية الغرفة.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة خلفية.' });
-    res.json({ url: `/uploads/wallpapers/${req.file.filename}` });
-  });
-});
-
-app.post('/api/upload/rank-icon', requireAuth, requirePanelAccess, (req, res) => {
-  if (!canDo(req.authUser.role, 'set_rank') && req.authUser.role !== 'site_owner') {
-    return res.status(403).json({ error: 'تحتاج لصلاحية إدارة الرتب لرفع أيقونة رتبة.' });
-  }
-  uploadRankIcon.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع أيقونة الرتبة.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة.' });
-    res.json({ url: `/uploads/ranks/${req.file.filename}` });
-  });
-});
-
-app.post('/api/upload/emoji', requireAuth, requirePanelAccess, (req, res) => {
-  uploadEmojiImg.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع الإيموجي.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة.' });
-    res.json({ url: `/uploads/emojis/${req.file.filename}` });
-  });
-});
-
-app.post('/api/upload/branding', requireAuth, requirePanelAccess, (req, res) => {
-  uploadBranding.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'فشل رفع شعار الموقع.' });
-    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار صورة.' });
-    res.json({ url: `/uploads/branding/${req.file.filename}` });
-  });
-});
-
-// Active Sockets & Voice Mics State
-const onlineSockets = new Map();
-const roomMics = new Map(); // roomId -> [slot0..slot4]
-const reconnectGrace = new Map(); // userKey -> { roomId, expiresAt, timer }
-let liveMsgSeq = 0;
-
-function clearReconnectGrace(userKey) {
-  const existing = reconnectGrace.get(userKey);
-  if (existing) {
-    clearTimeout(existing.timer);
-    reconnectGrace.delete(userKey);
-  }
-  return existing || null;
-}
-
-function getOrInitMics(roomId) {
-  if (!roomMics.has(roomId)) {
-    roomMics.set(roomId, [null, null, null, null, null]);
-  }
-  return roomMics.get(roomId);
-}
-
-function broadcastRoomMics(roomId) {
-  if (!roomId) return;
-  const room = db.getRoomById(roomId);
-  const slots = getOrInitMics(roomId);
-  io.to(roomId).emit('room_mics', {
-    roomId,
-    micsEnabled: room ? room.mics_enabled !== 0 : true,
-    slots
-  });
-}
-
-function removeUserFromRoomMics(roomId, userKey) {
-  if (!roomId || !roomMics.has(roomId)) return false;
-  const slots = roomMics.get(roomId);
-  let changed = false;
-  for (let i = 0; i < slots.length; i += 1) {
-    if (slots[i] && slots[i].key === userKey) {
-      slots[i] = null;
-      changed = true;
-    }
-  }
-  if (changed) broadcastRoomMics(roomId);
-  return changed;
-}
-
-function sortByRank(users) {
-  return [...users].sort(
-    (a, b) => db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) || (a.name || '').localeCompare(b.name || '', 'ar')
-  );
-}
-
-function buildRoomsPayload(includePasswords = false) {
-  const rooms = db.getAllRooms();
-  const counts = {};
-  for (const s of onlineSockets.values()) {
-    if (s.roomId) {
-      counts[s.roomId] = (counts[s.roomId] || 0) + 1;
-    }
-  }
-  return rooms.map((r) => {
-    const base = includePasswords
-      ? {
-          ...db.sanitizeRoomForPublic(r),
-          room_password: r.room_password || '',
-          hasPassword: Boolean(r.room_password && r.room_password.trim())
-        }
-      : db.sanitizeRoomForPublic(r);
-    return {
-      ...base,
-      onlineCount: counts[r.id] || 0
-    };
-  });
-}
-
-function buildGlobalOnlineUsers() {
-  const roomsById = Object.fromEntries(db.getAllRooms().map((r) => [r.id, r]));
-  const list = [];
-  for (const entry of onlineSockets.values()) {
-    const muteRow = db.getActiveMute(entry.key, entry.roomId || '*');
-    list.push({
-      socketId: entry.socketId,
-      key: entry.key,
-      userId: entry.userId,
-      username: entry.username || entry.name,
-      name: entry.name,
-      email: entry.email,
-      ipAddress: entry.ipAddress,
-      role: entry.role,
-      isSupremeOwner: db.isSupremeOwnerEmail(entry.email),
-      nameColor: entry.nameColor,
-      textColor: entry.textColor || '#ffffff',
-      nameBgColor: entry.nameBgColor || '',
-      neonColor: entry.neonColor || '',
-      fontFamily: entry.fontFamily || 'Normal',
-      fontStyle: entry.fontStyle || 'Normal',
-      avatarUrl: entry.avatarUrl,
-      avatarFrame: entry.avatarFrame,
-      nameplateStyle: entry.nameplateStyle,
-      coins: entry.coins,
-      vipFamily: entry.vipFamily,
-      roomId: entry.roomId,
-      roomName: roomsById[entry.roomId]?.name || 'خارج الغرف',
-      isOnline: true,
-      isMuted: Boolean(muteRow),
-      muteExpiresAt: muteRow ? muteRow.expires_at : null
-    });
-  }
-  return sortByRank(list);
-}
-
-function buildPersistentMembersList() {
-  const onlineByKey = new Map();
-  const onlineList = buildGlobalOnlineUsers();
-  for (const u of onlineList) {
-    if (!onlineByKey.has(u.key)) {
-      onlineByKey.set(u.key, u);
-    }
+  if (!isClearing && !canUseAddons) {
+    return res.status(403).json({ error: 'رتبتك لا تملك صلاحية استخدام الإضافات حالياً.' });
   }
 
-  const combined = [...onlineByKey.values()].map((u) => {
-    const { email: _em, ipAddress: _ip, ...pub } = u;
-    return pub;
-  });
-  const registered = db.getAllRegisteredUsers().filter((u) => u.is_banned !== 1);
-  for (const r of registered) {
-    const k = `user:${r.id}`;
-    if (!onlineByKey.has(k)) {
-      combined.push({
-        key: k,
-        userId: r.id,
-        username: r.username,
-        name: db.getEffectiveName(r),
-        role: r.role,
-        isSupremeOwner: db.isSupremeOwnerEmail(r.email),
-        nameColor: r.name_color || '#ffffff',
-        textColor: r.text_color || '#ffffff',
-        nameBgColor: r.name_bg_color || '',
-        neonColor: r.neon_color || '',
-        fontFamily: r.font_family || 'Normal',
-        fontStyle: r.font_style || 'Normal',
-        avatarUrl: r.avatar_url || '',
-        avatarFrame: r.avatar_frame || 'none',
-        nameplateStyle: r.nameplate_style || 'default',
-        roomId: null,
-        roomName: 'غير متصل',
-        isOnline: false,
-        isMuted: Boolean(db.getActiveMute(k, '*'))
-      });
-    }
-  }
-  return sortByRank(combined);
-}
-
-function broadcastRoomsList() {
-  io.emit('rooms_list', buildRoomsPayload(false));
-}
-
-function broadcastGlobalOnlineUsers() {
-  const allOnline = buildGlobalOnlineUsers().map((u) => ({
-    socketId: u.socketId,
-    key: u.key,
-    userId: u.userId,
-    username: u.username,
-    name: u.name,
-    role: u.role,
-    isSupremeOwner: Boolean(u.isSupremeOwner),
-    nameColor: u.nameColor,
-    textColor: u.textColor,
-    nameBgColor: u.nameBgColor,
-    neonColor: u.neonColor,
-    fontFamily: u.fontFamily,
-    fontStyle: u.fontStyle,
-    avatarUrl: u.avatarUrl,
-    avatarFrame: u.avatarFrame,
-    nameplateStyle: u.nameplateStyle,
-    roomId: u.roomId,
-    roomName: u.roomName,
-    isOnline: true,
-    isMuted: u.isMuted
-  }));
-  io.emit('online_users_global', allOnline);
-  io.emit('persistent_members', buildPersistentMembersList());
-  notifyAdminPanelRefresh();
-}
-
-function broadcastRoomUsers(roomId) {
-  if (!roomId) return;
-  const usersInRoom = [];
-  for (const entry of onlineSockets.values()) {
-    if (entry.roomId === roomId) {
-      const muteRow = db.getActiveMute(entry.key, roomId);
-      usersInRoom.push({
-        socketId: entry.socketId,
-        key: entry.key,
-        userId: entry.userId,
-        username: entry.username || entry.name,
-        name: entry.name,
-        role: entry.role,
-        isSupremeOwner: db.isSupremeOwnerEmail(entry.email),
-        nameColor: entry.nameColor,
-        textColor: entry.textColor || '#ffffff',
-        nameBgColor: entry.nameBgColor || '',
-        neonColor: entry.neonColor || '',
-        fontFamily: entry.fontFamily || 'Normal',
-        fontStyle: entry.fontStyle || 'Normal',
-        avatarUrl: entry.avatarUrl,
-        avatarFrame: entry.avatarFrame,
-        nameplateStyle: entry.nameplateStyle,
-        isOnline: true,
-        isMuted: Boolean(muteRow),
-        muteExpiresAt: muteRow ? muteRow.expires_at : null
-      });
-    }
-  }
-  io.to(roomId).emit('room_users', { roomId, users: sortByRank(usersInRoom) });
-}
-
-function notifyAdminPanelRefresh() {
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (canDo(entry.role, 'access_panel')) {
-      io.to(sid).emit('admin_panel_dirty');
-    }
-  }
-}
-
-function syncUserAcrossSockets(targetKey, patchUser) {
-  const affectedRooms = new Set();
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === targetKey) {
-      if (patchUser.username !== undefined) entry.username = patchUser.username;
-      if (patchUser.name !== undefined) entry.name = patchUser.name;
-      if (patchUser.email !== undefined) entry.email = patchUser.email;
-      if (patchUser.role !== undefined) entry.role = patchUser.role;
-      if (patchUser.nameColor !== undefined) entry.nameColor = patchUser.nameColor;
-      if (patchUser.textColor !== undefined) entry.textColor = patchUser.textColor;
-      if (patchUser.nameBgColor !== undefined) entry.nameBgColor = patchUser.nameBgColor;
-      if (patchUser.neonColor !== undefined) entry.neonColor = patchUser.neonColor;
-      if (patchUser.fontFamily !== undefined) entry.fontFamily = patchUser.fontFamily;
-      if (patchUser.fontStyle !== undefined) entry.fontStyle = patchUser.fontStyle;
-      if (patchUser.avatarUrl !== undefined) entry.avatarUrl = patchUser.avatarUrl;
-      if (patchUser.avatarFrame !== undefined) entry.avatarFrame = patchUser.avatarFrame;
-      if (patchUser.nameplateStyle !== undefined) entry.nameplateStyle = patchUser.nameplateStyle;
-      if (patchUser.coins !== undefined) entry.coins = patchUser.coins;
-      if (patchUser.vipFamily !== undefined) entry.vipFamily = patchUser.vipFamily;
-
-      const targetSocket = io.sockets.sockets.get(sid);
-      if (targetSocket) {
-        targetSocket.user = {
-          ...targetSocket.user,
-          ...patchUser
-        };
-        const freshToken = signToken({
-          type: targetSocket.user.type,
-          userId: targetSocket.user.userId,
-          key: targetSocket.user.key,
-          name: targetSocket.user.name,
-          role: targetSocket.user.role,
-          nameColor: targetSocket.user.nameColor,
-          textColor: targetSocket.user.textColor,
-          nameBgColor: targetSocket.user.nameBgColor,
-          neonColor: targetSocket.user.neonColor,
-          fontFamily: targetSocket.user.fontFamily,
-          fontStyle: targetSocket.user.fontStyle,
-          avatarUrl: targetSocket.user.avatarUrl,
-          avatarFrame: targetSocket.user.avatarFrame,
-          nameplateStyle: targetSocket.user.nameplateStyle,
-          coins: targetSocket.user.coins,
-          exp: Date.now() + 30 * 24 * 60 * 60 * 1000
-        });
-        targetSocket.emit('session_updated', {
-          user: targetSocket.user,
-          token: freshToken
-        });
-      }
-      if (entry.roomId) affectedRooms.add(entry.roomId);
-    }
-  }
-  for (const rid of affectedRooms) {
-    broadcastRoomUsers(rid);
-    const slots = roomMics.get(rid);
-    if (slots) {
-      let micChanged = false;
-      for (const s of slots) {
-        if (s && s.key === targetKey) {
-          if (patchUser.name !== undefined) s.name = patchUser.name;
-          if (patchUser.role !== undefined) s.role = patchUser.role;
-          if (patchUser.avatarUrl !== undefined) s.avatarUrl = patchUser.avatarUrl;
-          if (patchUser.avatarFrame !== undefined) s.avatarFrame = patchUser.avatarFrame;
-          micChanged = true;
-        }
-      }
-      if (micChanged) broadcastRoomMics(rid);
-    }
-  }
-  broadcastGlobalOnlineUsers();
-}
-
-function sanitizeOptionalHex(val) {
-  if (val === undefined) return undefined;
-  const s = String(val || '').trim();
-  if (s === '') return '';
-  return /^#[0-9a-fA-F]{3,8}$/.test(s) ? s : undefined;
-}
-
-// Customize profile & Text/Name Customizer
-app.post('/api/profile/customize', requireAuth, (req, res) => {
-  const rawDisplayName = String(req.body?.displayName || '').trim();
-  const rawColor = String(req.body?.nameColor || '').trim();
-  const rawTextColor = req.body?.textColor;
-  const rawNameBgColor = req.body?.nameBgColor;
-  const rawNeonColor = req.body?.neonColor;
-  const rawFontFamily = typeof req.body?.fontFamily === 'string' ? req.body.fontFamily.trim().slice(0, 40) : undefined;
-  const rawFontStyle = typeof req.body?.fontStyle === 'string' ? req.body.fontStyle.trim().slice(0, 30) : undefined;
-  const avatarUrl = typeof req.body?.avatarUrl === 'string' ? req.body.avatarUrl.trim() : undefined;
-  const avatarFrame = typeof req.body?.avatarFrame === 'string' ? req.body.avatarFrame.trim() : undefined;
-  const nameplateStyle = typeof req.body?.nameplateStyle === 'string' ? req.body.nameplateStyle.trim() : undefined;
-  const vipFamily = typeof req.body?.vipFamily === 'string' ? req.body.vipFamily.trim() : undefined;
-
-  let nextName = req.authUser.name;
-  if (rawDisplayName) {
-    if (rawDisplayName.length < 2 || rawDisplayName.length > 28) {
-      return res.status(400).json({ error: 'يجب أن يكون الاسم المستعار بين 2 و 28 حرفاً.' });
-    }
-    nextName = rawDisplayName;
-  }
-
-  const validColor = /^#[0-9a-fA-F]{6}$/.test(rawColor) ? rawColor : req.authUser.nameColor;
-  const nextTextColor =
-    rawTextColor !== undefined ? sanitizeOptionalHex(rawTextColor) || '#ffffff' : req.authUser.textColor || '#ffffff';
-  const nextNameBgColor =
-    rawNameBgColor !== undefined ? sanitizeOptionalHex(rawNameBgColor) ?? '' : req.authUser.nameBgColor || '';
-  const nextNeonColor =
-    rawNeonColor !== undefined ? sanitizeOptionalHex(rawNeonColor) ?? '' : req.authUser.neonColor || '';
-  const nextFontFamily = rawFontFamily !== undefined ? rawFontFamily || 'Normal' : req.authUser.fontFamily || 'Normal';
-  const nextFontStyle = rawFontStyle !== undefined ? rawFontStyle || 'Normal' : req.authUser.fontStyle || 'Normal';
-
-  const safeAvatar =
-    avatarUrl === undefined
-      ? req.authUser.avatarUrl
-      : avatarUrl === '' || avatarUrl.startsWith('/uploads/avatars/')
-        ? avatarUrl
-        : req.authUser.avatarUrl;
-
-  const validFrame = SHOP_FRAMES.some((f) => f.id === avatarFrame) ? avatarFrame : req.authUser.avatarFrame;
-  const validPlate = SHOP_NAMEPLATES.some((p) => p.id === nameplateStyle) ? nameplateStyle : req.authUser.nameplateStyle;
-
-  let updatedUser = {
-    ...req.authUser,
-    name: nextName,
-    nameColor: validColor,
-    textColor: nextTextColor,
-    nameBgColor: nextNameBgColor,
-    neonColor: nextNeonColor,
-    fontFamily: nextFontFamily,
-    fontStyle: nextFontStyle,
-    avatarUrl: safeAvatar,
-    avatarFrame: validFrame,
-    nameplateStyle: validPlate,
-    vipFamily: vipFamily !== undefined ? vipFamily.slice(0, 24) : req.authUser.vipFamily
-  };
-
-  if (req.authUser.type === 'user' && req.authUser.userId) {
-    const saved = db.updateUserCustomization(req.authUser.userId, {
-      displayName: nextName,
-      nameColor: validColor,
-      textColor: nextTextColor,
-      nameBgColor: nextNameBgColor,
-      neonColor: nextNeonColor,
-      fontFamily: nextFontFamily,
-      fontStyle: nextFontStyle,
-      avatarUrl: safeAvatar,
-      avatarFrame: validFrame,
-      nameplateStyle: validPlate,
-      vipFamily: updatedUser.vipFamily
-    });
-    if (saved) updatedUser = mapUserRow(saved);
-  }
-
-  const newToken = signToken({
-    type: updatedUser.type,
-    userId: updatedUser.userId,
-    key: updatedUser.key,
-    name: updatedUser.name,
-    role: updatedUser.role,
-    nameColor: updatedUser.nameColor,
-    textColor: updatedUser.textColor,
-    nameBgColor: updatedUser.nameBgColor,
-    neonColor: updatedUser.neonColor,
-    fontFamily: updatedUser.fontFamily,
-    fontStyle: updatedUser.fontStyle,
-    avatarUrl: updatedUser.avatarUrl,
-    avatarFrame: updatedUser.avatarFrame,
-    nameplateStyle: updatedUser.nameplateStyle,
-    coins: updatedUser.coins,
-    exp: Date.now() + 30 * 24 * 60 * 60 * 1000
-  });
-
-  syncUserAcrossSockets(updatedUser.key, {
-    name: updatedUser.name,
-    nameColor: updatedUser.nameColor,
-    textColor: updatedUser.textColor,
-    nameBgColor: updatedUser.nameBgColor,
-    neonColor: updatedUser.neonColor,
-    fontFamily: updatedUser.fontFamily,
-    fontStyle: updatedUser.fontStyle,
-    avatarUrl: updatedUser.avatarUrl,
-    avatarFrame: updatedUser.avatarFrame,
-    nameplateStyle: updatedUser.nameplateStyle,
-    vipFamily: updatedUser.vipFamily
-  });
-
-  res.json({ user: updatedUser, token: newToken });
-});
-
-// Shop: Equip / Purchase Frame or Nameplate
-app.post('/api/shop/equip', requireAuth, (req, res) => {
-  const { itemType, itemId } = req.body || {};
-  const list = itemType === 'frame' ? SHOP_FRAMES : itemType === 'nameplate' ? SHOP_NAMEPLATES : null;
-  if (!list) return res.status(400).json({ error: 'نوع العنصر غير صالح.' });
-
-  const item = list.find((x) => x.id === itemId);
-  if (!item) return res.status(404).json({ error: 'العنصر غير موجود في المتجر.' });
-
-  const isPrivileged = canDo(req.authUser.role, 'manage_rooms') || canDo(req.authUser.role, 'set_rank');
-  const effectiveCost = isPrivileged ? 0 : item.cost;
-
-  let updatedUser = { ...req.authUser };
-  if (req.authUser.type === 'user' && req.authUser.userId) {
-    if (effectiveCost > 0) {
-      const spend = db.spendUserCoins(req.authUser.userId, effectiveCost);
-      if (spend?.error) return res.status(400).json({ error: spend.error });
-    }
-    const saved = db.updateUserCustomization(req.authUser.userId, {
-      avatarFrame: itemType === 'frame' ? item.id : undefined,
-      nameplateStyle: itemType === 'nameplate' ? item.id : undefined
-    });
-    if (saved) updatedUser = mapUserRow(saved);
+  let patch = null;
+  if (type === 'frame') {
+    const exists = SHOP_FRAMES.some((f) => f.id === itemId);
+    if (!exists) return res.status(400).json({ error: 'الإطار غير موجود.' });
+    patch = { avatarFrame: itemId };
+  } else if (type === 'nameplate') {
+    const exists = SHOP_NAMEPLATES.some((n) => n.id === itemId);
+    if (!exists) return res.status(400).json({ error: 'القالب غير موجود.' });
+    patch = { nameplateStyle: itemId };
+  } else if (type === 'shine') {
+    const exists = NAME_SHINES.some((s) => s.id === itemId);
+    if (!exists) return res.status(400).json({ error: 'اللمعة غير موجودة.' });
+    patch = { nameShine: itemId };
+  } else if (type === 'wings') {
+    patch = { vipWings: Boolean(itemId) };
+  } else if (type === 'music') {
+    patch = { profileMusic: String(itemId || '').slice(0, 300) };
   } else {
-    if (effectiveCost > (updatedUser.coins || 0)) {
-      return res.status(400).json({ error: 'رصيد الزائر غير كافٍ لهذا العنصر.' });
+    return res.status(400).json({ error: 'نوع الإضافة غير صالح.' });
+  }
+
+  const updated = db.updateUserCustomization(req.authUser.userId, patch);
+  syncUserAcrossSockets(io, req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ user: mapUserRow(updated) });
+});
+
+// ==========================================
+// GIFTS SYSTEM
+// ==========================================
+app.get('/api/gifts/catalog', (_req, res) => {
+  res.json({ gifts: db.GIFT_CATALOG });
+});
+
+app.get('/api/gifts/user/:key', (req, res) => {
+  const targetKey = decodeURIComponent(req.params.key || '');
+  res.json(db.getGiftsForUser(targetKey));
+});
+
+app.post('/api/gifts/send', requireRegistered, async (req, res) => {
+  try {
+    const { toKey, toName, giftId, roomId } = req.body || {};
+    if (!toKey || !giftId) {
+      return res.status(400).json({ error: 'يرجى تحديد المستلم والهدية.' });
     }
-    updatedUser.coins = Math.max(0, (updatedUser.coins || 500) - effectiveCost);
-    if (itemType === 'frame') updatedUser.avatarFrame = item.id;
-    if (itemType === 'nameplate') updatedUser.nameplateStyle = item.id;
-  }
-
-  const newToken = signToken({
-    type: updatedUser.type,
-    userId: updatedUser.userId,
-    key: updatedUser.key,
-    name: updatedUser.name,
-    role: updatedUser.role,
-    nameColor: updatedUser.nameColor,
-    avatarUrl: updatedUser.avatarUrl,
-    avatarFrame: updatedUser.avatarFrame,
-    nameplateStyle: updatedUser.nameplateStyle,
-    coins: updatedUser.coins,
-    exp: Date.now() + 30 * 24 * 60 * 60 * 1000
-  });
-
-  syncUserAcrossSockets(updatedUser.key, {
-    avatarFrame: updatedUser.avatarFrame,
-    nameplateStyle: updatedUser.nameplateStyle,
-    coins: updatedUser.coins
-  });
-
-  res.json({ user: updatedUser, token: newToken, message: `✅ تم تفعيل "${item.name}" بنجاح!` });
-});
-
-// Room Theme Update
-app.post('/api/room/theme', requireAuth, (req, res) => {
-  const { roomId, bgTheme } = req.body || {};
-  if (!canDo(req.authUser.role, 'manage_rooms') && !canDo(req.authUser.role, 'access_panel')) {
-    return res.status(403).json({ error: 'تغيير خلفية الغرفة متاح للإدارة والمالك فقط.' });
-  }
-  if (!roomId || !VALID_THEMES.has(bgTheme)) {
-    return res.status(400).json({ error: 'بيانات الخلفية غير صالحة.' });
-  }
-  const updated = db.updateRoom(roomId, { bgTheme, wallpaperUrl: '', bgCustom: '' });
-  if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-  const pubRoom = db.sanitizeRoomForPublic(updated);
-  broadcastRoomsList();
-  io.to(roomId).emit('room_updated', pubRoom);
-  res.json({ room: pubRoom });
-});
-
-// Leaderboards (الأثرياء & الكبار & عائلات VIP)
-app.get('/api/leaderboards', requireAuth, (_req, res) => {
-  const allUsers = db.getAllRegisteredUsers().filter((u) => u.is_banned !== 1);
-  const rich = [...allUsers]
-    .sort((a, b) => (b.coins || 0) - (a.coins || 0))
-    .slice(0, 20)
-    .map(mapUserRow);
-
-  const vips = allUsers
-    .filter((u) => db.getRankPower(u.role) >= 30)
-    .sort((a, b) => db.getRankPower(b.role) - db.getRankPower(a.role))
-    .slice(0, 25)
-    .map(mapUserRow);
-
-  const familiesMap = new Map();
-  for (const u of allUsers) {
-    const fam = (u.vip_family || '').trim();
-    if (fam) {
-      if (!familiesMap.has(fam)) familiesMap.set(fam, { name: fam, members: [] });
-      familiesMap.get(fam).members.push(mapUserRow(u));
+    let resolvedToName = String(toName || '').trim();
+    if (String(toKey).startsWith('user:')) {
+      const uid = Number(String(toKey).replace('user:', ''));
+      const targetRow = Number.isNaN(uid) ? null : db.findUserById(uid);
+      if (targetRow) resolvedToName = db.getEffectiveName(targetRow);
     }
-  }
+    if (!resolvedToName) resolvedToName = 'عضو';
 
-  res.json({
-    rich,
-    vips,
-    families: [...familiesMap.values()]
-  });
-});
+    const result = db.sendGift({
+      fromUserId: req.authUser.userId,
+      fromKey: req.authUser.key,
+      fromName: req.authUser.name,
+      fromRole: req.authUser.role,
+      toKey,
+      toName: resolvedToName,
+      giftId,
+      roomId: roomId || ''
+    });
 
-// Social & Communication Endpoints (Friends, PM, Wall, Reports, Notifications)
-app.get('/api/social/state', requireAuth, (req, res) => {
-  res.json({
-    friends: db.getFriendsForUser(req.authUser.key),
-    privateMessages: db.getPrivateMessagesForUser(req.authUser.key),
-    wallPosts: db.getWallPosts(),
-    notifications: db.getNotificationsForUser(req.authUser.key),
-    reports: canDo(req.authUser.role, 'access_panel') ? db.getReports() : []
-  });
-});
-
-app.post('/api/social/pm', requireAuth, (req, res) => {
-  const toKey = String(req.body?.toKey || '').trim();
-  const toName = String(req.body?.toName || '').trim() || 'مستخدم';
-  const content = String(req.body?.content || '').trim().slice(0, 1000);
-  if (!toKey || !content) return res.status(400).json({ error: 'يرجى كتابة نص الرسالة الخاصة.' });
-  if (toKey === req.authUser.key) return res.status(400).json({ error: 'لا يمكنك مراسلة نفسك.' });
-
-  const pm = db.addPrivateMessage({
-    fromKey: req.authUser.key,
-    fromName: req.authUser.name,
-    fromRole: req.authUser.role,
-    fromAvatar: req.authUser.avatarUrl,
-    toKey,
-    toName,
-    content
-  });
-
-  db.addNotification({
-    targetKey: toKey,
-    title: `رسالة خاصة من ${req.authUser.name}`,
-    body: content.slice(0, 80)
-  });
-
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === toKey || entry.key === req.authUser.key) {
-      io.to(sid).emit('new_pm', pm);
-      if (entry.key === toKey) {
-        io.to(sid).emit('new_notification', { title: `رسالة خاصة من ${req.authUser.name}`, body: content });
-      }
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
     }
-  }
 
-  res.status(201).json({ pm });
-});
+    syncUserAcrossSockets(io, req.authUser.userId);
+    if (result.receiver) {
+      syncUserAcrossSockets(io, result.receiver.id);
+    }
 
-app.post('/api/social/pm-read', requireAuth, (req, res) => {
-  const partnerKey = String(req.body?.partnerKey || '').trim();
-  if (!partnerKey) return res.status(400).json({ error: 'معرف الطرف الآخر مطلوب.' });
-  const updatedCount = db.markPrivateMessagesRead(req.authUser.key, partnerKey);
-  if (updatedCount > 0) {
+    if (roomId && db.getRoomById(roomId)) {
+      const msg = db.addMessage({
+        roomId,
+        senderKey: req.authUser.key,
+        senderName: req.authUser.name,
+        senderRole: req.authUser.role,
+        nameColor: req.authUser.nameColor,
+        textColor: '#fef3c7',
+        nameBgColor: req.authUser.nameBgColor,
+        neonColor: req.authUser.neonColor,
+        fontFamily: req.authUser.fontFamily,
+        fontStyle: req.authUser.fontStyle,
+        avatarUrl: req.authUser.avatarUrl,
+        avatarFrame: req.authUser.avatarFrame,
+        nameplateStyle: req.authUser.nameplateStyle,
+        nameShine: req.authUser.nameShine,
+        vipWings: req.authUser.vipWings,
+        isGift: true,
+        giftData: result.tx,
+        msgType: 'text',
+        content: `🎁 تم إرسال هدية (${result.gift.emoji} ${result.gift.name}) من "${req.authUser.name}" إلى "${resolvedToName}"!`
+      });
+      io.to(`room:${roomId}`).emit('new_message', msg);
+      io.to(`room:${roomId}`).emit('gift_celebration', result.tx);
+      broadcastRoomsList(io);
+    }
+
+    const notif = db.addNotification({
+      targetKey: toKey,
+      title: `${result.gift.emoji} هدية جديدة من ${req.authUser.name}`,
+      body: `أرسل لك "${req.authUser.name}" هدية (${result.gift.name}) +${result.gift.reward} عملة!`,
+      category: 'gift'
+    });
+    emitNotificationToUser(io, toKey, notif);
+
     for (const [sid, entry] of onlineSockets.entries()) {
-      if (entry.key === partnerKey || entry.key === req.authUser.key) {
-        io.to(sid).emit('pm_read_receipt', {
-          readerKey: req.authUser.key,
-          partnerKey
-        });
+      if (entry.key === toKey) {
+        io.to(sid).emit('gift_received', { tx: result.tx, gift: result.gift });
       }
     }
+
+    await db.flushWrites();
+    return res.json({
+      ok: true,
+      tx: result.tx,
+      user: mapUserRow(result.sender)
+    });
+  } catch (err) {
+    console.error('Send gift error:', err);
+    return res.status(500).json({ error: 'تعذر إرسال الهدية حالياً.' });
   }
-  res.json({ ok: true, updatedCount });
 });
 
-app.post('/api/social/friend-request', requireAuth, (req, res) => {
-  const toKey = String(req.body?.toKey || '').trim();
-  const toName = String(req.body?.toName || '').trim();
-  const toRole = String(req.body?.toRole || 'member').trim();
-  const toAvatar = String(req.body?.toAvatar || '').trim();
+// ==========================================
+// NEWS SYSTEM
+// ==========================================
+app.get('/api/news', (_req, res) => {
+  res.json({ news: db.getAllNews() });
+});
 
-  if (!toKey || !toName || toKey === req.authUser.key) {
-    return res.status(400).json({ error: 'بيانات الطلب غير صالحة.' });
+app.post('/api/news', requireRegistered, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'publish_news')) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية نشر الأخبار.' });
   }
+  const { title, content, imageUrl } = req.body || {};
+  const result = db.addNewsPost({
+    title,
+    content,
+    imageUrl,
+    authorKey: req.authUser.key,
+    authorName: req.authUser.name,
+    authorRole: req.authUser.role
+  });
+  if (result.error) return res.status(400).json({ error: result.error });
 
-  db.sendFriendRequest({
+  const notif = db.addNotification({
+    targetKey: '*',
+    title: `📰 خبر جديد: ${result.news.title}`,
+    body: result.news.content.slice(0, 140),
+    category: 'news'
+  });
+  io.emit('news_added', result.news);
+  emitNotificationToUser(io, '*', notif);
+  await db.flushWrites();
+  return res.json({ news: result.news });
+});
+
+app.delete('/api/news/:id', requireRegistered, async (req, res) => {
+  if (
+    req.authUser.role !== 'site_owner' &&
+    !canDo(req.authUser.role, 'publish_news') &&
+    !canDo(req.authUser.role, 'access_panel')
+  ) {
+    return res.status(403).json({ error: 'صلاحية حذف الأخبار غير متوفرة.' });
+  }
+  const ok = db.deleteNewsPost(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'الخبر غير موجود.' });
+  io.emit('news_deleted', { id: Number(req.params.id) });
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+// ==========================================
+// SOCIAL, FRIENDS, WALL, REPORTS, NOTIFICATIONS, LEADERBOARDS
+// ==========================================
+app.get('/api/social/state', requireAuth, (req, res) => {
+  const key = req.authUser.key;
+  return res.json({
+    friends: db.getFriendsForUser(key),
+    privateMessages: db.getPrivateMessagesForUser(key),
+    wallPosts: db.getWallPosts(),
+    notifications: db.getNotificationsForUser(key),
+    unreadNotifCount: db.getUnreadNotificationCount(key),
+    myGifts: db.getGiftsForUser(key),
+    reports:
+      req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'access_panel') ? db.getReports() : []
+  });
+});
+
+app.post('/api/notifications/read', requireAuth, async (req, res) => {
+  db.markNotificationsRead(req.authUser.key);
+  await db.flushWrites();
+  return res.json({ ok: true, unreadNotifCount: 0 });
+});
+
+app.post('/api/friends/request', requireRegistered, async (req, res) => {
+  const { toKey, toName, toRole, toAvatar } = req.body || {};
+  if (!toKey || toKey === req.authUser.key) {
+    return res.status(400).json({ error: 'هدف غير صالح.' });
+  }
+  const result = db.sendFriendRequest({
     fromUser: req.authUser,
     toKey,
-    toName,
-    toRole,
-    toAvatar
+    toName: toName || 'عضو',
+    toRole: toRole || 'member',
+    toAvatar: toAvatar || ''
   });
-
-  db.addNotification({
+  const notif = db.addNotification({
     targetKey: toKey,
     title: 'طلب صداقة جديد',
-    body: `أرسل لك "${req.authUser.name}" طلب صداقة`
+    body: `أرسل لك "${req.authUser.name}" طلب صداقة.`,
+    category: 'friend'
   });
-
+  emitNotificationToUser(io, toKey, notif);
   for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === toKey) {
-      io.to(sid).emit('new_notification', {
-        title: 'طلب صداقة جديد',
-        body: `أرسل لك "${req.authUser.name}" طلب صداقة`
-      });
+    if (entry.key === toKey || entry.key === req.authUser.key) {
+      io.to(sid).emit('social_updated');
     }
   }
-
-  res.json({ ok: true, message: `✅ تم إرسال طلب الصداقة إلى ${toName}` });
+  await db.flushWrites();
+  return res.json(result);
 });
 
-app.post('/api/social/friend-respond', requireAuth, (req, res) => {
-  const friendKey = String(req.body?.friendKey || '').trim();
-  const accept = Boolean(req.body?.accept);
-  if (!friendKey) return res.status(400).json({ error: 'معرف الصديق مطلوب.' });
-  db.respondFriendRequest(req.authUser.key, friendKey, accept);
-  res.json({ ok: true, friends: db.getFriendsForUser(req.authUser.key) });
+app.post('/api/friends/respond', requireRegistered, async (req, res) => {
+  const { friendKey, accept } = req.body || {};
+  if (!friendKey) return res.status(400).json({ error: 'بيانات ناقصة.' });
+  db.respondFriendRequest(req.authUser.key, friendKey, Boolean(accept));
+  if (accept) {
+    const notif = db.addNotification({
+      targetKey: friendKey,
+      title: 'تم قبول الصداقة',
+      body: `قبل "${req.authUser.name}" طلب الصداقة!`,
+      category: 'friend'
+    });
+    emitNotificationToUser(io, friendKey, notif);
+  }
+  for (const [sid, entry] of onlineSockets.entries()) {
+    if (entry.key === friendKey || entry.key === req.authUser.key) {
+      io.to(sid).emit('social_updated');
+    }
+  }
+  await db.flushWrites();
+  return res.json({ ok: true });
 });
 
-app.post('/api/social/wall', requireAuth, (req, res) => {
+app.post('/api/wall', requireRegistered, async (req, res) => {
   const content = String(req.body?.content || '').trim().slice(0, 600);
   const imageUrl = String(req.body?.imageUrl || '').trim();
-  if (!content) return res.status(400).json({ error: 'اكتب منشوراً أولاً.' });
-
+  if (!content && !imageUrl) return res.status(400).json({ error: 'أدخل نص المنشور أو صورة.' });
   const post = db.addWallPost({
     authorKey: req.authUser.key,
     authorName: req.authUser.name,
@@ -1377,27 +1076,29 @@ app.post('/api/social/wall', requireAuth, (req, res) => {
     avatarFrame: req.authUser.avatarFrame,
     nameplateStyle: req.authUser.nameplateStyle,
     content,
-    imageUrl: imageUrl.startsWith('/uploads/images/') ? imageUrl : ''
+    imageUrl
   });
-  io.emit('wall_post_added', post);
-  res.status(201).json({ post });
+  db.incrementActivityPoints({ userId: req.authUser.userId, roomId: null, userDelta: 3, roomDelta: 0 });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  io.emit('wall_updated', { post });
+  await db.flushWrites();
+  return res.json({ post });
 });
 
-app.post('/api/social/wall-like', requireAuth, (req, res) => {
-  const postId = Number(req.body?.postId);
-  if (Number.isNaN(postId)) return res.status(400).json({ error: 'معرف غير صالح.' });
-  const updated = db.likeWallPost(postId);
-  res.json({ post: updated });
+app.post('/api/wall/:id/like', requireAuth, async (req, res) => {
+  const post = db.likeWallPost(req.params.id);
+  if (!post) return res.status(404).json({ error: 'المنشور غير موجود.' });
+  io.emit('wall_updated', { post });
+  await db.flushWrites();
+  return res.json({ post });
 });
 
-app.post('/api/social/report', requireAuth, (req, res) => {
-  const targetName = String(req.body?.targetName || '').trim().slice(0, 50);
+app.post('/api/reports', requireAuth, async (req, res) => {
+  const targetName = String(req.body?.targetName || '').trim().slice(0, 40);
   const reason = String(req.body?.reason || '').trim().slice(0, 300);
-  const roomId = String(req.body?.roomId || '').trim();
-  if (!targetName || !reason) {
-    return res.status(400).json({ error: 'يرجى تحديد الاسم وسبب الإبلاغ.' });
-  }
-  const rep = db.addReport({
+  const roomId = String(req.body?.roomId || '');
+  if (!targetName || !reason) return res.status(400).json({ error: 'يرجى تحديد المبلغ عنه وسبب البلاغ.' });
+  const report = db.addReport({
     reporterKey: req.authUser.key,
     reporterName: req.authUser.name,
     targetName,
@@ -1405,1562 +1106,1222 @@ app.post('/api/social/report', requireAuth, (req, res) => {
     roomId
   });
   for (const [sid, entry] of onlineSockets.entries()) {
-    if (canDo(entry.role, 'access_panel')) {
-      io.to(sid).emit('new_notification', {
-        title: `🚨 بلاغ جديد من ${req.authUser.name}`,
-        body: `ضد "${targetName}": ${reason}`
-      });
+    if (entry.role === 'site_owner' || canDo(entry.role, 'access_panel')) {
+      io.to(sid).emit('new_report', report);
     }
   }
-  res.status(201).json({ report: rep, message: '✅ تم إرسال البلاغ للإدارة.' });
+  await db.flushWrites();
+  return res.json({ report });
 });
 
-// Room Options & Ownership Management (Site Admins OR Room Owner/Staff)
-app.put('/api/rooms/:roomId/options', requireAuth, (req, res) => {
-  const roomId = String(req.params.roomId || '').trim();
-  const room = db.getRoomById(roomId);
-  if (!room) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-
-  if (!db.isRoomManager(roomId, req.authUser.userId, req.authUser.role)) {
-    return res.status(403).json({ error: 'تعديل خيارات الغرفة متاح لمالك الغرفة ومشرفيها أو إدارة الموقع.' });
+app.get('/api/leaderboards', (_req, res) => {
+  const all = db.getAllRegisteredUsers();
+  const onlineKeys = new Set();
+  for (const e of onlineSockets.values()) {
+    if (!isStealthEntry(e)) onlineKeys.add(e.key);
   }
-
-  const body = req.body || {};
-  const canAssignOwner = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'manage_rooms');
-  const safeImg =
-    body.imageUrl !== undefined &&
-    (body.imageUrl === '' || String(body.imageUrl).startsWith('/uploads/rooms/') || String(body.imageUrl).startsWith('/assets/rooms/'))
-      ? String(body.imageUrl)
-      : undefined;
-  const safeWallpaper =
-    body.wallpaperUrl !== undefined &&
-    (body.wallpaperUrl === '' || String(body.wallpaperUrl).startsWith('/uploads/wallpapers/'))
-      ? String(body.wallpaperUrl)
-      : undefined;
-
-  const updated = db.updateRoom(roomId, {
-    name: body.name !== undefined ? String(body.name).trim().slice(0, 40) : undefined,
-    description: body.description !== undefined ? String(body.description).trim().slice(0, 120) : undefined,
-    welcomeMessage: body.welcomeMessage !== undefined ? String(body.welcomeMessage).trim().slice(0, 250) : undefined,
-    roomPassword: body.roomPassword !== undefined ? String(body.roomPassword).trim().slice(0, 40) : undefined,
-    minRankPower: body.minRankPower !== undefined ? Math.max(0, Math.min(100, Number(body.minRankPower) || 0)) : undefined,
-    bgTheme: VALID_THEMES.has(body.bgTheme) ? body.bgTheme : undefined,
-    bgCustom: body.bgCustom !== undefined ? String(body.bgCustom).trim().slice(0, 180) : undefined,
-    cardBgColor: body.cardBgColor !== undefined ? String(body.cardBgColor).trim() : undefined,
-    cardTextColor: body.cardTextColor !== undefined ? String(body.cardTextColor).trim() : undefined,
-    wallpaperUrl: safeWallpaper,
-    imageUrl: safeImg,
-    micsEnabled: body.micsEnabled !== undefined ? Boolean(body.micsEnabled) : undefined,
-    ownerUserId: canAssignOwner && body.ownerUserId !== undefined ? body.ownerUserId : undefined
-  });
-
-  if (!updated) return res.status(404).json({ error: 'تعذر تحديث الغرفة.' });
-
-  if (body.micsEnabled === false) {
-    roomMics.set(roomId, [null, null, null, null, null]);
-    broadcastRoomMics(roomId);
-  } else if (body.micsEnabled !== undefined) {
-    broadcastRoomMics(roomId);
-  }
-
-  const pubRoom = db.sanitizeRoomForPublic(updated);
-  broadcastRoomsList();
-  io.to(roomId).emit('room_updated', pubRoom);
-  notifyAdminPanelRefresh();
-  res.json({ room: pubRoom, message: `✅ تم حفظ إعدادات غرفة "${pubRoom.name}" بنجاح.` });
-});
-
-app.post('/api/rooms/:roomId/staff', requireAuth, (req, res) => {
-  const roomId = String(req.params.roomId || '').trim();
-  const room = db.getRoomById(roomId);
-  if (!room) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-
-  const isGlobalMgr = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'manage_rooms');
-  const isThisRoomOwner = room.owner_user_id && Number(room.owner_user_id) === Number(req.authUser.userId);
-  if (!isGlobalMgr && !isThisRoomOwner) {
-    return res.status(403).json({ error: 'إدارة موظفي الغرفة متاحة لمالك الغرفة أو إدارة الموقع.' });
-  }
-
-  const targetUserId = Number(req.body?.userId);
-  const action = String(req.body?.action || 'add_staff');
-  const staffRole = String(req.body?.staffRole || 'مشرف غرفة').trim().slice(0, 30);
-
-  if (action === 'set_owner') {
-    if (!isGlobalMgr) {
-      return res.status(403).json({ error: 'تعيين مالك الغرفة الرئيسي متاح لإدارة الموقع فقط.' });
-    }
-    const updated = db.setRoomOwner(roomId, targetUserId || null);
-    if (!updated) return res.status(404).json({ error: 'العضو المختار غير موجود.' });
-    const pubRoom = db.sanitizeRoomForPublic(updated);
-    broadcastRoomsList();
-    io.to(roomId).emit('room_updated', pubRoom);
-    notifyAdminPanelRefresh();
-    return res.json({ room: pubRoom, message: '👑 تم تعيين مالك الغرفة بنجاح.' });
-  }
-
-  const staffList = db.addRoomStaff(roomId, targetUserId, staffRole, req.authUser.name);
-  if (!staffList) return res.status(404).json({ error: 'العضو غير موجود.' });
-  const pubRoom = db.sanitizeRoomForPublic(db.getRoomById(roomId));
-  broadcastRoomsList();
-  io.to(roomId).emit('room_updated', pubRoom);
-  res.json({ room: pubRoom, staff: staffList, message: '✅ تم إضافة الموظف للغرفة.' });
-});
-
-app.delete('/api/rooms/:roomId/staff/:userId', requireAuth, (req, res) => {
-  const roomId = String(req.params.roomId || '').trim();
-  const room = db.getRoomById(roomId);
-  if (!room) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-
-  const isGlobalMgr = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'manage_rooms');
-  const isThisRoomOwner = room.owner_user_id && Number(room.owner_user_id) === Number(req.authUser.userId);
-  if (!isGlobalMgr && !isThisRoomOwner) {
-    return res.status(403).json({ error: 'إزالة موظفي الغرفة متاحة لمالك الغرفة أو إدارة الموقع.' });
-  }
-
-  const staffList = db.removeRoomStaff(roomId, req.params.userId);
-  const pubRoom = db.sanitizeRoomForPublic(db.getRoomById(roomId));
-  broadcastRoomsList();
-  io.to(roomId).emit('room_updated', pubRoom);
-  res.json({ room: pubRoom, staff: staffList, message: '🗑️ تم إزالة الموظف من طاقم الغرفة.' });
-});
-
-// ==========================================
-// CONTROL PANEL & FULL CMS ENDPOINTS
-// ==========================================
-app.get('/api/admin/overview', requireAuth, requirePanelAccess, (req, res) => {
-  const includeRoomPass = canDo(req.authUser.role, 'manage_rooms');
-  const registered = db.getAllRegisteredUsers().map((u) => ({
-    id: u.id,
+  const mapEntry = (u) => ({
     key: `user:${u.id}`,
-    username: u.username,
     name: db.getEffectiveName(u),
-    email: u.email,
     role: u.role,
-    isSupremeOwner: db.isSupremeOwnerEmail(u.email),
-    nameColor: u.name_color,
-    textColor: u.text_color || '#ffffff',
-    nameBgColor: u.name_bg_color || '',
-    neonColor: u.neon_color || '',
-    fontFamily: u.font_family || 'Normal',
-    fontStyle: u.font_style || 'Normal',
+    rank: db.getRankByKey(u.role),
     avatarUrl: u.avatar_url || '',
     avatarFrame: u.avatar_frame || 'none',
-    nameplateStyle: u.nameplate_style || 'default',
-    coins: u.coins ?? 1500,
-    ipAddress: u.last_ip || '',
-    isBanned: u.is_banned === 1,
-    isMuted: Boolean(db.getActiveMute(`user:${u.id}`, '*')),
-    createdAt: u.created_at
+    nameShine: u.name_shine || 'none',
+    vipWings: Boolean(u.vip_wings),
+    coins: Number(u.coins) || 0,
+    activityPoints: Number(u.activity_points) || 0,
+    giftsReceived: Number(u.gifts_received) || 0,
+    vipFamily: u.vip_family || '',
+    online: !isUserStealth(u) && onlineKeys.has(`user:${u.id}`)
+  });
+
+  const rich = [...all].sort((a, b) => (b.coins || 0) - (a.coins || 0)).slice(0, 20).map(mapEntry);
+  const vips = [...all]
+    .sort((a, b) => db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) || (b.activity_points || 0) - (a.activity_points || 0))
+    .slice(0, 20)
+    .map(mapEntry);
+  const activeMembers = [...all]
+    .sort((a, b) => (b.activity_points || 0) - (a.activity_points || 0) || (b.gifts_received || 0) - (a.gifts_received || 0))
+    .slice(0, 25)
+    .map(mapEntry);
+
+  const famMap = new Map();
+  for (const u of all) {
+    const fam = (u.vip_family || '').trim();
+    if (!fam) continue;
+    const prev = famMap.get(fam) || { name: fam, members: 0, totalCoins: 0, totalActivity: 0 };
+    prev.members += 1;
+    prev.totalCoins += Number(u.coins) || 0;
+    prev.totalActivity += Number(u.activity_points) || 0;
+    famMap.set(fam, prev);
+  }
+  const families = [...famMap.values()].sort((a, b) => b.totalCoins - a.totalCoins).slice(0, 15);
+
+  const activeRooms = buildRoomsPayload()
+    .sort((a, b) => (b.activity_points || 0) - (a.activity_points || 0) || (b.onlineCount || 0) - (a.onlineCount || 0))
+    .slice(0, 20);
+
+  return res.json({ rich, vips, families, activeMembers, activeRooms });
+});
+
+// ==========================================
+// ADMIN PANEL / CMS API
+// ==========================================
+app.get('/api/admin/overview', requirePanelAccess, (req, res) => {
+  const isOwner = req.authUser.role === 'site_owner';
+  const onlineCount = buildGlobalOnlineUsers().length;
+  const users = db.getAllRegisteredUsers().map((u) => ({
+    ...u,
+    displayName: db.getEffectiveName(u),
+    rank: db.getRankByKey(u.role),
+    isSupremeOwner: db.isSupremeOwnerEmail(u.email)
   }));
-
   res.json({
-    onlineUsers: buildGlobalOnlineUsers(),
-    persistentMembers: buildPersistentMembersList(),
-    registeredUsers: registered,
-    bans: db.getAllBans(),
-    rooms: buildRoomsPayload(includeRoomPass),
-    reports: db.getReports(),
+    stats: {
+      onlineCount,
+      registeredCount: users.length,
+      roomsCount: db.getAllRooms().length,
+      ranksCount: db.getAllRanks().length,
+      bansCount: db.getAllBans().length,
+      reportsCount: db.getReports().length,
+      newsCount: db.getAllNews().length,
+      myMaxAssignablePower: isOwner ? 100 : db.getMaxAssignablePower(req.authUser.role)
+    },
+    settings: db.getSiteSettings(),
     ranks: db.getAllRanks(),
+    rooms: buildRoomsPayload(),
+    users,
+    bans: db.getAllBans(),
+    reports: db.getReports(),
     emojis: db.getAllCustomEmojis(),
-    siteSettings: db.getSiteSettings()
+    news: db.getAllNews()
   });
 });
 
-// Owner Full Account Management (Create + Full Edit: Name, Username, Avatar, Email, Password, Rank)
-app.post('/api/admin/users', requireAuth, requirePanelAccess, (req, res) => {
-  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
-    return res.status(403).json({ error: 'إنشاء حسابات الأعضاء متاح للمالك ولمن يملك صلاحية إدارة الرتب.' });
+app.put('/api/admin/settings', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'access_panel')) {
+    return res.status(403).json({ error: 'صلاحية الإعدادات غير متوفرة.' });
   }
-  const username = String(req.body?.username || '').trim();
-  const displayName = String(req.body?.displayName || username).trim();
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-  const role = String(req.body?.role || 'member').trim();
-
-  if (username.length < 2 || username.length > 24) {
-    return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون بين 2 و 24 حرفاً.' });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'يرجى إدخال بريد إلكتروني صحيح.' });
-  }
-  if (password.length < 4) {
-    return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 4 أحرف على الأقل.' });
-  }
-  if (role === 'site_owner' && !db.isSupremeOwnerEmail(req.authUser.email)) {
-    return res.status(403).json({ error: 'منح رتبة صاحب الموقع متاح للمالك الأعلى فقط.' });
-  }
-  if (req.authUser.role !== 'site_owner' && db.getRankSortWeight(role) >= db.getRankSortWeight(req.authUser.role)) {
-    return res.status(403).json({ error: 'لا يمكنك إنشاء حساب برتبة مساوية لرتبتك أو أعلى منها.' });
-  }
-
-  const passwordHash = bcrypt.hashSync(password, 10);
-  const created = db.adminCreateUser({ username, displayName, email, passwordHash, role });
-  if (created.error) return res.status(409).json({ error: created.error });
-
-  broadcastGlobalOnlineUsers();
-  res.status(201).json({
-    user: mapUserRow(created.user),
-    message: `✅ تم إنشاء حساب "${db.getEffectiveName(created.user)}" بنجاح.`
-  });
+  const settings = db.updateSiteSettings(req.body || {});
+  io.emit('site_settings_updated', settings);
+  await db.flushWrites();
+  return res.json({ settings });
 });
 
-app.put('/api/admin/users/:id', requireAuth, requirePanelAccess, (req, res) => {
-  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
-    return res.status(403).json({ error: 'تعديل بيانات الأعضاء متاح للمالك ولمن يملك صلاحية إدارة الرتب.' });
-  }
-  const targetId = Number(req.params.id);
-  const targetRow = Number.isNaN(targetId) ? null : db.findUserById(targetId);
-  if (!targetRow) return res.status(404).json({ error: 'الحساب غير موجود.' });
-
-  const actorIsSupreme = db.isSupremeOwnerEmail(req.authUser.email);
-  const targetIsSupreme = db.isSupremeOwnerEmail(targetRow.email);
-
-  if (targetIsSupreme && !actorIsSupreme) {
-    return res.status(403).json({ error: '⛔ لا يمكن تعديل حساب المالك الأعلى للموقع.' });
-  }
-  if (targetRow.role === 'site_owner' && !actorIsSupreme && req.authUser.role !== 'site_owner') {
-    return res.status(403).json({ error: 'لا يمكن تعديل حساب صاحب الموقع.' });
-  }
-  if (
-    !actorIsSupreme &&
-    req.authUser.role !== 'site_owner' &&
-    targetRow.id !== req.authUser.userId &&
-    db.getRankSortWeight(targetRow.role) >= db.getRankSortWeight(req.authUser.role)
-  ) {
-    return res.status(403).json({ error: 'لا يمكنك تعديل حساب برتبة أعلى منك أو مساوية لك.' });
-  }
-
-  const body = req.body || {};
-  const nextUsername = body.username !== undefined ? String(body.username).trim() : undefined;
-  const nextDisplayName = body.displayName !== undefined ? String(body.displayName).trim() : undefined;
-  const nextEmail = body.email !== undefined ? String(body.email).trim().toLowerCase() : undefined;
-  const nextPassword = body.password !== undefined ? String(body.password) : '';
-  const nextRole = body.role !== undefined ? String(body.role).trim() : undefined;
-  const nextAvatar =
-    body.avatarUrl !== undefined
-      ? body.avatarUrl === '' || String(body.avatarUrl).startsWith('/uploads/avatars/')
-        ? String(body.avatarUrl)
-        : undefined
-      : undefined;
-
-  if (nextUsername !== undefined && (nextUsername.length < 2 || nextUsername.length > 24)) {
-    return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون بين 2 و 24 حرفاً.' });
-  }
-  if (nextDisplayName !== undefined && (nextDisplayName.length < 2 || nextDisplayName.length > 28)) {
-    return res.status(400).json({ error: 'الاسم المستعار يجب أن يكون بين 2 و 28 حرفاً.' });
-  }
-  if (nextEmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
-    return res.status(400).json({ error: 'البريد الإلكتروني غير صحيح.' });
-  }
-  if (nextPassword && nextPassword.length < 4) {
-    return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل.' });
-  }
-  if (nextRole !== undefined) {
-    if (!db.isValidRank(nextRole)) return res.status(400).json({ error: 'الرتبة المختارة غير صالحة.' });
-    if (targetIsSupreme && nextRole !== 'site_owner') {
-      return res.status(403).json({ error: '⛔ لا يمكن تخفيض رتبة المالك الأعلى للموقع.' });
-    }
-    if (nextRole === 'site_owner' && !actorIsSupreme && !targetIsSupreme) {
-      return res.status(403).json({ error: 'منح رتبة صاحب الموقع متاح للمالك الأعلى فقط.' });
-    }
-    if (!actorIsSupreme && req.authUser.role !== 'site_owner' && db.getRankSortWeight(nextRole) >= db.getRankSortWeight(req.authUser.role)) {
-      return res.status(403).json({ error: 'لا يمكنك منح رتبة أعلى من رتبتك أو مساوية لها.' });
-    }
-  }
-
-  const passwordHash = nextPassword ? bcrypt.hashSync(nextPassword, 10) : undefined;
-  const updated = db.adminUpdateUserAccount(targetId, {
-    displayName: nextDisplayName,
-    username: nextUsername,
-    email: nextEmail,
-    passwordHash,
-    avatarUrl: nextAvatar,
-    role: nextRole
-  });
-  if (updated.error) return res.status(409).json({ error: updated.error });
-
-  const mapped = mapUserRow(updated.user);
-  syncUserAcrossSockets(mapped.key, {
-    username: mapped.username,
-    name: mapped.name,
-    email: mapped.email,
-    role: mapped.role,
-    avatarUrl: mapped.avatarUrl
-  });
-  io.emit('user_rank_updated', {
-    targetKey: mapped.key,
-    newRole: mapped.role,
-    name: mapped.name
-  });
-  res.json({
-    user: mapped,
-    message: `✅ تم تحديث بيانات "${mapped.name}" وحفظها فوراً.`
-  });
-});
-
-// Custom Ranks & Permissions CRUD
-app.post('/api/admin/ranks', requireAuth, requirePanelAccess, (req, res) => {
-  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
-    return res.status(403).json({ error: 'إنشاء الرتب متاح للمالك ولمن لديه صلاحية إدارة الرتب فقط.' });
-  }
-  const { label, icon, imageUrl, bgColor, textColor, power, permissions } = req.body || {};
-  const safeImg = imageUrl && String(imageUrl).startsWith('/uploads/ranks/') ? String(imageUrl) : '';
-  const requestedPower = Math.max(1, Math.min(99, Number(power) || 20));
-  if (req.authUser.role !== 'site_owner' && requestedPower >= db.getRankPower(req.authUser.role)) {
-    return res.status(403).json({ error: 'لا يمكنك إنشاء رتبة بقوة أعلى من رتبتك أو مساوية لها.' });
-  }
-  const created = db.createRank({
-    label,
-    icon,
-    imageUrl: safeImg,
-    bgColor,
-    textColor,
-    power: requestedPower,
-    permissions: permissions || {}
-  });
-  if (created.error) return res.status(400).json({ error: created.error });
-
-  const ranks = db.getAllRanks();
-  io.emit('ranks_updated', ranks);
-  broadcastGlobalOnlineUsers();
-  res.status(201).json({ rank: created.rank, ranks, message: `✅ تم إنشاء رتبة "${created.rank.label}" بنجاح!` });
-});
-
-app.put('/api/admin/ranks/:key', requireAuth, requirePanelAccess, (req, res) => {
-  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
-    return res.status(403).json({ error: 'تعديل الرتب متاح للمالك ولمن لديه صلاحية إدارة الرتب فقط.' });
-  }
-  const key = String(req.params.key || '').trim();
-  if (key === 'site_owner' && !db.isSupremeOwnerEmail(req.authUser.email)) {
-    return res.status(403).json({ error: 'لا يمكن تعديل رتبة صاحب الموقع الأعلى إلا من قِبل المالك الأساسي.' });
-  }
-  const existingPower = db.getRankPower(key);
-  if (req.authUser.role !== 'site_owner' && existingPower >= db.getRankPower(req.authUser.role)) {
-    return res.status(403).json({ error: 'لا يمكنك تعديل رتبة أعلى أو مساوية لرتبتك.' });
-  }
-
-  const { label, icon, imageUrl, bgColor, textColor, power, permissions } = req.body || {};
-  const safeImg =
-    imageUrl === undefined
-      ? undefined
-      : imageUrl === '' || String(imageUrl).startsWith('/uploads/ranks/')
-        ? String(imageUrl)
-        : undefined;
-
-  const nextPower =
-    power === undefined
-      ? undefined
-      : req.authUser.role === 'site_owner'
-        ? power
-        : Math.min(db.getRankPower(req.authUser.role) - 1, Math.max(1, Number(power) || 1));
-
-  const updated = db.updateRank(key, {
-    label,
-    icon,
-    imageUrl: safeImg,
-    bgColor,
-    textColor,
-    power: nextPower,
-    permissions
-  });
-  if (updated.error) return res.status(400).json({ error: updated.error });
-
-  const ranks = db.getAllRanks();
-  io.emit('ranks_updated', ranks);
-  broadcastGlobalOnlineUsers();
-  res.json({ rank: updated.rank, ranks, message: `✅ تم تحديث رتبة "${updated.rank.label}" وتطبيقها فوراً.` });
-});
-
-app.delete('/api/admin/ranks/:key', requireAuth, requirePanelAccess, (req, res) => {
-  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
-    return res.status(403).json({ error: 'حذف الرتب متاح للمالك ولمن لديه صلاحية إدارة الرتب فقط.' });
-  }
-  const key = String(req.params.key || '').trim();
-  const result = db.deleteRank(key);
+app.post('/api/admin/ranks', requireOwner, async (req, res) => {
+  const result = db.createRank(req.body || {});
   if (result.error) return res.status(400).json({ error: result.error });
-
-  for (const uid of result.affectedUserIds || []) {
-    syncUserAcrossSockets(`user:${uid}`, { role: 'member' });
-  }
-  const ranks = db.getAllRanks();
-  io.emit('ranks_updated', ranks);
-  broadcastGlobalOnlineUsers();
-  res.json({ ok: true, ranks, message: '🗑️ تم حذف الرتبة المخصصة ونقل أعضائها إلى عضو.' });
+  io.emit('ranks_updated', db.getAllRanks());
+  await db.flushWrites();
+  return res.json({ rank: result.rank });
 });
 
-// Custom Emojis & Stickers CRUD
-app.post('/api/admin/emojis', requireAuth, requirePanelAccess, (req, res) => {
-  const { code, imageUrl } = req.body || {};
-  const added = db.addCustomEmoji({
-    code,
-    imageUrl,
+app.put('/api/admin/ranks/:key', requireOwner, async (req, res) => {
+  const result = db.updateRank(req.params.key, req.body || {});
+  if (result.error) return res.status(400).json({ error: result.error });
+  io.emit('ranks_updated', db.getAllRanks());
+  for (const entry of onlineSockets.values()) {
+    if (entry.role === req.params.key && entry.userId) {
+      syncUserAcrossSockets(io, entry.userId);
+    }
+  }
+  await db.flushWrites();
+  return res.json({ rank: result.rank });
+});
+
+app.delete('/api/admin/ranks/:key', requireOwner, async (req, res) => {
+  const result = db.deleteRank(req.params.key);
+  if (result.error) return res.status(400).json({ error: result.error });
+  io.emit('ranks_updated', db.getAllRanks());
+  for (const uid of result.affectedUserIds || []) {
+    syncUserAcrossSockets(io, uid);
+  }
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/admin/emojis', requirePanelAccess, async (req, res) => {
+  const result = db.addCustomEmoji({
+    code: req.body?.code,
+    imageUrl: req.body?.imageUrl,
     createdBy: req.authUser.name
   });
-  if (added.error) return res.status(400).json({ error: added.error });
-
-  const emojis = db.getAllCustomEmojis();
-  io.emit('emojis_updated', emojis);
-  notifyAdminPanelRefresh();
-  res.status(201).json({ emoji: added.emoji, emojis, message: `✅ تم إضافة الإيموجي "${added.emoji.code}" بنجاح!` });
+  if (result.error) return res.status(400).json({ error: result.error });
+  io.emit('emojis_updated', db.getAllCustomEmojis());
+  await db.flushWrites();
+  return res.json({ emoji: result.emoji });
 });
 
-app.delete('/api/admin/emojis/:id', requireAuth, requirePanelAccess, (req, res) => {
+app.delete('/api/admin/emojis/:id', requirePanelAccess, async (req, res) => {
   db.deleteCustomEmoji(req.params.id);
-  const emojis = db.getAllCustomEmojis();
-  io.emit('emojis_updated', emojis);
-  notifyAdminPanelRefresh();
-  res.json({ ok: true, emojis, message: '🗑️ تم حذف الإيموجي المخصص.' });
+  io.emit('emojis_updated', db.getAllCustomEmojis());
+  await db.flushWrites();
+  return res.json({ ok: true });
 });
 
-// Site Settings & Theme CMS
-app.put('/api/admin/site-settings', requireAuth, requirePanelAccess, (req, res) => {
-  const body = req.body || {};
-  const safeLogo =
-    body.site_logo === undefined
-      ? undefined
-      : body.site_logo === '' ||
-          String(body.site_logo).startsWith('/uploads/branding/') ||
-          String(body.site_logo).startsWith('/assets/')
-        ? String(body.site_logo)
-        : undefined;
-
-  const updated = db.updateSiteSettings({
-    ...body,
-    site_logo: safeLogo
+app.post('/api/admin/rooms', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'manage_rooms')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية إدارة الغرف.' });
+  }
+  const {
+    name,
+    description,
+    icon,
+    imageUrl,
+    bgTheme,
+    wallpaperUrl,
+    bgCustom,
+    cardBgColor,
+    cardTextColor,
+    welcomeMessage,
+    roomPassword,
+    minRankPower,
+    ownerUserId
+  } = req.body || {};
+  const cleanName = String(name || '').trim().slice(0, 60);
+  if (cleanName.length < 2) return res.status(400).json({ error: 'اسم الغرفة يجب أن يكون حرفين على الأقل.' });
+  const id = `room_${Date.now().toString(36)}_${crypto.randomBytes(2).toString('hex')}`;
+  const room = db.createRoom({
+    id,
+    name: cleanName,
+    description,
+    icon,
+    imageUrl,
+    bgTheme,
+    wallpaperUrl,
+    bgCustom,
+    cardBgColor,
+    cardTextColor,
+    welcomeMessage,
+    roomPassword,
+    minRankPower,
+    ownerUserId,
+    createdBy: req.authUser.name
   });
-
-  io.emit('site_settings_updated', updated);
-  notifyAdminPanelRefresh();
-  res.json({ siteSettings: updated, message: '🎨 تم حفظ وتطبيق إعدادات الموقع والمظهر فوراً للجميع!' });
+  broadcastRoomsList(io);
+  await db.flushWrites();
+  return res.json({ room: db.sanitizeRoomForPublic(room) });
 });
 
-// Broadcast Global Popup Alert
-app.post('/api/admin/broadcast', requireAuth, requirePanelAccess, (req, res) => {
-  const title = String(req.body?.title || '📢 إعلان هام من الإدارة').trim().slice(0, 80);
-  const message = String(req.body?.message || '').trim().slice(0, 1000);
-  if (!message) {
-    return res.status(400).json({ error: 'يرجى كتابة نص الإعلان العام.' });
+app.put('/api/admin/rooms/:id', requirePanelAccess, async (req, res) => {
+  const rm = db.getRoomById(req.params.id);
+  if (!rm) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+  if (!db.isRoomManager(rm.id, req.authUser.userId, req.authUser.role)) {
+    return res.status(403).json({ error: 'لا تملك صلاحية تعديل هذه الغرفة.' });
   }
-
-  db.addNotification({
-    targetKey: '*',
-    title,
-    body: message
-  });
-
-  const payload = {
-    title,
-    message,
-    senderName: req.authUser.name,
-    senderRole: req.authUser.role,
-    createdAt: new Date().toISOString()
-  };
-
-  io.emit('broadcast_alert', payload);
-  io.emit('new_notification', { title, body: message });
-  res.json({ ok: true, payload, message: '📢 تم إرسال الإعلان العام المنبثق لجميع المتواجدين!' });
+  const updated = db.updateRoom(rm.id, req.body || {});
+  io.to(`room:${rm.id}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
+  broadcastRoomsList(io);
+  await db.flushWrites();
+  return res.json({ room: db.sanitizeRoomForPublic(updated) });
 });
 
-// Socket.io Authentication Middleware
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token || '';
-  const ip = getClientIp(socket.handshake);
-  const resolved = resolveSessionUser(token, ip);
-  if (!resolved) {
-    return next(new Error('UNAUTHORIZED'));
+app.delete('/api/admin/rooms/:id', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'manage_rooms')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية حذف الغرف.' });
   }
-  if (resolved.banned) {
-    return next(new Error(`BANNED:${resolved.reason}`));
+  if (req.params.id === 'general') {
+    return res.status(400).json({ error: 'لا يمكن حذف الغرفة العامة الرئيسية.' });
   }
-  if (isMaintenanceBlocked(resolved.user.role)) {
-    return next(new Error('MAINTENANCE:الموقع في وضع الصيانة المؤقتة حالياً'));
-  }
-  socket.user = resolved.user;
-  socket.clientIp = ip;
-  next();
-});
-
-function disconnectTargetSockets(targetKey, eventName, payload) {
-  const affectedRooms = new Set();
-  for (const [sid, entry] of [...onlineSockets.entries()]) {
-    if (entry.key === targetKey) {
-      if (entry.roomId) {
-        affectedRooms.add(entry.roomId);
-        removeUserFromRoomMics(entry.roomId, targetKey);
-      }
-      const targetSocket = io.sockets.sockets.get(sid);
-      if (targetSocket) {
-        if (eventName) targetSocket.emit(eventName, payload);
-        targetSocket.disconnect(true);
-      }
-      onlineSockets.delete(sid);
+  const rm = db.getRoomById(req.params.id);
+  if (!rm) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+  for (const [sid, entry] of onlineSockets.entries()) {
+    if (entry.roomId === rm.id) {
+      const sock = io.sockets.sockets.get(sid);
+      if (sock) moveSocketToRoom(sock, 'general', true);
     }
   }
-  for (const rid of affectedRooms) {
-    broadcastRoomUsers(rid);
-  }
-  broadcastRoomsList();
-  broadcastGlobalOnlineUsers();
-}
+  db.deleteRoom(rm.id);
+  broadcastRoomsList(io);
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
 
-function getTargetMetadata(targetKey) {
-  let targetRole = targetKey.startsWith('guest:') ? 'guest' : 'member';
+app.post('/api/admin/rooms/:id/staff', requirePanelAccess, async (req, res) => {
+  if (!db.isRoomManager(req.params.id, req.authUser.userId, req.authUser.role)) {
+    return res.status(403).json({ error: 'صلاحية غير كافية.' });
+  }
+  const staff = db.addRoomStaff(req.params.id, req.body?.userId, req.body?.staffRole, req.authUser.name);
+  if (!staff) return res.status(400).json({ error: 'تعذر إضافة مشرف الغرفة.' });
+  broadcastRoomsList(io);
+  await db.flushWrites();
+  return res.json({ staff });
+});
+
+app.delete('/api/admin/rooms/:id/staff/:userId', requirePanelAccess, async (req, res) => {
+  if (!db.isRoomManager(req.params.id, req.authUser.userId, req.authUser.role)) {
+    return res.status(403).json({ error: 'صلاحية غير كافية.' });
+  }
+  const staff = db.removeRoomStaff(req.params.id, req.params.userId);
+  broadcastRoomsList(io);
+  await db.flushWrites();
+  return res.json({ staff });
+});
+
+app.post('/api/admin/users', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية إنشاء الحسابات أو تعيين الرتب.' });
+  }
+  const { username, displayName, email, password, role } = req.body || {};
+  const targetRole = role || 'member';
+  const targetPower = db.getRankPower(targetRole);
+  const maxAllowed = db.getMaxAssignablePower(req.authUser.role);
+  if (req.authUser.role !== 'site_owner' && targetPower > maxAllowed) {
+    return res.status(403).json({ error: `سقف الترقية المسموح لرتبتك هو (${maxAllowed}) فقط.` });
+  }
+  if (!password || String(password).length < 5) {
+    return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 5 أحرف على الأقل.' });
+  }
+  const passwordHash = await bcrypt.hash(String(password), 10);
+  const result = db.adminCreateUser({
+    username,
+    displayName,
+    email,
+    passwordHash,
+    role: targetRole
+  });
+  if (result.error) return res.status(400).json({ error: result.error });
+  await db.flushWrites();
+  io.emit('persistent_members', buildPersistentMembersList());
+  return res.json({ user: mapUserRow(result.user) });
+});
+
+app.put('/api/admin/users/:id', requirePanelAccess, async (req, res) => {
+  const target = db.findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'الحساب غير موجود.' });
+  const myPower = db.getRankPower(req.authUser.role);
+  const targetCurPower = db.getRankPower(target.role);
+
+  if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(req.authUser.email)) {
+    return res.status(403).json({ error: 'حساب صاحب الموقع محمي ولا يمكن تعديله.' });
+  }
+  if (req.authUser.role !== 'site_owner' && targetCurPower >= myPower && target.id !== req.authUser.userId) {
+    return res.status(403).json({ error: 'لا يمكنك تعديل عضو مساوٍ لك أو أعلى منك في القوة.' });
+  }
+
+  const { displayName, username, email, password, role } = req.body || {};
+  if (role && role !== target.role) {
+    if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
+      return res.status(403).json({ error: 'لا تملك صلاحية تعديل الرتب.' });
+    }
+    const newPower = db.getRankPower(role);
+    const maxAssign = db.getMaxAssignablePower(req.authUser.role);
+    if (req.authUser.role !== 'site_owner' && newPower > maxAssign) {
+      return res.status(403).json({ error: `لا يمكنك الترقية لرتبة أعلى من سقفك (${maxAssign}).` });
+    }
+  }
+
+  const passwordHash = password && String(password).length >= 5 ? await bcrypt.hash(String(password), 10) : null;
+  const result = db.adminUpdateUserAccount(target.id, {
+    displayName,
+    username,
+    email,
+    passwordHash,
+    role
+  });
+  if (result.error) return res.status(400).json({ error: result.error });
+  syncUserAcrossSockets(io, target.id);
+  await db.flushWrites();
+  return res.json({ user: mapUserRow(result.user) });
+});
+
+app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'ban')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية الحظر.' });
+  }
+  const { targetKey, reason } = req.body || {};
+  if (!targetKey || db.isProtectedSupremeOwnerKey(targetKey)) {
+    return res.status(403).json({ error: 'لا يمكن حظر صاحب الموقع.' });
+  }
   let targetName = targetKey;
-  let email = '';
-  let ipAddress = '';
-
-  if (targetKey.startsWith('user:')) {
-    const uid = Number(targetKey.replace('user:', ''));
-    const row = Number.isNaN(uid) ? null : db.findUserById(uid);
+  let targetEmail = '';
+  let targetIp = '';
+  if (String(targetKey).startsWith('user:')) {
+    const uid = Number(String(targetKey).replace('user:', ''));
+    const row = db.findUserById(uid);
     if (row) {
-      targetRole = row.role;
+      if (req.authUser.role !== 'site_owner' && db.getRankPower(row.role) >= db.getRankPower(req.authUser.role)) {
+        return res.status(403).json({ error: 'لا يمكنك حظر رتبة أعلى منك أو مساوية لك.' });
+      }
       targetName = db.getEffectiveName(row);
-      email = row.email;
-      ipAddress = row.last_ip || '';
+      targetEmail = row.email;
+      targetIp = row.last_ip || '';
     }
   }
+  db.banTarget({
+    targetKey,
+    targetName,
+    email: targetEmail,
+    ipAddress: targetIp,
+    reason: reason || 'حظر من الإدارة',
+    bannedBy: req.authUser.name
+  });
 
-  for (const entry of onlineSockets.values()) {
+  for (const [sid, entry] of onlineSockets.entries()) {
     if (entry.key === targetKey) {
-      targetRole = entry.role;
-      targetName = entry.name;
-      if (entry.email) email = entry.email;
-      if (entry.ipAddress) ipAddress = entry.ipAddress;
-      break;
+      io.to(sid).emit('kicked', { reason: reason || 'تم حظرك نهائياً من الشات.' });
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.disconnect(true);
     }
   }
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
 
-  return { targetRole, targetName, email, ipAddress };
+app.delete('/api/admin/ban/:key', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'ban')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية فك الحظر.' });
+  }
+  db.unbanTarget(decodeURIComponent(req.params.key));
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+// ==========================================
+// HTTP SERVER & SOCKET.IO SETUP
+// ==========================================
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*' },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
+});
+
+function releaseUserMicsInRoom(socketOrKey, roomId) {
+  if (!roomId) return;
+  const slots = ensureRoomMicSlots(roomId);
+  const key = typeof socketOrKey === 'string' ? socketOrKey : onlineSockets.get(socketOrKey.id)?.key;
+  let changed = false;
+  for (const slot of slots) {
+    if (slot.holderKey === key) {
+      slot.holderKey = null;
+      slot.holderSocketId = null;
+      slot.holderName = null;
+      slot.holderRole = null;
+      slot.holderAvatar = null;
+      slot.isSelfMuted = false;
+      slot.isAdminMuted = false;
+      slot.isSpeaking = false;
+      changed = true;
+    }
+  }
+  if (changed) {
+    io.to(`room:${roomId}`).emit('mic_state', { roomId, slots: getPublicMicSlots(roomId) });
+  }
 }
+
+function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
+  const entry = onlineSockets.get(socket.id);
+  if (!entry) return;
+  const room = db.getRoomById(targetRoomId);
+  if (!room) {
+    socket.emit('error_toast', { message: 'الغرفة غير موجودة.' });
+    return;
+  }
+
+  const oldRoomId = entry.roomId;
+  if (oldRoomId && oldRoomId !== targetRoomId) {
+    releaseUserMicsInRoom(entry.key, oldRoomId);
+    socket.leave(`room:${oldRoomId}`);
+    entry.roomId = null;
+    broadcastRoomUsers(io, oldRoomId);
+  }
+
+  entry.roomId = targetRoomId;
+  socket.join(`room:${targetRoomId}`);
+
+  const messages = db.getRoomMessages(targetRoomId, 100);
+  const pubRoom = db.sanitizeRoomForPublic(room);
+  const isManager = db.isRoomManager(targetRoomId, entry.userId, entry.role);
+
+  socket.emit('room_joined', {
+    room: pubRoom,
+    isRoomManager: isManager,
+    messages,
+    mics: getPublicMicSlots(targetRoomId),
+    users: getRoomUsersList(targetRoomId)
+  });
+
+  broadcastRoomUsers(io, targetRoomId);
+  broadcastRoomsList(io);
+  broadcastGlobalOnlineUsers(io);
+
+  // Never broadcast join notice if stealth active, or silent reconnect, or rejoining same room during active grace
+  const pending = pendingGrace.get(entry.key);
+  const rejoiningSameRoom = pending && pending.lastRoomId === targetRoomId;
+  if (pending) {
+    clearTimeout(pending.timeout);
+    pendingGrace.delete(entry.key);
+  }
+
+  if (!isSilentReconnect && !rejoiningSameRoom && oldRoomId !== targetRoomId && !isStealthEntry(entry)) {
+    const rank = db.getRankByKey(entry.role);
+    io.to(`room:${targetRoomId}`).emit('room_notice', {
+      roomId: targetRoomId,
+      kind: 'join',
+      text: `✨ انضم (${rank.icon} ${rank.label}) "${entry.name}" إلى الغرفة.`
+    });
+  }
+}
+
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    const payload = verifyToken(token);
+    if (!payload) return next(new Error('AUTH_REQUIRED'));
+
+    const ip = getClientIp(socket);
+    if (payload.isGuest) {
+      const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip });
+      if (ban) return next(new Error(`BANNED:${ban.reason}`));
+      socket.authSession = {
+        socketId: socket.id,
+        key: payload.key,
+        userId: null,
+        isGuest: true,
+        name: payload.name || 'زائر',
+        displayName: payload.name || 'زائر',
+        username: payload.name || 'زائر',
+        email: '',
+        role: 'guest',
+        nameColor: '#ffffff',
+        textColor: '#ffffff',
+        nameBgColor: '',
+        neonColor: '',
+        fontFamily: 'Normal',
+        fontStyle: 'Normal',
+        avatarUrl: '',
+        avatarFrame: 'none',
+        nameplateStyle: 'default',
+        nameShine: 'none',
+        vipWings: false,
+        profileMusic: '',
+        bio: '',
+        coins: 0,
+        vipFamily: '',
+        isStealth: false,
+        activityPoints: 0,
+        giftsReceived: 0,
+        giftsSent: 0,
+        ipAddress: ip,
+        roomId: null,
+        lastHeartbeat: Date.now()
+      };
+      return next();
+    }
+
+    const row = db.findUserById(payload.userId);
+    if (!row) return next(new Error('AUTH_REQUIRED'));
+    if (db.isSupremeOwnerEmail(row.email)) {
+      db.ensureSupremeOwnerAccount(row.id);
+    } else {
+      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip });
+      if (ban) return next(new Error(`BANNED:${ban.reason}`));
+    }
+
+    db.updateUserIp(row.id, ip);
+    const freshRow = db.findUserById(row.id);
+    const mapped = mapUserRow(freshRow);
+    socket.authSession = {
+      socketId: socket.id,
+      ...mapped,
+      ipAddress: ip,
+      roomId: null,
+      lastHeartbeat: Date.now()
+    };
+    return next();
+  } catch (err) {
+    return next(new Error('AUTH_FAILED'));
+  }
+});
 
 io.on('connection', (socket) => {
-  const user = socket.user;
-  if (user.type === 'user' && user.userId && socket.clientIp) {
-    db.updateUserIp(user.userId, socket.clientIp);
-  }
+  const session = socket.authSession;
+  onlineSockets.set(socket.id, session);
 
-  let pendingGrace = clearReconnectGrace(user.key);
+  const pending = pendingGrace.get(session.key);
+  const wasGraceReconnect = Boolean(pending);
+  const initialRoomId = socket.handshake.auth?.roomId || (pending && pending.lastRoomId) || 'general';
+  const validRoom = db.getRoomById(initialRoomId) ? initialRoomId : db.getAllRooms()[0]?.id || 'general';
 
-  onlineSockets.set(socket.id, {
-    socketId: socket.id,
-    key: user.key,
-    userId: user.userId,
-    username: user.username || user.name,
-    email: user.email || '',
-    ipAddress: socket.clientIp || '',
-    name: user.name,
-    role: user.role,
-    nameColor: user.nameColor,
-    textColor: user.textColor || '#ffffff',
-    nameBgColor: user.nameBgColor || '',
-    neonColor: user.neonColor || '',
-    fontFamily: user.fontFamily || 'Normal',
-    fontStyle: user.fontStyle || 'Normal',
-    avatarUrl: user.avatarUrl,
-    avatarFrame: user.avatarFrame,
-    nameplateStyle: user.nameplateStyle,
-    coins: user.coins,
-    vipFamily: user.vipFamily || '',
-    roomId: null,
-    lastHeartbeat: Date.now()
+  socket.emit('init_state', {
+    user: session.isGuest ? session : mapUserRow(db.findUserById(session.userId)),
+    settings: db.getSiteSettings(),
+    ranks: db.getAllRanks(),
+    emojis: db.getAllCustomEmojis(),
+    rooms: buildRoomsPayload(),
+    onlineUsers: buildGlobalOnlineUsers(),
+    persistentMembers: buildPersistentMembersList(),
+    unreadNotifCount: db.getUnreadNotificationCount(session.key),
+    news: db.getAllNews(),
+    giftsCatalog: db.GIFT_CATALOG
   });
 
-  socket.on('heartbeat', () => {
+  moveSocketToRoom(socket, validRoom, wasGraceReconnect);
+
+  socket.on('heartbeat', (_data, cb) => {
     const entry = onlineSockets.get(socket.id);
-    if (entry) {
-      entry.lastHeartbeat = Date.now();
-    }
-    socket.emit('heartbeat_ack', { ts: Date.now() });
+    if (entry) entry.lastHeartbeat = Date.now();
+    if (typeof cb === 'function') cb({ ok: true, ts: Date.now() });
   });
 
-  socket.emit('ranks_updated', db.getAllRanks());
-  socket.emit('emojis_updated', db.getAllCustomEmojis());
-  socket.emit('site_settings_updated', db.getSiteSettings());
-  socket.emit('rooms_list', buildRoomsPayload(false));
-  broadcastGlobalOnlineUsers();
-
-  function moveSocketToRoom(targetRoomId) {
-    const rawRoom = db.getRoomById(targetRoomId);
-    if (!rawRoom) return;
-    const room = db.sanitizeRoomForPublic(rawRoom);
-
-    const currentEntry = onlineSockets.get(socket.id);
-    const oldRoomId = currentEntry ? currentEntry.roomId : null;
-    const isSilentReconnect = Boolean(
-      pendingGrace &&
-        pendingGrace.roomId === targetRoomId &&
-        Date.now() <= pendingGrace.expiresAt &&
-        oldRoomId === null
-    );
-    pendingGrace = null;
-
-    if (oldRoomId && oldRoomId !== targetRoomId) {
-      socket.leave(oldRoomId);
-      removeUserFromRoomMics(oldRoomId, socket.user.key);
-      currentEntry.roomId = null;
-      broadcastRoomUsers(oldRoomId);
-    }
-
-    socket.join(targetRoomId);
-    if (currentEntry) {
-      currentEntry.roomId = targetRoomId;
-    }
-
-    const history = db.getRoomMessages(targetRoomId, 100);
-    const activeMute = db.getActiveMute(socket.user.key, targetRoomId);
-
-    socket.emit('room_joined', {
-      room,
-      messages: history,
-      muteInfo: activeMute ? { expiresAt: activeMute.expires_at } : null,
-      isReconnect: isSilentReconnect,
-      mics: {
-        roomId: targetRoomId,
-        micsEnabled: room.mics_enabled !== 0,
-        slots: getOrInitMics(targetRoomId)
-      }
-    });
-
-    const settings = db.getSiteSettings();
-    if (!isSilentReconnect && oldRoomId === null && settings.welcome_message) {
-      socket.emit('system_notice', {
-        roomId: targetRoomId,
-        text: `👋 ${settings.welcome_message}`
-      });
-    }
-    if (!isSilentReconnect && room.welcome_message) {
-      socket.emit('system_notice', {
-        roomId: targetRoomId,
-        text: `📌 ترحيب الغرفة: ${room.welcome_message}`
-      });
-    }
-
-    if (!isSilentReconnect && oldRoomId !== targetRoomId) {
-      const joinRole = currentEntry?.role || socket.user.role;
-      const rankLabel = db.getRankByKey(joinRole)?.label || 'عضو';
-      io.to(targetRoomId).emit('system_notice', {
-        roomId: targetRoomId,
-        text: `✨ انضم (# ${rankLabel} #) "${currentEntry?.name || socket.user.name}" إلى الغرفة.`
-      });
-    }
-
-    broadcastRoomUsers(targetRoomId);
-    broadcastRoomsList();
-    broadcastGlobalOnlineUsers();
-  }
-
-  socket.on('join_room', (payload) => {
-    const ban = db.isTargetBanned({
-      targetKey: socket.user.key,
-      email: socket.user.email,
-      ipAddress: socket.user.role === 'site_owner' ? '' : socket.clientIp
-    });
-    if (ban) {
-      socket.emit('banned_forever', { reason: ban.reason });
-      socket.disconnect(true);
+  socket.on('join_room', ({ roomId, password }, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry) return;
+    const room = db.getRoomById(roomId);
+    if (!room) {
+      if (typeof cb === 'function') cb({ error: 'الغرفة غير موجودة.' });
       return;
     }
 
-    const reqRoomId = typeof payload === 'string' ? payload : payload?.roomId;
-    const suppliedPassword = typeof payload === 'object' ? String(payload?.password || '') : '';
-
-    const allRooms = db.getAllRooms();
-    const targetRoomObj = (reqRoomId && db.getRoomById(reqRoomId)) || allRooms[0];
-    if (!targetRoomObj) return;
-
-    const currentEntry = onlineSockets.get(socket.id);
-    const myRole = currentEntry?.role || socket.user.role;
-    const myPower = db.getRankPower(myRole);
-    const isStaffBypass =
-      myRole === 'site_owner' ||
-      canDo(myRole, 'manage_rooms') ||
-      db.isRoomManager(targetRoomObj.id, socket.user.userId, myRole);
-
-    if (!isStaffBypass && Number(targetRoomObj.min_rank_power) > myPower) {
-      socket.emit('action_error', {
-        message: `🔒 هذه الغرفة مخصصة لأصحاب الرتب بقوة (${targetRoomObj.min_rank_power}) فأعلى.`
-      });
-      if (!currentEntry?.roomId) {
-        const openFallback = allRooms.find((r) => Number(r.min_rank_power) <= myPower && !r.room_password) || allRooms[0];
-        if (openFallback && openFallback.id !== targetRoomObj.id) {
-          moveSocketToRoom(openFallback.id);
-        }
-      }
+    const isOwnerOrMod = entry.role === 'site_owner' || canDo(entry.role, 'manage_rooms');
+    if (!isOwnerOrMod && (Number(room.min_rank_power) || 0) > db.getRankPower(entry.role)) {
+      const errMsg = `الدخول لهذه الغرفة يتطلب رتبة بقوة ${room.min_rank_power} فأعلى.`;
+      if (typeof cb === 'function') cb({ error: errMsg });
+      else socket.emit('error_toast', { message: errMsg });
       return;
     }
 
-    if (!isStaffBypass && targetRoomObj.room_password && targetRoomObj.room_password.trim() !== '') {
-      if (suppliedPassword !== targetRoomObj.room_password) {
-        socket.emit('room_password_required', {
-          roomId: targetRoomObj.id,
-          roomName: targetRoomObj.name,
-          wrongPassword: Boolean(suppliedPassword)
-        });
-        if (!currentEntry?.roomId) {
-          const openFallback = allRooms.find((r) => !r.room_password && Number(r.min_rank_power) <= myPower);
-          if (openFallback) moveSocketToRoom(openFallback.id);
-        }
+    if (!isOwnerOrMod && room.room_password && room.room_password.trim()) {
+      if (String(password || '').trim() !== room.room_password.trim()) {
+        const errMsg = 'كلمة مرور الغرفة غير صحيحة.';
+        if (typeof cb === 'function') cb({ error: errMsg, requiresPassword: true });
+        else socket.emit('error_toast', { message: errMsg });
         return;
       }
     }
 
-    moveSocketToRoom(targetRoomObj.id);
+    moveSocketToRoom(socket, roomId, false);
+    if (typeof cb === 'function') cb({ ok: true });
   });
 
-  socket.on('refresh_room', (roomId) => {
-    const targetRoom = db.getRoomById(roomId) ? roomId : onlineSockets.get(socket.id)?.roomId;
-    if (!targetRoom) return;
-    socket.emit('room_history_sync', {
-      roomId: targetRoom,
-      messages: db.getRoomMessages(targetRoom, 100)
-    });
-    broadcastRoomUsers(targetRoom);
-    broadcastRoomsList();
-    broadcastRoomMics(targetRoom);
-  });
+  socket.on('send_message', (payload = {}, cb) => {
+    try {
+      const entry = onlineSockets.get(socket.id);
+      if (!entry || !entry.roomId) {
+        if (typeof cb === 'function') cb({ error: 'لست داخل غرفة.' });
+        return;
+      }
 
-  socket.on('send_message', (payload) => {
-    const ban = db.isTargetBanned({
-      targetKey: socket.user.key,
-      email: socket.user.email,
-      ipAddress: socket.user.role === 'site_owner' ? '' : socket.clientIp
-    });
-    if (ban) {
-      socket.emit('banned_forever', { reason: ban.reason });
-      socket.disconnect(true);
-      return;
-    }
+      const mute = db.getActiveMute(entry.key, entry.roomId);
+      if (mute) {
+        const mins = Math.max(1, Math.ceil((mute.expires_at - Date.now()) / 60000));
+        const errMsg = `أنت مكتوم حالياً في هذه الغرفة لمدة ${mins} دقيقة تقريباً.`;
+        if (typeof cb === 'function') cb({ error: errMsg });
+        else socket.emit('error_toast', { message: errMsg });
+        return;
+      }
 
-    const entry = onlineSockets.get(socket.id);
-    const roomId = payload?.roomId || entry?.roomId;
-    if (!roomId || !db.getRoomById(roomId)) return;
+      // Light spam guard (owner exempt)
+      if (entry.role !== 'site_owner') {
+        const now = Date.now();
+        const spam = roomActivitySpam.get(entry.key) || { count: 0, resetAt: now + 5000 };
+        if (now > spam.resetAt) {
+          spam.count = 0;
+          spam.resetAt = now + 5000;
+        }
+        spam.count += 1;
+        roomActivitySpam.set(entry.key, spam);
+        if (spam.count > 8) {
+          const errMsg = 'يرجى التمهل قليلاً قبل إرسال رسالة أخرى.';
+          if (typeof cb === 'function') cb({ error: errMsg });
+          return;
+        }
+      }
 
-    const activeMute = db.getActiveMute(socket.user.key, roomId);
-    if (activeMute) {
-      socket.emit('mute_status', { isMuted: true, expiresAt: activeMute.expires_at });
-      socket.emit('action_error', {
-        message: '⚠️ أنت مكتوم من قبل الإدارة ولا يمكنك إرسال الرسائل أو الوسائط حالياً.'
+      const msgType = ['text', 'image', 'audio'].includes(payload.msgType) ? payload.msgType : 'text';
+      const content = String(payload.content || '').trim().slice(0, 1000);
+      const mediaUrl = String(payload.mediaUrl || '').trim().slice(0, 300);
+      const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
+      const isAdminNotice =
+        Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
+
+      if (msgType === 'text' && !content) {
+        if (typeof cb === 'function') cb({ error: 'الرسالة فارغة.' });
+        return;
+      }
+      if ((msgType === 'image' || msgType === 'audio') && !mediaUrl) {
+        if (typeof cb === 'function') cb({ error: 'الملف غير موجود.' });
+        return;
+      }
+
+      const msg = db.addMessage({
+        roomId: entry.roomId,
+        senderKey: entry.key,
+        senderName: entry.name,
+        senderRole: entry.role,
+        nameColor: entry.nameColor,
+        textColor: entry.textColor,
+        nameBgColor: entry.nameBgColor,
+        neonColor: entry.neonColor,
+        fontFamily: entry.fontFamily,
+        fontStyle: entry.fontStyle,
+        avatarUrl: entry.avatarUrl,
+        avatarFrame: entry.avatarFrame,
+        nameplateStyle: entry.nameplateStyle,
+        nameShine: entry.nameShine,
+        vipWings: entry.vipWings,
+        isAdminNotice,
+        msgType,
+        content,
+        mediaUrl,
+        clientMsgId
       });
-      return;
-    }
 
-    const msgType = ['text', 'image', 'audio'].includes(payload?.msgType) ? payload.msgType : 'text';
-    const content = String(payload?.content || '').trim().slice(0, 2000);
-    const mediaUrl = String(payload?.mediaUrl || '').trim();
-    const clientMsgId = String(payload?.clientMsgId || '').trim().slice(0, 64);
+      const delta = msgType === 'text' ? 2 : 3;
+      db.incrementActivityPoints({
+        userId: entry.userId,
+        roomId: entry.roomId,
+        userDelta: delta,
+        roomDelta: delta
+      });
+      if (entry.userId) {
+        entry.activityPoints = (Number(entry.activityPoints) || 0) + delta;
+      }
 
-    if (msgType === 'text' && !content) return;
-    if ((msgType === 'image' || msgType === 'audio') && !mediaUrl.startsWith('/uploads/')) return;
+      io.to(`room:${entry.roomId}`).emit('new_message', msg);
+      broadcastRoomsList(io);
 
-    const senderName = entry?.name || socket.user.name;
-    const senderRole = entry?.role || socket.user.role;
-    const nameColor = entry?.nameColor || socket.user.nameColor;
-    const textColor = entry?.textColor || socket.user.textColor || '#ffffff';
-    const nameBgColor = entry?.nameBgColor || socket.user.nameBgColor || '';
-    const neonColor = entry?.neonColor || socket.user.neonColor || '';
-    const fontFamily = entry?.fontFamily || socket.user.fontFamily || 'Normal';
-    const fontStyle = entry?.fontStyle || socket.user.fontStyle || 'Normal';
-    const avatarUrl = entry?.avatarUrl || socket.user.avatarUrl;
-    const avatarFrame = entry?.avatarFrame || socket.user.avatarFrame || 'none';
-    const nameplateStyle = entry?.nameplateStyle || socket.user.nameplateStyle || 'default';
-
-    liveMsgSeq += 1;
-    const nowMs = Date.now();
-    const createdAtIso = new Date(nowMs).toISOString();
-    const liveId = `live-${nowMs}-${liveMsgSeq}`;
-    const instantMsg = {
-      id: liveId,
-      client_msg_id: clientMsgId,
-      room_id: roomId,
-      sender_key: socket.user.key,
-      sender_name: senderName,
-      sender_role: senderRole,
-      name_color: nameColor,
-      text_color: textColor,
-      name_bg_color: nameBgColor,
-      neon_color: neonColor,
-      font_family: fontFamily,
-      font_style: fontStyle,
-      avatar_url: avatarUrl,
-      avatar_frame: avatarFrame,
-      nameplate_style: nameplateStyle,
-      msg_type: msgType,
-      content,
-      media_url: mediaUrl,
-      created_at: createdAtIso,
-      created_at_ms: nowMs
-    };
-
-    // Immediate non-blocking broadcast to all connected clients in the room
-    io.to(roomId).emit('new_message', instantMsg);
-
-    // Parallel / non-blocking permanent save to Cloud Firestore + @mentions
-    setImmediate(() => {
-      try {
-        const saved = db.addMessage({
-          roomId,
-          senderKey: socket.user.key,
-          senderName,
-          senderRole,
-          nameColor,
-          textColor,
-          nameBgColor,
-          neonColor,
-          fontFamily,
-          fontStyle,
-          avatarUrl,
-          avatarFrame,
-          nameplateStyle,
-          msgType,
-          content,
-          mediaUrl,
-          clientMsgId,
-          createdAt: createdAtIso,
-          createdAtMs: nowMs
-        });
-
-        if (msgType === 'text' && content.includes('@')) {
-          const lowerContent = content.toLowerCase();
-          const notifiedKeys = new Set();
-          for (const [sid, onlineEntry] of onlineSockets.entries()) {
-            if (onlineEntry.key === socket.user.key || notifiedKeys.has(onlineEntry.key)) continue;
-            const n1 = (onlineEntry.name || '').trim().toLowerCase();
-            const n2 = (onlineEntry.username || '').trim().toLowerCase();
-            if ((n1 && lowerContent.includes(`@${n1}`)) || (n2 && lowerContent.includes(`@${n2}`))) {
-              notifiedKeys.add(onlineEntry.key);
+      // Check @mentions for notifications & audio alerts
+      if (msgType === 'text' && content.includes('@')) {
+        const mentionedKeys = new Set();
+        for (const other of onlineSockets.values()) {
+          if (other.key === entry.key || isStealthEntry(other)) continue;
+          if (content.includes(`@${other.name}`) || content.includes(`@${other.username}`)) {
+            mentionedKeys.add(other.key);
+          }
+        }
+        for (const tKey of mentionedKeys) {
+          const notif = db.addNotification({
+            targetKey: tKey,
+            title: `🔔 إشارة من ${entry.name}`,
+            body: content.slice(0, 120),
+            category: 'mention'
+          });
+          emitNotificationToUser(io, tKey, notif);
+          for (const [sid, o] of onlineSockets.entries()) {
+            if (o.key === tKey) {
               io.to(sid).emit('mention_alert', {
-                roomId,
-                messageId: saved?.id || liveId,
-                fromKey: socket.user.key,
-                fromName: senderName,
-                text: content.slice(0, 120)
+                fromName: entry.name,
+                roomId: entry.roomId,
+                content: content.slice(0, 120)
               });
             }
           }
         }
-      } catch (err) {
-        console.error('Firestore message persist error:', err);
       }
-    });
+
+      if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg });
+    } catch (err) {
+      console.error('send_message error:', err);
+      if (typeof cb === 'function') cb({ error: 'فشل إرسال الرسالة.' });
+    }
   });
 
-  // Voice Mics 1..5 Events
-  socket.on('mic_take', ({ roomId, slot }) => {
+  socket.on('typing', ({ isTyping } = {}) => {
     const entry = onlineSockets.get(socket.id);
-    const targetRoom = roomId || entry?.roomId;
-    const room = targetRoom ? db.getRoomById(targetRoom) : null;
-    if (!room) return;
-
-    const myRole = entry?.role || socket.user.role;
-    if (room.mics_enabled === 0 && !canDo(myRole, 'access_panel')) {
-      socket.emit('action_error', { message: 'المايكات الصوتية مغلقة حالياً في هذه الغرفة.' });
-      return;
-    }
-
-    const activeMute = db.getActiveMute(socket.user.key, targetRoom);
-    if (activeMute) {
-      socket.emit('action_error', { message: '⚠️ أنت مكتوم من قبل الإدارة ولا يمكنك الصعود على المايك.' });
-      return;
-    }
-
-    const idx = Number(slot) - 1;
-    if (idx < 0 || idx > 4) return;
-
-    const slots = getOrInitMics(targetRoom);
-    if (slots[idx] && slots[idx].key !== socket.user.key) {
-      socket.emit('action_error', { message: `المايك رقم ${slot} مشغول حالياً.` });
-      return;
-    }
-
-    for (let i = 0; i < slots.length; i += 1) {
-      if (slots[i] && slots[i].key === socket.user.key) slots[i] = null;
-    }
-
-    slots[idx] = {
-      slot: idx + 1,
-      key: socket.user.key,
-      name: entry?.name || socket.user.name,
-      role: entry?.role || socket.user.role,
-      avatarUrl: entry?.avatarUrl || socket.user.avatarUrl,
-      avatarFrame: entry?.avatarFrame || socket.user.avatarFrame,
-      isSpeaking: true
-    };
-
-    broadcastRoomMics(targetRoom);
-    io.to(targetRoom).emit('system_notice', {
-      roomId: targetRoom,
-      text: `🎙️ صعد "${slots[idx].name}" على المايك رقم ${idx + 1}.`
+    if (!entry || !entry.roomId || isStealthEntry(entry)) return;
+    socket.to(`room:${entry.roomId}`).emit('user_typing', {
+      roomId: entry.roomId,
+      userKey: entry.key,
+      name: entry.name,
+      isTyping: Boolean(isTyping)
     });
   });
 
-  socket.on('mic_leave', ({ roomId }) => {
+  socket.on('toggle_stealth', async ({ enabled } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
-    const targetRoom = roomId || entry?.roomId;
-    if (targetRoom) {
-      removeUserFromRoomMics(targetRoom, socket.user.key);
+    if (!entry || (entry.role !== 'site_owner' && !db.isSupremeOwnerEmail(entry.email))) {
+      if (typeof cb === 'function') cb({ error: 'وضع التخفي متاح لصاحب الموقع فقط.' });
+      return;
+    }
+    const resStealth = db.setUserStealth(entry.userId, Boolean(enabled));
+    if (resStealth && !resStealth.error) {
+      syncUserAcrossSockets(io, entry.userId);
+      broadcastRoomsList(io);
+      for (const r of db.getAllRooms()) broadcastRoomUsers(io, r.id);
+      await db.flushWrites();
+      if (typeof cb === 'function') cb({ ok: true, isStealth: Boolean(enabled) });
     }
   });
 
-  socket.on('mic_kick_slot', ({ roomId, slot }) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const isRoomMgr = roomId && db.isRoomManager(roomId, socket.user.userId, myRole);
-    if (!canDo(myRole, 'mute') && !canDo(myRole, 'kick') && !isRoomMgr) return;
-    const idx = Number(slot) - 1;
-    if (!roomId || idx < 0 || idx > 4) return;
-    const slots = getOrInitMics(roomId);
-    if (slots[idx]) {
-      const removedKey = slots[idx].key;
-      const meta = getTargetMetadata(removedKey);
-      if ((db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(removedKey)) && !db.isSupremeOwnerEmail(socket.user.email)) {
-        socket.emit('action_error', { message: '🛡️ لا يمكن إنزال صاحب الموقع الأعلى من المايك.' });
-        return;
-      }
-      slots[idx] = null;
-      broadcastRoomMics(roomId);
-      for (const [sid, e] of onlineSockets.entries()) {
-        if (e.key === removedKey) {
-          io.to(sid).emit('mic_force_left', { message: 'تم إنزالك من المايك بواسطة الإدارة.' });
-        }
-      }
-    }
-  });
-
-  socket.on('mic_toggle_enabled', ({ roomId, enabled }) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const isRoomMgr = roomId && db.isRoomManager(roomId, socket.user.userId, myRole);
-    if (!canDo(myRole, 'manage_rooms') && !canDo(myRole, 'access_panel') && !isRoomMgr) return;
-    if (!roomId || !db.getRoomById(roomId)) return;
-    db.updateRoom(roomId, { micsEnabled: Boolean(enabled) });
-    if (!enabled) {
-      roomMics.set(roomId, [null, null, null, null, null]);
-    }
-    broadcastRoomMics(roomId);
-    io.to(roomId).emit('system_notice', {
-      roomId,
-      text: enabled ? '🎙️ قامت الإدارة بفتح المايكات الصوتية في الغرفة.' : '🔇 قامت الإدارة بإغلاق المايكات الصوتية مؤقتاً.'
-    });
-  });
-
-  socket.on('mic_audio_chunk', ({ roomId, slot, audioData }) => {
-    if (!roomId || !audioData) return;
-    const slots = getOrInitMics(roomId);
-    const idx = Number(slot) - 1;
-    if (!slots[idx] || slots[idx].key !== socket.user.key) return;
-    socket.to(roomId).emit('mic_audio_chunk', {
-      roomId,
-      slot,
-      fromKey: socket.user.key,
-      audioData
-    });
-  });
-
-  // Private Chat Read Receipts & Live Voice Call Signaling
-  socket.on('pm_mark_read', ({ partnerKey }) => {
-    if (!partnerKey) return;
-    const updated = db.markPrivateMessagesRead(socket.user.key, String(partnerKey));
-    if (updated > 0) {
-      for (const [sid, e] of onlineSockets.entries()) {
-        if (e.key === partnerKey || e.key === socket.user.key) {
-          io.to(sid).emit('pm_read_receipt', {
-            readerKey: socket.user.key,
-            partnerKey
-          });
-        }
-      }
-    }
-  });
-
-  socket.on('pm_voice_call', ({ toKey, action }) => {
-    if (!toKey || toKey === socket.user.key) return;
+  // ==========================================
+  // MICS 1..5 + REAL WEBRTC AUDIO SIGNALING
+  // ==========================================
+  socket.on('mic_take', ({ slot } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.key === toKey) {
-        io.to(sid).emit('pm_voice_call', {
-          fromKey: socket.user.key,
-          fromName: entry?.name || socket.user.name,
-          fromAvatar: entry?.avatarUrl || socket.user.avatarUrl,
-          action: String(action || 'offer')
-        });
+    if (!entry || !entry.roomId) return;
+    const rm = db.getRoomById(entry.roomId);
+    if (!rm || rm.mics_enabled === 0) {
+      if (typeof cb === 'function') cb({ error: 'المايكات معطلة في هذه الغرفة.' });
+      return;
+    }
+    const slotNum = Number(slot);
+    if (slotNum < 1 || slotNum > 5) return;
+
+    const slots = ensureRoomMicSlots(entry.roomId);
+    const targetSlot = slots.find((s) => s.slot === slotNum);
+    if (!targetSlot) return;
+    if (targetSlot.holderKey && targetSlot.holderKey !== entry.key) {
+      if (typeof cb === 'function') cb({ error: 'هذا المايك محجوز حالياً.' });
+      return;
+    }
+
+    for (const s of slots) {
+      if (s.holderKey === entry.key && s.slot !== slotNum) {
+        s.holderKey = null;
+        s.holderSocketId = null;
+        s.holderName = null;
+        s.holderRole = null;
+        s.holderAvatar = null;
+        s.isSelfMuted = false;
+        s.isAdminMuted = false;
+        s.isSpeaking = false;
       }
     }
+
+    targetSlot.holderKey = entry.key;
+    targetSlot.holderSocketId = socket.id;
+    targetSlot.holderName = entry.name;
+    targetSlot.holderRole = entry.role;
+    targetSlot.holderAvatar = entry.avatarUrl || '';
+    targetSlot.isSelfMuted = false;
+    targetSlot.isAdminMuted = false;
+    targetSlot.isSpeaking = true;
+
+    io.to(`room:${entry.roomId}`).emit('mic_state', {
+      roomId: entry.roomId,
+      slots: getPublicMicSlots(entry.roomId)
+    });
+    if (typeof cb === 'function') cb({ ok: true, slot: slotNum });
   });
 
-  socket.on('pm_voice_chunk', ({ toKey, audioData }) => {
-    if (!toKey || !audioData) return;
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.key === toKey) {
-        io.to(sid).emit('pm_voice_chunk', {
-          fromKey: socket.user.key,
-          audioData
-        });
-      }
-    }
+  socket.on('mic_leave', () => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    releaseUserMicsInRoom(entry.key, entry.roomId);
   });
 
-  // Moderation Handlers (Using Dynamic Rank Permissions Matrix + Room Ownership)
-  function handleMute({ targetKey, roomId, minutes }) {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const isRoomMgr = roomId && db.isRoomManager(roomId, socket.user.userId, myRole);
-    if (!canDo(myRole, 'mute') && !isRoomMgr) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية كتم المستخدمين.' });
-      return;
-    }
-    if (!targetKey) return;
-    const meta = getTargetMetadata(targetKey);
-    if (db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) {
-      socket.emit('action_error', { message: '⛔ لا يمكن كتم المالك الأعلى للموقع.' });
-      return;
-    }
-    if (!canDo(myRole, 'mute') && isRoomMgr) {
-      if (meta.targetRole === 'site_owner' || targetKey === socket.user.key) {
-        socket.emit('action_error', { message: 'لا يمكنك كتم هذا العضو.' });
-        return;
-      }
-    } else if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey, socket.user.email, meta.email)) {
-      socket.emit('action_error', { message: 'لا يمكنك كتم مستخدم برتبة أعلى منك أو مساوية لك.' });
-      return;
-    }
-
-    const scopeRoom = !canDo(myRole, 'mute') && isRoomMgr ? roomId : roomId || '*';
-    const existing = db.getActiveMute(targetKey, scopeRoom);
-    if (existing || minutes === 0) {
-      db.removeMute(targetKey, !canDo(myRole, 'mute') && isRoomMgr ? roomId : '*');
-      for (const [sid, e] of onlineSockets.entries()) {
-        if (e.key === targetKey) {
-          io.to(sid).emit('mute_status', { isMuted: false, expiresAt: null });
-          if (e.roomId) broadcastRoomUsers(e.roomId);
-        }
-      }
-      if (roomId) {
-        io.to(roomId).emit('system_notice', {
-          roomId,
-          text: `🔊 قامت الإدارة بفك الكتم عن "${meta.targetName}".`
-        });
-      }
-      broadcastGlobalOnlineUsers();
-      return;
-    }
-
-    const mins = Math.min(10080, Math.max(1, Number(minutes) || 60));
-    const expiresAt = db.setMute(targetKey, !canDo(myRole, 'mute') && isRoomMgr ? roomId : '*', mins * 60 * 1000, socket.user.name);
-    if (!expiresAt) {
-      socket.emit('action_error', { message: '⛔ لا يمكن كتم المالك الأعلى للموقع.' });
-      return;
-    }
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.key === targetKey) {
-        if (e.roomId) removeUserFromRoomMics(e.roomId, targetKey);
-        io.to(sid).emit('mute_status', { isMuted: true, expiresAt, minutes: mins });
-        if (e.roomId) broadcastRoomUsers(e.roomId);
+  socket.on('mic_toggle_self_mute', ({ muted } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const slots = ensureRoomMicSlots(entry.roomId);
+    let changed = false;
+    for (const s of slots) {
+      if (s.holderKey === entry.key) {
+        s.isSelfMuted = Boolean(muted);
+        s.isSpeaking = !s.isSelfMuted && !s.isAdminMuted;
+        changed = true;
       }
     }
-    const noticeRoom = roomId || onlineSockets.get(socket.id)?.roomId;
-    if (noticeRoom) {
-      io.to(noticeRoom).emit('system_notice', {
-        roomId: noticeRoom,
-        text: `🔇 قام المشرف بكتم "${meta.targetName}" مؤقتاً.`
+    if (changed) {
+      io.to(`room:${entry.roomId}`).emit('mic_state', {
+        roomId: entry.roomId,
+        slots: getPublicMicSlots(entry.roomId)
       });
     }
-    broadcastGlobalOnlineUsers();
-  }
+  });
 
-  function handleKick({ targetKey, roomId }) {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'kick')) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية طرد المستخدمين.' });
-      return;
+  socket.on('mic_admin_mute_slot', ({ slot, muted } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const isMgr =
+      db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
+    if (!isMgr) return;
+    const slots = ensureRoomMicSlots(entry.roomId);
+    const targetSlot = slots.find((s) => s.slot === Number(slot));
+    if (!targetSlot || !targetSlot.holderKey) return;
+    targetSlot.isAdminMuted = Boolean(muted);
+    targetSlot.isSpeaking = !targetSlot.isSelfMuted && !targetSlot.isAdminMuted;
+    if (targetSlot.holderSocketId) {
+      io.to(targetSlot.holderSocketId).emit('mic_force_mute', { muted: targetSlot.isAdminMuted });
     }
-    if (!targetKey) return;
-    const meta = getTargetMetadata(targetKey);
-    if (db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) {
-      socket.emit('action_error', { message: '⛔ لا يمكن طرد المالك الأعلى للموقع.' });
-      return;
-    }
-    if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey, socket.user.email, meta.email)) {
-      socket.emit('action_error', { message: 'لا يمكنك طرد مستخدم برتبة أعلى منك أو مساوية لك.' });
-      return;
-    }
-
-    const noticeRoom = roomId || onlineSockets.get(socket.id)?.roomId;
-    disconnectTargetSockets(targetKey, 'kicked_from_chat', {
-      message: '👢 تم طردك من الشات بواسطة الإدارة'
-    });
-
-    if (noticeRoom && db.getRoomById(noticeRoom)) {
-      io.to(noticeRoom).emit('system_notice', {
-        roomId: noticeRoom,
-        text: `👢 تم طرد "${meta.targetName}" من الشات بواسطة الإدارة.`
-      });
-    }
-  }
-
-  // Room-level kick (used by Room Owners & Room Staff in خيارات الغرفة -> إدارة الإجراءات)
-  socket.on('room_kick_member', ({ roomId, targetKey }) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const targetRoom = roomId || onlineSockets.get(socket.id)?.roomId;
-    if (!targetRoom || !targetKey) return;
-    if (!db.isRoomManager(targetRoom, socket.user.userId, myRole)) {
-      socket.emit('action_error', { message: 'طرد الأعضاء من الغرفة متاح لمالك وطاقم الغرفة فقط.' });
-      return;
-    }
-    const meta = getTargetMetadata(targetKey);
-    if (
-      db.isSupremeOwnerEmail(meta.email) ||
-      db.isProtectedSupremeOwnerKey(targetKey) ||
-      (meta.targetRole === 'site_owner' && !db.isSupremeOwnerEmail(socket.user.email)) ||
-      targetKey === socket.user.key
-    ) {
-      socket.emit('action_error', { message: '⛔ لا يمكنك طرد هذا العضو.' });
-      return;
-    }
-    const fallback = db.getAllRooms().find((r) => r.id !== targetRoom) || db.getRoomById('general');
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.key === targetKey && e.roomId === targetRoom) {
-        removeUserFromRoomMics(targetRoom, targetKey);
-        const ts = io.sockets.sockets.get(sid);
-        if (ts) {
-          if (fallback && fallback.id !== targetRoom) {
-            ts.leave(targetRoom);
-            e.roomId = null;
-            ts.emit('force_join_room', {
-              roomId: fallback.id,
-              message: `👢 تم إبعادك من هذه الغرفة بواسطة إدارة الغرفة.`
-            });
-          } else {
-            ts.emit('kicked_from_chat', { message: '👢 تم طردك من الغرفة بواسطة إدارة الغرفة.' });
-            ts.disconnect(true);
-            onlineSockets.delete(sid);
-          }
-        }
-      }
-    }
-    broadcastRoomUsers(targetRoom);
-    broadcastRoomsList();
-    io.to(targetRoom).emit('system_notice', {
-      roomId: targetRoom,
-      text: `👢 تم إخراج "${meta.targetName}" من الغرفة بواسطة طاقم الغرفة.`
+    io.to(`room:${entry.roomId}`).emit('mic_state', {
+      roomId: entry.roomId,
+      slots: getPublicMicSlots(entry.roomId)
     });
   });
 
-  function handleBan({ targetKey, targetName, reason }) {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'ban')) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية حظر المستخدمين.' });
-      return;
+  socket.on('mic_kick_slot', ({ slot } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const isMgr =
+      db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
+    if (!isMgr) return;
+    const slots = ensureRoomMicSlots(entry.roomId);
+    const targetSlot = slots.find((s) => s.slot === Number(slot));
+    if (!targetSlot || !targetSlot.holderKey) return;
+    const kickedSid = targetSlot.holderSocketId;
+    targetSlot.holderKey = null;
+    targetSlot.holderSocketId = null;
+    targetSlot.holderName = null;
+    targetSlot.holderRole = null;
+    targetSlot.holderAvatar = null;
+    targetSlot.isSelfMuted = false;
+    targetSlot.isAdminMuted = false;
+    targetSlot.isSpeaking = false;
+    if (kickedSid) {
+      io.to(kickedSid).emit('mic_kicked', { byName: entry.name });
     }
-    if (!targetKey) return;
-    const meta = getTargetMetadata(targetKey);
-    if (db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) {
-      socket.emit('action_error', { message: '⛔ لا يمكن حظر المالك الأعلى للموقع.' });
-      return;
-    }
-    if (!canModerate(myRole, meta.targetRole, socket.user.key, targetKey, socket.user.email, meta.email)) {
-      socket.emit('action_error', { message: 'لا يمكنك حظر مستخدم برتبة أعلى منك أو مساوية لك.' });
-      return;
-    }
-
-    const cleanReason = String(reason || '').trim() || 'حظر نهائي بواسطة الإدارة';
-    const banned = db.banTarget({
-      targetKey,
-      targetName: targetName || meta.targetName,
-      email: meta.email,
-      ipAddress: meta.ipAddress,
-      reason: cleanReason,
-      bannedBy: socket.user.name
+    io.to(`room:${entry.roomId}`).emit('mic_state', {
+      roomId: entry.roomId,
+      slots: getPublicMicSlots(entry.roomId)
     });
-    if (!banned) {
-      socket.emit('action_error', { message: '⛔ لا يمكن حظر المالك الأعلى للموقع.' });
-      return;
-    }
-
-    const noticeRoom = onlineSockets.get(socket.id)?.roomId;
-    disconnectTargetSockets(targetKey, 'banned_forever', { reason: cleanReason });
-
-    if (noticeRoom && db.getRoomById(noticeRoom)) {
-      io.to(noticeRoom).emit('system_notice', {
-        roomId: noticeRoom,
-        text: `⛔ تم حظر "${meta.targetName}" نهائياً بواسطة الإدارة.`
-      });
-    }
-    notifyAdminPanelRefresh();
-  }
-
-  socket.on('owner_mute', handleMute);
-  socket.on('admin_mute', handleMute);
-  socket.on('owner_kick', handleKick);
-  socket.on('admin_kick', handleKick);
-  socket.on('owner_ban', handleBan);
-  socket.on('admin_ban', handleBan);
-
-  socket.on('admin_unban', ({ targetKey }) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'ban')) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية فك الحظر.' });
-      return;
-    }
-    if (!targetKey) return;
-    db.unbanTarget(targetKey);
-    socket.emit('action_success', { message: '✅ تم فك الحظر بنجاح.' });
-    notifyAdminPanelRefresh();
   });
 
-  function handleSetRole({ targetUserId, newRole }) {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const actorIsSupreme = db.isSupremeOwnerEmail(socket.user.email);
-    if (!canDo(myRole, 'set_rank') && !actorIsSupreme) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية منح أو تعديل الرتب.' });
-      return;
-    }
-    if (!db.isValidRank(newRole)) {
-      socket.emit('action_error', { message: 'الرتبة المختارة غير صالحة.' });
-      return;
-    }
-
-    const uid = Number(targetUserId);
-    const targetRow = Number.isNaN(uid) ? null : db.findUserById(uid);
-    if (!targetRow) {
-      socket.emit('action_error', { message: 'المستخدم غير موجود.' });
-      return;
-    }
-
-    const targetKey = `user:${targetRow.id}`;
-    if (targetKey === socket.user.key) {
-      socket.emit('action_error', { message: 'لا يمكنك تغيير رتبتك بنفسك.' });
-      return;
-    }
-
-    if (db.isSupremeOwnerEmail(targetRow.email)) {
-      socket.emit('action_error', { message: '⛔ لا يمكن تغيير أو تخفيض رتبة المالك الأعلى للموقع.' });
-      return;
-    }
-
-    if (newRole === 'site_owner' && !actorIsSupreme) {
-      socket.emit('action_error', { message: 'منح رتبة صاحب الموقع متاح للمالك الأعلى فقط.' });
-      return;
-    }
-
-    if (!actorIsSupreme && myRole !== 'site_owner') {
-      if (db.getRankSortWeight(targetRow.role) >= db.getRankSortWeight(myRole)) {
-        socket.emit('action_error', { message: 'لا يمكنك تعديل رتبة مستخدم أعلى منك أو مساوٍ لك.' });
-        return;
-      }
-      if (db.getRankSortWeight(newRole) >= db.getRankSortWeight(myRole)) {
-        socket.emit('action_error', { message: 'لا يمكنك منح رتبة مساوية لرتبتك أو أعلى منها.' });
-        return;
-      }
-    }
-
-    const updated = db.updateUserRole(uid, newRole);
-    if (!updated) {
-      socket.emit('action_error', { message: 'تعذر تحديث رتبة هذا المستخدم.' });
-      return;
-    }
-
-    syncUserAcrossSockets(targetKey, { role: updated.role });
-    io.emit('user_rank_updated', {
-      targetKey,
-      newRole: updated.role,
-      name: db.getEffectiveName(updated)
+  socket.on('mic_webrtc_ready', ({ slot } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    socket.to(`room:${entry.roomId}`).emit('mic_webrtc_peer_ready', {
+      roomId: entry.roomId,
+      slot: Number(slot) || 1,
+      fromSocketId: socket.id,
+      fromKey: entry.key,
+      fromName: entry.name
     });
-    const rankLabel = db.getRankByKey(updated.role)?.label || updated.role;
-    socket.emit('action_success', {
-      message: `✅ تم تحديث رتبة "${db.getEffectiveName(updated)}" إلى ${rankLabel}.`
-    });
-  }
-
-  socket.on('admin_set_role', handleSetRole);
-  socket.on('owner_set_rank', handleSetRole);
-
-  socket.on('admin_rename_user', ({ targetKey, newName }) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const actorIsSupreme = db.isSupremeOwnerEmail(socket.user.email);
-    if (!canDo(myRole, 'set_rank') && myRole !== 'site_owner' && !actorIsSupreme) {
-      socket.emit('action_error', { message: 'تغيير أسماء المستخدمين متاح لمن يملك صلاحية الرتب والمالك فقط.' });
-      return;
-    }
-    const cleanName = String(newName || '').trim().slice(0, 28);
-    if (cleanName.length < 2) {
-      socket.emit('action_error', { message: 'يجب أن يكون الاسم الجديد حرفين على الأقل.' });
-      return;
-    }
-    const meta = getTargetMetadata(targetKey);
-    if ((db.isSupremeOwnerEmail(meta.email) || db.isProtectedSupremeOwnerKey(targetKey)) && targetKey !== socket.user.key) {
-      socket.emit('action_error', { message: '⛔ لا يمكن تغيير اسم المالك الأعلى للموقع.' });
-      return;
-    }
-    if (!actorIsSupreme && myRole !== 'site_owner' && targetKey !== socket.user.key && db.getRankSortWeight(meta.targetRole) >= db.getRankSortWeight(myRole)) {
-      socket.emit('action_error', { message: 'لا يمكنك تغيير اسم مستخدم برتبة أعلى منك أو مساوية لك.' });
-      return;
-    }
-
-    if (targetKey.startsWith('user:')) {
-      const uid = Number(targetKey.replace('user:', ''));
-      const updated = db.forceChangeUserDisplayName(uid, cleanName);
-      if (!updated) {
-        socket.emit('action_error', { message: 'تعذر تحديث اسم المستخدم.' });
-        return;
-      }
-      syncUserAcrossSockets(targetKey, { name: db.getEffectiveName(updated) });
-    } else {
-      syncUserAcrossSockets(targetKey, { name: cleanName });
-    }
-
-    socket.emit('action_success', { message: `✅ تم تغيير الاسم إلى "${cleanName}" بنجاح.` });
   });
 
-  function handleClearRoom({ roomId }) {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const isRoomMgr = roomId && db.isRoomManager(roomId, socket.user.userId, myRole);
-    if (!canDo(myRole, 'clear_room') && !isRoomMgr) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية مسح رسائل الغرف.' });
-      return;
-    }
-    if (!roomId || !db.getRoomById(roomId)) return;
-
-    db.clearRoomMessages(roomId);
-    io.to(roomId).emit('room_cleared', {
-      roomId,
-      message: '🧹 قامت الإدارة بمسح جميع رسائل هذه الغرفة.'
+  socket.on('mic_webrtc_offer', ({ toSocketId, sdp, slot } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !toSocketId || !sdp) return;
+    io.to(toSocketId).emit('mic_webrtc_offer', {
+      fromSocketId: socket.id,
+      fromKey: entry.key,
+      fromName: entry.name,
+      slot: Number(slot) || 1,
+      sdp
     });
-  }
+  });
 
-  socket.on('owner_clear_room', handleClearRoom);
-  socket.on('admin_clear_room', handleClearRoom);
-
-  function sanitizeRoomFields(data) {
-    const safeImg =
-      data.imageUrl && (data.imageUrl.startsWith('/uploads/rooms/') || data.imageUrl.startsWith('/assets/rooms/'))
-        ? data.imageUrl
-        : undefined;
-    const safeWallpaper =
-      data.wallpaperUrl === undefined
-        ? undefined
-        : data.wallpaperUrl === '' || String(data.wallpaperUrl).startsWith('/uploads/wallpapers/')
-          ? String(data.wallpaperUrl)
-          : undefined;
-
-    return {
-      safeImg,
-      safeWallpaper,
-      bgCustom: data.bgCustom !== undefined ? String(data.bgCustom).trim().slice(0, 180) : undefined,
-      cardBgColor: data.cardBgColor !== undefined ? String(data.cardBgColor).trim() : undefined,
-      cardTextColor: data.cardTextColor !== undefined ? String(data.cardTextColor).trim() : undefined,
-      welcomeMessage: data.welcomeMessage !== undefined ? String(data.welcomeMessage).trim().slice(0, 250) : undefined,
-      roomPassword: data.roomPassword !== undefined ? String(data.roomPassword).trim().slice(0, 40) : undefined,
-      minRankPower: data.minRankPower !== undefined ? Math.max(0, Math.min(100, Number(data.minRankPower) || 0)) : undefined,
-      ownerUserId: data.ownerUserId !== undefined ? (data.ownerUserId ? Number(data.ownerUserId) : null) : undefined
-    };
-  }
-
-  function handleCreateRoom(data = {}) {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'manage_rooms')) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية إنشاء الغرف.' });
-      return;
-    }
-    const cleanName = String(data.name || '').trim();
-    if (cleanName.length < 2 || cleanName.length > 40) {
-      socket.emit('action_error', { message: 'اسم الغرفة يجب أن يكون بين 2 و 40 حرفاً.' });
-      return;
-    }
-
-    const parsed = sanitizeRoomFields(data);
-    const id = `room-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`;
-    const created = db.createRoom({
-      id,
-      name: cleanName,
-      description: String(data.description || '').trim().slice(0, 120),
-      icon: String(data.icon || '💬').trim().slice(0, 4) || '💬',
-      imageUrl: parsed.safeImg || '/assets/rooms/default.svg',
-      bgTheme: VALID_THEMES.has(data.bgTheme) ? data.bgTheme : 'warm_peach',
-      wallpaperUrl: parsed.safeWallpaper || '',
-      bgCustom: parsed.bgCustom || '',
-      cardBgColor: parsed.cardBgColor || '',
-      cardTextColor: parsed.cardTextColor || '',
-      welcomeMessage: parsed.welcomeMessage || '',
-      roomPassword: parsed.roomPassword || '',
-      minRankPower: parsed.minRankPower || 0,
-      ownerUserId: parsed.ownerUserId || null,
-      createdBy: socket.user.name
+  socket.on('mic_webrtc_answer', ({ toSocketId, sdp } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !toSocketId || !sdp) return;
+    io.to(toSocketId).emit('mic_webrtc_answer', {
+      fromSocketId: socket.id,
+      fromKey: entry.key,
+      sdp
     });
+  });
 
-    broadcastRoomsList();
-    notifyAdminPanelRefresh();
-    socket.emit('room_created', db.sanitizeRoomForPublic(created));
-  }
+  socket.on('mic_webrtc_ice', ({ toSocketId, candidate } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !toSocketId || !candidate) return;
+    io.to(toSocketId).emit('mic_webrtc_ice', {
+      fromSocketId: socket.id,
+      candidate
+    });
+  });
 
-  socket.on('owner_create_room', handleCreateRoom);
-  socket.on('admin_create_room', handleCreateRoom);
-
-  socket.on('admin_update_room', (data = {}) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    const { roomId, name, description, icon, bgTheme } = data;
-    if (!roomId || !db.getRoomById(roomId)) {
-      socket.emit('action_error', { message: 'الغرفة غير موجودة.' });
+  // ==========================================
+  // SYNCHRONIZED ROOM YOUTUBE PLAYER
+  // ==========================================
+  socket.on('room_youtube_set', async ({ roomId, url, title, isPlaying } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    const targetRoomId = roomId || entry?.roomId;
+    if (!entry || !targetRoomId) return;
+    if (!db.isRoomManager(targetRoomId, entry.userId, entry.role)) {
+      if (typeof cb === 'function') cb({ error: 'تشغيل يوتيوب الغرفة متاح لمالك الغرفة والإدارة فقط.' });
       return;
     }
-    const isRoomMgr = db.isRoomManager(roomId, socket.user.userId, myRole);
-    if (!canDo(myRole, 'manage_rooms') && !isRoomMgr) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية تعديل الغرف.' });
+
+    const rawUrl = String(url || '').trim();
+    const videoId = rawUrl === '' ? '' : extractYouTubeId(rawUrl);
+    if (rawUrl !== '' && !videoId) {
+      if (typeof cb === 'function') cb({ error: 'رابط يوتيوب غير صالح. أرسل رابط فيديو يوتيوب صحيح.' });
       return;
     }
-    const parsed = sanitizeRoomFields(data);
-    const updated = db.updateRoom(roomId, {
-      name,
-      description,
-      icon,
-      imageUrl: parsed.safeImg,
-      bgTheme: VALID_THEMES.has(bgTheme) ? bgTheme : undefined,
-      wallpaperUrl: parsed.safeWallpaper,
-      bgCustom: parsed.bgCustom,
-      cardBgColor: parsed.cardBgColor,
-      cardTextColor: parsed.cardTextColor,
-      welcomeMessage: parsed.welcomeMessage,
-      roomPassword: parsed.roomPassword,
-      minRankPower: parsed.minRankPower,
-      ownerUserId: canDo(myRole, 'manage_rooms') ? parsed.ownerUserId : undefined
+
+    const updated = db.setRoomYoutube(targetRoomId, {
+      videoId,
+      title: String(title || (videoId ? 'فيديو يوتيوب الغرفة' : '')).slice(0, 120),
+      isPlaying: Boolean(videoId && isPlaying !== false)
     });
     if (!updated) return;
 
-    const pubRoom = db.sanitizeRoomForPublic(updated);
-    broadcastRoomsList();
-    io.to(roomId).emit('room_updated', pubRoom);
-    notifyAdminPanelRefresh();
-    socket.emit('action_success', { message: `✅ تم تحديث غرفة "${updated.name}" بالكامل.` });
+    const pub = db.sanitizeRoomForPublic(updated);
+    io.to(`room:${targetRoomId}`).emit('room_youtube_updated', {
+      roomId: targetRoomId,
+      youtubeVideoId: pub.youtube_video_id,
+      youtubeTitle: pub.youtube_title,
+      youtubeIsPlaying: Boolean(pub.youtube_is_playing),
+      byName: entry.name
+    });
+    broadcastRoomsList(io);
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true, room: pub });
   });
 
-  socket.on('admin_delete_room', ({ roomId }) => {
-    const myRole = onlineSockets.get(socket.id)?.role || socket.user.role;
-    if (!canDo(myRole, 'manage_rooms')) {
-      socket.emit('action_error', { message: 'ليس لديك صلاحية حذف الغرف.' });
-      return;
-    }
-    const allRooms = db.getAllRooms();
-    if (allRooms.length <= 1) {
-      socket.emit('action_error', { message: 'لا يمكن حذف آخر غرفة متبقية في الشات.' });
-      return;
-    }
-    const target = db.getRoomById(roomId);
-    if (!target) return;
+  // ==========================================
+  // PRIVATE MESSAGES
+  // ==========================================
+  socket.on('send_pm', async ({ toKey, toName, content } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    const clean = String(content || '').trim().slice(0, 800);
+    if (!entry || !toKey || !clean) return;
+    const pm = db.addPrivateMessage({
+      fromKey: entry.key,
+      fromName: entry.name,
+      fromRole: entry.role,
+      fromAvatar: entry.avatarUrl,
+      toKey,
+      toName: toName || 'عضو',
+      content: clean
+    });
+    const notif = db.addNotification({
+      targetKey: toKey,
+      title: `✉️ رسالة خاصة من ${entry.name}`,
+      body: clean.slice(0, 120),
+      category: 'pm'
+    });
+    emitNotificationToUser(io, toKey, notif);
 
-    const fallback = allRooms.find((r) => r.id !== roomId);
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.roomId === roomId) {
-        const s = io.sockets.sockets.get(sid);
-        if (s && fallback) {
-          s.leave(roomId);
-          e.roomId = null;
-          s.emit('force_join_room', {
-            roomId: fallback.id,
-            message: `تم حذف غرفة "${target.name}" ونقلك إلى "${fallback.name}".`
-          });
+    for (const [sid, o] of onlineSockets.entries()) {
+      if (o.key === toKey || o.key === entry.key) {
+        io.to(sid).emit('new_pm', pm);
+      }
+    }
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true, pm });
+  });
+
+  socket.on('mark_pm_read', async ({ partnerKey } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !partnerKey) return;
+    db.markPrivateMessagesRead(entry.key, partnerKey);
+    await db.flushWrites();
+  });
+
+  // ==========================================
+  // MODERATION SOCKET ACTIONS
+  // ==========================================
+  socket.on('admin_mute', async ({ targetKey, minutes = 10, unmute = false } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
+    if (!isMgr) return;
+    if (db.isProtectedSupremeOwnerKey(targetKey)) {
+      socket.emit('error_toast', { message: 'لا يمكن كتم صاحب الموقع.' });
+      return;
+    }
+
+    if (unmute) {
+      db.removeMute(targetKey, entry.roomId);
+      io.to(`room:${entry.roomId}`).emit('room_notice', {
+        roomId: entry.roomId,
+        text: `🔊 قام "${entry.name}" بفك الكتم عن العضو.`
+      });
+    } else {
+      const mins = Math.max(1, Math.min(1440, Number(minutes) || 10));
+      db.setMute(targetKey, entry.roomId, mins * 60 * 1000, entry.name);
+      releaseUserMicsInRoom(targetKey, entry.roomId);
+      io.to(`room:${entry.roomId}`).emit('room_notice', {
+        roomId: entry.roomId,
+        text: `🔇 قام "${entry.name}" بكتم عضو لمدة ${mins} دقيقة.`
+      });
+    }
+    await db.flushWrites();
+  });
+
+  socket.on('admin_kick', ({ targetKey } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
+    if (!isMgr || db.isProtectedSupremeOwnerKey(targetKey)) return;
+
+    for (const [sid, o] of onlineSockets.entries()) {
+      if (o.key === targetKey && o.roomId === entry.roomId) {
+        if (entry.role !== 'site_owner' && db.getRankPower(o.role) >= db.getRankPower(entry.role)) {
+          socket.emit('error_toast', { message: 'لا يمكنك طرد رتبة أعلى منك أو مساوية لك.' });
+          return;
         }
+        io.to(sid).emit('kicked', { reason: `تم طردك من الغرفة بواسطة ${entry.name}` });
+        const s = io.sockets.sockets.get(sid);
+        if (s) s.disconnect(true);
+      }
+    }
+  });
+
+  socket.on('admin_ban', async ({ targetKey, reason = 'حظر إداري' } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'ban'))) return;
+    if (db.isProtectedSupremeOwnerKey(targetKey)) return;
+
+    let targetName = targetKey;
+    let targetEmail = '';
+    let targetIp = '';
+    for (const o of onlineSockets.values()) {
+      if (o.key === targetKey) {
+        if (entry.role !== 'site_owner' && db.getRankPower(o.role) >= db.getRankPower(entry.role)) {
+          socket.emit('error_toast', { message: 'لا يمكنك حظر رتبة أعلى منك أو مساوية لك.' });
+          return;
+        }
+        targetName = o.name;
+        targetEmail = o.email || '';
+        targetIp = o.ipAddress || '';
+        break;
       }
     }
 
-    db.deleteRoom(roomId);
-    roomMics.delete(roomId);
-    broadcastRoomsList();
-    broadcastGlobalOnlineUsers();
-    socket.emit('action_success', { message: `🗑️ تم حذف غرفة "${target.name}".` });
+    db.banTarget({ targetKey, targetName, email: targetEmail, ipAddress: targetIp, reason, bannedBy: entry.name });
+    for (const [sid, o] of onlineSockets.entries()) {
+      if (o.key === targetKey) {
+        io.to(sid).emit('kicked', { reason: `تم حظرك: ${reason}` });
+        const s = io.sockets.sockets.get(sid);
+        if (s) s.disconnect(true);
+      }
+    }
+    await db.flushWrites();
   });
 
-  socket.on('disconnect', (reason) => {
+  socket.on('admin_set_role', async ({ userId, newRole } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
-    onlineSockets.delete(socket.id);
-
-    const isExplicitLeave =
-      reason === 'client namespace disconnect' || reason === 'server namespace disconnect';
-
-    if (entry && entry.roomId) {
-      if (isExplicitLeave) {
-        clearReconnectGrace(entry.key);
-        removeUserFromRoomMics(entry.roomId, entry.key);
-        broadcastRoomUsers(entry.roomId);
-        broadcastRoomsList();
-        broadcastGlobalOnlineUsers();
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'set_rank'))) {
+      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية تعديل الرتب.' });
+      return;
+    }
+    const target = db.findUserById(userId);
+    if (!target) return;
+    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
+      if (typeof cb === 'function') cb({ error: 'صاحب الموقع محمي ولا يمكن تغيير رتبته.' });
+      return;
+    }
+    const myPower = db.getRankPower(entry.role);
+    const maxAssign = db.getMaxAssignablePower(entry.role);
+    const newPower = db.getRankPower(newRole);
+    if (entry.role !== 'site_owner') {
+      if (db.getRankPower(target.role) >= myPower) {
+        if (typeof cb === 'function') cb({ error: 'لا يمكنك تعديل رتبة مساوية لك أو أعلى منك.' });
         return;
       }
-
-      // Allow 30s grace window for auto-reconnect so idle blips/tab switches never disrupt user presence
-      const hasOtherActiveSocket = [...onlineSockets.values()].some((e) => e.key === entry.key);
-      if (!hasOtherActiveSocket) {
-        clearReconnectGrace(entry.key);
-        const leftRoomId = entry.roomId;
-        const leftKey = entry.key;
-        const expiresAt = Date.now() + 30000;
-        const timer = setTimeout(() => {
-          reconnectGrace.delete(leftKey);
-          const stillOnline = [...onlineSockets.values()].some((e) => e.key === leftKey);
-          if (!stillOnline) {
-            removeUserFromRoomMics(leftRoomId, leftKey);
-            broadcastRoomUsers(leftRoomId);
-            broadcastRoomsList();
-            broadcastGlobalOnlineUsers();
-          }
-        }, 30000);
-        reconnectGrace.set(leftKey, { roomId: leftRoomId, expiresAt, timer });
+      if (newPower > maxAssign) {
+        if (typeof cb === 'function') cb({ error: `سقف الترقية الأقصى المتاح لك هو (${maxAssign}).` });
+        return;
       }
-      broadcastRoomUsers(entry.roomId);
-      broadcastRoomsList();
     }
-    broadcastGlobalOnlineUsers();
-  });
-});
 
-app.use((err, _req, res, _next) => {
-  console.error('Express error:', err);
-  res.status(500).json({ error: err.message || 'خطأ في الخادم' });
-});
-
-let isShuttingDown = false;
-async function shutdownGracefully(signal) {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-  console.log(`Received ${signal}, flushing Firestore writes...`);
-  try {
+    const updated = db.updateUserRole(userId, newRole);
+    if (!updated) return;
+    syncUserAcrossSockets(io, userId);
+    const rank = db.getRankByKey(newRole);
+    if (entry.roomId) {
+      io.to(`room:${entry.roomId}`).emit('room_notice', {
+        roomId: entry.roomId,
+        text: `🎖️ تم ترقية/تعديل رتبة "${db.getEffectiveName(updated)}" إلى (${rank.icon} ${rank.label}) بواسطة ${entry.name}.`
+      });
+    }
     await db.flushWrites();
-  } catch (err) {
-    console.error('Error flushing Firestore writes on shutdown:', err);
-  }
-  server.close(() => {
-    process.exit(0);
+    if (typeof cb === 'function') cb({ ok: true });
   });
-  setTimeout(() => process.exit(0), 4000).unref();
+
+  socket.on('admin_force_name', async ({ userId, newDisplayName } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel'))) return;
+    const target = db.findUserById(userId);
+    if (!target) return;
+    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) return;
+    db.forceChangeUserDisplayName(userId, newDisplayName);
+    syncUserAcrossSockets(io, userId);
+    await db.flushWrites();
+  });
+
+  socket.on('admin_give_coins', async ({ userId, amount } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || entry.role !== 'site_owner') return;
+    const delta = Number(amount) || 0;
+    if (!delta) return;
+    const updated = db.adjustUserCoins(userId, delta);
+    if (!updated) return;
+    syncUserAcrossSockets(io, userId);
+    await db.flushWrites();
+  });
+
+  socket.on('admin_clear_room', async () => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'clear_room');
+    if (!isMgr) return;
+    db.clearRoomMessages(entry.roomId);
+    io.to(`room:${entry.roomId}`).emit('room_cleared', { roomId: entry.roomId, byName: entry.name });
+    await db.flushWrites();
+  });
+
+  socket.on('admin_room_update', async (payload = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    const rid = payload.roomId || entry?.roomId;
+    if (!entry || !rid) return;
+    if (!db.isRoomManager(rid, entry.userId, entry.role)) {
+      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية تعديل هذه الغرفة.' });
+      return;
+    }
+    const updated = db.updateRoom(rid, payload);
+    if (!updated) return;
+    io.to(`room:${rid}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
+    broadcastRoomsList(io);
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry) return;
+    const oldRoomId = entry.roomId;
+    const key = entry.key;
+    onlineSockets.delete(socket.id);
+    releaseUserMicsInRoom(key, oldRoomId);
+
+    // Grace period keeps transient disconnect silent without emitting any leave notice
+    const prevGrace = pendingGrace.get(key);
+    if (prevGrace) clearTimeout(prevGrace.timeout);
+
+    const timeout = setTimeout(() => {
+      pendingGrace.delete(key);
+      broadcastRoomUsers(io, oldRoomId);
+      broadcastGlobalOnlineUsers(io);
+      broadcastRoomsList(io);
+      io.emit('persistent_members', buildPersistentMembersList());
+    }, 25000);
+
+    pendingGrace.set(key, { timeout, lastRoomId: oldRoomId });
+    broadcastRoomUsers(io, oldRoomId);
+    broadcastGlobalOnlineUsers(io);
+    broadcastRoomsList(io);
+  });
+});
+
+// ==========================================
+// STARTUP
+// ==========================================
+async function start() {
+  await db.init({
+    onExternalMessage: (msg) => {
+      if (msg && msg.room_id) io.to(`room:${msg.room_id}`).emit('new_message', msg);
+    },
+    onRanksChanged: (ranks) => {
+      io.emit('ranks_updated', ranks);
+    },
+    onRoomsChanged: () => {
+      broadcastRoomsList(io);
+    },
+    onSettingsChanged: (settings) => {
+      io.emit('site_settings_updated', settings);
+    },
+    onEmojisChanged: (emojis) => {
+      io.emit('emojis_updated', emojis);
+    },
+    onUsersChanged: () => {
+      io.emit('persistent_members', buildPersistentMembersList());
+    }
+  });
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Arabic CodyChat Server listening on http://0.0.0.0:${PORT}`);
+  });
 }
 
-process.on('SIGTERM', () => shutdownGracefully('SIGTERM'));
-process.on('SIGINT', () => shutdownGracefully('SIGINT'));
-
-async function startServer() {
-  try {
-    await db.init({
-      onExternalMessage: (msg) => {
-        if (msg && msg.room_id) {
-          io.to(msg.room_id).emit('new_message', msg);
-        }
-      },
-      onRanksChanged: () => {
-        io.emit('ranks_updated', db.getAllRanks());
-      },
-      onRoomsChanged: () => {
-        broadcastRoomsList();
-      },
-      onSettingsChanged: () => {
-        io.emit('site_settings_updated', db.getSiteSettings());
-      },
-      onEmojisChanged: () => {
-        io.emit('emojis_updated', db.getAllCustomEmojis());
-      }
-    });
-
-    server.listen(PORT, HOST, () => {
-      console.log(`Arabic Realtime Chat listening on http://${HOST}:${PORT} (Firestore: ${db.getStorageStatus().databaseId})`);
-    });
-  } catch (err) {
-    console.error('Failed to initialize Cloud Firestore backend:', err);
-    process.exit(1);
-  }
-}
-
-startServer();
+start().catch((err) => {
+  console.error('Fatal server startup error:', err);
+  process.exit(1);
+});

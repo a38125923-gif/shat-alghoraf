@@ -1,6 +1,10 @@
 {
-  "name": "شات الغرف",
-  "description": "تطبيق شات ودردشة كتابية حية بغرف متعددة، ورتب ومشرفين وأدمن، وتحكم كامل للمالك.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "شات الغرف المباشر",
+  "description": "تطبيق شات عربي فوري احترافي بنمط CodyChat مع مايكات صوتية WebRTC، نظام رتب وصلاحيات كامل، هدايا، أخبار، وتخزين سحابي دائم عبر Firebase Firestore",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
