@@ -79,5 +79,6 @@ dependencies {
     implementation(libs.androidx.credentials.play.services)
     implementation(libs.googleid)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

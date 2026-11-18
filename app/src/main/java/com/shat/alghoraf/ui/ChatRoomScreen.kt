@@ -42,8 +42,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
@@ -57,17 +59,25 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -147,9 +157,14 @@ fun ChatRoomScreen(
     val notifsState by viewModel.notifications.collectAsStateWithLifecycle()
     val reportsState by viewModel.reports.collectAsStateWithLifecycle()
     val bansState by viewModel.bans.collectAsStateWithLifecycle()
+    val giftTxState by viewModel.giftTransactions.collectAsStateWithLifecycle()
     val toastMsg by viewModel.toastMessage.collectAsStateWithLifecycle()
     val giftCelebration by viewModel.giftCelebration.collectAsStateWithLifecycle()
     val liveMicLevel by viewModel.liveMicLevel.collectAsStateWithLifecycle()
+    val isRadioPlaying by viewModel.isRadioPlaying.collectAsStateWithLifecycle()
+    val selectedRadioStation by viewModel.selectedRadioStation.collectAsStateWithLifecycle()
+    val youtubeResults by viewModel.youtubeSearchResults.collectAsStateWithLifecycle()
+    val isSearchingYoutube by viewModel.isSearchingYoutube.collectAsStateWithLifecycle()
 
     val isSupremeOwner = DefaultCatalogs.isSupremeOwnerEmail(viewModel.currentUserEmail)
     val myProfile = (myProfileState as? UiState.Success)?.data ?: PublicProfile(
@@ -173,7 +188,15 @@ fun ChatRoomScreen(
     val notifications = (notifsState as? UiState.Success)?.data.orEmpty()
     val unreadNotifCount = notifications.count { !it.isRead }
     val bans = (bansState as? UiState.Success)?.data.orEmpty()
-    val isBanned = myPrivate?.isBanned == true || bans.any { it.targetUserId == viewModel.currentUserId && it.isActive }
+    val friendships = (friendsState as? UiState.Success)?.data.orEmpty()
+    val giftTransactions = (giftTxState as? UiState.Success)?.data.orEmpty()
+    val wallPosts = (wallState as? UiState.Success)?.data.orEmpty()
+    val isXBannedMatch = myPrivate?.isXBanned == true ||
+        myProfile.isXBanned ||
+        bans.any { it.isActive && it.banType == "xban" && viewModel.deviceId.isNotBlank() && it.deviceId == viewModel.deviceId }
+    val isBanned = myPrivate?.isBanned == true ||
+        isXBannedMatch ||
+        bans.any { it.targetUserId == viewModel.currentUserId && it.isActive }
 
     // UI Modal States
     var showProfileDialog by remember { mutableStateOf(false) }
@@ -189,8 +212,9 @@ fun ChatRoomScreen(
 
     var micsExpanded by remember { mutableStateOf(true) }
     var showTopicBanner by remember { mutableStateOf(true) }
-    var radioPlaying by remember { mutableStateOf(false) }
+    var showRadioMenu by remember { mutableStateOf(false) }
     var showEmojiBar by remember { mutableStateOf(false) }
+    var selectedEmojiTab by remember { mutableStateOf("وجوه") }
     var showPlusMenu by remember { mutableStateOf(false) }
     var asAdminNotice by remember { mutableStateOf(false) }
     var draftMessage by remember { mutableStateOf("") }
@@ -273,6 +297,10 @@ fun ChatRoomScreen(
         }
     }
 
+    LaunchedEffect(myProfile.kickedFromRoom) {
+        viewModel.handleKickedCheck(myProfile.kickedFromRoom)
+    }
+
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -287,7 +315,13 @@ fun ChatRoomScreen(
         ) {
             Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("🚫 تم حظر حسابك", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = CrimsonOwner)
+                    Icon(Icons.Default.Block, contentDescription = null, tint = CrimsonOwner, modifier = Modifier.size(44.dp))
+                    Text(
+                        text = if (isXBannedMatch) "تم حظر الجهاز والحساب (X-Ban)" else "تم حظر حسابك",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp,
+                        color = CrimsonOwner
+                    )
                     Text("السبب: ${myPrivate?.banReason?.ifBlank { "مخالفة القوانين" } ?: "مخالفة القوانين"}")
                     androidx.compose.material3.Button(onClick = {
                         GoogleAuthManager.signOut(credentialManager, scope)
@@ -305,7 +339,10 @@ fun ChatRoomScreen(
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
                 Column(modifier = Modifier.fillMaxHeight().padding(14.dp)) {
-                    Text("🏠 غرف الشات (${allRooms.size})", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = RoyalBlue)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.Home, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(18.dp))
+                        Text("غرف الشات (${allRooms.size})", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = RoyalBlue)
+                    }
                     Spacer(Modifier.height(8.dp))
                     allRooms.forEach { rm ->
                         NavigationDrawerItem(
@@ -318,17 +355,24 @@ fun ChatRoomScreen(
                                     viewModel.showNotice("تتطلب هذه الغرفة رتبة بقوة ${rm.minRankPower}+")
                                 }
                             },
+                            icon = { Icon(Icons.Default.Forum, contentDescription = null, tint = if (rm.id == activeRoomId) RoyalBlue else Color(0xFF64748B), modifier = Modifier.size(18.dp)) },
                             label = {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                    Text("${rm.icon} ${rm.name}", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text("${rm.activityPoints}⭐", fontSize = 11.sp, color = RoyalGold)
+                                    Text(rm.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text("${rm.activityPoints}", fontSize = 11.sp, color = RoyalGold, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = RoyalGold, modifier = Modifier.size(13.dp))
+                                    }
                                 }
                             },
                             modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
-                    Text("🟢 المتصلون الآن (${visibleProfiles.count { it.isOnline }})", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = RoyalBlue)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(GreenAccent))
+                        Text("المتصلون الآن (${visibleProfiles.count { it.isOnline }})", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = RoyalBlue)
+                    }
                     Spacer(Modifier.height(6.dp))
                     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(visibleProfiles) { u ->
@@ -367,7 +411,10 @@ fun ChatRoomScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("👻 وضع التخفي للمالك", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF92400E))
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = Color(0xFF92400E), modifier = Modifier.size(16.dp))
+                                    Text("وضع التخفي للمالك", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF92400E))
+                                }
                                 androidx.compose.material3.Switch(
                                     checked = myProfile.isStealth,
                                     onCheckedChange = { viewModel.toggleStealth(it) },
@@ -384,7 +431,7 @@ fun ChatRoomScreen(
                                 showRoomOwnerDialog = true
                             },
                             icon = { Icon(Icons.Default.Settings, contentDescription = null, tint = RoyalGold) },
-                            label = { Text("👑 إدارة الغرفة الحالية", fontWeight = FontWeight.Bold) }
+                            label = { Text("إدارة الغرفة الحالية", fontWeight = FontWeight.Bold) }
                         )
                     }
                     NavigationDrawerItem(
@@ -394,7 +441,7 @@ fun ChatRoomScreen(
                             showSocialTab = 4
                         },
                         icon = { Icon(Icons.Default.Newspaper, contentDescription = null, tint = RoyalBlue) },
-                        label = { Text("📰 الأخبار والإعلانات", fontWeight = FontWeight.SemiBold) }
+                        label = { Text("الأخبار والإعلانات", fontWeight = FontWeight.SemiBold) }
                     )
                     NavigationDrawerItem(
                         selected = false,
@@ -403,7 +450,7 @@ fun ChatRoomScreen(
                             showReportDialog = true
                         },
                         icon = { Icon(Icons.Default.Report, contentDescription = null, tint = CrimsonOwner) },
-                        label = { Text("🚨 إبلاغ الإدارة", fontWeight = FontWeight.SemiBold) }
+                        label = { Text("إبلاغ الإدارة", fontWeight = FontWeight.SemiBold) }
                     )
                     if (myRank.permAccessPanel || isSupremeOwner) {
                         NavigationDrawerItem(
@@ -476,8 +523,8 @@ fun ChatRoomScreen(
                             horizontalArrangement = Arrangement.spacedBy(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            HeaderRankAction(label = "الاثرياء", emoji = "👑", tintBg = Color(0x33F59E0B)) { showLeaderboardTab = 0 }
-                            HeaderRankAction(label = "الكبار", emoji = "🔶", tintBg = Color(0x33F97316)) { showLeaderboardTab = 1 }
+                            HeaderRankAction(label = "الاثرياء", icon = Icons.Default.WorkspacePremium, iconTint = RoyalGold, tintBg = Color(0x33F59E0B)) { showLeaderboardTab = 0 }
+                            HeaderRankAction(label = "الكبار", icon = Icons.Default.Diamond, iconTint = Color(0xFFFB923C), tintBg = Color(0x33F97316)) { showLeaderboardTab = 1 }
                         }
 
                         Spacer(Modifier.width(6.dp))
@@ -587,20 +634,80 @@ fun ChatRoomScreen(
                     }
 
                     AnimatedVisibility(visible = showEmojiBar) {
-                        Row(
+                        val emojiTabs = listOf("وجوه", "قلوب", "رموز", "احتفالات", "متحركة")
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color.White)
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                .border(0.5.dp, Color(0xFFE2E8F0))
                         ) {
-                            DefaultCatalogs.quickEmojis.forEach { emoji ->
-                                Text(
-                                    text = emoji,
-                                    fontSize = 22.sp,
-                                    modifier = Modifier.clickable { draftMessage += emoji }
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                emojiTabs.forEach { cat ->
+                                    val selected = selectedEmojiTab == cat
+                                    FilterChip(
+                                        selected = selected,
+                                        onClick = { selectedEmojiTab = cat },
+                                        label = { Text(cat, fontSize = 11.5.sp, fontWeight = FontWeight.Bold) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = CodyHeaderNavy,
+                                            selectedLabelColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = Color(0xFFECEFF1))
+                            if (selectedEmojiTab == "متحركة") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    DefaultCatalogs.animatedStickers.forEach { sticker ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xFFF8FAFC))
+                                                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    viewModel.sendMessage(text = sticker.glyph, msgType = "sticker")
+                                                    showEmojiBar = false
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(sticker.glyph, fontSize = 26.sp)
+                                            Text(sticker.label, fontSize = 10.sp, color = Color(0xFF475569), fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                            } else {
+                                val list = DefaultCatalogs.emojiCategories[selectedEmojiTab] ?: DefaultCatalogs.quickEmojis
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    list.forEach { emoji ->
+                                        Text(
+                                            text = emoji,
+                                            fontSize = 24.sp,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable { draftMessage += emoji }
+                                                .padding(2.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -792,29 +899,62 @@ fun ChatRoomScreen(
                             }
 
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 FooterNavAction(Icons.Default.Refresh, "تحديث") {
                                     viewModel.refreshActiveRoom()
                                 }
+                                Box {
+                                    FooterNavAction(Icons.Default.Radio, "الإذاعات") {
+                                        showRadioMenu = true
+                                    }
+                                    DropdownMenu(
+                                        expanded = showRadioMenu,
+                                        onDismissRequest = { showRadioMenu = false }
+                                    ) {
+                                        DefaultCatalogs.radioStations.forEach { station ->
+                                            val isCurrent = selectedRadioStation.id == station.id
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(
+                                                            text = station.name,
+                                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                                            color = if (isCurrent) RoyalBlue else Color(0xFF0F172A),
+                                                            fontSize = 13.sp
+                                                        )
+                                                        Text(station.genre, fontSize = 10.sp, color = Color(0xFF64748B))
+                                                    }
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Radio,
+                                                        contentDescription = null,
+                                                        tint = if (isCurrent && isRadioPlaying) GreenAccent else RoyalGold
+                                                    )
+                                                },
+                                                onClick = {
+                                                    viewModel.selectRadioStation(station)
+                                                    showRadioMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                                 Box(
                                     modifier = Modifier
                                         .size(34.dp)
                                         .clip(CircleShape)
-                                        .background(GreenAccent)
-                                        .border(1.5.dp, Color(0xFF86EFAC), CircleShape)
-                                        .clickable {
-                                            radioPlaying = !radioPlaying
-                                            val track = myProfile.profileMusic.ifBlank { "preset:calm_lofi" }
-                                            viewModel.previewProfileMusic(if (radioPlaying) track else "")
-                                            viewModel.showNotice(if (radioPlaying) "📻 تم تشغيل الراديو" else "⏹️ تم إيقاف الراديو")
-                                        },
+                                        .background(if (isRadioPlaying) Color(0xFF16A34A) else GreenAccent)
+                                        .border(1.5.dp, if (isRadioPlaying) RoyalGold else Color(0xFF86EFAC), CircleShape)
+                                        .clickable { viewModel.toggleRadio() }
+                                        .testTag("footer_radio_toggle"),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = if (radioPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "الراديو",
+                                        imageVector = if (isRadioPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "تشغيل أو إيقاف الراديو",
                                         tint = Color.White,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -884,7 +1024,7 @@ fun ChatRoomScreen(
                             Text(state.message, color = if (isDarkTheme) Color.White else CrimsonOwner)
                         }
                         is UiState.Success -> {
-                            val msgs = state.data
+                            val msgs = state.data.filter { !it.isGhostOnly || it.senderId == viewModel.currentUserId }
                             if (msgs.isEmpty()) {
                                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                                     Text(
@@ -975,15 +1115,43 @@ fun ChatRoomScreen(
     if (showProfileDialog) {
         ProfileCustomizerDialog(
             profile = myProfile,
+            allProfiles = allProfiles,
+            friendships = friendships,
+            giftTransactions = giftTransactions,
+            wallPosts = wallPosts,
             isSupremeOwner = isSupremeOwner,
             ranks = ranks,
             onDismiss = { showProfileDialog = false },
-            onSave = { dName, bio, av, nc, tc, nbg, neon, ff, fs, frame, plate, shine, wings, music, fam ->
-                viewModel.saveCustomizations(dName, bio, av, nc, tc, nbg, neon, ff, fs, frame, plate, shine, wings, music, fam)
+            onSave = { dName, bio, av, cov, bgFx, age, gender, country, allowCalls, allowPm, nc, tc, nbg, neon, ff, fs, frame, plate, shine, wings, music, fam ->
+                viewModel.saveCustomizations(
+                    displayName = dName,
+                    bio = bio,
+                    avatarUrl = av,
+                    coverUrl = cov,
+                    profileBgEffect = bgFx,
+                    age = age,
+                    gender = gender,
+                    country = country,
+                    allowCalls = allowCalls,
+                    allowPm = allowPm,
+                    nameColor = nc,
+                    textColor = tc,
+                    nameBgColor = nbg,
+                    neonColor = neon,
+                    fontFamily = ff,
+                    fontStyle = fs,
+                    avatarFrame = frame,
+                    nameplateStyle = plate,
+                    nameShine = shine,
+                    vipWings = wings,
+                    profileMusic = music,
+                    vipFamily = fam
+                )
             },
             onToggleStealth = { viewModel.toggleStealth(it) },
             onOpenAdminPanel = { showAdminDialog = true },
             onPreviewMusic = { viewModel.previewProfileMusic(it) },
+            onNotify = { viewModel.showNotice(it) },
             onSignOut = {
                 showProfileDialog = false
                 scope.launch {
@@ -998,16 +1166,26 @@ fun ChatRoomScreen(
         QuickUserCardDialog(
             target = target,
             myProfile = myProfile,
+            allProfiles = allProfiles,
+            friendships = friendships,
+            giftTransactions = giftTransactions,
+            wallPosts = wallPosts,
             ranks = ranks,
             isSupremeOwner = isSupremeOwner,
             onDismiss = { selectedUserForCard = null },
             onOpenSendGift = { selectedUserForGift = target },
             onSendPrivateMsg = { txt -> viewModel.sendPrivateMessage(target, txt) },
             onAddFriend = { viewModel.sendFriendRequest(target) },
+            onInteractProfile = { addLike, stars -> viewModel.interactWithProfile(target.userId, addLike, stars) },
             onReport = { reason -> viewModel.submitReport(target.userId, target.shownName, reason) },
             onAssignRank = { rkKey, grantAdmin -> viewModel.assignRank(target.userId, rkKey, grantAdmin) },
+            onKickUser = { viewModel.kickUserFromRoom(target) },
             onMute = { reason -> viewModel.muteUser(target, reason) },
-            onBan = { reason -> viewModel.banUser(target, reason) },
+            onSetGhosted = { ghosted -> viewModel.setUserGhosted(target, ghosted) },
+            onBan = { reason -> viewModel.banUser(target, reason, "ban") },
+            onXBan = { reason -> viewModel.banUser(target, reason, "xban") },
+            onGiveCoins = { amount -> viewModel.giveCoins(target, amount) },
+            onDeletePermanently = { viewModel.deleteUserAccountPermanently(target) },
             onPreviewMusic = { viewModel.previewProfileMusic(it) }
         )
     }
@@ -1038,9 +1216,9 @@ fun ChatRoomScreen(
             myUid = viewModel.currentUserId,
             canPublishNews = canPublishNews,
             notifications = notifications,
-            friendships = (friendsState as? UiState.Success)?.data.orEmpty(),
+            friendships = friendships,
             privateMessages = (pmsState as? UiState.Success)?.data.orEmpty(),
-            wallPosts = (wallState as? UiState.Success)?.data.orEmpty(),
+            wallPosts = wallPosts,
             newsPosts = (newsState as? UiState.Success)?.data.orEmpty(),
             profiles = visibleProfiles,
             onDismiss = { showSocialTab = null },
@@ -1075,7 +1253,10 @@ fun ChatRoomScreen(
             onSaveSiteSettings = { sName, wBanner, mText, sound ->
                 viewModel.saveSiteSettings(sName, wBanner, mText, sound)
             },
-            onBanUser = { target, reason -> viewModel.banUser(target, reason) },
+            onBanUser = { target, reason -> viewModel.banUser(target, reason, "ban") },
+            onXBanUser = { target, reason -> viewModel.banUser(target, reason, "xban") },
+            onSetUserGhosted = { target, ghosted -> viewModel.setUserGhosted(target, ghosted) },
+            onDeleteUserPermanently = { viewModel.deleteUserAccountPermanently(it) },
             onUnbanUser = { viewModel.unbanUser(it) }
         )
     }
@@ -1112,6 +1293,9 @@ fun ChatRoomScreen(
         YoutubeRoomDialog(
             currentTitle = activeRoom.youtubeTitle,
             currentVideoId = activeRoom.youtubeVideoId,
+            searchResults = youtubeResults,
+            isSearching = isSearchingYoutube,
+            onSearch = { viewModel.searchYoutube(it) },
             onDismiss = { showYoutubeDialog = false },
             onApply = { vid, title, playing -> viewModel.updateRoomYoutube(vid, title, playing) }
         )
@@ -1148,7 +1332,8 @@ private fun TopQuickAction(
 @Composable
 private fun HeaderRankAction(
     label: String,
-    emoji: String,
+    icon: ImageVector,
+    iconTint: Color,
     tintBg: Color,
     onClick: () -> Unit
 ) {
@@ -1158,9 +1343,9 @@ private fun HeaderRankAction(
             .clip(RoundedCornerShape(8.dp))
             .background(tintBg)
             .clickable { onClick() }
-            .padding(horizontal = 5.dp, vertical = 2.dp)
+            .padding(horizontal = 6.dp, vertical = 3.dp)
     ) {
-        Text(emoji, fontSize = 13.sp)
+        Icon(icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(15.dp))
         Text(label, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
     }
 }

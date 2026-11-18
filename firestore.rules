@@ -58,6 +58,8 @@ service cloud.firestore {
              data.coins is int && data.coins >= 0 && data.coins <= 100000000 &&
              data.isStealth is bool &&
              data.isBanned is bool &&
+             (!('isXBanned' in data) || data.isXBanned is bool) &&
+             (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128)) &&
              data.banReason is string && data.banReason.size() <= 300 &&
              isValidTimestamp(data.createdAt) &&
              isValidTimestamp(data.updatedAt);
@@ -70,36 +72,64 @@ service cloud.firestore {
              isValidTimestamp(data.createdAt);
     }
 
-    function isValidPublicProfile(data) {
-      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
-             data.username is string && data.username.size() >= 2 && data.username.size() <= 40 &&
-             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50 &&
-             data.role is string && data.role.size() >= 2 && data.role.size() <= 40 &&
-             (!('bio' in data) || (data.bio is string && data.bio.size() <= 240)) &&
-             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 450000)) &&
-             (!('nameColor' in data) || (data.nameColor is string && data.nameColor.size() <= 30)) &&
-             (!('textColor' in data) || (data.textColor is string && data.textColor.size() <= 30)) &&
-             (!('nameBgColor' in data) || (data.nameBgColor is string && data.nameBgColor.size() <= 30)) &&
-             (!('neonColor' in data) || (data.neonColor is string && data.neonColor.size() <= 30)) &&
-             (!('fontFamily' in data) || (data.fontFamily is string && data.fontFamily.size() <= 40)) &&
-             (!('fontStyle' in data) || (data.fontStyle is string && data.fontStyle.size() <= 40)) &&
-             (!('avatarFrame' in data) || (data.avatarFrame is string && data.avatarFrame.size() <= 40)) &&
-             (!('nameplateStyle' in data) || (data.nameplateStyle is string && data.nameplateStyle.size() <= 40)) &&
-             (!('nameShine' in data) || (data.nameShine is string && data.nameShine.size() <= 40)) &&
-             (!('vipWings' in data) || data.vipWings is bool) &&
-             (!('profileMusic' in data) || (data.profileMusic is string && data.profileMusic.size() <= 80)) &&
-             (!('vipFamily' in data) || (data.vipFamily is string && data.vipFamily.size() <= 60)) &&
-             data.coins is int && data.coins >= 0 && data.coins <= 100000000 &&
-             data.activityPoints is int && data.activityPoints >= 0 && data.activityPoints <= 100000000 &&
-             data.giftsReceived is int && data.giftsReceived >= 0 && data.giftsReceived <= 100000000 &&
-             data.giftsSent is int && data.giftsSent >= 0 && data.giftsSent <= 100000000 &&
-             data.isStealth is bool &&
-             data.isOnline is bool &&
-             data.isPublic is bool &&
-             data.currentRoomId is string && data.currentRoomId.size() >= 1 && data.currentRoomId.size() <= 64 &&
-             (!('lastSeenAt' in data) || isValidTimestamp(data.lastSeenAt)) &&
-             isValidTimestamp(data.createdAt) &&
-             isValidTimestamp(data.updatedAt);
+    function isValidPublicProfile(d) {
+      return d.userId is string && d.userId.size() >= 1 && d.userId.size() <= 128 &&
+             d.username is string && d.username.size() >= 2 && d.username.size() <= 40 &&
+             d.displayName is string && d.displayName.size() >= 1 && d.displayName.size() <= 50 &&
+             d.role is string && d.role.size() >= 2 && d.role.size() <= 40 &&
+             (!('bio' in d) || (d.bio is string && d.bio.size() <= 240)) &&
+             (!('avatarUrl' in d) || (d.avatarUrl is string && d.avatarUrl.size() <= 450000)) &&
+             (!('coverUrl' in d) || (d.coverUrl is string && d.coverUrl.size() <= 450000)) &&
+             (!('age' in d) || (d.age is int && d.age >= 0 && d.age <= 120)) &&
+             (!('likesCount' in d) || (d.likesCount is int && d.likesCount >= 0 && d.likesCount <= 100000000)) &&
+             (!('ratingSum' in d) || (d.ratingSum is int && d.ratingSum >= 0 && d.ratingSum <= 500000000)) &&
+             (!('ratingCount' in d) || (d.ratingCount is int && d.ratingCount >= 0 && d.ratingCount <= 100000000)) &&
+             (!('isGhosted' in d) || d.isGhosted is bool) &&
+             (!('isXBanned' in d) || d.isXBanned is bool) &&
+             dataCoinsAndFlagsValid(d);
+    }
+
+    function dataCoinsAndFlagsValid(d) {
+      return d.coins is int && d.coins >= 0 && d.coins <= 100000000 &&
+             d.activityPoints is int && d.activityPoints >= 0 && d.activityPoints <= 100000000 &&
+             d.giftsReceived is int && d.giftsReceived >= 0 && d.giftsReceived <= 100000000 &&
+             d.giftsSent is int && d.giftsSent >= 0 && d.giftsSent <= 100000000 &&
+             d.isStealth is bool &&
+             d.isOnline is bool &&
+             d.isPublic is bool &&
+             d.currentRoomId is string && d.currentRoomId.size() >= 1 && d.currentRoomId.size() <= 64 &&
+             (!('lastSeenAt' in d) || isValidTimestamp(d.lastSeenAt)) &&
+             isValidTimestamp(d.createdAt) &&
+             isValidTimestamp(d.updatedAt);
+    }
+
+    function isAllowedPublicProfileUpdate(userId, n, o, affected) {
+      return isSupremeOwner() ||
+             (isAdmin() && o.role != 'site_owner' && n.role != 'site_owner') ||
+             (isOwner(userId) &&
+              n.role == o.role &&
+              n.isStealth == o.isStealth &&
+              n.giftsReceived == o.giftsReceived &&
+              (!('isGhosted' in o) || n.isGhosted == o.isGhosted) &&
+              (!('isXBanned' in o) || n.isXBanned == o.isXBanned) &&
+              (!('likesCount' in o) || n.likesCount == o.likesCount) &&
+              (!('ratingSum' in o) || n.ratingSum == o.ratingSum) &&
+              (!('ratingCount' in o) || n.ratingCount == o.ratingCount) &&
+              affected.hasOnly([
+                'username', 'displayName', 'bio', 'avatarUrl', 'coverUrl', 'profileBgEffect',
+                'age', 'gender', 'country', 'allowCalls', 'allowPm', 'nameColor', 'textColor',
+                'nameBgColor', 'neonColor', 'fontFamily', 'fontStyle', 'avatarFrame',
+                'nameplateStyle', 'nameShine', 'vipWings', 'profileMusic', 'vipFamily',
+                'coins', 'activityPoints', 'giftsSent', 'isOnline', 'currentRoomId',
+                'deviceId', 'kickedFromRoom', 'lastSeenAt', 'updatedAt'
+              ])) ||
+             (affected.hasOnly(['giftsReceived', 'coins', 'updatedAt']) &&
+              n.coins >= o.coins &&
+              n.giftsReceived >= o.giftsReceived) ||
+             (affected.hasOnly(['likesCount', 'ratingSum', 'ratingCount', 'updatedAt']) &&
+              (!('likesCount' in o) || n.likesCount >= o.likesCount) &&
+              (!('ratingSum' in o) || n.ratingSum >= o.ratingSum) &&
+              (!('ratingCount' in o) || n.ratingCount >= o.ratingCount));
     }
 
     function isValidRoom(data) {
@@ -143,16 +173,17 @@ service cloud.firestore {
              data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
              data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
              data.senderRole is string && data.senderRole.size() >= 1 && data.senderRole.size() <= 40 &&
-             data.msgType in ['text', 'image', 'audio', 'gift', 'admin_notice', 'system'] &&
+             data.msgType in ['text', 'image', 'audio', 'sticker', 'gift', 'admin_notice', 'system'] &&
              data.content is string && data.content.size() <= 2000 &&
              (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 650000)) &&
+             (!('isGhostOnly' in data) || data.isGhostOnly is bool) &&
              (!('nameColor' in data) || (data.nameColor is string && data.nameColor.size() <= 30)) &&
              (!('textColor' in data) || (data.textColor is string && data.textColor.size() <= 30)) &&
              (!('nameBgColor' in data) || (data.nameBgColor is string && data.nameBgColor.size() <= 30)) &&
              (!('neonColor' in data) || (data.neonColor is string && data.neonColor.size() <= 30)) &&
              (!('fontFamily' in data) || (data.fontFamily is string && data.fontFamily.size() <= 40)) &&
              (!('fontStyle' in data) || (data.fontStyle is string && data.fontStyle.size() <= 40)) &&
-             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 350000)) &&
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 450000)) &&
              (!('avatarFrame' in data) || (data.avatarFrame is string && data.avatarFrame.size() <= 40)) &&
              (!('nameplateStyle' in data) || (data.nameplateStyle is string && data.nameplateStyle.size() <= 40)) &&
              (!('nameShine' in data) || (data.nameShine is string && data.nameShine.size() <= 40)) &&
@@ -170,6 +201,7 @@ service cloud.firestore {
              data.label is string && data.label.size() >= 1 && data.label.size() <= 60 &&
              data.icon is string && data.icon.size() <= 16 &&
              (!('iconImageUrl' in data) || (data.iconImageUrl is string && data.iconImageUrl.size() <= 250000)) &&
+             (!('badgeStyle' in data) || (data.badgeStyle is string && data.badgeStyle.size() <= 40)) &&
              data.bgColor is string && data.bgColor.size() <= 24 &&
              data.textColor is string && data.textColor.size() <= 24 &&
              data.power is int && data.power >= 0 && data.power <= 100 &&
@@ -279,6 +311,8 @@ service cloud.firestore {
              data.bannedById is string && data.bannedById.size() >= 1 && data.bannedById.size() <= 128 &&
              data.bannedByName is string && data.bannedByName.size() >= 1 && data.bannedByName.size() <= 60 &&
              data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 300 &&
+             (!('banType' in data) || (data.banType is string && data.banType.size() <= 20)) &&
+             (!('deviceId' in data) || (data.deviceId is string && data.deviceId.size() <= 128)) &&
              data.isActive is bool &&
              isValidTimestamp(data.createdAt) &&
              isValidTimestamp(data.updatedAt);
@@ -321,7 +355,7 @@ service cloud.firestore {
                           incoming().isStealth == existing().isStealth &&
                           incoming().isBanned == existing().isBanned &&
                           incoming().banReason == existing().banReason &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['username', 'coins', 'updatedAt']))
+                          incoming().diff(existing()).affectedKeys().hasOnly(['username', 'coins', 'deviceId', 'updatedAt']))
                        );
       allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner();
     }
@@ -348,27 +382,15 @@ service cloud.firestore {
                          (incoming().role == 'member' && incoming().isStealth == false && incoming().coins <= 1500)
                        );
       allow update: if isSignedIn() && isValidId(userId) &&
-                       isValidPublicProfile(incoming()) &&
-                       incoming().userId == existing().userId &&
-                       incoming().isPublic == true &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.isPublic == true &&
                        isImmutableCreatedAt() &&
-                       (
-                         isSupremeOwner() ||
-                         (isAdmin() && existing().role != 'site_owner' && incoming().role != 'site_owner') ||
-                         (isOwner(userId) &&
-                          incoming().role == existing().role &&
-                          incoming().isStealth == existing().isStealth &&
-                          incoming().giftsReceived == existing().giftsReceived &&
-                          incoming().diff(existing()).affectedKeys().hasOnly([
-                            'username', 'displayName', 'bio', 'avatarUrl', 'nameColor', 'textColor',
-                            'nameBgColor', 'neonColor', 'fontFamily', 'fontStyle', 'avatarFrame',
-                            'nameplateStyle', 'nameShine', 'vipWings', 'profileMusic', 'vipFamily',
-                            'coins', 'activityPoints', 'giftsSent', 'isOnline', 'currentRoomId',
-                            'lastSeenAt', 'updatedAt'
-                          ])) ||
-                         (incoming().diff(existing()).affectedKeys().hasOnly(['giftsReceived', 'coins', 'updatedAt']) &&
-                          incoming().coins >= existing().coins &&
-                          incoming().giftsReceived >= existing().giftsReceived)
+                       isValidPublicProfile(request.resource.data) &&
+                       isAllowedPublicProfileUpdate(
+                         userId,
+                         request.resource.data,
+                         resource.data,
+                         request.resource.data.diff(resource.data).affectedKeys()
                        );
       allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner();
     }

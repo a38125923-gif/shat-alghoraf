@@ -17,6 +17,7 @@ import com.shat.alghoraf.data.NewsPost
 import com.shat.alghoraf.data.NotificationItem
 import com.shat.alghoraf.data.PrivateMessage
 import com.shat.alghoraf.data.PublicProfile
+import com.shat.alghoraf.data.RadioStationItem
 import com.shat.alghoraf.data.RankConfig
 import com.shat.alghoraf.data.RoomMicSlot
 import com.shat.alghoraf.data.SiteSettings
@@ -24,7 +25,9 @@ import com.shat.alghoraf.data.UiState
 import com.shat.alghoraf.data.UserPrivate
 import com.shat.alghoraf.data.UserReport
 import com.shat.alghoraf.data.WallPost
+import com.shat.alghoraf.data.YoutubeSearchResult
 import com.shat.alghoraf.data.toFirestoreMessage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -38,13 +41,18 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import kotlin.coroutines.cancellation.CancellationException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainChatViewModel(
     private val repository: ChatRepository,
     val currentUserId: String,
-    val currentUserEmail: String?
+    val currentUserEmail: String?,
+    val deviceId: String = ""
 ) : ViewModel() {
 
     private val isSupremeOwnerAccount = DefaultCatalogs.isSupremeOwnerEmail(currentUserEmail)
@@ -55,6 +63,16 @@ class MainChatViewModel(
     private val audioEngine = VoiceAudioEngine()
     val liveMicLevel: StateFlow<Float> = audioEngine.liveMicLevel
     val isMicCapturing: StateFlow<Boolean> = audioEngine.isMicCapturing
+    val isRadioPlaying: StateFlow<Boolean> = audioEngine.isRadioPlaying
+
+    private val _selectedRadioStation = MutableStateFlow(DefaultCatalogs.radioStations.first())
+    val selectedRadioStation: StateFlow<RadioStationItem> = _selectedRadioStation.asStateFlow()
+
+    private val _youtubeSearchResults = MutableStateFlow<List<YoutubeSearchResult>>(emptyList())
+    val youtubeSearchResults: StateFlow<List<YoutubeSearchResult>> = _youtubeSearchResults.asStateFlow()
+
+    private val _isSearchingYoutube = MutableStateFlow(false)
+    val isSearchingYoutube: StateFlow<Boolean> = _isSearchingYoutube.asStateFlow()
 
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -140,7 +158,7 @@ class MainChatViewModel(
 
     init {
         viewModelScope.launch {
-            repository.ensureUserProvisioned().onFailure { err ->
+            repository.ensureUserProvisioned(deviceId).onFailure { err ->
                 _toastMessage.value = err.toFirestoreMessage("تعذر تهيئة بيانات الحساب")
             }
             var tick = 0
@@ -274,6 +292,41 @@ class MainChatViewModel(
         }
     }
 
+    fun toggleRadio() {
+        if (audioEngine.isRadioPlaying.value) {
+            audioEngine.stopRadioStream()
+            _toastMessage.value = "⏹️ تم إيقاف الراديو"
+        } else {
+            val st = _selectedRadioStation.value
+            audioEngine.startRadioStream(
+                streamUrl = st.streamUrl,
+                onStreamReady = { _toastMessage.value = "📻 جاري تشغيل: ${st.name}" },
+                onFallback = { _toastMessage.value = "📻 تشغيل نغمة راديو هادئة (${st.name})" }
+            )
+            _toastMessage.value = "📻 جاري الاتصال بالمحطة: ${st.name}..."
+        }
+    }
+
+    fun selectRadioStation(station: RadioStationItem) {
+        _selectedRadioStation.value = station
+        audioEngine.startRadioStream(
+            streamUrl = station.streamUrl,
+            onStreamReady = { _toastMessage.value = "📻 تم التحويل إلى: ${station.name}" },
+            onFallback = { _toastMessage.value = "📻 تم اختيار: ${station.name}" }
+        )
+    }
+
+    fun handleKickedCheck(kickedRoom: String) {
+        if (kickedRoom.isNotBlank() && kickedRoom == _activeRoomId.value && !isSupremeOwnerAccount) {
+            _activeRoomId.value = "general"
+            _toastMessage.value = "⚠️ تم طردك من الغرفة وإعادتك للغرفة العامة"
+            viewModelScope.launch {
+                repository.clearKickedFlag()
+                repository.sendHeartbeat("general", true)
+            }
+        }
+    }
+
     fun previewProfileMusic(presetId: String) {
         audioEngine.playProfileMusicChime(presetId)
     }
@@ -292,6 +345,13 @@ class MainChatViewModel(
         displayName: String,
         bio: String,
         avatarUrl: String,
+        coverUrl: String,
+        profileBgEffect: String,
+        age: Long,
+        gender: String,
+        country: String,
+        allowCalls: Boolean,
+        allowPm: Boolean,
         nameColor: String,
         textColor: String,
         nameBgColor: String,
@@ -310,6 +370,13 @@ class MainChatViewModel(
                 displayName = displayName,
                 bio = bio,
                 avatarUrl = avatarUrl,
+                coverUrl = coverUrl,
+                profileBgEffect = profileBgEffect,
+                age = age,
+                gender = gender,
+                country = country,
+                allowCalls = allowCalls,
+                allowPm = allowPm,
                 nameColor = nameColor,
                 textColor = textColor,
                 nameBgColor = nameBgColor,
@@ -326,6 +393,16 @@ class MainChatViewModel(
                 _toastMessage.value = "تم حفظ التعديلات سحابياً بنجاح ✅"
             }.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر حفظ التعديلات")
+            }
+        }
+    }
+
+    fun interactWithProfile(targetUid: String, addLike: Boolean, rateStars: Int = 0) {
+        viewModelScope.launch {
+            repository.interactWithProfile(targetUid, addLike, rateStars).onSuccess {
+                _toastMessage.value = if (rateStars > 0) "تم تسجيل تقييمك ($rateStars ★)" else "تم تسجيل إعجابك ❤️"
+            }.onFailure {
+                _toastMessage.value = it.toFirestoreMessage("تعذر تسجيل التفاعل")
             }
         }
     }
@@ -413,6 +490,61 @@ class MainChatViewModel(
         }
     }
 
+    fun searchYoutube(query: String) {
+        val clean = query.trim()
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            _isSearchingYoutube.value = true
+            try {
+                val results = withContext(Dispatchers.IO) { fetchYoutubeResults(clean) }
+                _youtubeSearchResults.value = results
+                if (results.isEmpty()) {
+                    _toastMessage.value = "لم يتم العثور على نتائج — يمكنك إدخال الرابط مباشرة"
+                }
+            } catch (_: Exception) {
+                _toastMessage.value = "تعذر الاتصال ببحث يوتيوب حالياً"
+            } finally {
+                _isSearchingYoutube.value = false
+            }
+        }
+    }
+
+    private fun fetchYoutubeResults(query: String): List<YoutubeSearchResult> {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val url = URL("https://www.youtube.com/results?search_query=$encoded")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 7000
+            readTimeout = 7000
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36")
+            setRequestProperty("Accept-Language", "ar,en;q=0.9")
+        }
+        val html = conn.inputStream.bufferedReader().use { it.readText() }
+        val results = mutableListOf<YoutubeSearchResult>()
+        val seenIds = mutableSetOf<String>()
+        val blockRegex = Regex("\"videoId\":\"([a-zA-Z0-9_-]{11})\".*?\"title\":\\{\"runs\":\\[\\{\"text\":\"(.*?)\"\\}", RegexOption.DOT_MATCHES_ALL)
+        for (match in blockRegex.findAll(html)) {
+            val vid = match.groupValues[1]
+            if (seenIds.add(vid)) {
+                val rawTitle = match.groupValues[2]
+                    .replace("\\u0026", "&")
+                    .replace("\\\"", "\"")
+                    .replace("\\n", " ")
+                results.add(
+                    YoutubeSearchResult(
+                        videoId = vid,
+                        title = rawTitle.take(80),
+                        channel = "YouTube",
+                        duration = "فيديو",
+                        thumbnailUrl = "https://i.ytimg.com/vi/$vid/hqdefault.jpg"
+                    )
+                )
+                if (results.size >= 8) break
+            }
+        }
+        return results
+    }
+
     fun updateRoomYoutube(videoIdOrUrl: String, title: String, playing: Boolean) {
         val cleanId = extractYoutubeId(videoIdOrUrl)
         viewModelScope.launch {
@@ -476,11 +608,11 @@ class MainChatViewModel(
         }
     }
 
-    fun banUser(target: PublicProfile, reason: String) {
+    fun banUser(target: PublicProfile, reason: String, banType: String = "ban") {
         val me = (myProfile.value as? UiState.Success)?.data ?: return
         viewModelScope.launch {
-            repository.banUser(me, target, reason).onSuccess {
-                _toastMessage.value = "تم حظر ${target.shownName}"
+            repository.banUser(me, target, reason, banType).onSuccess {
+                _toastMessage.value = if (banType == "xban") "تم تنفيذ X-Ban على ${target.shownName}" else "تم حظر ${target.shownName}"
             }.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر تنفيذ الحظر")
             }
@@ -493,6 +625,46 @@ class MainChatViewModel(
                 _toastMessage.value = "تم فك الحظر ✅"
             }.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر فك الحظر")
+            }
+        }
+    }
+
+    fun setUserGhosted(target: PublicProfile, ghosted: Boolean) {
+        viewModelScope.launch {
+            repository.setUserGhosted(target, ghosted).onSuccess {
+                _toastMessage.value = if (ghosted) "تم تفعيل وضع الشبح لـ ${target.shownName}" else "تم إلغاء وضع الشبح عن ${target.shownName}"
+            }.onFailure {
+                _toastMessage.value = it.toFirestoreMessage("تعذر تغيير وضع الشبح")
+            }
+        }
+    }
+
+    fun kickUserFromRoom(target: PublicProfile) {
+        viewModelScope.launch {
+            repository.kickUserFromRoom(target, _activeRoomId.value).onSuccess {
+                _toastMessage.value = "تم طرد ${target.shownName} من الغرفة"
+            }.onFailure {
+                _toastMessage.value = it.toFirestoreMessage("تعذر طرد العضو")
+            }
+        }
+    }
+
+    fun giveCoins(target: PublicProfile, amount: Long) {
+        viewModelScope.launch {
+            repository.giveUserCoins(target, amount).onSuccess {
+                _toastMessage.value = "تم إضافة $amount كوينز لحساب ${target.shownName} ✅"
+            }.onFailure {
+                _toastMessage.value = it.toFirestoreMessage("تعذر شحن الكوينز")
+            }
+        }
+    }
+
+    fun deleteUserAccountPermanently(target: PublicProfile) {
+        viewModelScope.launch {
+            repository.deleteUserAccountPermanently(target).onSuccess {
+                _toastMessage.value = "تم حذف حساب ${target.shownName} نهائياً"
+            }.onFailure {
+                _toastMessage.value = it.toFirestoreMessage("تعذر حذف الحساب")
             }
         }
     }

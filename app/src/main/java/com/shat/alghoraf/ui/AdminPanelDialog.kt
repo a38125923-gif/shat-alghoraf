@@ -28,8 +28,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -54,10 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -95,6 +96,9 @@ fun AdminPanelDialog(
     onPublishNews: (title: String, content: String, imageUrl: String) -> Unit,
     onSaveSiteSettings: (siteName: String, welcomeBanner: String, marqueeText: String, soundEnabled: Boolean) -> Unit,
     onBanUser: (PublicProfile, String) -> Unit,
+    onXBanUser: (PublicProfile, String) -> Unit,
+    onSetUserGhosted: (PublicProfile, Boolean) -> Unit,
+    onDeleteUserPermanently: (PublicProfile) -> Unit,
     onUnbanUser: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -112,7 +116,10 @@ fun AdminPanelDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("👑 لوحة تحكم الإدارة والمالك", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color.White)
+                        Text("لوحة تحكم الإدارة والمالك", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = Color.White) }
                 }
 
@@ -131,16 +138,16 @@ fun AdminPanelDialog(
                         ) {
                             Text("ملخص الحالة السحابية (Firestore Live)", fontWeight = FontWeight.Bold, color = RoyalBlue)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                AdminStatBox("👥 الأعضاء", profiles.size.toString(), Modifier.weight(1f))
-                                AdminStatBox("🟢 المتصلون", profiles.count { it.isOnline }.toString(), Modifier.weight(1f))
+                                AdminStatBox("الأعضاء", profiles.size.toString(), Modifier.weight(1f))
+                                AdminStatBox("المتصلون", profiles.count { it.isOnline }.toString(), Modifier.weight(1f))
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                AdminStatBox("💬 الغرف", rooms.size.toString(), Modifier.weight(1f))
-                                AdminStatBox("✉️ الرسائل", messageCount.toString(), Modifier.weight(1f))
+                                AdminStatBox("الغرف", rooms.size.toString(), Modifier.weight(1f))
+                                AdminStatBox("الرسائل", messageCount.toString(), Modifier.weight(1f))
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                AdminStatBox("📰 الأخبار", news.size.toString(), Modifier.weight(1f))
-                                AdminStatBox("🚫 المحظورين", bans.size.toString(), Modifier.weight(1f))
+                                AdminStatBox("الأخبار", news.size.toString(), Modifier.weight(1f))
+                                AdminStatBox("المحظورين", bans.size.toString(), Modifier.weight(1f))
                             }
                             Surface(color = Color(0xFFFFFBEB), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                                 Text(
@@ -164,7 +171,7 @@ fun AdminPanelDialog(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text("${u.shownName} • 🪙${u.coins}", fontWeight = FontWeight.Bold)
+                                            Text("${u.shownName} • ${u.coins} كوينز", fontWeight = FontWeight.Bold)
                                             StyledRankBadge(rk)
                                         }
                                         if (u.role != "site_owner") {
@@ -173,13 +180,34 @@ fun AdminPanelDialog(
                                                     FilterChip(
                                                         selected = u.role == opt.key,
                                                         onClick = { onAssignRank(u.userId, opt.key, opt.permAccessPanel || opt.permPublishNews || opt.permManageRooms) },
-                                                        label = { Text("${opt.icon} ${opt.label}", fontSize = 10.sp) }
+                                                        label = { Text(opt.label, fontSize = 10.sp) }
                                                     )
                                                 }
                                             }
-                                            OutlinedButton(
-                                                onClick = { onBanUser(u, "حظر إداري من لوحة التحكم") }
-                                            ) { Text("حظر العضو", color = CrimsonOwner, fontSize = 12.sp) }
+                                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                OutlinedButton(
+                                                    onClick = { onSetUserGhosted(u, !u.isGhosted) }
+                                                ) {
+                                                    Icon(Icons.Default.VisibilityOff, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                    Spacer(Modifier.size(4.dp))
+                                                    Text(if (u.isGhosted) "إلغاء الشبح" else "تجميد شبح", fontSize = 11.sp)
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { onBanUser(u, "حظر إداري من لوحة التحكم") }
+                                                ) { Text("حظر", color = CrimsonOwner, fontSize = 11.sp) }
+                                                OutlinedButton(
+                                                    onClick = { onXBanUser(u, "إكس باند جهاز من لوحة التحكم") }
+                                                ) { Text("X-Ban", color = CrimsonOwner, fontSize = 11.sp) }
+                                                if (isSupremeOwner) {
+                                                    OutlinedButton(
+                                                        onClick = { onDeleteUserPermanently(u) }
+                                                    ) {
+                                                        Icon(Icons.Default.DeleteForever, contentDescription = null, tint = CrimsonOwner, modifier = Modifier.size(14.dp))
+                                                        Spacer(Modifier.size(3.dp))
+                                                        Text("حذف نهائي", color = CrimsonOwner, fontSize = 11.sp)
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -190,6 +218,7 @@ fun AdminPanelDialog(
                             var rKey by remember { mutableStateOf("") }
                             var rLabel by remember { mutableStateOf("") }
                             var rIcon by remember { mutableStateOf("👑") }
+                            var rBadgeStyle by remember { mutableStateOf("crown_royal") }
                             var rIconImg by remember { mutableStateOf("") }
                             var rPower by remember { mutableStateOf("35") }
                             var rMaxAssign by remember { mutableStateOf("20") }
@@ -228,13 +257,13 @@ fun AdminPanelDialog(
                                     OutlinedTextField(value = rBg, onValueChange = { rBg = it }, label = { Text("اللون Hex") }, modifier = Modifier.weight(1f), singleLine = true)
                                 }
 
-                                Text("مكتبة أيقونات الرتب الملكية:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                Text("شكل أيقونة الرتبة الملكية:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    DefaultCatalogs.rankIconLibrary.forEach { opt ->
+                                    DefaultCatalogs.rankBadgeStyles.forEach { st ->
                                         FilterChip(
-                                            selected = rIcon == opt.id && rIconImg.isBlank(),
-                                            onClick = { rIcon = opt.id; rIconImg = "" },
-                                            label = { Text("${opt.id} ${opt.label}", fontSize = 11.sp) }
+                                            selected = rBadgeStyle == st.id && rIconImg.isBlank(),
+                                            onClick = { rBadgeStyle = st.id; rIcon = st.badge; rIconImg = "" },
+                                            label = { Text(st.label, fontSize = 11.sp) }
                                         )
                                     }
                                 }
@@ -258,6 +287,7 @@ fun AdminPanelDialog(
                                             label = rLabel.ifBlank { "معاينة" },
                                             icon = rIcon,
                                             iconImageUrl = rIconImg,
+                                            badgeStyle = rBadgeStyle,
                                             bgColor = rBg
                                         )
                                     )
@@ -288,6 +318,7 @@ fun AdminPanelDialog(
                                                     label = rLabel,
                                                     icon = rIcon,
                                                     iconImageUrl = rIconImg,
+                                                    badgeStyle = rBadgeStyle,
                                                     bgColor = rBg,
                                                     textColor = "#FFFFFF",
                                                     power = p,
@@ -321,6 +352,7 @@ fun AdminPanelDialog(
                                                 rKey = rk.key
                                                 rLabel = rk.label
                                                 rIcon = rk.icon
+                                                rBadgeStyle = rk.badgeStyle.ifBlank { "crown_royal" }
                                                 rIconImg = rk.iconImageUrl
                                                 rPower = rk.power.toString()
                                                 rMaxAssign = rk.maxAssignableRank.toString()

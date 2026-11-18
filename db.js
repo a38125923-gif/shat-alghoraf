@@ -80,6 +80,11 @@ function enforceSupremeOwnerUser(u) {
     patch.coins = 99999;
     changed = true;
   }
+  if (u.is_ghosted) {
+    u.is_ghosted = 0;
+    patch.is_ghosted = 0;
+    changed = true;
+  }
   if (changed) {
     enqueueSet('users', String(u.id), patch, true);
     const senderKey = `user:${u.id}`;
@@ -975,19 +980,31 @@ function normalizeUserDoc(docId, data) {
     font_family: String(data.font_family || 'Normal'),
     font_style: String(data.font_style || 'Normal'),
     avatar_url: String(data.avatar_url || ''),
+    cover_url: String(data.cover_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
     name_shine: String(data.name_shine || 'none'),
+    profile_bg_effect: String(data.profile_bg_effect || 'none'),
     vip_wings: data.vip_wings ? 1 : 0,
     profile_music: String(data.profile_music || ''),
     bio: String(data.bio || ''),
+    age: String(data.age || ''),
+    gender: String(data.gender || ''),
+    country: String(data.country || ''),
+    allow_calls: data.allow_calls === 0 || data.allow_calls === false ? 0 : 1,
+    allow_pm: data.allow_pm === 0 || data.allow_pm === false ? 0 : 1,
+    likes_count: Number(data.likes_count) || 0,
+    rating_sum: Number(data.rating_sum) || 0,
+    rating_count: Number(data.rating_count) || 0,
     coins: data.coins !== undefined ? Number(data.coins) : 1500,
     vip_family: String(data.vip_family || ''),
     is_stealth: allowStealth && data.is_stealth ? 1 : 0,
+    is_ghosted: !isSupremeOwnerEmail(email) && data.is_ghosted ? 1 : 0,
     activity_points: Number(data.activity_points) || 0,
     gifts_received: Number(data.gifts_received) || 0,
     gifts_sent: Number(data.gifts_sent) || 0,
     last_ip: String(data.last_ip || ''),
+    last_device_id: String(data.last_device_id || ''),
     is_banned: data.is_banned ? 1 : 0,
     ban_reason: String(data.ban_reason || ''),
     created_at: String(data.created_at || nowIso())
@@ -1016,6 +1033,7 @@ function normalizeMessageDoc(docId, data) {
     vip_wings: data.vip_wings ? 1 : 0,
     is_admin_notice: Boolean(data.is_admin_notice),
     is_gift: Boolean(data.is_gift),
+    is_ghost_only: Boolean(data.is_ghost_only),
     gift_data: data.gift_data || null,
     msg_type: String(data.msg_type || 'text'),
     content: String(data.content || ''),
@@ -1062,11 +1080,24 @@ function normalizeRankDoc(docId, data) {
   const defaultUseAddons = key === 'site_owner' || power >= 5 ? 1 : 0;
   const defaultMaxAssign =
     key === 'site_owner' ? 100 : data.perm_set_rank ? Math.max(0, power - 1) : 0;
+  const defaultBadgeStyle =
+    key === 'site_owner'
+      ? 'crown_royal'
+      : power >= 95
+        ? 'gold_eagle'
+        : power >= 80
+          ? 'diamond_medal'
+          : power >= 40
+            ? 'silver_wing'
+            : power >= 10
+              ? 'royal_shield'
+              : 'neon_badge';
 
   return {
     key,
     label: String(data.label || docId),
     icon: String(data.icon || '⭐'),
+    badge_style: String(data.badge_style || defaultBadgeStyle),
     image_url: String(data.image_url || ''),
     bg_color: String(data.bg_color || '#334155'),
     text_color: String(data.text_color || '#ffffff'),
@@ -1606,6 +1637,7 @@ function mapRankRow(row) {
     key: row.key,
     label: row.label,
     icon: row.icon || '⭐',
+    badge_style: row.badge_style || 'royal_shield',
     image_url: row.image_url || '',
     bg_color: row.bg_color || '#334155',
     text_color: row.text_color || '#ffffff',
@@ -1709,6 +1741,7 @@ function createRank({
   key,
   label,
   icon,
+  badgeStyle,
   imageUrl,
   bgColor,
   textColor,
@@ -1734,6 +1767,7 @@ function createRank({
     key: safeKey,
     label: cleanLabel,
     icon: String(icon || '⭐').trim().slice(0, 8) || '⭐',
+    badge_style: String(badgeStyle || 'royal_shield').trim().slice(0, 40) || 'royal_shield',
     image_url: String(imageUrl || '').trim(),
     bg_color: sanitizeHexColor(bgColor, '#334155'),
     text_color: sanitizeHexColor(textColor, '#ffffff'),
@@ -1759,12 +1793,16 @@ function createRank({
   return { rank: getRankByKey(safeKey) };
 }
 
-function updateRank(key, { label, icon, imageUrl, bgColor, textColor, power, maxAssignableRank, permissions }) {
+function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor, power, maxAssignableRank, permissions }) {
   const existing = store.ranksByKey.get(key);
   if (!existing) return { error: 'الرتبة غير موجودة.' };
 
   const nextLabel = label !== undefined && String(label).trim() ? String(label).trim().slice(0, 32) : existing.label;
   const nextIcon = icon !== undefined ? String(icon).trim().slice(0, 8) || '⭐' : existing.icon;
+  const nextBadgeStyle =
+    badgeStyle !== undefined && String(badgeStyle).trim()
+      ? String(badgeStyle).trim().slice(0, 40)
+      : existing.badge_style || 'royal_shield';
   const nextImg = imageUrl !== undefined ? String(imageUrl).trim() : existing.image_url;
   const nextBg = bgColor !== undefined ? sanitizeHexColor(bgColor, existing.bg_color) : existing.bg_color;
   const nextText = textColor !== undefined ? sanitizeHexColor(textColor, existing.text_color) : existing.text_color;
@@ -1792,6 +1830,7 @@ function updateRank(key, { label, icon, imageUrl, bgColor, textColor, power, max
     ...existing,
     label: nextLabel,
     icon: nextIcon,
+    badge_style: nextBadgeStyle,
     image_url: nextImg,
     bg_color: nextBg,
     text_color: nextText,
@@ -1940,7 +1979,7 @@ function getUserCount() {
   return store.usersById.size;
 }
 
-function registerUser({ username, email, passwordHash, ipAddress }) {
+function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
   const cleanUser = String(username || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
 
@@ -1962,26 +2001,38 @@ function registerUser({ username, email, passwordHash, ipAddress }) {
     password_hash: passwordHash,
     role,
     display_name: cleanUser,
-    name_color: '#ffffff',
-    text_color: '#ffffff',
+    name_color: '#0f172a',
+    text_color: '#111827',
     name_bg_color: '',
     neon_color: '',
     font_family: 'Normal',
     font_style: 'Normal',
     avatar_url: '',
-    avatar_frame: role === 'site_owner' ? 'gold_royal' : 'none',
+    cover_url: '',
+    avatar_frame: role === 'site_owner' ? 'kings_crown' : 'none',
     nameplate_style: role === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
+    profile_bg_effect: role === 'site_owner' ? 'aurora_glow' : 'none',
     vip_wings: role === 'site_owner' ? 1 : 0,
     profile_music: '',
     bio: '',
+    age: '',
+    gender: '',
+    country: '',
+    allow_calls: 1,
+    allow_pm: 1,
+    likes_count: 0,
+    rating_sum: 0,
+    rating_count: 0,
     coins: role === 'site_owner' ? 99999 : 1500,
     vip_family: '',
     is_stealth: 0,
+    is_ghosted: 0,
     activity_points: 0,
     gifts_received: 0,
     gifts_sent: 0,
     last_ip: ipAddress || '',
+    last_device_id: deviceId || '',
     is_banned: 0,
     ban_reason: '',
     created_at: nowIso()
@@ -2012,12 +2063,22 @@ function findUserById(id) {
   return { ...u };
 }
 
-function updateUserIp(userId, ipAddress) {
-  if (!userId || !ipAddress) return;
+function updateUserIp(userId, ipAddress, deviceId = '') {
+  if (!userId) return;
   const u = store.usersById.get(Number(userId));
-  if (!u || u.last_ip === ipAddress) return;
-  u.last_ip = ipAddress;
-  enqueueSet('users', String(u.id), { last_ip: ipAddress }, true);
+  if (!u) return;
+  const patch = {};
+  if (ipAddress && u.last_ip !== ipAddress) {
+    u.last_ip = ipAddress;
+    patch.last_ip = ipAddress;
+  }
+  if (deviceId && u.last_device_id !== deviceId) {
+    u.last_device_id = deviceId;
+    patch.last_device_id = deviceId;
+  }
+  if (Object.keys(patch).length > 0) {
+    enqueueSet('users', String(u.id), patch, true);
+  }
 }
 
 function setUserStealth(userId, enabled) {
@@ -2029,6 +2090,97 @@ function setUserStealth(userId, enabled) {
   u.is_stealth = enabled ? 1 : 0;
   enqueueSet('users', String(u.id), { is_stealth: u.is_stealth }, true);
   return { user: { ...u } };
+}
+
+function setUserGhosted(userId, enabled) {
+  const u = store.usersById.get(Number(userId));
+  if (!u) return { error: 'العضو غير موجود.' };
+  if (isSupremeOwnerEmail(u.email) || u.role === 'site_owner') {
+    return { error: 'حساب صاحب الموقع محمي ولا يمكن تجميده.' };
+  }
+  u.is_ghosted = enabled ? 1 : 0;
+  enqueueSet('users', String(u.id), { is_ghosted: u.is_ghosted }, true);
+  return { user: { ...u } };
+}
+
+function interactProfile(targetUserId, { like, rating } = {}) {
+  const u = store.usersById.get(Number(targetUserId));
+  if (!u) return null;
+  const patch = {};
+  if (like) {
+    u.likes_count = (Number(u.likes_count) || 0) + 1;
+    patch.likes_count = u.likes_count;
+  }
+  const stars = Number(rating);
+  if (stars >= 1 && stars <= 5) {
+    u.rating_sum = (Number(u.rating_sum) || 0) + Math.round(stars);
+    u.rating_count = (Number(u.rating_count) || 0) + 1;
+    patch.rating_sum = u.rating_sum;
+    patch.rating_count = u.rating_count;
+  }
+  if (Object.keys(patch).length > 0) {
+    enqueueSet('users', String(u.id), patch, true);
+  }
+  return { ...u };
+}
+
+function updateUserCredentials(userId, { email, passwordHash } = {}) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return { error: 'الحساب غير موجود.' };
+  const targetIsSupreme = isSupremeOwnerEmail(current.email);
+  const nextEmail = targetIsSupreme
+    ? SUPREME_OWNER_EMAIL
+    : email && String(email).trim()
+      ? String(email).trim().toLowerCase()
+      : current.email;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+    return { error: 'البريد الإلكتروني غير صالح.' };
+  }
+  for (const other of store.usersById.values()) {
+    if (other.id !== current.id && other.email.toLowerCase() === nextEmail) {
+      return { error: 'البريد الإلكتروني مستخدم لحساب آخر.' };
+    }
+  }
+  const patch = { email: nextEmail };
+  current.email = nextEmail;
+  if (passwordHash) {
+    current.password_hash = passwordHash;
+    patch.password_hash = passwordHash;
+  }
+  enqueueSet('users', String(current.id), patch, true);
+  return { user: { ...current } };
+}
+
+function deleteUserAccountPermanently(userId) {
+  const uid = Number(userId);
+  const target = store.usersById.get(uid);
+  if (!target) return { error: 'الحساب غير موجود.' };
+  if (isSupremeOwnerEmail(target.email) || target.role === 'site_owner') {
+    return { error: 'حساب صاحب الموقع الأعلى محمي ولا يمكن حذفه نهائياً.' };
+  }
+  const targetKey = `user:${uid}`;
+  store.usersById.delete(uid);
+  enqueueDelete('users', String(uid));
+
+  for (const [k, rs] of [...store.roomStaffByKey.entries()]) {
+    if (Number(rs.user_id) === uid) {
+      store.roomStaffByKey.delete(k);
+      enqueueDelete('room_staff', safeDocId(k));
+    }
+  }
+  for (const [k, m] of [...store.mutesByKey.entries()]) {
+    if (m.target_key === targetKey) {
+      store.mutesByKey.delete(k);
+      enqueueDelete('mutes', safeDocId(k));
+    }
+  }
+  for (const [k, f] of [...store.friendshipsByKey.entries()]) {
+    if (f.user_key === targetKey || f.friend_key === targetKey) {
+      store.friendshipsByKey.delete(k);
+      enqueueDelete('friendships', safeDocId(k));
+    }
+  }
+  return { ok: true, deletedKey: targetKey, deletedUserId: uid };
 }
 
 function incrementActivityPoints({ userId, roomId, userDelta = 1, roomDelta = 1 }) {
@@ -2059,13 +2211,20 @@ function updateUserCustomization(
     fontFamily,
     fontStyle,
     avatarUrl,
+    coverUrl,
     avatarFrame,
     nameplateStyle,
     nameShine,
+    profileBgEffect,
     vipWings,
     profileMusic,
     bio,
-    vipFamily
+    vipFamily,
+    age,
+    gender,
+    country,
+    allowCalls,
+    allowPm
   }
 ) {
   const current = store.usersById.get(Number(userId));
@@ -2075,19 +2234,27 @@ function updateUserCustomization(
     ...current,
     display_name: displayName !== undefined && displayName.trim() ? displayName.trim().slice(0, 28) : getEffectiveName(current),
     name_color: nameColor || current.name_color,
-    text_color: textColor !== undefined ? textColor || '#ffffff' : current.text_color || '#ffffff',
+    text_color: textColor !== undefined ? textColor || '#111827' : current.text_color || '#111827',
     name_bg_color: nameBgColor !== undefined ? String(nameBgColor || '').trim().slice(0, 30) : current.name_bg_color || '',
     neon_color: neonColor !== undefined ? String(neonColor || '').trim().slice(0, 30) : current.neon_color || '',
     font_family: fontFamily !== undefined ? String(fontFamily || 'Normal').trim().slice(0, 40) : current.font_family || 'Normal',
     font_style: fontStyle !== undefined ? String(fontStyle || 'Normal').trim().slice(0, 30) : current.font_style || 'Normal',
     avatar_url: avatarUrl !== undefined ? avatarUrl : current.avatar_url,
+    cover_url: coverUrl !== undefined ? coverUrl : current.cover_url || '',
     avatar_frame: avatarFrame !== undefined ? avatarFrame || 'none' : current.avatar_frame || 'none',
     nameplate_style: nameplateStyle !== undefined ? nameplateStyle || 'default' : current.nameplate_style || 'default',
     name_shine: nameShine !== undefined ? String(nameShine || 'none').trim().slice(0, 30) : current.name_shine || 'none',
+    profile_bg_effect:
+      profileBgEffect !== undefined ? String(profileBgEffect || 'none').trim().slice(0, 36) : current.profile_bg_effect || 'none',
     vip_wings: vipWings !== undefined ? (vipWings ? 1 : 0) : current.vip_wings ? 1 : 0,
     profile_music: profileMusic !== undefined ? String(profileMusic || '').trim().slice(0, 300) : current.profile_music || '',
     bio: bio !== undefined ? String(bio || '').trim().slice(0, 160) : current.bio || '',
-    vip_family: vipFamily !== undefined ? vipFamily.trim().slice(0, 24) : current.vip_family || ''
+    vip_family: vipFamily !== undefined ? vipFamily.trim().slice(0, 24) : current.vip_family || '',
+    age: age !== undefined ? String(age || '').trim().slice(0, 16) : current.age || '',
+    gender: gender !== undefined ? String(gender || '').trim().slice(0, 20) : current.gender || '',
+    country: country !== undefined ? String(country || '').trim().slice(0, 36) : current.country || '',
+    allow_calls: allowCalls !== undefined ? (allowCalls ? 1 : 0) : current.allow_calls === 0 ? 0 : 1,
+    allow_pm: allowPm !== undefined ? (allowPm ? 1 : 0) : current.allow_pm === 0 ? 0 : 1
   };
 
   store.usersById.set(updated.id, updated);
@@ -2122,26 +2289,38 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     password_hash: passwordHash,
     role: safeRole,
     display_name: cleanDisplay,
-    name_color: '#ffffff',
-    text_color: '#ffffff',
+    name_color: '#0f172a',
+    text_color: '#111827',
     name_bg_color: '',
     neon_color: '',
     font_family: 'Normal',
     font_style: 'Normal',
     avatar_url: '',
-    avatar_frame: safeRole === 'site_owner' ? 'gold_royal' : 'none',
+    cover_url: '',
+    avatar_frame: safeRole === 'site_owner' ? 'kings_crown' : 'none',
     nameplate_style: safeRole === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
+    profile_bg_effect: safeRole === 'site_owner' ? 'aurora_glow' : 'none',
     vip_wings: safeRole === 'site_owner' ? 1 : 0,
     profile_music: '',
     bio: '',
+    age: '',
+    gender: '',
+    country: '',
+    allow_calls: 1,
+    allow_pm: 1,
+    likes_count: 0,
+    rating_sum: 0,
+    rating_count: 0,
     coins: safeRole === 'site_owner' ? 99999 : 1500,
     vip_family: '',
     is_stealth: 0,
+    is_ghosted: 0,
     activity_points: 0,
     gifts_received: 0,
     gifts_sent: 0,
     last_ip: '',
+    last_device_id: '',
     is_banned: 0,
     ban_reason: '',
     created_at: nowIso()
@@ -2568,6 +2747,7 @@ function addMessage({
   vipWings,
   isAdminNotice,
   isGift,
+  isGhostOnly,
   giftData,
   msgType,
   content,
@@ -2579,7 +2759,7 @@ function addMessage({
   const id = nextSeq('messages');
   const tsMs = Number(createdAtMs) || Date.now();
   const iso = createdAt || new Date(tsMs).toISOString();
-  const persistedMsgType = ['text', 'image', 'audio'].includes(msgType) ? msgType : 'text';
+  const persistedMsgType = ['text', 'image', 'audio', 'sticker'].includes(msgType) ? msgType : 'text';
   const msg = {
     id,
     doc_id: String(id),
@@ -2587,8 +2767,8 @@ function addMessage({
     sender_key: senderKey,
     sender_name: senderName,
     sender_role: senderRole || 'member',
-    name_color: nameColor || '#ffffff',
-    text_color: textColor || '#ffffff',
+    name_color: nameColor || '#0f172a',
+    text_color: textColor || '#111827',
     name_bg_color: nameBgColor || '',
     neon_color: neonColor || '',
     font_family: fontFamily || 'Normal',
@@ -2600,6 +2780,7 @@ function addMessage({
     vip_wings: vipWings ? 1 : 0,
     is_admin_notice: Boolean(isAdminNotice),
     is_gift: Boolean(isGift),
+    is_ghost_only: Boolean(isGhostOnly),
     gift_data: giftData || null,
     msg_type: persistedMsgType,
     content: content || '',
@@ -2621,11 +2802,13 @@ function addMessage({
   return { ...msg };
 }
 
-function getRoomMessages(roomId, limit = 100) {
+function getRoomMessages(roomId, limit = 100, viewerKey = '') {
   const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
   const list = [];
   for (const m of store.messagesById.values()) {
-    if (m.room_id === roomId) list.push(m);
+    if (m.room_id === roomId && (!m.is_ghost_only || m.sender_key === viewerKey)) {
+      list.push(m);
+    }
   }
   list.sort(
     (a, b) =>
@@ -2720,19 +2903,22 @@ function isLoopbackIp(ip) {
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost';
 }
 
-function banTarget({ targetKey, targetName, email, ipAddress, reason, bannedBy }) {
+function banTarget({ targetKey, targetName, email, ipAddress, deviceId, banType = 'ban', reason, bannedBy }) {
   if (isProtectedSupremeOwnerKey(targetKey) || isSupremeOwnerEmail(email)) {
     return false;
   }
   const prev = store.bansByKey.get(targetKey) || {};
   const cleanEmail = (email || '').toLowerCase() || prev.email || '';
   const cleanIp = ipAddress || prev.ip_address || '';
-  const cleanReason = reason || 'حظر نهائي من الإدارة';
+  const cleanDevice = deviceId || prev.device_id || '';
+  const cleanReason = reason || (banType === 'xban' ? 'إكس باند (حظر جهاز وعنوان)' : 'حظر نهائي من الإدارة');
   const docObj = {
     target_key: targetKey,
     target_name: targetName || targetKey,
     email: cleanEmail,
     ip_address: cleanIp,
+    device_id: cleanDevice,
+    ban_type: banType === 'xban' ? 'xban' : 'ban',
     reason: cleanReason,
     banned_by: bannedBy || 'الإدارة',
     created_at: nowIso()
@@ -2777,6 +2963,7 @@ function isTargetBanned(input) {
   const targetKey = typeof input === 'string' ? input : input?.targetKey || '';
   const email = typeof input === 'object' ? (input?.email || '').toLowerCase() : '';
   const ipAddress = typeof input === 'object' ? input?.ipAddress || '' : '';
+  const deviceId = typeof input === 'object' ? input?.deviceId || '' : '';
 
   if (isSupremeOwnerEmail(email) || isProtectedSupremeOwnerKey(targetKey)) {
     return null;
@@ -2800,6 +2987,12 @@ function isTargetBanned(input) {
   if (email) {
     for (const b of store.bansByKey.values()) {
       if ((b.email || '').toLowerCase() === email) return { ...b };
+    }
+  }
+
+  if (deviceId) {
+    for (const b of store.bansByKey.values()) {
+      if (b.device_id && b.device_id === deviceId) return { ...b };
     }
   }
 
@@ -3253,6 +3446,10 @@ module.exports = {
   findUserById,
   updateUserIp,
   setUserStealth,
+  setUserGhosted,
+  interactProfile,
+  updateUserCredentials,
+  deleteUserAccountPermanently,
   incrementActivityPoints,
   updateUserCustomization,
   adminCreateUser,

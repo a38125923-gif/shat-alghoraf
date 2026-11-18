@@ -17,13 +17,14 @@ const TOKEN_SECRET =
   process.env.CHAT_TOKEN_SECRET || 'arabic-chat-super-secret-token-key-2026-v3';
 
 const UPLOAD_ROOT = path.join(__dirname, 'data', 'uploads');
-const UPLOAD_SUBDIRS = ['avatars', 'images', 'audio', 'wallpapers', 'emojis', 'rank_icons', 'news'];
+const UPLOAD_SUBDIRS = ['avatars', 'covers', 'images', 'audio', 'wallpapers', 'emojis', 'rank_icons', 'news'];
 for (const sub of UPLOAD_SUBDIRS) {
   fs.mkdirSync(path.join(UPLOAD_ROOT, sub), { recursive: true });
 }
 
 const SHOP_FRAMES = [
   { id: 'none', label: 'بدون إطار', price: 0, tier: 'free', preview: '#64748b' },
+  { id: 'kings_crown', label: 'تاج الملوك KINGS', price: 0, tier: 'vip', preview: '#fbbf24' },
   { id: 'gold_royal', label: 'الإطار الذهبي الملكي', price: 0, tier: 'vip', preview: '#f59e0b' },
   { id: 'fire_gold', label: 'إطار اللهب الذهبي', price: 0, tier: 'vip', preview: '#f97316' },
   { id: 'diamond_ring', label: 'الإطار الماسي', price: 0, tier: 'vip', preview: '#38bdf8' },
@@ -51,11 +52,55 @@ const NAME_SHINES = [
   { id: 'royal_aura', label: 'هالة البنفسج الملكية', previewColor: '#c084fc' }
 ];
 
+const PROFILE_BG_EFFECTS = [
+  { id: 'none', label: 'بدون خلفية متحركة', preview: '#1e293b' },
+  { id: 'animated_flames', label: 'لهب ذهبي متوهج', preview: '#ea580c' },
+  { id: 'falling_stars', label: 'نجوم وشُهب متساقطة', preview: '#38bdf8' },
+  { id: 'royal_waves', label: 'أمواج ملكية متدرجة', preview: '#7c3aed' },
+  { id: 'aurora_glow', label: 'شفق الألماس الساحر', preview: '#10b981' }
+];
+
+const RANK_BADGE_STYLES = [
+  { id: 'crown_royal', label: 'تاج ملكي متحرك', iconClass: 'fa-solid fa-crown' },
+  { id: 'gold_eagle', label: 'نسر ذهبي مجنح', iconClass: 'fa-solid fa-feather-pointed' },
+  { id: 'silver_wing', label: 'جناح فضي لامع', iconClass: 'fa-solid fa-dove' },
+  { id: 'diamond_medal', label: 'وسام ماسي متوهج', iconClass: 'fa-solid fa-gem' },
+  { id: 'royal_shield', label: 'درع الحماية الملكي', iconClass: 'fa-solid fa-shield-halved' },
+  { id: 'neon_badge', label: 'شارة نيون حديثة', iconClass: 'fa-solid fa-certificate' }
+];
+
+const RADIO_STATIONS = [
+  {
+    id: 'arabic_hits',
+    name: 'إذاعة الأغاني العربية المباشرة',
+    genre: 'طرب وموسيقى عربية',
+    streamUrl: 'https://n0e.radiojar.com/8s5u5tpdtwzuv'
+  },
+  {
+    id: 'quran_live',
+    name: 'إذاعة القرآن الكريم المباشرة',
+    genre: 'تلاوات عطرة على مدار الساعة',
+    streamUrl: 'https://n0a.radiojar.com/0tpy1h0kxtzuv'
+  },
+  {
+    id: 'chill_lofi',
+    name: 'موسيقى استرخاء ولوفاي',
+    genre: 'أجواء هادئة للدردشة',
+    streamUrl: 'https://streams.fluxfm.de/Chillhop/mp3-320/audio/'
+  },
+  {
+    id: 'classic_tarab',
+    name: 'سهرة الطرب الأصيل والعود',
+    genre: 'طرب أصيل',
+    streamUrl: 'https://n09.radiojar.com/4wqre23fytzuv'
+  }
+];
+
 const PROFILE_MUSIC_PRESETS = [
   { id: '', label: 'بدون موسيقى' },
-  { id: 'preset:calm_lofi', label: '🎵 أنغام هادئة (Lo-Fi)' },
-  { id: 'preset:royal_oud', label: '🎵 نغمة شرقية ملكية' },
-  { id: 'preset:ambient_stars', label: '🎵 أوتار ليلية ناعمة' }
+  { id: 'preset:calm_lofi', label: 'أنغام هادئة (Lo-Fi)' },
+  { id: 'preset:royal_oud', label: 'نغمة شرقية ملكية' },
+  { id: 'preset:ambient_stars', label: 'أوتار ليلية ناعمة' }
 ];
 
 const app = express();
@@ -127,6 +172,9 @@ function mapUserRow(u) {
   const rank = db.getRankByKey(u.role);
   const effectiveName = db.getEffectiveName(u);
   const stealth = isUserStealth(u);
+  const ratingCount = Number(u.rating_count) || 0;
+  const ratingSum = Number(u.rating_sum) || 0;
+  const ratingAvg = ratingCount > 0 ? Number((ratingSum / ratingCount).toFixed(1)) : 5.0;
   return {
     key: `user:${u.id}`,
     userId: u.id,
@@ -137,22 +185,34 @@ function mapUserRow(u) {
     email: u.email,
     role: u.role,
     rank,
-    nameColor: u.name_color || '#ffffff',
-    textColor: u.text_color || '#ffffff',
+    nameColor: u.name_color || '#0f172a',
+    textColor: u.text_color || '#111827',
     nameBgColor: u.name_bg_color || '',
     neonColor: u.neon_color || '',
     fontFamily: u.font_family || 'Normal',
     fontStyle: u.font_style || 'Normal',
     avatarUrl: u.avatar_url || '',
+    coverUrl: u.cover_url || '',
     avatarFrame: u.avatar_frame || 'none',
     nameplateStyle: u.nameplate_style || 'default',
     nameShine: u.name_shine || 'none',
+    profileBgEffect: u.profile_bg_effect || 'none',
     vipWings: Boolean(u.vip_wings),
     profileMusic: u.profile_music || '',
     bio: u.bio || '',
+    age: u.age || '',
+    gender: u.gender || '',
+    country: u.country || '',
+    allowCalls: u.allow_calls !== 0,
+    allowPm: u.allow_pm !== 0,
+    likesCount: Number(u.likes_count) || 0,
+    ratingSum,
+    ratingCount,
+    ratingAvg,
     coins: Number(u.coins) || 0,
     vipFamily: u.vip_family || '',
     isStealth: stealth,
+    isGhosted: Boolean(u.is_ghosted),
     activityPoints: Number(u.activity_points) || 0,
     giftsReceived: Number(u.gifts_received) || 0,
     giftsSent: Number(u.gifts_sent) || 0
@@ -270,6 +330,7 @@ function makeUploader(subdir, allowedPrefix, maxBytes = 12 * 1024 * 1024) {
 }
 
 const uploadAvatar = makeUploader('avatars', 'image/', 8 * 1024 * 1024);
+const uploadCover = makeUploader('covers', 'image/', 10 * 1024 * 1024);
 const uploadImage = makeUploader('images', 'image/', 10 * 1024 * 1024);
 const uploadAudio = makeUploader('audio', 'audio/', 12 * 1024 * 1024);
 const uploadWallpaper = makeUploader('wallpapers', 'image/', 12 * 1024 * 1024);
@@ -333,12 +394,23 @@ function getRoomUsersList(roomId) {
         fontFamily: entry.fontFamily,
         fontStyle: entry.fontStyle,
         avatarUrl: entry.avatarUrl,
+        coverUrl: entry.coverUrl || '',
         avatarFrame: entry.avatarFrame,
         nameplateStyle: entry.nameplateStyle,
         nameShine: entry.nameShine || 'none',
+        profileBgEffect: entry.profileBgEffect || 'none',
         vipWings: Boolean(entry.vipWings),
         profileMusic: entry.profileMusic || '',
         bio: entry.bio || '',
+        age: entry.age || '',
+        gender: entry.gender || '',
+        country: entry.country || '',
+        allowCalls: entry.allowCalls !== false,
+        allowPm: entry.allowPm !== false,
+        likesCount: Number(entry.likesCount) || 0,
+        ratingAvg: Number(entry.ratingAvg) || 5.0,
+        ratingCount: Number(entry.ratingCount) || 0,
+        isGhosted: Boolean(entry.isGhosted),
         coins: Number(entry.coins) || 0,
         vipFamily: entry.vipFamily || '',
         activityPoints: Number(entry.activityPoints) || 0,
@@ -366,12 +438,23 @@ function buildGlobalOnlineUsers() {
       rank: db.getRankByKey(entry.role),
       nameColor: entry.nameColor,
       avatarUrl: entry.avatarUrl,
+      coverUrl: entry.coverUrl || '',
       avatarFrame: entry.avatarFrame,
       nameplateStyle: entry.nameplateStyle,
       nameShine: entry.nameShine || 'none',
+      profileBgEffect: entry.profileBgEffect || 'none',
       vipWings: Boolean(entry.vipWings),
       profileMusic: entry.profileMusic || '',
       bio: entry.bio || '',
+      age: entry.age || '',
+      gender: entry.gender || '',
+      country: entry.country || '',
+      allowCalls: entry.allowCalls !== false,
+      allowPm: entry.allowPm !== false,
+      likesCount: Number(entry.likesCount) || 0,
+      ratingAvg: Number(entry.ratingAvg) || 5.0,
+      ratingCount: Number(entry.ratingCount) || 0,
+      isGhosted: Boolean(entry.isGhosted),
       vipFamily: entry.vipFamily || '',
       activityPoints: Number(entry.activityPoints) || 0,
       roomId: entry.roomId || null,
@@ -391,6 +474,8 @@ function buildPersistentMembersList() {
   return db.getAllRegisteredUsers().map((u) => {
     const key = `user:${u.id}`;
     const isStealth = isUserStealth(u);
+    const ratingCount = Number(u.rating_count) || 0;
+    const ratingAvg = ratingCount > 0 ? Number(((Number(u.rating_sum) || 0) / ratingCount).toFixed(1)) : 5.0;
     return {
       key,
       userId: u.id,
@@ -401,14 +486,26 @@ function buildPersistentMembersList() {
       role: u.role,
       rank: db.getRankByKey(u.role),
       avatarUrl: u.avatar_url || '',
+      coverUrl: u.cover_url || '',
       avatarFrame: u.avatar_frame || 'none',
       nameplateStyle: u.nameplate_style || 'default',
       nameShine: u.name_shine || 'none',
+      profileBgEffect: u.profile_bg_effect || 'none',
       vipWings: Boolean(u.vip_wings),
       profileMusic: u.profile_music || '',
       bio: u.bio || '',
-      nameColor: u.name_color || '#ffffff',
+      age: u.age || '',
+      gender: u.gender || '',
+      country: u.country || '',
+      allowCalls: u.allow_calls !== 0,
+      allowPm: u.allow_pm !== 0,
+      likesCount: Number(u.likes_count) || 0,
+      ratingAvg,
+      ratingCount,
+      isGhosted: Boolean(u.is_ghosted),
+      nameColor: u.name_color || '#0f172a',
       vipFamily: u.vip_family || '',
+      coins: Number(u.coins) || 0,
       activityPoints: Number(u.activity_points) || 0,
       giftsReceived: Number(u.gifts_received) || 0,
       online: !isStealth && onlineKeys.has(key)
@@ -465,12 +562,23 @@ function syncUserAcrossSockets(io, userId) {
         fontFamily: mapped.fontFamily,
         fontStyle: mapped.fontStyle,
         avatarUrl: mapped.avatarUrl,
+        coverUrl: mapped.coverUrl,
         avatarFrame: mapped.avatarFrame,
         nameplateStyle: mapped.nameplateStyle,
         nameShine: mapped.nameShine,
+        profileBgEffect: mapped.profileBgEffect,
         vipWings: mapped.vipWings,
         profileMusic: mapped.profileMusic,
         bio: mapped.bio,
+        age: mapped.age,
+        gender: mapped.gender,
+        country: mapped.country,
+        allowCalls: mapped.allowCalls,
+        allowPm: mapped.allowPm,
+        likesCount: mapped.likesCount,
+        ratingAvg: mapped.ratingAvg,
+        ratingCount: mapped.ratingCount,
+        isGhosted: mapped.isGhosted,
         coins: mapped.coins,
         vipFamily: mapped.vipFamily,
         isStealth: mapped.isStealth,
@@ -545,8 +653,9 @@ app.post('/api/register', async (req, res) => {
     }
 
     const ip = getClientIp(req);
+    const deviceId = String(req.headers['x-device-id'] || req.body?.deviceId || '').trim().slice(0, 128);
     if (!db.isSupremeOwnerEmail(cleanEmail)) {
-      const ipBan = db.isTargetBanned({ email: cleanEmail, ipAddress: ip });
+      const ipBan = db.isTargetBanned({ email: cleanEmail, ipAddress: ip, deviceId });
       if (ipBan) {
         return res.status(403).json({ error: `تم حظر هذا الحساب أو الجهاز: ${ipBan.reason}` });
       }
@@ -557,7 +666,8 @@ app.post('/api/register', async (req, res) => {
       username: cleanUser,
       email: cleanEmail,
       passwordHash,
-      ipAddress: ip
+      ipAddress: ip,
+      deviceId
     });
     if (result.error) return res.status(409).json({ error: result.error });
 
@@ -593,16 +703,17 @@ app.post('/api/login', async (req, res) => {
     }
 
     const ip = getClientIp(req);
+    const deviceId = String(req.headers['x-device-id'] || req.body?.deviceId || '').trim().slice(0, 128);
     if (db.isSupremeOwnerEmail(row.email)) {
       db.ensureSupremeOwnerAccount(row.id);
     } else {
-      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip });
+      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip, deviceId });
       if (ban) {
         return res.status(403).json({ error: `تم حظر هذا الحساب: ${ban.reason}` });
       }
     }
 
-    db.updateUserIp(row.id, ip);
+    db.updateUserIp(row.id, ip, deviceId);
     const freshRow = db.findUserById(row.id);
     const mapped = mapUserRow(freshRow);
     const token = signToken({ userId: mapped.userId, isGuest: false });
@@ -617,8 +728,9 @@ app.post('/api/guest', (req, res) => {
   const rawName = String(req.body?.name || '').trim().slice(0, 22);
   const name = rawName.length >= 2 ? rawName : `زائر_${Math.floor(100 + Math.random() * 900)}`;
   const ip = getClientIp(req);
+  const deviceId = String(req.headers['x-device-id'] || req.body?.deviceId || '').trim().slice(0, 128);
   const key = `guest:${crypto.randomBytes(6).toString('hex')}`;
-  const ban = db.isTargetBanned({ ipAddress: ip });
+  const ban = db.isTargetBanned({ ipAddress: ip, deviceId });
   if (ban) return res.status(403).json({ error: `هذا الجهاز محظور: ${ban.reason}` });
 
   const token = signToken({ key, name, isGuest: true });
@@ -691,6 +803,14 @@ app.post('/api/upload/avatar', requireRegistered, uploadAvatar.single('file'), (
   return res.json({ url });
 });
 
+app.post('/api/upload/cover', requireRegistered, uploadCover.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الغلاف.' });
+  const url = `/uploads/covers/${req.file.filename}`;
+  db.updateUserCustomization(req.authUser.userId, { coverUrl: url });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  return res.json({ url });
+});
+
 app.post('/api/upload/image', requireAuth, uploadImage.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
   return res.json({ url: `/uploads/images/${req.file.filename}` });
@@ -725,7 +845,81 @@ app.post('/api/upload/news', requireRegistered, uploadNewsImg.single('file'), (r
 });
 
 // ==========================================
-// PROFILE CUSTOMIZER, STEALTH, SHOP & ADDONS
+// YOUTUBE SEARCH BY NAME & RADIO STATIONS
+// ==========================================
+app.get('/api/radio/stations', (_req, res) => {
+  res.json({ stations: RADIO_STATIONS });
+});
+
+app.get('/api/youtube/search', requireAuth, async (req, res) => {
+  const q = String(req.query?.q || '').trim().slice(0, 120);
+  if (!q) return res.status(400).json({ error: 'أدخل كلمة البحث عن فيديو يوتيوب.' });
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const ytRes = await fetch(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+      {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36',
+          'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
+        }
+      }
+    );
+    clearTimeout(timer);
+    const html = await ytRes.text();
+    const match = html.match(/var ytInitialData\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+    const results = [];
+    if (match && match[1]) {
+      const parsed = JSON.parse(match[1]);
+      const sections =
+        parsed?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+      for (const sec of sections) {
+        const items = sec?.itemSectionRenderer?.contents || [];
+        for (const item of items) {
+          const vr = item.videoRenderer;
+          if (!vr || !vr.videoId) continue;
+          const title = (vr.title?.runs || []).map((r) => r.text).join('') || vr.title?.simpleText || q;
+          const author = (vr.ownerText?.runs || []).map((r) => r.text).join('') || 'YouTube';
+          const duration = vr.lengthText?.simpleText || 'فيديو';
+          results.push({
+            videoId: vr.videoId,
+            title: title.slice(0, 120),
+            author: author.slice(0, 60),
+            duration,
+            thumbnail: `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`
+          });
+          if (results.length >= 12) break;
+        }
+        if (results.length >= 12) break;
+      }
+    }
+    return res.json({ results });
+  } catch (err) {
+    return res.json({
+      results: [
+        {
+          videoId: 'jfKfPfyJRdk',
+          title: `بث موسيقى هادئة - ${q}`,
+          author: 'Lofi Radio',
+          duration: 'مباشر',
+          thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg'
+        },
+        {
+          videoId: '5qap5aO4i9A',
+          title: 'أنغام عربية واسترخاء',
+          author: 'Music Stream',
+          duration: 'HD',
+          thumbnail: 'https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg'
+        }
+      ]
+    });
+  }
+});
+
+// ==========================================
+// PROFILE CUSTOMIZER, CREDENTIALS, INTERACT, STEALTH, SHOP & ADDONS
 // ==========================================
 app.post('/api/profile/stealth', requireOwner, async (req, res) => {
   const enabled = Boolean(req.body?.enabled);
@@ -742,6 +936,50 @@ app.post('/api/profile/stealth', requireOwner, async (req, res) => {
   return res.json({ ok: true, isStealth: enabled, user: mapUserRow(resStealth.user) });
 });
 
+app.post('/api/profile/credentials', requireRegistered, async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body || {};
+    const existing = db.findUserById(req.authUser.userId);
+    if (!existing) return res.status(404).json({ error: 'الحساب غير موجود.' });
+    if (newPassword && String(newPassword).length < 5) {
+      return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 5 أحرف على الأقل.' });
+    }
+    if (newPassword || (email && email.trim().toLowerCase() !== existing.email.toLowerCase())) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'يرجى إدخال كلمة المرور الحالية للتأكيد.' });
+      }
+      const passOk = await bcrypt.compare(String(currentPassword), existing.password_hash);
+      if (!passOk) {
+        return res.status(403).json({ error: 'كلمة المرور الحالية غير صحيحة.' });
+      }
+    }
+    const passwordHash = newPassword ? await bcrypt.hash(String(newPassword), 10) : null;
+    const upd = db.updateUserCredentials(req.authUser.userId, { email, passwordHash });
+    if (upd.error) return res.status(400).json({ error: upd.error });
+    syncUserAcrossSockets(io, req.authUser.userId);
+    await db.flushWrites();
+    return res.json({ ok: true, user: mapUserRow(upd.user) });
+  } catch (err) {
+    return res.status(500).json({ error: 'تعذر تحديث بيانات الحساب.' });
+  }
+});
+
+app.post('/api/profile/interact', requireAuth, async (req, res) => {
+  const { targetKey, like, rating } = req.body || {};
+  if (!targetKey || !String(targetKey).startsWith('user:')) {
+    return res.status(400).json({ error: 'التفاعل متاح لملفات الأعضاء المسجلين فقط.' });
+  }
+  if (targetKey === req.authUser.key) {
+    return res.status(400).json({ error: 'لا يمكنك تقييم أو الإعجاب بملفك الشخصي.' });
+  }
+  const uid = Number(String(targetKey).replace('user:', ''));
+  const updated = db.interactProfile(uid, { like: Boolean(like), rating });
+  if (!updated) return res.status(404).json({ error: 'العضو غير موجود.' });
+  syncUserAcrossSockets(io, uid);
+  await db.flushWrites();
+  return res.json({ ok: true, user: mapUserRow(updated) });
+});
+
 app.post('/api/profile/customize', requireRegistered, async (req, res) => {
   const {
     displayName,
@@ -752,13 +990,20 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     fontFamily,
     fontStyle,
     avatarUrl,
+    coverUrl,
     avatarFrame,
     nameplateStyle,
     nameShine,
+    profileBgEffect,
     vipWings,
     profileMusic,
     bio,
-    vipFamily
+    vipFamily,
+    age,
+    gender,
+    country,
+    allowCalls,
+    allowPm
   } = req.body || {};
 
   const canUseAddons = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'use_addons');
@@ -766,6 +1011,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     (avatarFrame !== undefined && avatarFrame !== 'none' && avatarFrame !== req.authUser.avatarFrame) ||
     (nameplateStyle !== undefined && nameplateStyle !== 'default' && nameplateStyle !== req.authUser.nameplateStyle) ||
     (nameShine !== undefined && nameShine !== 'none' && nameShine !== req.authUser.nameShine) ||
+    (profileBgEffect !== undefined && profileBgEffect !== 'none' && profileBgEffect !== req.authUser.profileBgEffect) ||
     (vipWings === true && !req.authUser.vipWings) ||
     (profileMusic !== undefined && profileMusic !== '' && profileMusic !== req.authUser.profileMusic);
 
@@ -782,13 +1028,20 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     fontFamily,
     fontStyle,
     avatarUrl,
+    coverUrl,
     avatarFrame,
     nameplateStyle,
     nameShine,
+    profileBgEffect,
     vipWings,
     profileMusic,
     bio,
-    vipFamily
+    vipFamily,
+    age,
+    gender,
+    country,
+    allowCalls,
+    allowPm
   });
   if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
   syncUserAcrossSockets(io, req.authUser.userId);
@@ -801,7 +1054,10 @@ app.get('/api/shop/items', (_req, res) => {
     frames: SHOP_FRAMES,
     nameplates: SHOP_NAMEPLATES,
     shines: NAME_SHINES,
+    profileBackgrounds: PROFILE_BG_EFFECTS,
+    rankBadgeStyles: RANK_BADGE_STYLES,
     musicPresets: PROFILE_MUSIC_PRESETS,
+    radioStations: RADIO_STATIONS,
     gifts: db.GIFT_CATALOG
   });
 });
@@ -829,6 +1085,10 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
     const exists = NAME_SHINES.some((s) => s.id === itemId);
     if (!exists) return res.status(400).json({ error: 'اللمعة غير موجودة.' });
     patch = { nameShine: itemId };
+  } else if (type === 'bg_effect') {
+    const exists = PROFILE_BG_EFFECTS.some((b) => b.id === itemId);
+    if (!exists) return res.status(400).json({ error: 'الخلفية المتحركة غير موجودة.' });
+    patch = { profileBgEffect: itemId };
   } else if (type === 'wings') {
     patch = { vipWings: Boolean(itemId) };
   } else if (type === 'music') {
@@ -1430,13 +1690,14 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
   if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'ban')) {
     return res.status(403).json({ error: 'لا تملك صلاحية الحظر.' });
   }
-  const { targetKey, reason } = req.body || {};
+  const { targetKey, reason, banType } = req.body || {};
   if (!targetKey || db.isProtectedSupremeOwnerKey(targetKey)) {
     return res.status(403).json({ error: 'لا يمكن حظر صاحب الموقع.' });
   }
   let targetName = targetKey;
   let targetEmail = '';
   let targetIp = '';
+  let targetDevice = '';
   if (String(targetKey).startsWith('user:')) {
     const uid = Number(String(targetKey).replace('user:', ''));
     const row = db.findUserById(uid);
@@ -1447,6 +1708,7 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
       targetName = db.getEffectiveName(row);
       targetEmail = row.email;
       targetIp = row.last_ip || '';
+      targetDevice = row.last_device_id || '';
     }
   }
   db.banTarget({
@@ -1454,7 +1716,9 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
     targetName,
     email: targetEmail,
     ipAddress: targetIp,
-    reason: reason || 'حظر من الإدارة',
+    deviceId: banType === 'xban' ? targetDevice : '',
+    banType: banType === 'xban' ? 'xban' : 'ban',
+    reason: reason || (banType === 'xban' ? 'إكس باند X-Ban من الإدارة' : 'حظر من الإدارة'),
     bannedBy: req.authUser.name
   });
 
@@ -1465,6 +1729,36 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
       if (s) s.disconnect(true);
     }
   }
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/admin/ghost', requirePanelAccess, async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'mute')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية وضع الشبح.' });
+  }
+  const { userId, enabled } = req.body || {};
+  const result = db.setUserGhosted(userId, Boolean(enabled));
+  if (result.error) return res.status(400).json({ error: result.error });
+  syncUserAcrossSockets(io, userId);
+  await db.flushWrites();
+  return res.json({ ok: true, user: mapUserRow(result.user) });
+});
+
+app.delete('/api/admin/users/:id', requireOwner, async (req, res) => {
+  const uid = Number(req.params.id);
+  const result = db.deleteUserAccountPermanently(uid);
+  if (result.error) return res.status(400).json({ error: result.error });
+  for (const [sid, entry] of onlineSockets.entries()) {
+    if (entry.userId === uid) {
+      io.to(sid).emit('kicked', { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.' });
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.disconnect(true);
+    }
+  }
+  broadcastRoomsList(io);
+  broadcastGlobalOnlineUsers(io);
+  io.emit('persistent_members', buildPersistentMembersList());
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -1533,7 +1827,7 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
   entry.roomId = targetRoomId;
   socket.join(`room:${targetRoomId}`);
 
-  const messages = db.getRoomMessages(targetRoomId, 100);
+  const messages = db.getRoomMessages(targetRoomId, 100, entry.key);
   const pubRoom = db.sanitizeRoomForPublic(room);
   const isManager = db.isRoomManager(targetRoomId, entry.userId, entry.role);
 
@@ -1591,8 +1885,9 @@ io.use((socket, next) => {
     if (!payload) return next(new Error('AUTH_REQUIRED'));
 
     const ip = getClientIp(socket);
+    const deviceId = String(socket.handshake.auth?.deviceId || '').trim().slice(0, 128);
     if (payload.isGuest) {
-      const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip });
+      const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId });
       if (ban) return next(new Error(`BANNED:${ban.reason}`));
       socket.authSession = {
         socketId: socket.id,
@@ -1604,19 +1899,30 @@ io.use((socket, next) => {
         username: payload.name || 'زائر',
         email: '',
         role: 'guest',
-        nameColor: '#ffffff',
-        textColor: '#ffffff',
+        nameColor: '#0f172a',
+        textColor: '#111827',
         nameBgColor: '',
         neonColor: '',
         fontFamily: 'Normal',
         fontStyle: 'Normal',
         avatarUrl: '',
+        coverUrl: '',
         avatarFrame: 'none',
         nameplateStyle: 'default',
         nameShine: 'none',
+        profileBgEffect: 'none',
         vipWings: false,
         profileMusic: '',
         bio: '',
+        age: '',
+        gender: '',
+        country: '',
+        allowCalls: true,
+        allowPm: true,
+        likesCount: 0,
+        ratingAvg: 5.0,
+        ratingCount: 0,
+        isGhosted: false,
         coins: 0,
         vipFamily: '',
         isStealth: false,
@@ -1624,6 +1930,7 @@ io.use((socket, next) => {
         giftsReceived: 0,
         giftsSent: 0,
         ipAddress: ip,
+        deviceId,
         roomId: null,
         lastHeartbeat: Date.now()
       };
@@ -1635,17 +1942,18 @@ io.use((socket, next) => {
     if (db.isSupremeOwnerEmail(row.email)) {
       db.ensureSupremeOwnerAccount(row.id);
     } else {
-      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip });
+      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip, deviceId });
       if (ban) return next(new Error(`BANNED:${ban.reason}`));
     }
 
-    db.updateUserIp(row.id, ip);
+    db.updateUserIp(row.id, ip, deviceId);
     const freshRow = db.findUserById(row.id);
     const mapped = mapUserRow(freshRow);
     socket.authSession = {
       socketId: socket.id,
       ...mapped,
       ipAddress: ip,
+      deviceId,
       roomId: null,
       lastHeartbeat: Date.now()
     };
@@ -1749,7 +2057,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      const msgType = ['text', 'image', 'audio'].includes(payload.msgType) ? payload.msgType : 'text';
+      const msgType = ['text', 'image', 'audio', 'sticker'].includes(payload.msgType) ? payload.msgType : 'text';
       const content = String(payload.content || '').trim().slice(0, 1000);
       const mediaUrl = String(payload.mediaUrl || '').trim().slice(0, 300);
       const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
@@ -1764,7 +2072,12 @@ io.on('connection', (socket) => {
         if (typeof cb === 'function') cb({ error: 'الملف غير موجود.' });
         return;
       }
+      if (msgType === 'sticker' && !content && !mediaUrl) {
+        if (typeof cb === 'function') cb({ error: 'الملصق فارغ.' });
+        return;
+      }
 
+      const isGhostOnly = Boolean(entry.isGhosted) && entry.role !== 'site_owner';
       const msg = db.addMessage({
         roomId: entry.roomId,
         senderKey: entry.key,
@@ -1782,11 +2095,19 @@ io.on('connection', (socket) => {
         nameShine: entry.nameShine,
         vipWings: entry.vipWings,
         isAdminNotice,
+        isGhostOnly,
         msgType,
         content,
         mediaUrl,
         clientMsgId
       });
+
+      if (isGhostOnly) {
+        // Ghosted/shadow-frozen users see their own messages locally without reaching anyone else
+        socket.emit('new_message', msg);
+        if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg });
+        return;
+      }
 
       const delta = msgType === 'text' ? 2 : 3;
       db.incrementActivityPoints({
@@ -2161,7 +2482,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('admin_ban', async ({ targetKey, reason = 'حظر إداري' } = {}) => {
+  socket.on('admin_ban', async ({ targetKey, reason = 'حظر إداري', banType = 'ban' } = {}) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'ban'))) return;
     if (db.isProtectedSupremeOwnerKey(targetKey)) return;
@@ -2169,6 +2490,7 @@ io.on('connection', (socket) => {
     let targetName = targetKey;
     let targetEmail = '';
     let targetIp = '';
+    let targetDevice = '';
     for (const o of onlineSockets.values()) {
       if (o.key === targetKey) {
         if (entry.role !== 'site_owner' && db.getRankPower(o.role) >= db.getRankPower(entry.role)) {
@@ -2178,11 +2500,21 @@ io.on('connection', (socket) => {
         targetName = o.name;
         targetEmail = o.email || '';
         targetIp = o.ipAddress || '';
+        targetDevice = o.deviceId || '';
         break;
       }
     }
 
-    db.banTarget({ targetKey, targetName, email: targetEmail, ipAddress: targetIp, reason, bannedBy: entry.name });
+    db.banTarget({
+      targetKey,
+      targetName,
+      email: targetEmail,
+      ipAddress: targetIp,
+      deviceId: banType === 'xban' ? targetDevice : '',
+      banType: banType === 'xban' ? 'xban' : 'ban',
+      reason,
+      bannedBy: entry.name
+    });
     for (const [sid, o] of onlineSockets.entries()) {
       if (o.key === targetKey) {
         io.to(sid).emit('kicked', { reason: `تم حظرك: ${reason}` });
@@ -2191,6 +2523,56 @@ io.on('connection', (socket) => {
       }
     }
     await db.flushWrites();
+  });
+
+  socket.on('admin_ghost', async ({ targetKey, enabled = true } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'mute'))) return;
+    if (!targetKey || !String(targetKey).startsWith('user:') || db.isProtectedSupremeOwnerKey(targetKey)) {
+      if (typeof cb === 'function') cb({ error: 'لا يمكن تطبيق وضع الشبح على هذا الحساب.' });
+      return;
+    }
+    const uid = Number(String(targetKey).replace('user:', ''));
+    const targetRow = db.findUserById(uid);
+    if (!targetRow) return;
+    if (entry.role !== 'site_owner' && db.getRankPower(targetRow.role) >= db.getRankPower(entry.role)) {
+      socket.emit('error_toast', { message: 'لا يمكنك تجميد رتبة مساوية لك أو أعلى منك.' });
+      return;
+    }
+    const resGhost = db.setUserGhosted(uid, Boolean(enabled));
+    if (resGhost.error) {
+      socket.emit('error_toast', { message: resGhost.error });
+      return;
+    }
+    syncUserAcrossSockets(io, uid);
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true, isGhosted: Boolean(enabled) });
+  });
+
+  socket.on('admin_delete_account', async ({ userId } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'حذف الحسابات متاح لصاحب الموقع فقط.' });
+      return;
+    }
+    const uid = Number(userId);
+    const resDel = db.deleteUserAccountPermanently(uid);
+    if (resDel.error) {
+      if (typeof cb === 'function') cb({ error: resDel.error });
+      return;
+    }
+    for (const [sid, o] of onlineSockets.entries()) {
+      if (o.userId === uid) {
+        io.to(sid).emit('kicked', { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.' });
+        const s = io.sockets.sockets.get(sid);
+        if (s) s.disconnect(true);
+      }
+    }
+    broadcastRoomsList(io);
+    broadcastGlobalOnlineUsers(io);
+    io.emit('persistent_members', buildPersistentMembersList());
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true });
   });
 
   socket.on('admin_set_role', async ({ userId, newRole } = {}, cb) => {
@@ -2327,7 +2709,7 @@ io.on('connection', (socket) => {
 async function start() {
   await db.init({
     onExternalMessage: (msg) => {
-      if (msg && msg.room_id) io.to(`room:${msg.room_id}`).emit('new_message', msg);
+      if (msg && msg.room_id && !msg.is_ghost_only) io.to(`room:${msg.room_id}`).emit('new_message', msg);
     },
     onRanksChanged: (ranks) => {
       io.emit('ranks_updated', ranks);

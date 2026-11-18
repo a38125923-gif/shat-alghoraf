@@ -289,7 +289,7 @@ class ChatRepository(
 
     // --- Account Bootstrap & Supreme Owner Promotion ---
 
-    suspend fun ensureUserProvisioned(): Result<Unit> {
+    suspend fun ensureUserProvisioned(deviceId: String = ""): Result<Unit> {
         var currentPath = "users"
         return try {
             val firebaseUser = auth.currentUser ?: throw IllegalStateException("المستخدم غير مسجل الدخول")
@@ -301,6 +301,7 @@ class ChatRepository(
                 .let { if (it.length < 2) "عضو_$it" else it }
             val photoUrl = firebaseUser.photoUrl?.toString().orEmpty().take(400)
             val isSupreme = DefaultCatalogs.isSupremeOwnerEmail(email) && firebaseUser.isEmailVerified
+            val safeDeviceId = deviceId.trim().take(128)
 
             currentPath = "users/$uid"
             val userRef = db.collection("users").document(uid)
@@ -325,20 +326,35 @@ class ChatRepository(
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
                 userRef.set(privateMap).await()
-            } else if (isSupreme) {
-                val role = userSnap.getString("role") ?: "member"
-                val coins = userSnap.getLong("coins") ?: 0L
-                val banned = userSnap.getBoolean("isBanned") ?: false
-                if (role != "site_owner" || coins < 99999L || banned) {
+                if (safeDeviceId.isNotBlank()) {
                     userRef.update(
                         mapOf(
-                            "role" to "site_owner",
-                            "coins" to maxOf(coins, 99999L),
-                            "isBanned" to false,
-                            "banReason" to "",
+                            "deviceId" to safeDeviceId,
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
                     ).await()
+                }
+            } else {
+                val userUpdates = mutableMapOf<String, Any>()
+                if (isSupreme) {
+                    val role = userSnap.getString("role") ?: "member"
+                    val coins = userSnap.getLong("coins") ?: 0L
+                    val banned = userSnap.getBoolean("isBanned") ?: false
+                    val xBanned = userSnap.getBoolean("isXBanned") ?: false
+                    if (role != "site_owner" || coins < 99999L || banned || xBanned) {
+                        userUpdates["role"] = "site_owner"
+                        userUpdates["coins"] = maxOf(coins, 99999L)
+                        userUpdates["isBanned"] = false
+                        userUpdates["isXBanned"] = false
+                        userUpdates["banReason"] = ""
+                    }
+                }
+                if (safeDeviceId.isNotBlank() && userSnap.getString("deviceId").orEmpty() != safeDeviceId) {
+                    userUpdates["deviceId"] = safeDeviceId
+                }
+                if (userUpdates.isNotEmpty()) {
+                    userUpdates["updatedAt"] = FieldValue.serverTimestamp()
+                    userRef.update(userUpdates).await()
                 }
             }
 
@@ -346,20 +362,34 @@ class ChatRepository(
             if (!publicSnap.exists()) {
                 val initRole = if (isSupreme) "site_owner" else "member"
                 val initCoins = if (isSupreme) 99999L else 1500L
-                val publicMap = mapOf(
+                val publicMap = mutableMapOf<String, Any>(
                     "userId" to uid,
                     "username" to rawName,
                     "displayName" to rawName,
                     "role" to initRole,
                     "bio" to if (isSupreme) "صاحب الموقع والمؤسس الأعلى" else "مرحباً بالجميع في شات الغرف",
                     "avatarUrl" to photoUrl,
+                    "coverUrl" to "",
+                    "profileBgEffect" to if (isSupreme) "royal_waves" else "none",
+                    "age" to 0L,
+                    "gender" to "",
+                    "country" to "",
+                    "allowCalls" to true,
+                    "allowPm" to true,
+                    "likesCount" to 0L,
+                    "ratingSum" to 0L,
+                    "ratingCount" to 0L,
+                    "isGhosted" to false,
+                    "isXBanned" to false,
+                    "kickedFromRoom" to "",
+                    "deviceId" to safeDeviceId,
                     "nameColor" to if (isSupreme) "#B91C1C" else "#1A45E5",
                     "textColor" to "#1E293B",
                     "nameBgColor" to "",
                     "neonColor" to if (isSupreme) "#F59E0B" else "",
                     "fontFamily" to "Cairo",
                     "fontStyle" to if (isSupreme) "Bold" else "Normal",
-                    "avatarFrame" to if (isSupreme) "gold_royal" else "none",
+                    "avatarFrame" to if (isSupreme) "kings_crown" else "none",
                     "nameplateStyle" to if (isSupreme) "crimson_royal" else "default",
                     "nameShine" to if (isSupreme) "gold_shimmer" else "none",
                     "vipWings" to isSupreme,
@@ -384,10 +414,14 @@ class ChatRepository(
                     "lastSeenAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
+                if (safeDeviceId.isNotBlank()) {
+                    updates["deviceId"] = safeDeviceId
+                }
                 if (isSupreme) {
                     updates["role"] = "site_owner"
                     val coins = publicSnap.getLong("coins") ?: 0L
                     if (coins < 99999L) updates["coins"] = 99999L
+                    if (publicSnap.getBoolean("isXBanned") == true) updates["isXBanned"] = false
                 }
                 publicRef.update(updates).await()
             }
@@ -605,13 +639,14 @@ class ChatRepository(
                 "neonColor" to sender.neonColor.take(30),
                 "fontFamily" to sender.fontFamily.take(40),
                 "fontStyle" to sender.fontStyle.take(40),
-                "avatarUrl" to sender.avatarUrl.take(340000),
+                "avatarUrl" to sender.avatarUrl.take(430000),
                 "avatarFrame" to sender.avatarFrame.take(40),
                 "nameplateStyle" to sender.nameplateStyle.take(40),
                 "nameShine" to sender.nameShine.take(40),
                 "vipWings" to sender.vipWings,
                 "isAdminNotice" to isAdminNotice,
                 "isGift" to false,
+                "isGhostOnly" to sender.isGhosted,
                 "msgType" to msgType,
                 "content" to safeContent,
                 "mediaUrl" to safeMedia,
@@ -809,12 +844,19 @@ class ChatRepository(
         }
     }
 
-    // --- Profile & 4-Tab Customizations ---
+    // --- Profile & 6-Tab Customizations ---
 
     suspend fun updateMyCustomizations(
         displayName: String,
         bio: String,
         avatarUrl: String,
+        coverUrl: String,
+        profileBgEffect: String,
+        age: Long,
+        gender: String,
+        country: String,
+        allowCalls: Boolean,
+        allowPm: Boolean,
         nameColor: String,
         textColor: String,
         nameBgColor: String,
@@ -836,7 +878,14 @@ class ChatRepository(
                 mapOf(
                     "displayName" to safeName,
                     "bio" to bio.trim().take(240),
-                    "avatarUrl" to avatarUrl.take(400000),
+                    "avatarUrl" to avatarUrl.take(430000),
+                    "coverUrl" to coverUrl.take(430000),
+                    "profileBgEffect" to profileBgEffect.take(40).ifBlank { "none" },
+                    "age" to age.coerceIn(0L, 120L),
+                    "gender" to gender.trim().take(30),
+                    "country" to country.trim().take(60),
+                    "allowCalls" to allowCalls,
+                    "allowPm" to allowPm,
                     "nameColor" to nameColor.take(30),
                     "textColor" to textColor.take(30),
                     "nameBgColor" to nameBgColor.take(30),
@@ -847,7 +896,7 @@ class ChatRepository(
                     "nameplateStyle" to nameplateStyle.take(40),
                     "nameShine" to nameShine.take(40),
                     "vipWings" to vipWings,
-                    "profileMusic" to profileMusic.take(80),
+                    "profileMusic" to profileMusic.take(120),
                     "vipFamily" to vipFamily.trim().take(60),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
@@ -857,6 +906,57 @@ class ChatRepository(
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.UPDATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun interactWithProfile(targetUid: String, addLike: Boolean, rateStars: Int = 0): Result<Unit> {
+        val path = "public_profiles/$targetUid"
+        return try {
+            val uid = requireUserId()
+            require(targetUid != uid) { "لا يمكنك تقييم أو إعجاب ملفك الشخصي" }
+            val ref = db.collection("public_profiles").document(targetUid)
+            val snap = ref.get().await()
+            if (!snap.exists()) throw IllegalStateException("الحساب غير موجود")
+            val curLikes = snap.getLong("likesCount") ?: 0L
+            val curSum = snap.getLong("ratingSum") ?: 0L
+            val curCount = snap.getLong("ratingCount") ?: 0L
+
+            val updates = mutableMapOf<String, Any>(
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (addLike) {
+                updates["likesCount"] = curLikes + 1L
+            }
+            if (rateStars in 1..5) {
+                updates["ratingSum"] = curSum + rateStars.toLong()
+                updates["ratingCount"] = curCount + 1L
+            }
+            if (updates.size > 1) {
+                ref.update(updates).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun clearKickedFlag(): Result<Unit> {
+        return try {
+            val uid = requireUserId()
+            db.collection("public_profiles").document(uid).update(
+                mapOf(
+                    "kickedFromRoom" to "",
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1353,6 +1453,7 @@ class ChatRepository(
                 "label" to rank.label.trim().take(60),
                 "icon" to rank.icon.trim().take(16),
                 "iconImageUrl" to rank.iconImageUrl.take(220000),
+                "badgeStyle" to rank.badgeStyle.take(40).ifBlank { "crown_royal" },
                 "bgColor" to rank.bgColor.take(24),
                 "textColor" to rank.textColor.take(24),
                 "power" to rank.power.coerceIn(0L, 100L),
@@ -1431,7 +1532,12 @@ class ChatRepository(
         }
     }
 
-    suspend fun banUser(actor: PublicProfile, target: PublicProfile, reason: String): Result<Unit> {
+    suspend fun banUser(
+        actor: PublicProfile,
+        target: PublicProfile,
+        reason: String,
+        banType: String = "ban"
+    ): Result<Unit> {
         return try {
             val uid = requireUserId()
             require(target.userId != uid)
@@ -1439,6 +1545,8 @@ class ChatRepository(
             val banRef = db.collection("bans").document(target.userId)
             val banSnap = banRef.get().await()
             val cleanReason = reason.trim().take(300).ifBlank { "مخالفة القوانين" }
+            val cleanType = if (banType == "xban") "xban" else "ban"
+            val cleanDev = target.deviceId.take(128)
             if (banSnap.exists()) {
                 banRef.update(
                     mapOf(
@@ -1447,6 +1555,8 @@ class ChatRepository(
                         "bannedById" to uid,
                         "bannedByName" to actor.shownName.take(60),
                         "reason" to cleanReason,
+                        "banType" to cleanType,
+                        "deviceId" to cleanDev,
                         "isActive" to true,
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
@@ -1459,11 +1569,32 @@ class ChatRepository(
                         "bannedById" to uid,
                         "bannedByName" to actor.shownName.take(60),
                         "reason" to cleanReason,
+                        "banType" to cleanType,
+                        "deviceId" to cleanDev,
                         "isActive" to true,
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
+            }
+            if (cleanType == "xban") {
+                db.collection("public_profiles").document(target.userId).update(
+                    mapOf(
+                        "isXBanned" to true,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+                val userDoc = db.collection("users").document(target.userId).get().await()
+                if (userDoc.exists()) {
+                    db.collection("users").document(target.userId).update(
+                        mapOf(
+                            "isXBanned" to true,
+                            "isBanned" to true,
+                            "banReason" to cleanReason,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
             }
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -1478,11 +1609,119 @@ class ChatRepository(
         return try {
             requireUserId()
             db.collection("bans").document(targetUserId).delete().await()
+            try {
+                val prof = db.collection("public_profiles").document(targetUserId).get().await()
+                if (prof.exists()) {
+                    db.collection("public_profiles").document(targetUserId).update(
+                        mapOf("isXBanned" to false, "updatedAt" to FieldValue.serverTimestamp())
+                    ).await()
+                }
+                val uDoc = db.collection("users").document(targetUserId).get().await()
+                if (uDoc.exists()) {
+                    db.collection("users").document(targetUserId).update(
+                        mapOf(
+                            "isBanned" to false,
+                            "isXBanned" to false,
+                            "banReason" to "",
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            } catch (_: Exception) { }
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.DELETE, "bans/$targetUserId")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setUserGhosted(target: PublicProfile, ghosted: Boolean): Result<Unit> {
+        return try {
+            val uid = requireUserId()
+            require(target.userId != uid)
+            require(target.role != "site_owner") { "لا يمكن تجميد صاحب الموقع!" }
+            db.collection("public_profiles").document(target.userId).update(
+                mapOf(
+                    "isGhosted" to ghosted,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "public_profiles/${target.userId}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun kickUserFromRoom(target: PublicProfile, roomId: String): Result<Unit> {
+        return try {
+            val uid = requireUserId()
+            require(target.userId != uid)
+            require(target.role != "site_owner") { "لا يمكن طرد صاحب الموقع!" }
+            db.collection("public_profiles").document(target.userId).update(
+                mapOf(
+                    "kickedFromRoom" to roomId.take(64),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "public_profiles/${target.userId}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun giveUserCoins(target: PublicProfile, amount: Long): Result<Unit> {
+        return try {
+            requireUserId()
+            require(isCurrentSupremeOwner()) { "إضافة الكوينز الإدارية متاحة للمالك الأعلى فقط." }
+            require(amount in 1L..100000L)
+            db.collection("public_profiles").document(target.userId).update(
+                mapOf(
+                    "coins" to FieldValue.increment(amount),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            val userDoc = db.collection("users").document(target.userId).get().await()
+            if (userDoc.exists()) {
+                db.collection("users").document(target.userId).update(
+                    mapOf(
+                        "coins" to FieldValue.increment(amount),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "public_profiles/${target.userId}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteUserAccountPermanently(target: PublicProfile): Result<Unit> {
+        return try {
+            val uid = requireUserId()
+            require(isCurrentSupremeOwner()) { "الحذف النهائي للحسابات متاح للمالك الأعلى فقط." }
+            require(target.userId != uid) { "لا يمكنك حذف حساب المالك الأعلى!" }
+            require(target.role != "site_owner") { "حساب صاحب الموقع محمي ولا يمكن حذفه!" }
+            try {
+                db.collection("admins").document(target.userId).delete().await()
+            } catch (_: Exception) { }
+            db.collection("public_profiles").document(target.userId).delete().await()
+            db.collection("users").document(target.userId).delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, "users/${target.userId}")
             Result.failure(e)
         }
     }

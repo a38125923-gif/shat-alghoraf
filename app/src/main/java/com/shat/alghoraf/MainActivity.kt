@@ -1,6 +1,8 @@
 package com.shat.alghoraf
 
+import android.annotation.SuppressLint
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,6 +42,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("HardwareIds")
 @Composable
 fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
     val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
@@ -59,10 +62,16 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
                         }
                         val databaseId = app.getString(R.string.firestore_database_id)
                         val db = FirebaseFirestore.getInstance(databaseId)
+                        val deviceId = try {
+                            Settings.Secure.getString(app.contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
+                        } catch (_: Exception) {
+                            ""
+                        }
                         MainChatViewModel(
                             repository = ChatRepository(db, auth),
                             currentUserId = uid,
-                            currentUserEmail = email
+                            currentUserEmail = email,
+                            deviceId = deviceId
                         )
                     }
                 }

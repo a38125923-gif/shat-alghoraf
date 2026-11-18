@@ -18,6 +18,8 @@ data class UserPrivate(
     val coins: Long = 1500L,
     @get:PropertyName("isStealth") @PropertyName("isStealth") val isStealth: Boolean = false,
     @get:PropertyName("isBanned") @PropertyName("isBanned") val isBanned: Boolean = false,
+    @get:PropertyName("isXBanned") @PropertyName("isXBanned") val isXBanned: Boolean = false,
+    val deviceId: String = "",
     val banReason: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
@@ -45,6 +47,20 @@ data class PublicProfile(
     val vipWings: Boolean = false,
     val profileMusic: String = "",
     val vipFamily: String = "",
+    val coverUrl: String = "",
+    val profileBgEffect: String = "none",
+    val age: Long = 0L,
+    val gender: String = "",
+    val country: String = "",
+    val allowCalls: Boolean = true,
+    val allowPm: Boolean = true,
+    val likesCount: Long = 0L,
+    val ratingSum: Long = 0L,
+    val ratingCount: Long = 0L,
+    @get:PropertyName("isGhosted") @PropertyName("isGhosted") val isGhosted: Boolean = false,
+    @get:PropertyName("isXBanned") @PropertyName("isXBanned") val isXBanned: Boolean = false,
+    val kickedFromRoom: String = "",
+    val deviceId: String = "",
     val coins: Long = 1500L,
     val activityPoints: Long = 0L,
     val giftsReceived: Long = 0L,
@@ -129,6 +145,7 @@ data class ChatMessage(
     val msgType: String = "text",
     val content: String = "",
     val mediaUrl: String = "",
+    @get:PropertyName("isGhostOnly") @PropertyName("isGhostOnly") val isGhostOnly: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null
 )
 
@@ -140,6 +157,7 @@ data class RankConfig(
     val label: String = "عضو",
     val icon: String = "👤",
     val iconImageUrl: String = "",
+    val badgeStyle: String = "crown_royal",
     val bgColor: String = "#334155",
     val textColor: String = "#FFFFFF",
     val power: Long = 1L,
@@ -296,6 +314,8 @@ data class BanRecord(
     val bannedById: String = "",
     val bannedByName: String = "",
     val reason: String = "",
+    val banType: String = "ban",
+    val deviceId: String = "",
     @get:PropertyName("isActive") @PropertyName("isActive") val isActive: Boolean = true,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
@@ -315,4 +335,26 @@ data class StyleOption(
     val id: String,
     val label: String,
     val badge: String = ""
+)
+
+data class YoutubeSearchResult(
+    val videoId: String,
+    val title: String,
+    val channel: String,
+    val duration: String,
+    val thumbnailUrl: String
+)
+
+data class RadioStationItem(
+    val id: String,
+    val name: String,
+    val genre: String,
+    val streamUrl: String
+)
+
+data class StickerOption(
+    val id: String,
+    val glyph: String,
+    val label: String,
+    val animType: String = "bounce"
 )

@@ -21,12 +21,30 @@ object DefaultCatalogs {
 
     val avatarFrames = listOf(
         StyleOption("none", "بدون إطار", "⭕"),
+        StyleOption("kings_crown", "تاج الملوك KINGS", "👑"),
         StyleOption("gold_royal", "إطار ملكي ذهبي", "👑"),
         StyleOption("neon_cyan", "إطار نيون سماوي", "💠"),
         StyleOption("flame_red", "إطار نار مشتعلة", "🔥"),
         StyleOption("emerald_vip", "إطار زمرد VIP", "💎"),
         StyleOption("rose_aura", "إطار هالة وردية", "🌸"),
         StyleOption("violet_crown", "إطار بنفسجي فاخر", "⚜️")
+    )
+
+    val profileBackgroundEffects = listOf(
+        StyleOption("none", "بدون تأثير خلفي", "⬜"),
+        StyleOption("animated_flames", "لهب ملكي متحرك", "🔥"),
+        StyleOption("falling_stars", "نجوم متساقطة", "✨"),
+        StyleOption("royal_waves", "أمواج بحرية فاخرة", "🌊"),
+        StyleOption("aurora_glow", "أضواء الشفق الساحرة", "🌌")
+    )
+
+    val rankBadgeStyles = listOf(
+        StyleOption("crown_royal", "تاج ملكي ذهبي", "👑"),
+        StyleOption("gold_eagle", "صقر ذهبي ملكي", "🦅"),
+        StyleOption("silver_wing", "أجنحة فضية", "🕊️"),
+        StyleOption("diamond_medal", "وسام ماسي", "💎"),
+        StyleOption("royal_shield", "درع ملكي", "🛡️"),
+        StyleOption("neon_badge", "شارة نيون", "⚡")
     )
 
     val nameplateStyles = listOf(
@@ -89,6 +107,35 @@ object DefaultCatalogs {
         "😀", "😂", "😍", "🥰", "😎", "👑", "🔥", "💖",
         "🌹", "🎉", "👏", "🙏", "☕", "💎", "🎶", "✨",
         "🤝", "💯", "🥳", "😅", "🫡", "🤍", "❤️", "🌙"
+    )
+
+    val emojiCategories: Map<String, List<String>> = mapOf(
+        "وجوه" to listOf("😀", "😂", "🤣", "😍", "🥰", "😘", "😎", "🤩", "🥳", "😇", "😉", "😋", "🤔", "😴", "😅", "🫡", "🤗", "🤭", "😌", "😢", "😤", "🤯", "🥺", "🫶"),
+        "قلوب" to listOf("❤️", "💖", "💘", "💝", "💗", "💓", "💞", "💕", "🤍", "🖤", "💜", "💙", "💚", "💛", "🧡", "❣️", "❤️‍🔥", "💋"),
+        "رموز" to listOf("👑", "💎", "🔥", "⭐", "🌟", "✨", "⚡", "🛡️", "⚜️", "🏆", "🎖️", "🏅", "🦅", "🕊️", "🦋", "🌙", "☀️", "💯", "✅", "🧿"),
+        "احتفالات" to listOf("🎉", "🎊", "🎈", "🎁", "🌹", "💐", "☕", "🍵", "🎶", "🎵", "🎧", "🎤", "👏", "🙏", "🤝", "✌️", "🥂", "🍰")
+    )
+
+    val animatedStickers = listOf(
+        StickerOption("crown_king", "👑", "تاج الملك", "bounce"),
+        StickerOption("love_burst", "💖", "نبض الحب", "pulse"),
+        StickerOption("royal_fire", "🔥", "حماس ناري", "shake"),
+        StickerOption("diamond_vip", "💎", "ألماس VIP", "spin"),
+        StickerOption("rose_love", "🌹", "وردة فاخرة", "bounce"),
+        StickerOption("party_popper", "🎉", "احتفال", "shake"),
+        StickerOption("sparkle_magic", "✨", "تألق", "pulse"),
+        StickerOption("clap_vip", "👏", "تصفيق حار", "bounce"),
+        StickerOption("coffee_time", "☕", "قهوة رايقة", "bounce"),
+        StickerOption("music_vibe", "🎶", "طرب وموسيقى", "pulse"),
+        StickerOption("kiss_heart", "😘", "قبلة حب", "pulse"),
+        StickerOption("salute_boss", "🫡", "تحية ملكية", "bounce")
+    )
+
+    val radioStations = listOf(
+        RadioStationItem("arab_hits", "إذاعة الأغاني العربية", "طرب عربي", "https://stream.zeno.fm/0r0xa792kwzuv"),
+        RadioStationItem("quran", "إذاعة القرآن الكريم", "تلاوات مباشرة", "https://stream.radiojar.com/8s5u5tpdtwzuv"),
+        RadioStationItem("lofi", "راديو موسيقى لوفاي", "Lo-Fi استرخاء", "https://ice1.somafm.com/groovesalad-128-mp3"),
+        RadioStationItem("night_vibes", "سهرة الطرب الليلية", "موسيقى ليلية", "https://ice1.somafm.com/lush-128-mp3")
     )
 
     val defaultRooms = listOf(

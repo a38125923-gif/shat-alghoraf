@@ -10,6 +10,12 @@
       href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800&family=Changa:wght@400;600;700&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
     <link rel="stylesheet" href="/styles.css" />
     <style id="dynamicCmsCss"></style>
   </head>
@@ -21,7 +27,7 @@
       <div class="auth-card">
         <div class="auth-brand">
           <img id="authSiteLogo" class="auth-logo hidden" alt="شعار الموقع" />
-          <div class="auth-badge">💬 شات عربي مباشر</div>
+          <div class="auth-badge"><i class="fa-solid fa-comments"></i> منصة الشات العربي المباشر</div>
           <h1 id="authSiteName">شات الغرف المباشر</h1>
           <p id="authSiteDesc">دردشة عربية فورية • مايكات صوتية • رتب وإطارات ملكية</p>
         </div>
@@ -37,7 +43,7 @@
           <input type="text" id="loginIdentifier" placeholder="أدخل اسمك أو بريدك" required />
           <label>كلمة المرور</label>
           <input type="password" id="loginPassword" placeholder="••••••••" required />
-          <button type="submit" class="btn-primary btn-full">دخول إلى الشات</button>
+          <button type="submit" class="btn-primary btn-full"><i class="fa-solid fa-right-to-bracket"></i> دخول إلى الشات</button>
         </form>
 
         <form id="registerForm" class="auth-form hidden">
@@ -47,13 +53,13 @@
           <input type="email" id="regEmail" placeholder="name@example.com" required />
           <label>كلمة المرور</label>
           <input type="password" id="regPassword" placeholder="5 أحرف على الأقل" minlength="5" required />
-          <button type="submit" class="btn-primary btn-full">إنشاء حساب ودخول</button>
+          <button type="submit" class="btn-primary btn-full"><i class="fa-solid fa-user-plus"></i> إنشاء حساب ودخول</button>
         </form>
 
         <form id="guestForm" class="auth-form hidden">
           <label>الاسم المستعار (زائر)</label>
           <input type="text" id="guestName" placeholder="اختر اسماً للظهور في الغرف" minlength="2" maxlength="22" required />
-          <button type="submit" class="btn-primary btn-full">دخول فوري كزائر</button>
+          <button type="submit" class="btn-primary btn-full"><i class="fa-solid fa-bolt"></i> دخول فوري كزائر</button>
         </form>
 
         <div id="authError" class="form-error hidden"></div>
@@ -73,35 +79,38 @@
               </span>
               <span class="online-dot"></span>
             </button>
-            <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">👻</span>
+            <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">
+              <i class="fa-solid fa-user-secret"></i>
+            </span>
 
             <div id="profileDropdown" class="profile-dropdown hidden">
               <div class="dropdown-header">
                 <div id="dropUserName" class="drop-name">-</div>
                 <div id="dropUserRole" class="drop-role">-</div>
-                <div id="dropUserCoins" class="drop-coins">💰 0 عملة</div>
+                <div id="dropUserCoins" class="drop-coins"><i class="fa-solid fa-coins"></i> 0 عملة</div>
               </div>
-              <button type="button" id="dropCustomizeBtn" class="drop-item">🎨 تخصيص الملف والإضافات</button>
-              <button type="button" id="dropGiftsTabBtn" class="drop-item">🎁 هداياي ومحفظتي</button>
-              <button type="button" id="dropStealthBtn" class="drop-item hidden">👻 وضع التخفي (إخفاء التواجد)</button>
-              <button type="button" id="dropAdminBtn" class="drop-item hidden">⚙️ لوحة التحكم</button>
-              <button type="button" id="dropLogoutBtn" class="drop-item danger">🚪 تسجيل الخروج</button>
+              <button type="button" id="dropProfileBtn" class="drop-item"><i class="fa-solid fa-id-card"></i> ملفي الشخصي (6 تبويبات)</button>
+              <button type="button" id="dropCustomizeBtn" class="drop-item"><i class="fa-solid fa-wand-magic-sparkles"></i> تخصيص الألوان والإضافات</button>
+              <button type="button" id="dropGiftsTabBtn" class="drop-item"><i class="fa-solid fa-gift"></i> هداياي ومحفظتي</button>
+              <button type="button" id="dropStealthBtn" class="drop-item hidden"><i class="fa-solid fa-user-secret"></i> وضع التخفي (إخفاء التواجد)</button>
+              <button type="button" id="dropAdminBtn" class="drop-item hidden"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
+              <button type="button" id="dropLogoutBtn" class="drop-item danger"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
             </div>
           </div>
 
           <div class="quick-top-actions">
             <button type="button" id="topNotifBtn" class="top-icon-btn" title="الإشعارات">
-              <span class="ti-ico">🔔</span>
+              <span class="ti-ico"><i class="fa-solid fa-bell"></i></span>
               <span id="notifBadge" class="badge-count hidden">0</span>
               <span class="ti-lbl">اشعار</span>
             </button>
             <button type="button" id="topFriendsBtn" class="top-icon-btn" title="طلبات الصداقة">
-              <span class="ti-ico">🤝</span>
+              <span class="ti-ico"><i class="fa-solid fa-user-group"></i></span>
               <span id="friendBadge" class="badge-count hidden">0</span>
               <span class="ti-lbl">طلب</span>
             </button>
             <button type="button" id="topPmBtn" class="top-icon-btn" title="الرسائل الخاصة">
-              <span class="ti-ico">✉️</span>
+              <span class="ti-ico"><i class="fa-solid fa-envelope"></i></span>
               <span id="pmBadge" class="badge-count hidden">0</span>
               <span class="ti-lbl">رسالة</span>
             </button>
@@ -113,15 +122,17 @@
         <div class="topbar-left">
           <div class="gold-circles-group">
             <button type="button" id="goldRichBtn" class="gold-circle-btn crown-btn" title="الأثرياء">
-              <span class="gc-ico">👑</span>
+              <span class="gc-ico"><i class="fa-solid fa-crown"></i></span>
               <span class="gc-lbl">الاثرياء</span>
             </button>
             <button type="button" id="goldVipsBtn" class="gold-circle-btn diamond-btn" title="الكبار والتفاعل">
-              <span class="gc-ico">🔶</span>
+              <span class="gc-ico"><i class="fa-solid fa-gem"></i></span>
               <span class="gc-lbl">الكبار</span>
             </button>
           </div>
-          <button type="button" id="menuDrawerBtn" class="menu-burger-btn" title="القائمة">☰</button>
+          <button type="button" id="menuDrawerBtn" class="menu-burger-btn" title="القائمة">
+            <i class="fa-solid fa-bars"></i>
+          </button>
         </div>
       </header>
 
@@ -130,48 +141,67 @@
         <div id="micsCollapsibleWrap" class="mics-bar-row">
           <div id="micSlotsContainer" class="mic-slots-row"></div>
           <div class="mic-self-floating hidden" id="micSelfFloating">
-            <button type="button" id="toggleSelfMicMuteBtn" class="mini-ctrl-btn hidden" title="كتم/فتح المايك الخاص بك">🎙️</button>
-            <button type="button" id="leaveMicBtn" class="mini-ctrl-btn danger hidden" title="نزول من المايك">🔇</button>
+            <button type="button" id="toggleSelfMicMuteBtn" class="mini-ctrl-btn hidden" title="كتم/فتح المايك الخاص بك">
+              <i class="fa-solid fa-microphone"></i>
+            </button>
+            <button type="button" id="leaveMicBtn" class="mini-ctrl-btn danger hidden" title="نزول من المايك">
+              <i class="fa-solid fa-microphone-slash"></i>
+            </button>
           </div>
         </div>
 
-        <!-- THIN BLUE LINE WITH TWO SMALL CENTERED BLUE CIRCULAR BUTTONS -->
+        <!-- THIN BLUE LINE WITH CENTERED BLUE CIRCULAR BUTTONS -->
         <div class="mics-blue-divider">
           <span class="blue-divider-line"></span>
           <div class="blue-divider-btns">
-            <button type="button" id="toggleMicsCollapseBtn" class="divider-circle-btn" title="تبديل / تصغير المايكات">↕️</button>
-            <button type="button" id="micsAndYtSettingsBtn" class="divider-circle-btn" title="إعدادات المايكات ومشغل يوتيوب">⚙️</button>
-            <button type="button" id="toggleYoutubeBarBtn" class="divider-circle-btn yt-dot-btn hidden" title="مشغل يوتيوب الغرفة">🎬</button>
+            <button type="button" id="toggleMicsCollapseBtn" class="divider-circle-btn" title="تبديل / تصغير المايكات">
+              <i class="fa-solid fa-up-down"></i>
+            </button>
+            <button type="button" id="micsAndYtSettingsBtn" class="divider-circle-btn" title="مشغل يوتيوب الغرفة ومعلوماتها">
+              <i class="fa-brands fa-youtube"></i>
+            </button>
+            <button type="button" id="toggleYoutubeBarBtn" class="divider-circle-btn yt-dot-btn hidden" title="مشغل يوتيوب الغرفة">
+              <i class="fa-solid fa-play"></i>
+            </button>
           </div>
           <span class="blue-divider-line"></span>
         </div>
 
-        <!-- COLLAPSIBLE ROOM META STRIP (HIDDEN BY DEFAULT UNTIL TOGGLED OR YT ACTIVE) -->
+        <!-- COLLAPSIBLE ROOM META STRIP -->
         <div id="roomBannerCard" class="room-banner-card hidden">
           <img id="roomBannerImg" src="/assets/rooms/general.svg" alt="صورة الغرفة" class="room-banner-thumb" />
           <div class="room-banner-info">
             <div class="room-banner-title-row">
               <span id="roomBannerName">الغرفة العامة</span>
-              <span id="roomActivityBadge" class="room-activity-pill">🔥 0 تفاعل</span>
+              <span id="roomActivityBadge" class="room-activity-pill"><i class="fa-solid fa-fire"></i> 0 تفاعل</span>
             </div>
             <div id="roomBannerDesc" class="room-banner-desc">الغرفة الرئيسية للتعارف والدردشة</div>
           </div>
-          <button type="button" id="roomSettingsBtn" class="mini-ctrl-btn hidden" title="إعدادات الغرفة">⚙️</button>
+          <button type="button" id="roomSettingsBtn" class="mini-ctrl-btn hidden" title="إعدادات الغرفة">
+            <i class="fa-solid fa-gear"></i>
+          </button>
         </div>
 
-        <!-- COLLAPSIBLE SYNCED YOUTUBE PLAYER BAR -->
+        <!-- COLLAPSIBLE SYNCED YOUTUBE PLAYER BAR + SEARCH BY NAME -->
         <div id="roomYoutubeBar" class="room-yt-bar hidden">
           <div class="yt-bar-head">
-            <span id="ytNowPlayingLabel">🎬 مشغل يوتيوب الغرفة</span>
+            <span id="ytNowPlayingLabel"><i class="fa-brands fa-youtube" style="color:#ef4444"></i> مشغل يوتيوب الغرفة</span>
             <div class="yt-bar-controls">
-              <button type="button" id="ytMuteLocalBtn" class="yt-mini-btn">🔊 صوت</button>
-              <button type="button" id="ytStopBtn" class="yt-mini-btn danger hidden">⏹️ إيقاف</button>
-              <button type="button" id="ytCloseViewBtn" class="yt-mini-btn">✕</button>
+              <button type="button" id="ytMuteLocalBtn" class="yt-mini-btn"><i class="fa-solid fa-volume-high"></i> صوت</button>
+              <button type="button" id="ytStopBtn" class="yt-mini-btn danger hidden"><i class="fa-solid fa-stop"></i> إيقاف</button>
+              <button type="button" id="ytCloseViewBtn" class="yt-mini-btn"><i class="fa-solid fa-xmark"></i></button>
             </div>
           </div>
-          <div id="ytManagerForm" class="yt-manager-form hidden">
-            <input type="text" id="ytUrlInput" placeholder="ألصق رابط يوتيوب هنا لتشغيله للجميع في الغرفة..." />
-            <button type="button" id="ytPlayRoomBtn" class="btn-primary btn-xs">تشغيل للغرفة</button>
+          <div id="ytManagerForm" class="yt-manager-wrap hidden">
+            <div class="yt-manager-form">
+              <input type="text" id="ytSearchInput" placeholder="ابحث بالاسم عن أغنية أو فيديو في يوتيوب..." />
+              <button type="button" id="ytSearchBtn" class="btn-primary btn-xs"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>
+            </div>
+            <div id="ytSearchResults" class="yt-search-results hidden"></div>
+            <div class="yt-manager-form">
+              <input type="text" id="ytUrlInput" placeholder="أو ألصق رابط يوتيوب مباشر هنا..." />
+              <button type="button" id="ytPlayRoomBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i> تشغيل الرابط</button>
+            </div>
           </div>
           <div id="ytPlayerContainer" class="yt-player-wrap hidden">
             <iframe
@@ -194,8 +224,8 @@
 
         <aside id="usersSidePanel" class="users-side-panel">
           <div class="users-panel-head">
-            <span>المتواجدون (<span id="sideOnlineCount">0</span>)</span>
-            <button type="button" id="closeUsersSideBtn" class="close-side-btn">✕</button>
+            <span><i class="fa-solid fa-users"></i> المتواجدون (<span id="sideOnlineCount">0</span>)</span>
+            <button type="button" id="closeUsersSideBtn" class="close-side-btn"><i class="fa-solid fa-xmark"></i></button>
           </div>
           <div id="roomUsersList" class="users-list"></div>
         </aside>
@@ -204,78 +234,108 @@
       <!-- TOPIC BANNER (#d8f3dc) ABOVE INPUT BAR -->
       <div id="topicBannerBar" class="topic-banner-bar">
         <div class="topic-banner-content">
-          <span class="topic-warn-ico">⚠️</span>
+          <span class="topic-warn-ico"><i class="fa-solid fa-bullhorn"></i></span>
           <strong class="topic-title-lbl">الموضوع:</strong>
           <span id="topicBannerText" class="topic-text-val">أهلاً بكم في شات الغرف المباشر، نتمنى لكم أطيب الأوقات!</span>
         </div>
-        <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق">×</button>
+        <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <!-- WHITE INPUT BAR -->
       <section id="bottomBar" class="cody-input-bar">
-        <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">➤</button>
+        <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
 
         <div class="input-pill-wrap">
-          <span id="adminNoticeModePill" class="admin-mode-pill hidden" title="إلغاء وضع إشعار الإدارة">📢 إشعار ✕</span>
+          <span id="adminNoticeModePill" class="admin-mode-pill hidden" title="إلغاء وضع إشعار الإدارة">
+            <i class="fa-solid fa-bullhorn"></i> إشعار <i class="fa-solid fa-xmark"></i>
+          </span>
           <input
             type="text"
             id="messageInput"
-            placeholder="اكتب هنا..."
+            placeholder="اكتب رسالتك هنا..."
             maxlength="1000"
             autocomplete="off"
           />
-          <button type="button" id="emojiPickerBtn" class="inside-emoji-btn" title="إيموجي وملصقات">😊</button>
+          <button type="button" id="emojiPickerBtn" class="inside-emoji-btn" title="إيموجي وملصقات">
+            <i class="fa-regular fa-face-smile"></i>
+          </button>
         </div>
 
         <div class="input-left-tools">
-          <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="تسجيل رسالة صوتية">🎤</button>
+          <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="تسجيل رسالة صوتية">
+            <i class="fa-solid fa-microphone"></i>
+          </button>
           <div class="plus-menu-wrap">
-            <button type="button" id="plusMenuBtn" class="input-tool-btn" title="إضافات وخيارات">+</button>
+            <button type="button" id="plusMenuBtn" class="input-tool-btn" title="إضافات وخيارات">
+              <i class="fa-solid fa-plus"></i>
+            </button>
             <div id="plusDropdown" class="plus-dropdown hidden">
-              <button type="button" id="plusUploadImageBtn" class="drop-item">🖼️ إرسال صورة</button>
-              <button type="button" id="plusYoutubeBtn" class="drop-item">🎬 مشغل يوتيوب الغرفة</button>
-              <button type="button" id="plusReportBtn" class="drop-item">🚨 إبلاغ الإدارة</button>
-              <button type="button" id="plusAdminNoticeBtn" class="drop-item hidden">📢 إرسال كإشعار إدارة</button>
-              <button type="button" id="plusCustomizeTextBtn" class="drop-item">🎨 تخصيص الخط والألوان</button>
-              <button type="button" id="plusClearRoomBtn" class="drop-item danger hidden">🧹 مسح رسائل الغرفة</button>
+              <button type="button" id="plusUploadImageBtn" class="drop-item"><i class="fa-solid fa-image"></i> إرسال صورة / GIF</button>
+              <button type="button" id="plusYoutubeBtn" class="drop-item"><i class="fa-brands fa-youtube"></i> مشغل يوتيوب الغرفة</button>
+              <button type="button" id="plusReportBtn" class="drop-item"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
+              <button type="button" id="plusAdminNoticeBtn" class="drop-item hidden"><i class="fa-solid fa-bullhorn"></i> إرسال كإشعار إدارة</button>
+              <button type="button" id="plusCustomizeTextBtn" class="drop-item"><i class="fa-solid fa-palette"></i> تخصيص الخط والألوان</button>
+              <button type="button" id="plusClearRoomBtn" class="drop-item danger hidden"><i class="fa-solid fa-broom"></i> مسح رسائل الغرفة</button>
             </div>
           </div>
         </div>
 
-        <input type="file" id="chatImageFileInput" accept="image/*" class="hidden" />
+        <input type="file" id="chatImageFileInput" accept="image/*,image/gif" class="hidden" />
       </section>
 
       <!-- FIXED DARK NAVY FOOTER BAR (#0b2239) -->
       <footer id="codyFooterBar" class="cody-footerbar">
         <div class="footer-right-group">
           <button type="button" id="footerOptionsBtn" class="footer-nav-btn" title="الخيارات">
-            <span class="fn-ico">⚙️</span>
+            <span class="fn-ico"><i class="fa-solid fa-sliders"></i></span>
             <span class="fn-lbl">الخيارات</span>
           </button>
           <button type="button" id="toggleUsersDrawerBtn" class="footer-nav-btn" title="المتواجدون في الغرفة">
-            <span class="fn-ico">👥 <span id="roomOnlineCounter" class="footer-count-pill">0</span></span>
+            <span class="fn-ico"><i class="fa-solid fa-users"></i> <span id="roomOnlineCounter" class="footer-count-pill">0</span></span>
             <span class="fn-lbl">متواجدين</span>
           </button>
           <button type="button" id="switchRoomsBtn" class="footer-nav-btn" title="الغرف">
-            <span class="fn-ico">🏠</span>
+            <span class="fn-ico"><i class="fa-solid fa-door-open"></i></span>
             <span class="fn-lbl">الغرف</span>
           </button>
         </div>
 
         <div class="footer-left-group">
           <button type="button" id="footerRefreshBtn" class="footer-nav-btn" title="تحديث">
-            <span class="fn-ico">🔄</span>
+            <span class="fn-ico"><i class="fa-solid fa-arrows-rotate"></i></span>
             <span class="fn-lbl">تحديث</span>
           </button>
-          <button type="button" id="footerRadioBtn" class="footer-radio-btn" title="الراديو والمشغل الصوتي">▶️</button>
+          <div class="radio-ctrl-wrap">
+            <button type="button" id="footerRadioSwitchBtn" class="radio-station-pill" title="اختيار محطة الراديو">
+              <i class="fa-solid fa-radio"></i> <span id="footerRadioStationName">الراديو</span>
+            </button>
+            <button type="button" id="footerRadioBtn" class="footer-radio-btn" title="تشغيل/إيقاف الراديو">
+              <i class="fa-solid fa-play"></i>
+            </button>
+          </div>
         </div>
       </footer>
 
-      <!-- EMOJI & STICKERS POPOVER -->
+      <!-- RADIO STATION PICKER POPOVER -->
+      <div id="radioPopover" class="radio-popover hidden">
+        <div class="radio-pop-head">
+          <span><i class="fa-solid fa-tower-broadcast"></i> محطات الراديو المباشرة</span>
+          <button type="button" id="closeRadioPopoverBtn" class="yt-mini-btn"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="radioStationsList" class="radio-stations-list"></div>
+      </div>
+
+      <!-- CATEGORIZED EMOJI, ANIMATED STICKERS & CUSTOM POPOVER -->
       <div id="emojiPopover" class="emoji-popover hidden">
         <div class="emoji-pop-tabs">
-          <button type="button" class="ep-tab active" data-ep-tab="std">😀 إيموجي</button>
-          <button type="button" class="ep-tab" data-ep-tab="custom">✨ ملصقات الشات</button>
+          <button type="button" class="ep-tab active" data-ep-tab="faces" title="وجوه"><i class="fa-regular fa-face-laugh"></i></button>
+          <button type="button" class="ep-tab" data-ep-tab="hearts" title="قلوب"><i class="fa-solid fa-heart"></i></button>
+          <button type="button" class="ep-tab" data-ep-tab="symbols" title="رموز"><i class="fa-solid fa-crown"></i></button>
+          <button type="button" class="ep-tab" data-ep-tab="party" title="احتفالات"><i class="fa-solid fa-champagne-glasses"></i></button>
+          <button type="button" class="ep-tab" data-ep-tab="animated" title="متحركة"><i class="fa-solid fa-wand-sparkles"></i> متحركة</button>
+          <button type="button" class="ep-tab" data-ep-tab="custom" title="ملصقات"><i class="fa-solid fa-icons"></i></button>
         </div>
         <div id="emojiPopoverGrid" class="emoji-pop-grid"></div>
       </div>
@@ -285,20 +345,21 @@
       <aside id="mainDrawer" class="main-drawer hidden">
         <div class="drawer-header">
           <span id="drawerSiteTitle">القائمة الرئيسية</span>
-          <button type="button" id="closeMainDrawerBtn" class="close-side-btn">✕</button>
+          <button type="button" id="closeMainDrawerBtn" class="close-side-btn"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <nav class="drawer-nav">
-          <button type="button" class="drawer-item" data-drawer="online">👥 الأعضاء المتواجدون</button>
-          <button type="button" class="drawer-item" data-drawer="rooms">🏠 قائمة الغرف</button>
-          <button type="button" class="drawer-item" data-drawer="room_activity">🔥 تفاعل الغرف</button>
-          <button type="button" class="drawer-item" data-drawer="news">📰 الأخبار</button>
-          <button type="button" class="drawer-item" data-drawer="wall">🧱 جدار المنشورات</button>
-          <button type="button" class="drawer-item" data-drawer="leaderboards">🏆 الكبار والأثرياء</button>
-          <button type="button" class="drawer-item" data-drawer="customize">🎨 تخصيص الملف والإضافات</button>
-          <button type="button" class="drawer-item" data-drawer="report">🚨 إبلاغ الإدارة</button>
-          <button type="button" class="drawer-item hidden" id="drawerStealthBtn" data-drawer="stealth">👻 وضع التخفي</button>
-          <button type="button" class="drawer-item hidden" id="drawerAdminBtn" data-drawer="admin">⚙️ لوحة التحكم</button>
-          <button type="button" class="drawer-item danger" data-drawer="logout">🚪 تسجيل الخروج</button>
+          <button type="button" class="drawer-item" data-drawer="online"><i class="fa-solid fa-users"></i> الأعضاء المتواجدون</button>
+          <button type="button" class="drawer-item" data-drawer="rooms"><i class="fa-solid fa-door-open"></i> قائمة الغرف</button>
+          <button type="button" class="drawer-item" data-drawer="room_activity"><i class="fa-solid fa-fire"></i> تفاعل الغرف</button>
+          <button type="button" class="drawer-item" data-drawer="news"><i class="fa-solid fa-newspaper"></i> الأخبار</button>
+          <button type="button" class="drawer-item" data-drawer="wall"><i class="fa-solid fa-signs-post"></i> جدار المنشورات</button>
+          <button type="button" class="drawer-item" data-drawer="leaderboards"><i class="fa-solid fa-trophy"></i> الكبار والأثرياء</button>
+          <button type="button" class="drawer-item" data-drawer="profile"><i class="fa-solid fa-id-card"></i> ملفي الشخصي</button>
+          <button type="button" class="drawer-item" data-drawer="customize"><i class="fa-solid fa-palette"></i> تخصيص الملف والإضافات</button>
+          <button type="button" class="drawer-item" data-drawer="report"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
+          <button type="button" class="drawer-item hidden" id="drawerStealthBtn" data-drawer="stealth"><i class="fa-solid fa-user-secret"></i> وضع التخفي</button>
+          <button type="button" class="drawer-item hidden" id="drawerAdminBtn" data-drawer="admin"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
+          <button type="button" class="drawer-item danger" data-drawer="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
         </nav>
         <div id="drawerBodyContent" class="drawer-body-content"></div>
       </aside>
@@ -310,7 +371,7 @@
     <!-- ANIMATED GIFT CELEBRATION OVERLAY -->
     <div id="giftOverlay" class="gift-overlay hidden">
       <div class="gift-overlay-card">
-        <div id="giftOverlayEmoji" class="gift-overlay-emoji">🎁</div>
+        <div id="giftOverlayEmoji" class="gift-overlay-emoji"><i class="fa-solid fa-gift"></i></div>
         <div id="giftOverlayTitle" class="gift-overlay-title">هدية ملكية!</div>
         <div id="giftOverlaySubtitle" class="gift-overlay-sub"></div>
       </div>
@@ -320,36 +381,81 @@
          MODALS
     ========================================== -->
 
-    <!-- 1. INTEGRATED 4-TAB PROFILE CUSTOMIZER MODAL -->
+    <!-- 1. LUXURY 6-TAB OWN PROFILE & CUSTOMIZER MODAL -->
     <div id="customizeModal" class="modal-backdrop hidden">
-      <div class="modal-card modal-card-md">
-        <div class="modal-header">
-          <h3>🎨 تخصيص الملف الشخصي والإضافات</h3>
-          <button type="button" class="modal-close" data-close-modal="customizeModal">✕</button>
+      <div class="modal-card modal-card-md profile-luxury-card">
+        <div id="custBgEffectLayer" class="profile-bg-effect-layer"></div>
+
+        <!-- WIDE COVER PHOTO HERO -->
+        <div class="profile-cover-hero" id="custCoverHero">
+          <img id="custCoverImg" src="" alt="" class="profile-cover-img hidden" />
+          <div class="profile-cover-overlay"></div>
+          <div class="profile-cover-top-actions">
+            <button type="button" id="custUploadCoverBtn" class="cover-action-btn" title="تغيير صورة الغلاف (يدعم GIF)">
+              <i class="fa-solid fa-camera"></i> غلاف
+            </button>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button type="button" id="custSwitchToMoreBtn" class="cover-action-btn" title="الإعدادات والمظهر">
+                <i class="fa-solid fa-pen-to-square"></i> تعديل
+              </button>
+              <button type="button" class="cover-action-btn" data-close-modal="customizeModal" title="إغلاق">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+          <input type="file" id="custCoverFile" accept="image/*,image/gif" class="hidden" />
+          <input type="file" id="custAvatarFile" accept="image/*,image/gif" class="hidden" />
         </div>
 
-        <div class="cust-tabs-nav">
-          <button type="button" class="cust-tab active" data-cust-tab="account">👤 حساب</button>
-          <button type="button" class="cust-tab" data-cust-tab="gifts">🎁 الهدايا</button>
-          <button type="button" class="cust-tab" data-cust-tab="options">🎨 الخيارات</button>
-          <button type="button" class="cust-tab" data-cust-tab="addons">✨ الإضافات</button>
-        </div>
-
-        <div class="modal-body">
-          <!-- LIVE PREVIEW HEADER -->
-          <div id="custPreviewBanner" class="cust-preview-box">
-            <span id="custPreviewAvatarWrap" class="avatar-wrap frame-none">
+        <!-- CENTERED AVATAR + FRAME + LIKES/STARS BAR -->
+        <div class="profile-center-identity">
+          <div class="profile-avatar-stage">
+            <span id="custPreviewAvatarWrap" class="avatar-wrap lg frame-none">
               <img id="custPreviewAvatarImg" src="" alt="" class="hidden" />
               <span id="custPreviewAvatarLetter" class="avatar-letter">ع</span>
             </span>
-            <div class="cust-preview-meta">
-              <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
-              <div id="custPreviewBio" class="cust-preview-bio"></div>
-            </div>
+            <button type="button" id="custUploadAvatarBtn" class="avatar-cam-fab" title="تغيير الصورة الشخصية (يدعم GIF)">
+              <i class="fa-solid fa-camera"></i>
+            </button>
           </div>
+          <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
+          <div id="custPreviewBio" class="cust-preview-bio"></div>
+          <div class="profile-social-counters">
+            <span class="social-pill"><i class="fa-solid fa-heart" style="color:#ef4444"></i> <span id="custLikesCountVal">0</span> إعجاب</span>
+            <span class="social-pill"><i class="fa-solid fa-star" style="color:#f59e0b"></i> <span id="custRatingAvgVal">5.0</span></span>
+            <span class="social-pill"><i class="fa-solid fa-coins" style="color:#eab308"></i> <span id="custTopCoinsVal">0</span></span>
+          </div>
+        </div>
 
-          <!-- TAB 1: ACCOUNT -->
-          <div id="custPane_account" class="cust-pane">
+        <!-- 6-TAB PROFILE NAVIGATION -->
+        <div class="cust-tabs-nav six-tabs">
+          <button type="button" class="cust-tab active" data-cust-tab="info"><i class="fa-solid fa-circle-info"></i> المعلومات</button>
+          <button type="button" class="cust-tab" data-cust-tab="friends"><i class="fa-solid fa-user-group"></i> الأصدقاء</button>
+          <button type="button" class="cust-tab" data-cust-tab="gifts"><i class="fa-solid fa-gift"></i> الهدايا</button>
+          <button type="button" class="cust-tab" data-cust-tab="relations"><i class="fa-solid fa-heart-pulse"></i> العلاقات</button>
+          <button type="button" class="cust-tab" data-cust-tab="posts"><i class="fa-solid fa-signs-post"></i> المنشورات</button>
+          <button type="button" class="cust-tab" data-cust-tab="more"><i class="fa-solid fa-sliders"></i> المزيد</button>
+        </div>
+
+        <div class="modal-body profile-modal-body">
+          <!-- TAB 1: المعلومات -->
+          <div id="custPane_info" class="cust-pane">
+            <div class="rank-duo-grid">
+              <div class="rank-duo-card interaction">
+                <span class="rd-label"><i class="fa-solid fa-fire"></i> ترتيب التفاعل</span>
+                <strong id="custInteractionRankNum">#1</strong>
+              </div>
+              <div class="rank-duo-card rich">
+                <span class="rd-label"><i class="fa-solid fa-crown"></i> ترتيب الأثرياء</span>
+                <strong id="custRichRankNum">#1</strong>
+              </div>
+            </div>
+
+            <div class="profile-link-box">
+              <input type="text" id="custProfileLinkInput" readonly />
+              <button type="button" id="custCopyLinkBtn" class="btn-primary btn-xs"><i class="fa-solid fa-copy"></i> نسخ الرابط</button>
+            </div>
+
             <div class="form-grid-2">
               <div>
                 <label>الاسم المستعار للعرض</label>
@@ -359,150 +465,227 @@
                 <label>عائلة VIP</label>
                 <input type="text" id="custVipFamily" maxlength="24" placeholder="مثال: ملوك العرب" />
               </div>
-            </div>
-            <label>النبذة / الحالة الشخصية</label>
-            <input type="text" id="custBioInput" maxlength="160" placeholder="اكتب نبذة قصيرة عنك..." />
-
-            <div class="upload-row">
-              <label>الصورة الشخصية (تدعم الصور المتحركة GIF)</label>
-              <div class="inline-row">
-                <input type="file" id="custAvatarFile" accept="image/*" class="hidden" />
-                <button type="button" id="custUploadAvatarBtn" class="btn-primary btn-sm" style="width:100%;">📷 تغيير الصورة الشخصية</button>
-              </div>
-            </div>
-
-            <div id="custStealthCard" class="stealth-box hidden">
               <div>
-                <strong>👻 وضع التخفي للمالك</strong>
-                <p>إخفاء دخولك ومغادرتك واسمك من قوائم المتواجدين بالكامل.</p>
+                <label>العمر</label>
+                <input type="text" id="custAgeInput" maxlength="10" placeholder="مثال: 24" />
               </div>
-              <label class="switch-label">
-                <input type="checkbox" id="custStealthToggle" />
-                <span>تفعيل التخفي</span>
-              </label>
+              <div>
+                <label>الجنس</label>
+                <select id="custGenderSelect">
+                  <option value="">غير محدد</option>
+                  <option value="ذكر">ذكر</option>
+                  <option value="أنثى">أنثى</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div>
+                <label>البلد / الإقامة</label>
+                <input type="text" id="custCountryInput" maxlength="40" placeholder="مثال: السعودية، مصر، العراق..." />
+              </div>
+              <div>
+                <label>النبذة / الحالة الشخصية</label>
+                <input type="text" id="custBioInput" maxlength="160" placeholder="اكتب نبذة قصيرة عنك..." />
+              </div>
             </div>
           </div>
 
-          <!-- TAB 2: GIFTS -->
+          <!-- TAB 2: الأصدقاء -->
+          <div id="custPane_friends" class="cust-pane hidden">
+            <div id="custFriendsList" class="news-feed-list"></div>
+          </div>
+
+          <!-- TAB 3: الهدايا -->
           <div id="custPane_gifts" class="cust-pane hidden">
             <div class="gifts-wallet-summary">
-              <div class="stat-mini"><span>💰 رصيدك</span><strong id="custCoinsBalance">0</strong></div>
-              <div class="stat-mini"><span>📥 هدايا مستلمة</span><strong id="custGiftsReceivedCount">0</strong></div>
-              <div class="stat-mini"><span>📤 هدايا مرسلة</span><strong id="custGiftsSentCount">0</strong></div>
-              <div class="stat-mini"><span>🔥 نقاط التفاعل</span><strong id="custActivityPoints">0</strong></div>
+              <div class="stat-mini"><span><i class="fa-solid fa-coins"></i> رصيدك</span><strong id="custCoinsBalance">0</strong></div>
+              <div class="stat-mini"><span><i class="fa-solid fa-box-open"></i> مستلمة</span><strong id="custGiftsReceivedCount">0</strong></div>
+              <div class="stat-mini"><span><i class="fa-solid fa-paper-plane"></i> مرسلة</span><strong id="custGiftsSentCount">0</strong></div>
+              <div class="stat-mini"><span><i class="fa-solid fa-fire"></i> التفاعل</span><strong id="custActivityPoints">0</strong></div>
             </div>
             <h4 class="sub-heading">سجل الهدايا المستلمة</h4>
             <div id="custReceivedGiftsList" class="received-gifts-grid"></div>
           </div>
 
-          <!-- TAB 3: OPTIONS -->
-          <div id="custPane_options" class="cust-pane hidden">
-            <div class="form-grid-2">
-              <div>
-                <label>لون الاسم</label>
-                <input type="color" id="custNameColor" value="#ffffff" />
-              </div>
-              <div>
-                <label>لون نص الرسائل</label>
-                <input type="color" id="custTextColor" value="#ffffff" />
-              </div>
-              <div>
-                <label>لون خلفية الاسم (اختياري)</label>
-                <div class="inline-row">
-                  <input type="color" id="custNameBgColor" value="#1e293b" />
-                  <button type="button" id="custClearNameBgBtn" class="btn-secondary btn-xs">شفاف</button>
-                </div>
-              </div>
-              <div>
-                <label>توهج النيون حول الاسم</label>
-                <div class="inline-row">
-                  <input type="color" id="custNeonColor" value="#38bdf8" />
-                  <button type="button" id="custClearNeonBtn" class="btn-secondary btn-xs">إلغاء</button>
-                </div>
-              </div>
-              <div>
-                <label>نوع الخط</label>
-                <select id="custFontFamily">
-                  <option value="Normal">الافتراضي</option>
-                  <option value="Cairo">Cairo (كايرو)</option>
-                  <option value="Tajawal">Tajawal (تجوال)</option>
-                  <option value="Amiri">Amiri (أميري)</option>
-                  <option value="Changa">Changa (تشانغا)</option>
-                  <option value="Reem Kufi">Reem Kufi (كوفي)</option>
-                </select>
-              </div>
-              <div>
-                <label>نمط الخط</label>
-                <select id="custFontStyle">
-                  <option value="Normal">عادي</option>
-                  <option value="Bold">عريض Bold</option>
-                  <option value="Italic">مائل Italic</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="profile-music-box">
-              <label>🎵 موسيقى البروفايل</label>
-              <div class="inline-row">
-                <select id="custMusicPreset">
-                  <option value="">بدون موسيقى</option>
-                  <option value="preset:calm_lofi">🎵 أنغام هادئة</option>
-                  <option value="preset:royal_oud">🎵 نغمة ملكية</option>
-                  <option value="preset:ambient_stars">🎵 أوتار ليلية</option>
-                </select>
-                <input type="text" id="custMusicCustomUrl" placeholder="أو رابط ملف MP3 مباشر (اختياري)" style="flex:1" />
-                <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs">▶️ تجربة</button>
-              </div>
-            </div>
+          <!-- TAB 4: العلاقات -->
+          <div id="custPane_relations" class="cust-pane hidden">
+            <div id="custRelationsBox" class="news-feed-list"></div>
           </div>
 
-          <!-- TAB 4: ADD-ONS -->
-          <div id="custPane_addons" class="cust-pane hidden">
-            <div id="custAddonsLockNotice" class="lock-notice hidden">
-              🔒 استخدام الإضافات (الإطارات المتحركة ولمعة الاسم والأجنحة) مقفل لرتبتك الحالية. يمكن للإدارة تفعيله من منشئ الرتب.
+          <!-- TAB 5: المنشورات -->
+          <div id="custPane_posts" class="cust-pane hidden">
+            <div class="news-composer">
+              <textarea id="custWallInput" rows="2" placeholder="شارك منشوراً في ملفك وجدار الموقع..."></textarea>
+              <button type="button" id="custWallSubmitBtn" class="btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> نشر على الجدار</button>
             </div>
+            <div id="custUserPostsList" class="news-feed-list" style="margin-top:8px;"></div>
+          </div>
 
+          <!-- TAB 6: المزيد (لون/نيون/خلفية + الإضافات + الحساب + الخصوصية + الخروج) -->
+          <div id="custPane_more" class="cust-pane hidden">
+            <!-- NAME COLOR WITH SUB-TABS: لون | نيون | خلفية -->
             <div class="addon-block">
               <div class="addon-block-head">
-                <h4>🌟 لمعة الاسم (Name Shimmer & Glitter)</h4>
+                <h4><i class="fa-solid fa-palette"></i> لون الاسم ونص الرسالة</h4>
               </div>
-              <div id="custShineGrid" class="shine-grid"></div>
+              <div class="sub-pill-tabs" id="nameStyleSubTabs">
+                <button type="button" class="sub-pill-tab active" data-namestyle-tab="color">لون</button>
+                <button type="button" class="sub-pill-tab" data-namestyle-tab="neon">نيون</button>
+                <button type="button" class="sub-pill-tab" data-namestyle-tab="bg">خلفية</button>
+              </div>
+              <div id="nameStylePane_color" class="namestyle-pane">
+                <div class="color-swatches-row" id="nameColorSwatches"></div>
+                <div class="inline-row" style="margin-top:6px;">
+                  <label class="muted">تحديد لون مخصص للاسم:</label>
+                  <input type="color" id="custNameColor" value="#0f172a" />
+                </div>
+              </div>
+              <div id="nameStylePane_neon" class="namestyle-pane hidden">
+                <div class="inline-row">
+                  <label class="muted">لون توهج النيون:</label>
+                  <input type="color" id="custNeonColor" value="#38bdf8" />
+                  <button type="button" id="custClearNeonBtn" class="btn-secondary btn-xs">إلغاء النيون</button>
+                </div>
+              </div>
+              <div id="nameStylePane_bg" class="namestyle-pane hidden">
+                <div class="inline-row">
+                  <label class="muted">لون خلفية الاسم:</label>
+                  <input type="color" id="custNameBgColor" value="#1e293b" />
+                  <button type="button" id="custClearNameBgBtn" class="btn-secondary btn-xs">بدون خلفية</button>
+                </div>
+              </div>
+
+              <div class="form-grid-2" style="margin-top:8px;">
+                <div>
+                  <label>لون نص الرسائل</label>
+                  <input type="color" id="custTextColor" value="#111827" />
+                </div>
+                <div>
+                  <label>نوع الخط</label>
+                  <select id="custFontFamily">
+                    <option value="Normal">الافتراضي</option>
+                    <option value="Cairo">Cairo (كايرو)</option>
+                    <option value="Tajawal">Tajawal (تجوال)</option>
+                    <option value="Amiri">Amiri (أميري)</option>
+                    <option value="Changa">Changa (تشانغا)</option>
+                    <option value="Reem Kufi">Reem Kufi (كوفي)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-grid-2" style="margin-top:6px;">
+                <div>
+                  <label>نمط الخط</label>
+                  <select id="custFontStyle">
+                    <option value="Normal">عادي</option>
+                    <option value="Bold">عريض Bold</option>
+                    <option value="Italic">مائل Italic</option>
+                  </select>
+                </div>
+                <div>
+                  <label>موسيقى البروفايل</label>
+                  <div class="inline-row">
+                    <select id="custMusicPreset" style="flex:1">
+                      <option value="">بدون موسيقى</option>
+                      <option value="preset:calm_lofi">أنغام هادئة</option>
+                      <option value="preset:royal_oud">نغمة ملكية</option>
+                      <option value="preset:ambient_stars">أوتار ليلية</option>
+                    </select>
+                    <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i></button>
+                  </div>
+                </div>
+              </div>
+              <input type="text" id="custMusicCustomUrl" placeholder="أو رابط MP3 مباشر لموسيقى البروفايل (اختياري)" style="margin-top:6px;width:100%;" />
+            </div>
+
+            <!-- ADD-ONS (FRAMES + SHINES + NAMEPLATES + ANIMATED PROFILE BACKGROUNDS) -->
+            <div id="custAddonsLockNotice" class="lock-notice hidden">
+              <i class="fa-solid fa-lock"></i> الإضافات الملكية غير مفعلة لرتبتك الحالية. يمكن للإدارة تفعيلها من منشئ الرتب.
             </div>
 
             <div class="addon-block">
               <div class="addon-block-head">
-                <h4>🖼️ إطارات الصورة المتحركة (Avatar Frames)</h4>
+                <h4><i class="fa-solid fa-sparkles"></i> خلفيات بطاقة الملف المتحركة</h4>
+              </div>
+              <div id="custBgEffectsGrid" class="shine-grid"></div>
+            </div>
+
+            <div class="addon-block">
+              <div class="addon-block-head">
+                <h4><i class="fa-solid fa-crown"></i> إطارات الصورة المتحركة وتاج الملوك</h4>
               </div>
               <div id="custFramesGrid" class="frames-addon-grid"></div>
             </div>
 
             <div class="addon-block">
               <div class="addon-block-head">
-                <h4>🎗️ قوالب الاسم والأجنحة الملكية</h4>
+                <h4><i class="fa-solid fa-wand-magic-sparkles"></i> لمعة الاسم والأجنحة</h4>
                 <label class="switch-label">
                   <input type="checkbox" id="custVipWingsToggle" />
-                  <span>🪽 تفعيل أجنحة VIP حول الاسم</span>
+                  <span><i class="fa-solid fa-feather-pointed"></i> أجنحة VIP</span>
                 </label>
               </div>
-              <div id="custNameplatesGrid" class="nameplates-grid"></div>
+              <div id="custShineGrid" class="shine-grid"></div>
+              <div id="custNameplatesGrid" class="nameplates-grid" style="margin-top:8px;"></div>
+            </div>
+
+            <!-- EMAIL & PASSWORD EDIT -->
+            <div class="addon-block">
+              <div class="addon-block-head">
+                <h4><i class="fa-solid fa-shield-halved"></i> تعديل البريد الإلكتروني وكلمة المرور</h4>
+              </div>
+              <div class="form-grid-2">
+                <input type="email" id="custCredEmail" placeholder="البريد الإلكتروني" />
+                <input type="password" id="custCredCurrentPass" placeholder="كلمة المرور الحالية (للتأكيد)" />
+                <input type="password" id="custCredNewPass" placeholder="كلمة المرور الجديدة (اختياري)" />
+                <button type="button" id="custSaveCredsBtn" class="btn-secondary btn-sm"><i class="fa-solid fa-key"></i> تحديث بيانات الدخول</button>
+              </div>
+            </div>
+
+            <!-- PRIVACY SWITCHES & STEALTH & LOGOUT -->
+            <div class="addon-block">
+              <div class="addon-block-head">
+                <h4><i class="fa-solid fa-user-lock"></i> إعدادات الخصوصية والتخفي</h4>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="custAllowCallsToggle" checked />
+                  <span><i class="fa-solid fa-phone-volume"></i> السماح باستقبال المكالمات والمايكات</span>
+                </label>
+                <label class="switch-label">
+                  <input type="checkbox" id="custAllowPmToggle" checked />
+                  <span><i class="fa-solid fa-envelope-open-text"></i> السماح باستقبال الرسائل الخاصة</span>
+                </label>
+              </div>
+
+              <div id="custStealthCard" class="stealth-box hidden" style="margin-top:8px;">
+                <div>
+                  <strong><i class="fa-solid fa-user-secret"></i> وضع التخفي للمالك</strong>
+                  <p>إخفاء دخولك ومغادرتك واسمك من قوائم المتواجدين بالكامل.</p>
+                </div>
+                <label class="switch-label">
+                  <input type="checkbox" id="custStealthToggle" />
+                  <span>تفعيل التخفي</span>
+                </label>
+              </div>
+
+              <button type="button" id="custMoreLogoutBtn" class="btn-danger btn-sm" style="margin-top:10px;width:100%;">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج من الحساب
+              </button>
             </div>
           </div>
 
           <div class="modal-footer-actions">
-            <button type="button" id="saveCustomizeBtn" class="btn-primary">💾 حفظ وتطبيق التعديلات</button>
+            <button type="button" id="saveCustomizeBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ وتطبيق التعديلات</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 2. QUICK USER PROFILE & ACTIONS MODAL -->
+    <!-- 2. LUXURY MEMBER PROFILE CARD MODAL (6 TABS + MODERATION ☰ MENU) -->
     <div id="quickUserModal" class="modal-backdrop hidden">
-      <div class="modal-card modal-card-sm">
-        <div class="modal-header">
-          <h3>بطاقة العضو</h3>
-          <button type="button" class="modal-close" data-close-modal="quickUserModal">✕</button>
-        </div>
-        <div id="quickUserBody" class="modal-body"></div>
+      <div class="modal-card modal-card-md profile-luxury-card">
+        <div id="quickUserBody" class="profile-card-shell"></div>
       </div>
     </div>
 
@@ -510,12 +693,12 @@
     <div id="giftModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
-          <h3>🎁 إرسال هدية إلى <span id="giftTargetName">العضو</span></h3>
-          <button type="button" class="modal-close" data-close-modal="giftModal">✕</button>
+          <h3><i class="fa-solid fa-gift"></i> إرسال هدية إلى <span id="giftTargetName">العضو</span></h3>
+          <button type="button" class="modal-close" data-close-modal="giftModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
           <div class="gift-balance-bar">
-            <span>رصيدك الحالي: <strong id="giftModalCoins">0</strong> 💰</span>
+            <span>رصيدك الحالي: <strong id="giftModalCoins">0</strong> <i class="fa-solid fa-coins"></i></span>
             <span class="muted">يستلم العضو مكافأة فورية + إعلان في الغرفة</span>
           </div>
           <div id="giftCatalogGrid" class="gift-catalog-grid"></div>
@@ -527,62 +710,62 @@
     <div id="newsModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
-          <h3>📰 أخبار وإعلانات الموقع</h3>
-          <button type="button" class="modal-close" data-close-modal="newsModal">✕</button>
+          <h3><i class="fa-solid fa-newspaper"></i> أخبار وإعلانات الموقع</h3>
+          <button type="button" class="modal-close" data-close-modal="newsModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
           <div id="newsPublishBar" class="news-publish-bar hidden">
-            <button type="button" id="toggleNewsComposerBtn" class="btn-primary btn-sm">➕ نشر خبر جديد</button>
+            <button type="button" id="toggleNewsComposerBtn" class="btn-primary btn-sm"><i class="fa-solid fa-plus"></i> نشر خبر جديد</button>
           </div>
           <div id="newsComposerForm" class="news-composer hidden">
             <input type="text" id="newsTitleInput" placeholder="عنوان الخبر..." maxlength="120" />
             <textarea id="newsContentInput" rows="3" placeholder="تفاصيل الخبر أو الإعلان..." maxlength="2000"></textarea>
             <div class="inline-row">
-              <input type="file" id="newsImageFile" accept="image/*" />
+              <input type="file" id="newsImageFile" accept="image/*,image/gif" />
               <input type="text" id="newsImageUrl" placeholder="أو رابط صورة الخبر (اختياري)" />
             </div>
-            <button type="button" id="submitNewsBtn" class="btn-primary">🚀 نشر الخبر للجميع</button>
+            <button type="button" id="submitNewsBtn" class="btn-primary"><i class="fa-solid fa-rocket"></i> نشر الخبر للجميع</button>
           </div>
           <div id="newsFeedList" class="news-feed-list"></div>
         </div>
       </div>
     </div>
 
-    <!-- 5. LEADERBOARDS MODAL (الأثرياء / تفاعل الأعضاء / تفاعل الغرف / العائلات) -->
+    <!-- 5. LEADERBOARDS MODAL -->
     <div id="leaderboardsModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
-          <h3>🏆 المتصدرون والتفاعل المباشر</h3>
-          <button type="button" class="modal-close" data-close-modal="leaderboardsModal">✕</button>
+          <h3><i class="fa-solid fa-trophy"></i> المتصدرون والتفاعل المباشر</h3>
+          <button type="button" class="modal-close" data-close-modal="leaderboardsModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="cust-tabs-nav">
-          <button type="button" class="lb-tab active" data-lb-tab="rich">💰 الأثرياء</button>
-          <button type="button" class="lb-tab" data-lb-tab="activeMembers">🔥 تفاعل الأعضاء</button>
-          <button type="button" class="lb-tab" data-lb-tab="activeRooms">🏠 تفاعل الغرف</button>
-          <button type="button" class="lb-tab" data-lb-tab="vips">👑 الكبار</button>
-          <button type="button" class="lb-tab" data-lb-tab="families">🏰 العائلات</button>
+          <button type="button" class="lb-tab active" data-lb-tab="rich"><i class="fa-solid fa-coins"></i> الأثرياء</button>
+          <button type="button" class="lb-tab" data-lb-tab="activeMembers"><i class="fa-solid fa-fire"></i> تفاعل الأعضاء</button>
+          <button type="button" class="lb-tab" data-lb-tab="activeRooms"><i class="fa-solid fa-door-open"></i> تفاعل الغرف</button>
+          <button type="button" class="lb-tab" data-lb-tab="vips"><i class="fa-solid fa-crown"></i> الكبار</button>
+          <button type="button" class="lb-tab" data-lb-tab="families"><i class="fa-solid fa-shield-halved"></i> العائلات</button>
         </div>
         <div id="leaderboardsBody" class="modal-body"></div>
       </div>
     </div>
 
-    <!-- 6. SOCIAL MODAL (NOTIFICATIONS / FRIENDS / PRIVATE MESSAGES / WALL / REPORTS) -->
+    <!-- 6. SOCIAL MODAL -->
     <div id="socialModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
           <h3 id="socialModalTitle">الإشعارات والتواصل</h3>
-          <button type="button" class="modal-close" data-close-modal="socialModal">✕</button>
+          <button type="button" class="modal-close" data-close-modal="socialModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="socialModalBody" class="modal-body"></div>
       </div>
     </div>
 
-    <!-- 7. ROOMS SWITCHER & SETTINGS MODAL -->
+    <!-- 7. ROOMS SWITCHER MODAL -->
     <div id="roomsModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
-          <h3>🏠 غرف الدردشة المتاحة</h3>
-          <button type="button" class="modal-close" data-close-modal="roomsModal">✕</button>
+          <h3><i class="fa-solid fa-door-open"></i> غرف الدردشة المتاحة</h3>
+          <button type="button" class="modal-close" data-close-modal="roomsModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="roomsModalBody" class="modal-body"></div>
       </div>
@@ -592,18 +775,18 @@
     <div id="adminModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-lg">
         <div class="modal-header">
-          <h3>⚙️ لوحة تحكم المالك وإدارة النظام</h3>
-          <button type="button" class="modal-close" data-close-modal="adminModal">✕</button>
+          <h3><i class="fa-solid fa-sliders"></i> لوحة تحكم المالك وإدارة النظام</h3>
+          <button type="button" class="modal-close" data-close-modal="adminModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="admin-nav-tabs">
-          <button type="button" class="adm-tab active" data-adm-tab="stats">📊 الإحصائيات</button>
-          <button type="button" class="adm-tab" data-adm-tab="users">👥 الأعضاء والرتب</button>
-          <button type="button" class="adm-tab" data-adm-tab="ranks">👑 منشئ الرتب</button>
-          <button type="button" class="adm-tab" data-adm-tab="rooms">🏠 الغرف</button>
-          <button type="button" class="adm-tab" data-adm-tab="news">📰 الأخبار</button>
-          <button type="button" class="adm-tab" data-adm-tab="cms">🎨 المظهر و CSS</button>
-          <button type="button" class="adm-tab" data-adm-tab="emojis">😊 الإيموجيات</button>
-          <button type="button" class="adm-tab" data-adm-tab="bans">🚫 الحظر والبلاغات</button>
+          <button type="button" class="adm-tab active" data-adm-tab="stats"><i class="fa-solid fa-chart-simple"></i> الإحصائيات</button>
+          <button type="button" class="adm-tab" data-adm-tab="users"><i class="fa-solid fa-users-gear"></i> الأعضاء والرتب</button>
+          <button type="button" class="adm-tab" data-adm-tab="ranks"><i class="fa-solid fa-crown"></i> منشئ الرتب</button>
+          <button type="button" class="adm-tab" data-adm-tab="rooms"><i class="fa-solid fa-door-open"></i> الغرف</button>
+          <button type="button" class="adm-tab" data-adm-tab="news"><i class="fa-solid fa-newspaper"></i> الأخبار</button>
+          <button type="button" class="adm-tab" data-adm-tab="cms"><i class="fa-solid fa-paintbrush"></i> المظهر و CSS</button>
+          <button type="button" class="adm-tab" data-adm-tab="emojis"><i class="fa-regular fa-face-smile"></i> الإيموجيات</button>
+          <button type="button" class="adm-tab" data-adm-tab="bans"><i class="fa-solid fa-ban"></i> الحظر والبلاغات</button>
         </div>
         <div id="adminModalBody" class="modal-body"></div>
       </div>

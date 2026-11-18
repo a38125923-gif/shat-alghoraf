@@ -137,13 +137,25 @@ test("User PII isolation & role escalation guards on /users and /public_profiles
     })
   );
 
-  // Legitimate customization update succeeds
+  // Legitimate customization update succeeds (including coverUrl & profileBgEffect)
   await assertSucceeds(
     aliceDb.collection("public_profiles").doc(ALICE_UID).update({
       displayName: "أليس المتألقة",
-      avatarFrame: "gold_royal",
+      avatarFrame: "kings_crown",
+      profileBgEffect: "royal_waves",
+      coverUrl: "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
       nameShine: "gold_shimmer",
       updatedAt: new Date(Date.now() - 500),
+    })
+  );
+
+  // Peer likes & star rating update succeeds, while self role escalation still fails
+  await assertSucceeds(
+    bobDb.collection("public_profiles").doc(ALICE_UID).update({
+      likesCount: 1,
+      ratingSum: 5,
+      ratingCount: 1,
+      updatedAt: new Date(Date.now() - 400),
     })
   );
 });
