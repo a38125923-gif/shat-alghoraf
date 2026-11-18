@@ -1,13 +1,11 @@
 package com.shat.alghoraf.ui
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.ToneGenerator
-import android.net.Uri
 import android.os.Build
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -145,6 +143,7 @@ fun ChatRoomScreen(
     val bansState by viewModel.bans.collectAsStateWithLifecycle()
     val toastMsg by viewModel.toastMessage.collectAsStateWithLifecycle()
     val giftCelebration by viewModel.giftCelebration.collectAsStateWithLifecycle()
+    val liveMicLevel by viewModel.liveMicLevel.collectAsStateWithLifecycle()
 
     val isSupremeOwner = DefaultCatalogs.isSupremeOwnerEmail(viewModel.currentUserEmail)
     val myProfile = (myProfileState as? UiState.Success)?.data ?: PublicProfile(
@@ -159,6 +158,8 @@ fun ChatRoomScreen(
     val activeRoom = allRooms.firstOrNull { it.id == activeRoomId } ?: allRooms.firstOrNull() ?: DefaultCatalogs.defaultRooms.first()
     val ranks = (ranksState as? UiState.Success)?.data ?: DefaultCatalogs.defaultRanks
     val myRank = DefaultCatalogs.rankFor(myProfile.role, ranks)
+    val isRoomOwnerForActive = isSupremeOwner || (myRank.permRoomOwner && activeRoom.ownerUserId == viewModel.currentUserId)
+    val canPublishNews = isSupremeOwner || myRank.permPublishNews || myRank.permAccessPanel
     val messages = (messagesState as? UiState.Success)?.data.orEmpty()
     val mics = (micsState as? UiState.Success)?.data ?: (1..5).map {
         com.shat.alghoraf.data.RoomMicSlot(id = it.toString(), roomId = activeRoomId, slotNumber = it.toLong())
@@ -171,10 +172,12 @@ fun ChatRoomScreen(
     // UI Modal States
     var showProfileDialog by remember { mutableStateOf(false) }
     var showAdminDialog by remember { mutableStateOf(false) }
+    var showRoomOwnerDialog by remember { mutableStateOf(false) }
     var showLeaderboardTab by remember { mutableStateOf<Int?>(null) }
     var showSocialTab by remember { mutableStateOf<Int?>(null) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showYoutubeDialog by remember { mutableStateOf(false) }
+    var youtubeMutedLocally by remember { mutableStateOf(false) }
     var selectedUserForCard by remember { mutableStateOf<PublicProfile?>(null) }
     var selectedUserForGift by remember { mutableStateOf<PublicProfile?>(null) }
 
@@ -183,6 +186,7 @@ fun ChatRoomScreen(
     var showPlusMenu by remember { mutableStateOf(false) }
     var asAdminNotice by remember { mutableStateOf(false) }
     var draftMessage by remember { mutableStateOf("") }
+    var previousUnreadCount by remember { mutableIntStateOf(0) }
 
     var hasAudioPermission by remember {
         mutableStateOf(
@@ -235,6 +239,22 @@ fun ChatRoomScreen(
                 activeRecorder?.release()
             } catch (_: Exception) { }
         }
+    }
+
+    LaunchedEffect(mics, hasAudioPermission) {
+        if (hasAudioPermission) {
+            viewModel.syncMyMicAudioState(mics)
+        }
+    }
+
+    LaunchedEffect(unreadNotifCount) {
+        if (unreadNotifCount > previousUnreadCount && settings.soundEffectsEnabled) {
+            try {
+                ToneGenerator(AudioManager.STREAM_NOTIFICATION, 75)
+                    .startTone(ToneGenerator.TONE_PROP_BEEP2, 220)
+            } catch (_: Exception) { }
+        }
+        previousUnreadCount = unreadNotifCount
     }
 
     LaunchedEffect(toastMsg) {
@@ -320,9 +340,32 @@ fun ChatRoomScreen(
                             ) {
                                 AvatarWithFrame(u.avatarUrl, u.shownName, u.avatarFrame, size = 36.dp, showOnlineDot = true, isOnline = u.isOnline)
                                 Column(modifier = Modifier.weight(1f)) {
-                                    StyledChatName(u.shownName, u.nameColor, u.nameplateStyle, u.nameShine, u.fontFamily, u.vipWings)
+                                    StyledChatName(u.shownName, u.nameColor, u.nameplateStyle, u.nameShine, u.fontFamily, u.vipWings, u.nameBgColor, u.neonColor)
                                     StyledRankBadge(uRank)
                                 }
+                            }
+                        }
+                    }
+                    if (isSupremeOwner) {
+                        Surface(
+                            color = Color(0xFFFFFBEB),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .border(1.dp, RoyalGold, RoundedCornerShape(12.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("👻 وضع التخفي للمالك", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF92400E))
+                                androidx.compose.material3.Switch(
+                                    checked = myProfile.isStealth,
+                                    onCheckedChange = { viewModel.toggleStealth(it) },
+                                    modifier = Modifier.testTag("drawer_stealth_switch")
+                                )
                             }
                         }
                     }
@@ -588,8 +631,9 @@ fun ChatRoomScreen(
                     VoiceMicStrip(
                         mics = mics,
                         currentUid = viewModel.currentUserId,
-                        isAdminUser = myRank.permMute || isSupremeOwner,
+                        isAdminUser = myRank.permMute || isSupremeOwner || isRoomOwnerForActive,
                         hasAudioPermission = hasAudioPermission,
+                        liveMicLevel = liveMicLevel,
                         isExpanded = micsExpanded,
                         onToggleExpand = { micsExpanded = !micsExpanded },
                         onMicClick = { slot ->
@@ -604,7 +648,7 @@ fun ChatRoomScreen(
                         onAdminMuteMic = { slot, mute -> viewModel.adminMuteMic(slot, mute) },
                         onOpenMicSettings = {
                             if (!hasAudioPermission) audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            else viewModel.showNotice("إعدادات المايك: الصوت مفعل ومربوط سحابياً ✅")
+                            else viewModel.showNotice("إعدادات المايك: التقاط الصوت مفعل والمزامنة نشطة ✅")
                         }
                     )
                 }
@@ -661,13 +705,25 @@ fun ChatRoomScreen(
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (isRoomOwnerForActive) {
+                                Surface(
+                                    color = Color(0xFFFEF3C7),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.clickable { showRoomOwnerDialog = true }
+                                ) {
+                                    Text("👑 الغرفة", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                                }
+                            }
                             if (activeRoom.youtubeIsPlaying && activeRoom.youtubeVideoId.isNotBlank()) {
                                 Surface(
                                     color = Color(0xFFDC2626),
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.clickable {
-                                        val ytIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${activeRoom.youtubeVideoId}"))
-                                        context.startActivity(ytIntent)
+                                        if (isSupremeOwner || myRank.permAccessPanel || isRoomOwnerForActive) {
+                                            showYoutubeDialog = true
+                                        } else {
+                                            youtubeMutedLocally = !youtubeMutedLocally
+                                        }
                                     }
                                 ) {
                                     Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -685,6 +741,17 @@ fun ChatRoomScreen(
                             }
                         }
                     }
+                }
+
+                if (activeRoom.youtubeIsPlaying && activeRoom.youtubeVideoId.isNotBlank()) {
+                    InRoomYoutubePlayer(
+                        videoId = activeRoom.youtubeVideoId,
+                        title = activeRoom.youtubeTitle,
+                        isMutedLocally = youtubeMutedLocally,
+                        canControlRoomPlayer = isSupremeOwner || myRank.permAccessPanel || myRank.permMute || isRoomOwnerForActive,
+                        onToggleMute = { youtubeMutedLocally = !youtubeMutedLocally },
+                        onStopForRoom = { viewModel.updateRoomYoutube("", "", false) }
+                    )
                 }
 
                 // 4. Messages Feed
@@ -795,6 +862,7 @@ fun ChatRoomScreen(
             },
             onToggleStealth = { viewModel.toggleStealth(it) },
             onOpenAdminPanel = { showAdminDialog = true },
+            onPreviewMusic = { viewModel.previewProfileMusic(it) },
             onSignOut = {
                 showProfileDialog = false
                 scope.launch {
@@ -818,7 +886,8 @@ fun ChatRoomScreen(
             onReport = { reason -> viewModel.submitReport(target.userId, target.shownName, reason) },
             onAssignRank = { rkKey, grantAdmin -> viewModel.assignRank(target.userId, rkKey, grantAdmin) },
             onMute = { reason -> viewModel.muteUser(target, reason) },
-            onBan = { reason -> viewModel.banUser(target, reason) }
+            onBan = { reason -> viewModel.banUser(target, reason) },
+            onPreviewMusic = { viewModel.previewProfileMusic(it) }
         )
     }
 
@@ -846,6 +915,7 @@ fun ChatRoomScreen(
         SocialHubDialog(
             initialTab = initial,
             myUid = viewModel.currentUserId,
+            canPublishNews = canPublishNews,
             notifications = notifications,
             friendships = (friendsState as? UiState.Success)?.data.orEmpty(),
             privateMessages = (pmsState as? UiState.Success)?.data.orEmpty(),
@@ -858,7 +928,8 @@ fun ChatRoomScreen(
             onRemoveFriend = { viewModel.removeFriend(it) },
             onSendPm = { partner, msg -> viewModel.sendPrivateMessage(partner, msg) },
             onCreateWallPost = { viewModel.createWallPost(it) },
-            onLikeWallPost = { viewModel.likeWallPost(it) }
+            onLikeWallPost = { viewModel.likeWallPost(it) },
+            onPublishNews = { title, content, imageUrl -> viewModel.publishNews(title, content, imageUrl) }
         )
     }
 
@@ -876,15 +947,36 @@ fun ChatRoomScreen(
             onDismiss = { showAdminDialog = false },
             onAssignRank = { uid, rkKey, grantAdmin -> viewModel.assignRank(uid, rkKey, grantAdmin) },
             onSaveRank = { viewModel.saveRank(it) },
-            onSaveRoom = { id, name, desc, icon, theme, welcome, power, micsEnabled ->
-                viewModel.saveRoom(id, name, desc, icon, theme, welcome, power, micsEnabled)
+            onSaveRoom = { id, name, desc, icon, theme, welcome, power, micsEnabled, ownerUid, ownerName ->
+                viewModel.saveRoom(id, name, desc, icon, theme, welcome, power, micsEnabled, ownerUid, ownerName)
             },
-            onPublishNews = { title, content -> viewModel.publishNews(title, content) },
+            onPublishNews = { title, content, imageUrl -> viewModel.publishNews(title, content, imageUrl) },
             onSaveSiteSettings = { sName, wBanner, mText, sound ->
                 viewModel.saveSiteSettings(sName, wBanner, mText, sound)
             },
             onBanUser = { target, reason -> viewModel.banUser(target, reason) },
             onUnbanUser = { viewModel.unbanUser(it) }
+        )
+    }
+
+    if (showRoomOwnerDialog) {
+        RoomOwnerEditDialog(
+            room = activeRoom,
+            onDismiss = { showRoomOwnerDialog = false },
+            onSave = { name, welcome, theme, micsEnabled ->
+                viewModel.saveRoom(
+                    roomId = activeRoom.id,
+                    name = name,
+                    desc = activeRoom.description,
+                    icon = activeRoom.icon,
+                    bgTheme = theme,
+                    welcome = welcome,
+                    minPower = activeRoom.minRankPower,
+                    micsEnabled = micsEnabled,
+                    ownerUserId = activeRoom.ownerUserId,
+                    ownerName = activeRoom.ownerName
+                )
+            }
         )
     }
 

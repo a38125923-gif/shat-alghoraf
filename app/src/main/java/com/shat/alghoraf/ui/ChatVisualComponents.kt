@@ -1,7 +1,12 @@
 package com.shat.alghoraf.ui
 
+import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -27,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -54,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -201,6 +208,17 @@ fun AvatarWithFrame(
 fun StyledRankBadge(rank: RankConfig) {
     val bg = parseHexColor(rank.bgColor, Color(0xFF334155))
     val fg = parseHexColor(rank.textColor, Color.White)
+    val customIconBitmap = remember(rank.iconImageUrl) {
+        if (rank.iconImageUrl.startsWith("data:image")) {
+            try {
+                val b64 = rank.iconImageUrl.substringAfter("base64,", "")
+                val bytes = Base64.decode(b64, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            } catch (_: Exception) {
+                null
+            }
+        } else null
+    }
     Surface(
         color = bg,
         shape = RoundedCornerShape(8.dp)
@@ -210,7 +228,21 @@ fun StyledRankBadge(rank: RankConfig) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            if (rank.icon.isNotBlank()) {
+            if (customIconBitmap != null) {
+                Image(
+                    bitmap = customIconBitmap,
+                    contentDescription = rank.label,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(13.dp).clip(CircleShape)
+                )
+            } else if (rank.iconImageUrl.startsWith("http")) {
+                AsyncImage(
+                    model = rank.iconImageUrl,
+                    contentDescription = rank.label,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(13.dp).clip(CircleShape)
+                )
+            } else if (rank.icon.isNotBlank()) {
                 Text(text = rank.icon, fontSize = 10.sp)
             }
             Text(
@@ -232,7 +264,9 @@ fun StyledChatName(
     nameplateStyle: String,
     nameShine: String,
     fontFamilyName: String,
-    vipWings: Boolean
+    vipWings: Boolean,
+    nameBgColorHex: String = "",
+    neonColorHex: String = ""
 ) {
     val infinite = rememberInfiniteTransition(label = "shine")
     val shimmerOffset by infinite.animateFloat(
@@ -259,7 +293,14 @@ fun StyledChatName(
         else -> CairoFontFamily
     }
 
+    val customBgColor = if (nameBgColorHex.isNotBlank()) parseHexColor(nameBgColorHex, Color.Transparent) else Color.Transparent
+    val neonGlowColor = if (neonColorHex.isNotBlank()) parseHexColor(neonColorHex, Color.Transparent) else Color.Transparent
+    val hasPlateOrBg = plateBrush != null || customBgColor != Color.Transparent
     val baseColor = if (plateBrush != null) Color.White else parseHexColor(nameColorHex, RoyalBlue)
+    val shadow = if (neonGlowColor != Color.Transparent) {
+        Shadow(color = neonGlowColor, offset = Offset(0f, 0f), blurRadius = 14f)
+    } else null
+
     val textBrush: Brush? = when (nameShine) {
         "gold_shimmer" -> Brush.linearGradient(
             colors = listOf(Color(0xFFB45309), Color(0xFFFDE047), Color(0xFFF59E0B)),
@@ -284,15 +325,31 @@ fun StyledChatName(
         else -> null
     }
 
+    val showRoyalOrnaments = vipWings || nameplateStyle != "default" || nameShine != "none"
+
     Box(
         modifier = Modifier
             .then(
-                if (plateBrush != null) {
-                    Modifier
+                when {
+                    plateBrush != null -> Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(plateBrush)
+                        .then(
+                            if (neonGlowColor != Color.Transparent) Modifier.border(1.dp, neonGlowColor, RoundedCornerShape(8.dp))
+                            else Modifier
+                        )
                         .padding(horizontal = 7.dp, vertical = 2.dp)
-                } else Modifier
+                    customBgColor != Color.Transparent -> Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(customBgColor.copy(alpha = 0.22f))
+                        .border(1.dp, if (neonGlowColor != Color.Transparent) neonGlowColor else customBgColor, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                    neonGlowColor != Color.Transparent -> Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, neonGlowColor.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                    else -> Modifier
+                }
             )
     ) {
         Row(
@@ -301,6 +358,8 @@ fun StyledChatName(
         ) {
             if (vipWings) {
                 Text(text = "🕊️", fontSize = 11.sp)
+            } else if (showRoyalOrnaments) {
+                Text(text = "꧁", color = if (hasPlateOrBg && plateBrush != null) GoldLightCompat else RoyalGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
             Text(
                 text = name,
@@ -309,21 +368,25 @@ fun StyledChatName(
                         brush = textBrush,
                         fontFamily = chosenFont,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        shadow = shadow
                     )
                 } else {
                     TextStyle(
                         color = baseColor,
                         fontFamily = chosenFont,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        shadow = shadow
                     )
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (vipWings) {
-                Text(text = "✨", fontSize = 10.sp)
+                Text(text = "🕊️", fontSize = 11.sp)
+            } else if (showRoyalOrnaments) {
+                Text(text = "꧂", color = if (hasPlateOrBg && plateBrush != null) GoldLightCompat else RoyalGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -335,6 +398,7 @@ fun VoiceMicStrip(
     currentUid: String,
     isAdminUser: Boolean,
     hasAudioPermission: Boolean,
+    liveMicLevel: Float,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onMicClick: (RoomMicSlot) -> Unit,
@@ -398,10 +462,11 @@ fun VoiceMicStrip(
                             val occupied = slot.holderUid.isNotBlank()
                             val isMine = slot.holderUid == currentUid
                             val muted = slot.isMutedByUser || slot.isMutedByAdmin
+                            val activeSpeaking = occupied && !muted && (slot.isTalking || (isMine && liveMicLevel > 0.08f))
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
-                                    .width(48.dp)
+                                    .width(50.dp)
                                     .testTag("mic_slot_${slot.slotNumber}")
                             ) {
                                 Box(
@@ -416,8 +481,16 @@ fun VoiceMicStrip(
                                             }
                                         )
                                         .border(
-                                            width = if (isMine) 2.5.dp else 1.5.dp,
-                                            color = if (isMine) RoyalGold else Color.White,
+                                            width = when {
+                                                activeSpeaking -> 3.dp
+                                                isMine -> 2.5.dp
+                                                else -> 1.5.dp
+                                            },
+                                            color = when {
+                                                activeSpeaking -> OnlineGreen
+                                                isMine -> RoyalGold
+                                                else -> Color.White
+                                            },
                                             shape = CircleShape
                                         )
                                         .clickable { onMicClick(slot) },
@@ -457,7 +530,14 @@ fun VoiceMicStrip(
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     if (isMine || isAdminUser) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            if (isMine) {
+                                                Text(
+                                                    text = if (slot.isMutedByUser) "🎙️" else "🔇",
+                                                    fontSize = 10.sp,
+                                                    modifier = Modifier.clickable { onMicClick(slot) }
+                                                )
+                                            }
                                             if (isAdminUser && !isMine) {
                                                 Text(
                                                     text = if (slot.isMutedByAdmin) "🔊" else "🔇",
@@ -488,6 +568,88 @@ fun VoiceMicStrip(
                     }
                 }
             }
+        }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun InRoomYoutubePlayer(
+    videoId: String,
+    title: String,
+    isMutedLocally: Boolean,
+    canControlRoomPlayer: Boolean,
+    onToggleMute: () -> Unit,
+    onStopForRoom: () -> Unit
+) {
+    Surface(
+        color = Color(0xFF0F172A),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .border(1.dp, RoyalGold.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "🎵 يوتيوب الغرفة: ${title.ifBlank { videoId }}",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (isMutedLocally) "🔇 مكتوم لك" else "🔊 صوت مفعل",
+                        color = GoldLightCompat,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { onToggleMute() }
+                    )
+                    if (canControlRoomPlayer) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "إيقاف المشغل للغرفة",
+                            tint = Color(0xFFF87171),
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { onStopForRoom() }
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        settings.cacheMode = WebSettings.LOAD_DEFAULT
+                        webChromeClient = WebChromeClient()
+                        webViewClient = WebViewClient()
+                    }
+                },
+                update = { webView ->
+                    val muteFlag = if (isMutedLocally) 1 else 0
+                    val embedUrl = "https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&mute=$muteFlag"
+                    if (webView.tag != embedUrl) {
+                        webView.tag = embedUrl
+                        webView.loadUrl(embedUrl)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
         }
     }
 }
@@ -537,23 +699,40 @@ fun ChatMessageRow(
     }
 
     if (message.isAdminNotice || message.msgType == "admin_notice") {
+        val decodedNoticeImg = remember(message.mediaUrl) {
+            if (message.mediaUrl.startsWith("data:image")) {
+                try {
+                    val b64 = message.mediaUrl.substringAfter("base64,", "")
+                    val bytes = Base64.decode(b64, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+        }
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 4.dp)
-                .border(1.5.dp, CrimsonOwner, RoundedCornerShape(14.dp))
+                .border(2.dp, CrimsonOwner, RoundedCornerShape(14.dp))
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Default.Campaign, contentDescription = null, tint = CrimsonOwner, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Campaign, contentDescription = null, tint = CrimsonOwner, modifier = Modifier.size(20.dp))
                     Text(
-                        text = "إشعار من الإدارة • ${message.senderName}",
+                        text = "إشعار من الإدارة:",
                         color = CrimsonOwner,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = message.senderName,
+                        color = Color(0xFF991B1B),
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
@@ -562,9 +741,18 @@ fun ChatMessageRow(
                 Text(
                     text = message.content,
                     color = Color(0xFF7F1D1D),
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyLarge
                 )
+                if (decodedNoticeImg != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Image(
+                        bitmap = decodedNoticeImg,
+                        contentDescription = "صورة الإشعار",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(10.dp))
+                    )
+                }
             }
         }
         return
@@ -620,7 +808,9 @@ fun ChatMessageRow(
                             nameplateStyle = message.nameplateStyle,
                             nameShine = message.nameShine,
                             fontFamilyName = message.fontFamily,
-                            vipWings = message.vipWings
+                            vipWings = message.vipWings,
+                            nameBgColorHex = message.nameBgColor,
+                            neonColorHex = message.neonColor
                         )
                     }
                     StyledRankBadge(rank = rank)

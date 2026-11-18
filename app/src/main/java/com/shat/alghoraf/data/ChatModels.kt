@@ -139,6 +139,7 @@ data class RankConfig(
     val key: String = "member",
     val label: String = "عضو",
     val icon: String = "👤",
+    val iconImageUrl: String = "",
     val bgColor: String = "#334155",
     val textColor: String = "#FFFFFF",
     val power: Long = 1L,

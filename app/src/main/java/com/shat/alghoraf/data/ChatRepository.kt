@@ -511,18 +511,32 @@ class ChatRepository(
 
     // --- Presence & Heartbeat ---
 
-    suspend fun sendHeartbeat(roomId: String, online: Boolean): Result<Unit> {
+    suspend fun sendHeartbeat(roomId: String, online: Boolean, incrementActivity: Boolean = false): Result<Unit> {
         val path = "public_profiles/${auth.currentUser?.uid ?: "none"}"
         return try {
             val uid = requireUserId()
-            db.collection("public_profiles").document(uid).update(
-                mapOf(
-                    "isOnline" to online,
-                    "currentRoomId" to roomId.take(64).ifBlank { "general" },
-                    "lastSeenAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+            val updates = mutableMapOf<String, Any>(
+                "isOnline" to online,
+                "currentRoomId" to roomId.take(64).ifBlank { "general" },
+                "lastSeenAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            if (online && incrementActivity) {
+                updates["activityPoints"] = FieldValue.increment(1L)
+            }
+            db.collection("public_profiles").document(uid).update(updates).await()
+            if (online && incrementActivity) {
+                val roomRef = db.collection("rooms").document(roomId.take(64).ifBlank { "general" })
+                val roomSnap = roomRef.get().await()
+                if (roomSnap.exists()) {
+                    roomRef.update(
+                        mapOf(
+                            "activityPoints" to FieldValue.increment(1L),
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            }
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -568,7 +582,8 @@ class ChatRepository(
         content: String,
         msgType: String = "text",
         mediaUrl: String = "",
-        isAdminNotice: Boolean = false
+        isAdminNotice: Boolean = false,
+        roomProfiles: List<PublicProfile> = emptyList()
     ): Result<Unit> {
         val path = "messages"
         return try {
@@ -620,6 +635,26 @@ class ChatRepository(
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
+            }
+
+            // Detect @mentions or exact displayName mentions and create real Firestore notification
+            if (safeContent.isNotBlank() && roomProfiles.isNotEmpty()) {
+                val lower = safeContent.lowercase()
+                roomProfiles.filter { it.userId != uid }.take(30).forEach { target ->
+                    val shown = target.shownName.trim().lowercase()
+                    val uname = target.username.trim().lowercase()
+                    val matched = (shown.length >= 2 && (lower.contains("@$shown") || lower.contains(shown))) ||
+                        (uname.length >= 2 && lower.contains("@$uname"))
+                    if (matched) {
+                        sendNotification(
+                            recipientId = target.userId,
+                            sender = sender,
+                            type = "mention",
+                            title = "📣 منشن من ${sender.shownName}",
+                            body = safeContent.take(180)
+                        )
+                    }
+                }
             }
 
             Result.success(Unit)
@@ -748,6 +783,28 @@ class ChatRepository(
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.UPDATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateMicTalking(roomId: String, slotNumber: Int, talking: Boolean): Result<Unit> {
+        val path = "rooms/$roomId/mics/$slotNumber"
+        return try {
+            val uid = requireUserId()
+            val ref = db.collection("rooms").document(roomId).collection("mics").document(slotNumber.toString())
+            val snap = ref.get().await()
+            if (snap.exists() && snap.getString("holderUid") == uid) {
+                ref.update(
+                    mapOf(
+                        "isTalking" to talking,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1159,23 +1216,55 @@ class ChatRepository(
 
     // --- Admin & Owner CMS Operations ---
 
-    suspend fun publishNews(author: PublicProfile, title: String, content: String): Result<Unit> {
+    suspend fun publishNews(
+        author: PublicProfile,
+        title: String,
+        content: String,
+        imageUrl: String = "",
+        announceInRoomId: String = "general"
+    ): Result<Unit> {
         return try {
             val uid = requireUserId()
+            val cleanTitle = title.trim().take(120)
+            val cleanBody = content.trim().take(2000)
             db.collection("news").document().set(
                 mapOf(
                     "authorId" to uid,
                     "authorName" to author.shownName.take(60),
                     "authorAvatar" to author.avatarUrl.take(340000),
                     "authorRole" to author.role.take(40),
-                    "title" to title.trim().take(120),
-                    "content" to content.trim().take(2000),
-                    "imageUrl" to "",
+                    "title" to cleanTitle,
+                    "content" to cleanBody,
+                    "imageUrl" to imageUrl.take(400000),
                     "isPublished" to true,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
+
+            // Announce news in the active room as an admin notice
+            db.collection("messages").document().set(
+                mapOf(
+                    "roomId" to announceInRoomId.take(64).ifBlank { "general" },
+                    "senderId" to uid,
+                    "senderName" to author.shownName.take(60),
+                    "senderRole" to author.role.take(40),
+                    "nameColor" to author.nameColor.take(30),
+                    "textColor" to "#7F1D1D",
+                    "avatarUrl" to author.avatarUrl.take(340000),
+                    "avatarFrame" to author.avatarFrame.take(40),
+                    "nameplateStyle" to author.nameplateStyle.take(40),
+                    "nameShine" to author.nameShine.take(40),
+                    "vipWings" to author.vipWings,
+                    "isAdminNotice" to true,
+                    "isGift" to false,
+                    "msgType" to "admin_notice",
+                    "content" to "📰 خبر جديد: $cleanTitle — ${cleanBody.take(180)}",
+                    "mediaUrl" to imageUrl.take(400000),
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -1185,25 +1274,39 @@ class ChatRepository(
         }
     }
 
-    suspend fun saveRoom(roomId: String, name: String, description: String, icon: String, bgTheme: String, welcomeMessage: String, minRankPower: Long, micsEnabled: Boolean): Result<Unit> {
+    suspend fun saveRoom(
+        roomId: String,
+        name: String,
+        description: String,
+        icon: String,
+        bgTheme: String,
+        welcomeMessage: String,
+        minRankPower: Long,
+        micsEnabled: Boolean,
+        ownerUserId: String = "",
+        ownerName: String = ""
+    ): Result<Unit> {
         return try {
             val uid = requireUserId()
             val cleanId = roomId.trim().lowercase().replace(Regex("[^a-z0-9_\\-]"), "_").ifBlank { "room_${System.currentTimeMillis()}" }
             val ref = db.collection("rooms").document(cleanId)
             val snap = ref.get().await()
             if (snap.exists()) {
-                ref.update(
-                    mapOf(
-                        "name" to name.trim().take(80),
-                        "description" to description.trim().take(300),
-                        "icon" to icon.trim().take(16).ifBlank { "💬" },
-                        "bgTheme" to bgTheme.take(40),
-                        "welcomeMessage" to welcomeMessage.trim().take(300),
-                        "minRankPower" to minRankPower.coerceIn(0L, 100L),
-                        "micsEnabled" to micsEnabled,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                val updates = mutableMapOf<String, Any>(
+                    "name" to name.trim().take(80),
+                    "description" to description.trim().take(300),
+                    "icon" to icon.trim().take(16).ifBlank { "💬" },
+                    "bgTheme" to bgTheme.take(40),
+                    "welcomeMessage" to welcomeMessage.trim().take(300),
+                    "minRankPower" to minRankPower.coerceIn(0L, 100L),
+                    "micsEnabled" to micsEnabled,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                if (ownerUserId.isNotBlank()) {
+                    updates["ownerUserId"] = ownerUserId.take(128)
+                    updates["ownerName"] = ownerName.ifBlank { "مالك الغرفة" }.take(60)
+                }
+                ref.update(updates).await()
             } else {
                 ref.set(
                     mapOf(
@@ -1216,8 +1319,8 @@ class ChatRepository(
                         "welcomeMessage" to welcomeMessage.trim().take(300),
                         "minRankPower" to minRankPower.coerceIn(0L, 100L),
                         "micsEnabled" to micsEnabled,
-                        "ownerUserId" to uid,
-                        "ownerName" to "صاحب الموقع",
+                        "ownerUserId" to ownerUserId.ifBlank { uid }.take(128),
+                        "ownerName" to ownerName.ifBlank { "صاحب الموقع" }.take(60),
                         "activityPoints" to 0L,
                         "youtubeVideoId" to "",
                         "youtubeTitle" to "",
@@ -1249,6 +1352,7 @@ class ChatRepository(
                 "key" to cleanKey,
                 "label" to rank.label.trim().take(60),
                 "icon" to rank.icon.trim().take(16),
+                "iconImageUrl" to rank.iconImageUrl.take(220000),
                 "bgColor" to rank.bgColor.take(24),
                 "textColor" to rank.textColor.take(24),
                 "power" to rank.power.coerceIn(0L, 100L),
@@ -1286,6 +1390,9 @@ class ChatRepository(
     suspend fun assignUserRank(targetUid: String, rankKey: String, grantAdminAccess: Boolean): Result<Unit> {
         return try {
             val uid = requireUserId()
+            require(rankKey != "site_owner" || isCurrentSupremeOwner()) {
+                "لا يمكن منح رتبة صاحب الموقع لغير المالك الأعلى"
+            }
             db.collection("public_profiles").document(targetUid).update(
                 mapOf(
                     "role" to rankKey,

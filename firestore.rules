@@ -169,6 +169,7 @@ service cloud.firestore {
       return data.key is string && data.key.size() >= 1 && data.key.size() <= 50 &&
              data.label is string && data.label.size() >= 1 && data.label.size() <= 60 &&
              data.icon is string && data.icon.size() <= 16 &&
+             (!('iconImageUrl' in data) || (data.iconImageUrl is string && data.iconImageUrl.size() <= 250000)) &&
              data.bgColor is string && data.bgColor.size() <= 24 &&
              data.textColor is string && data.textColor.size() <= 24 &&
              data.power is int && data.power >= 0 && data.power <= 100 &&
@@ -382,6 +383,10 @@ service cloud.firestore {
                        isImmutableCreatedAt() &&
                        (
                          isAdmin() ||
+                         (existing().ownerUserId == request.auth.uid &&
+                          incoming().ownerUserId == existing().ownerUserId &&
+                          incoming().createdBy == existing().createdBy &&
+                          incoming().isActive == true) ||
                          (incoming().isActive == true &&
                           incoming().diff(existing()).affectedKeys().hasOnly([
                             'activityPoints', 'youtubeVideoId', 'youtubeTitle', 'youtubeIsPlaying', 'updatedAt'

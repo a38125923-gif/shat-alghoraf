@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.shat.alghoraf.audio.VoiceAudioEngine
 import com.shat.alghoraf.data.BanRecord
 import com.shat.alghoraf.data.ChatMessage
 import com.shat.alghoraf.data.ChatRepository
@@ -50,6 +51,10 @@ class MainChatViewModel(
 
     private val _activeRoomId = MutableStateFlow("general")
     val activeRoomId: StateFlow<String> = _activeRoomId.asStateFlow()
+
+    private val audioEngine = VoiceAudioEngine()
+    val liveMicLevel: StateFlow<Float> = audioEngine.liveMicLevel
+    val isMicCapturing: StateFlow<Boolean> = audioEngine.isMicCapturing
 
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -138,11 +143,18 @@ class MainChatViewModel(
             repository.ensureUserProvisioned().onFailure { err ->
                 _toastMessage.value = err.toFirestoreMessage("تعذر تهيئة بيانات الحساب")
             }
+            var tick = 0
             while (isActive) {
-                repository.sendHeartbeat(_activeRoomId.value, true)
-                delay(15_000L)
+                tick++
+                repository.sendHeartbeat(_activeRoomId.value, true, incrementActivity = (tick % 6 == 0))
+                delay(10_000L)
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        audioEngine.release()
     }
 
     fun clearToast() {
@@ -167,6 +179,7 @@ class MainChatViewModel(
 
     fun sendMessage(text: String, msgType: String = "text", mediaUrl: String = "", asAdminNotice: Boolean = false) {
         val me = (myProfile.value as? UiState.Success)?.data ?: return
+        val profiles = (publicProfiles.value as? UiState.Success)?.data.orEmpty()
         viewModelScope.launch {
             val res = repository.sendRoomMessage(
                 roomId = _activeRoomId.value,
@@ -174,7 +187,8 @@ class MainChatViewModel(
                 content = text,
                 msgType = if (asAdminNotice) "admin_notice" else msgType,
                 mediaUrl = mediaUrl,
-                isAdminNotice = asAdminNotice
+                isAdminNotice = asAdminNotice,
+                roomProfiles = profiles
             )
             res.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر إرسال الرسالة")
@@ -193,13 +207,40 @@ class MainChatViewModel(
     fun toggleMicSlot(slotNumber: Int) {
         val me = (myProfile.value as? UiState.Success)?.data ?: return
         viewModelScope.launch {
-            repository.claimOrToggleMic(_activeRoomId.value, slotNumber, me).onFailure {
+            repository.claimOrToggleMic(_activeRoomId.value, slotNumber, me).onSuccess {
+                val slots = (roomMics.value as? UiState.Success)?.data.orEmpty()
+                val slot = slots.firstOrNull { it.slotNumber.toInt() == slotNumber }
+                val willBeMuted = slot?.holderUid == currentUserId && !slot.isMutedByUser
+                if (willBeMuted || slot?.isMutedByAdmin == true) {
+                    audioEngine.stopMicCapture()
+                } else {
+                    audioEngine.startMicCapture { talking ->
+                        viewModelScope.launch {
+                            repository.updateMicTalking(_activeRoomId.value, slotNumber, talking)
+                        }
+                    }
+                }
+            }.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر استخدام المايك")
             }
         }
     }
 
+    fun syncMyMicAudioState(mics: List<RoomMicSlot>) {
+        val mySlot = mics.firstOrNull { it.holderUid == currentUserId }
+        if (mySlot != null && !mySlot.isMutedByUser && !mySlot.isMutedByAdmin) {
+            audioEngine.startMicCapture { talking ->
+                viewModelScope.launch {
+                    repository.updateMicTalking(_activeRoomId.value, mySlot.slotNumber.toInt(), talking)
+                }
+            }
+        } else {
+            audioEngine.stopMicCapture()
+        }
+    }
+
     fun leaveMicSlot(slotNumber: Int) {
+        audioEngine.stopMicCapture()
         viewModelScope.launch {
             repository.leaveMic(_activeRoomId.value, slotNumber).onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر مغادرة المايك")
@@ -213,6 +254,10 @@ class MainChatViewModel(
                 _toastMessage.value = it.toFirestoreMessage("تعذر التحكم في المايك")
             }
         }
+    }
+
+    fun previewProfileMusic(presetId: String) {
+        audioEngine.playProfileMusicChime(presetId)
     }
 
     fun toggleStealth(enabled: Boolean) {
@@ -361,20 +406,31 @@ class MainChatViewModel(
         }
     }
 
-    fun publishNews(title: String, content: String) {
+    fun publishNews(title: String, content: String, imageUrl: String = "") {
         val me = (myProfile.value as? UiState.Success)?.data ?: return
         viewModelScope.launch {
-            repository.publishNews(me, title, content).onSuccess {
-                _toastMessage.value = "تم نشر الخبر في الموقع ✅"
+            repository.publishNews(me, title, content, imageUrl, _activeRoomId.value).onSuccess {
+                _toastMessage.value = "تم نشر الخبر في الموقع وإشعار الأعضاء ✅"
             }.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر نشر الخبر")
             }
         }
     }
 
-    fun saveRoom(roomId: String, name: String, desc: String, icon: String, bgTheme: String, welcome: String, minPower: Long, micsEnabled: Boolean) {
+    fun saveRoom(
+        roomId: String,
+        name: String,
+        desc: String,
+        icon: String,
+        bgTheme: String,
+        welcome: String,
+        minPower: Long,
+        micsEnabled: Boolean,
+        ownerUserId: String = "",
+        ownerName: String = ""
+    ) {
         viewModelScope.launch {
-            repository.saveRoom(roomId, name, desc, icon, bgTheme, welcome, minPower, micsEnabled).onSuccess {
+            repository.saveRoom(roomId, name, desc, icon, bgTheme, welcome, minPower, micsEnabled, ownerUserId, ownerName).onSuccess {
                 _toastMessage.value = "تم حفظ الغرفة سحابياً ✅"
             }.onFailure {
                 _toastMessage.value = it.toFirestoreMessage("تعذر حفظ الغرفة")

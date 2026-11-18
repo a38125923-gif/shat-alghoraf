@@ -153,6 +153,7 @@
         "key": { "type": "string" },
         "label": { "type": "string" },
         "icon": { "type": "string" },
+        "iconImageUrl": { "type": "string" },
         "bgColor": { "type": "string" },
         "textColor": { "type": "string" },
         "power": { "type": "integer" },

@@ -64,6 +64,21 @@ object DefaultCatalogs {
         StyleOption("emerald_mist", "زمردي هادئ")
     )
 
+    val rankIconLibrary = listOf(
+        StyleOption("👑", "تاج ذهبي"),
+        StyleOption("🏆", "كأس ملكي"),
+        StyleOption("🛡️", "درع حارس"),
+        StyleOption("🕊️", "أجنحة VIP"),
+        StyleOption("🎖️", "وسام شرف"),
+        StyleOption("🌟", "نجمة متألقة"),
+        StyleOption("⚔️", "سيوف ملكية"),
+        StyleOption("💎", "جوهرة زرقاء"),
+        StyleOption("⚜️", "صولجان ملكي"),
+        StyleOption("🔰", "شارة إشراف"),
+        StyleOption("🔥", "لهب التميز"),
+        StyleOption("🏛️", "إدارة عليا")
+    )
+
     val colorPalette = listOf(
         "#1A45E5", "#B91C1C", "#D97706", "#059669",
         "#7C3AED", "#DB2777", "#0284C7", "#1E293B",

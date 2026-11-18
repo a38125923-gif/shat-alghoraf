@@ -2,13 +2,12 @@ package com.shat.alghoraf.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.AudioManager
-import android.media.ToneGenerator
 import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,6 +69,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -139,6 +140,7 @@ fun ProfileCustomizerDialog(
     ) -> Unit,
     onToggleStealth: (Boolean) -> Unit,
     onOpenAdminPanel: () -> Unit,
+    onPreviewMusic: (String) -> Unit,
     onSignOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -148,6 +150,7 @@ fun ProfileCustomizerDialog(
     var avatarUrl by remember { mutableStateOf(profile.avatarUrl) }
     var nameColor by remember { mutableStateOf(profile.nameColor) }
     var textColor by remember { mutableStateOf(profile.textColor) }
+    var nameBgColor by remember { mutableStateOf(profile.nameBgColor) }
     var neonColor by remember { mutableStateOf(profile.neonColor) }
     var fontFamily by remember { mutableStateOf(profile.fontFamily) }
     var avatarFrame by remember { mutableStateOf(profile.avatarFrame) }
@@ -166,6 +169,7 @@ fun ProfileCustomizerDialog(
     }
 
     val myRank = DefaultCatalogs.rankFor(profile.role, ranks)
+    val canUseAddons = isSupremeOwner || myRank.permUseAddons
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -235,6 +239,13 @@ fun ProfileCustomizerDialog(
                                     Text("🪙 رصيدك: ${profile.coins} كوينز • ⭐ التفاعل: ${profile.activityPoints}", fontSize = 12.sp, color = Color(0xFF475569))
                                 }
                             }
+                            OutlinedTextField(
+                                value = if (avatarUrl.startsWith("http")) avatarUrl else "",
+                                onValueChange = { if (it.isBlank() || it.startsWith("http")) avatarUrl = it },
+                                label = { Text("أو رابط صورة متحركة GIF / URL") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
                             OutlinedTextField(
                                 value = displayName,
                                 onValueChange = { displayName = it },
@@ -343,6 +354,42 @@ fun ProfileCustomizerDialog(
                                     )
                                 }
                             }
+                            Text("خلفية الاسم (Name Background)", fontWeight = FontWeight.Bold)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(selected = nameBgColor.isBlank(), onClick = { nameBgColor = "" }, label = { Text("شفاف") })
+                                DefaultCatalogs.colorPalette.take(8).forEach { hex ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(parseHexColor(hex, RoyalBlue))
+                                            .border(
+                                                width = if (nameBgColor == hex) 3.dp else 1.dp,
+                                                color = if (nameBgColor == hex) Color.Black else Color.LightGray,
+                                                shape = CircleShape
+                                            )
+                                            .clickable { nameBgColor = hex }
+                                    )
+                                }
+                            }
+                            Text("توهج النيون حول الاسم (Neon Glow)", fontWeight = FontWeight.Bold)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(selected = neonColor.isBlank(), onClick = { neonColor = "" }, label = { Text("بدون") })
+                                DefaultCatalogs.colorPalette.take(8).forEach { hex ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(parseHexColor(hex, RoyalGold))
+                                            .border(
+                                                width = if (neonColor == hex) 3.dp else 1.dp,
+                                                color = if (neonColor == hex) Color.Black else Color.LightGray,
+                                                shape = CircleShape
+                                            )
+                                            .clickable { neonColor = hex }
+                                    )
+                                }
+                            }
                             Text("لون النص في الرسائل", fontWeight = FontWeight.Bold)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 DefaultCatalogs.colorPalette.forEach { hex ->
@@ -373,43 +420,129 @@ fun ProfileCustomizerDialog(
                         }
 
                         3 -> {
-                            Text("إطار الصورة الشخصية", fontWeight = FontWeight.Bold)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                DefaultCatalogs.avatarFrames.forEach { opt ->
-                                    FilterChip(
-                                        selected = avatarFrame == opt.id,
-                                        onClick = { avatarFrame = opt.id },
-                                        label = { Text("${opt.badge} ${opt.label}") }
+                            // Live Preview Banner
+                            Surface(
+                                color = Color(0xFFF8FAFC),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().border(1.dp, RoyalGold.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    AvatarWithFrame(avatarUrl, displayName, avatarFrame, size = 48.dp, showOnlineDot = true)
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("معاينة حية لشكلك في الغرفة:", fontSize = 10.sp, color = Color.Gray)
+                                        StyledChatName(
+                                            name = displayName.ifBlank { "عضو" },
+                                            nameColorHex = nameColor,
+                                            nameplateStyle = nameplateStyle,
+                                            nameShine = nameShine,
+                                            fontFamilyName = fontFamily,
+                                            vipWings = vipWings,
+                                            nameBgColorHex = nameBgColor,
+                                            neonColorHex = neonColor
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (!canUseAddons) {
+                                Surface(color = Color(0xFFFEF2F2), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        "ملاحظة: بعض الإضافات الملكية تتطلب رتبة أعلى بصلاحية استخدام الإضافات.",
+                                        fontSize = 11.sp,
+                                        color = CrimsonOwner,
+                                        modifier = Modifier.padding(8.dp)
                                     )
                                 }
                             }
+
+                            Text("معرض إطارات الصور المتحركة", fontWeight = FontWeight.Bold)
+                            DefaultCatalogs.avatarFrames.filter { it.id != "none" }.forEach { opt ->
+                                val isActiveFrame = avatarFrame == opt.id
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = if (isActiveFrame) Color(0xFFFFFBEB) else Color(0xFFF8FAFC)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            AvatarWithFrame(avatarUrl, displayName, opt.id, size = 42.dp)
+                                            Column {
+                                                Text("${opt.badge} ${opt.label}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                Text(if (isActiveFrame) "مفعل حالياً ✅" else "إطار متحرك", fontSize = 11.sp, color = Color.Gray)
+                                            }
+                                        }
+                                        if (isActiveFrame) {
+                                            OutlinedButton(onClick = { avatarFrame = "none" }) {
+                                                Text("Delete / إزالة", fontSize = 11.sp, color = CrimsonOwner)
+                                            }
+                                        } else {
+                                            Button(
+                                                enabled = canUseAddons,
+                                                onClick = { avatarFrame = opt.id },
+                                                colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue)
+                                            ) {
+                                                Text("USE NOW", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             Text("لوحة الاسم الملكية (Nameplate)", fontWeight = FontWeight.Bold)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 DefaultCatalogs.nameplateStyles.forEach { opt ->
                                     FilterChip(
                                         selected = nameplateStyle == opt.id,
+                                        enabled = canUseAddons || opt.id == "default",
                                         onClick = { nameplateStyle = opt.id },
                                         label = { Text(opt.label) }
                                     )
                                 }
                             }
-                            Text("لمعة الاسم المتحركة (Name Shine)", fontWeight = FontWeight.Bold)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+
+                            Text("شبكة لمعة الاسم (معاينة حية)", fontWeight = FontWeight.Bold)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 DefaultCatalogs.nameShineOptions.forEach { opt ->
-                                    FilterChip(
-                                        selected = nameShine == opt.id,
-                                        onClick = { nameShine = opt.id },
-                                        label = { Text(opt.label) }
-                                    )
+                                    Surface(
+                                        color = if (nameShine == opt.id) Color(0xFFDBEAFE) else Color(0xFFF8FAFC),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier
+                                            .border(
+                                                width = if (nameShine == opt.id) 2.dp else 1.dp,
+                                                color = if (nameShine == opt.id) RoyalBlue else Color(0xFFE2E8F0),
+                                                shape = RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable(enabled = canUseAddons || opt.id == "none") { nameShine = opt.id }
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            StyledChatName(
+                                                name = displayName.take(10).ifBlank { "معاينة" },
+                                                nameColorHex = nameColor,
+                                                nameplateStyle = "default",
+                                                nameShine = opt.id,
+                                                fontFamilyName = fontFamily,
+                                                vipWings = false
+                                            )
+                                            Text(opt.label, fontSize = 10.sp, color = Color.Gray)
+                                        }
+                                    }
                                 }
                             }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("أجنحة VIP الملكية بجانب الاسم 🕊️", fontWeight = FontWeight.Bold)
-                                Switch(checked = vipWings, onCheckedChange = { vipWings = it })
+                                Switch(checked = vipWings, enabled = canUseAddons, onCheckedChange = { vipWings = it })
                             }
                             Text("موسيقى البروفايل", fontWeight = FontWeight.Bold)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -418,12 +551,7 @@ fun ProfileCustomizerDialog(
                                         selected = profileMusic == opt.id,
                                         onClick = {
                                             profileMusic = opt.id
-                                            if (opt.id.isNotBlank()) {
-                                                try {
-                                                    ToneGenerator(AudioManager.STREAM_MUSIC, 65)
-                                                        .startTone(ToneGenerator.TONE_PROP_BEEP2, 220)
-                                                } catch (_: Exception) { }
-                                            }
+                                            if (opt.id.isNotBlank()) onPreviewMusic(opt.id)
                                         },
                                         label = { Text("${opt.badge} ${opt.label}") },
                                         leadingIcon = { Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -448,7 +576,7 @@ fun ProfileCustomizerDialog(
                         onClick = {
                             onSave(
                                 displayName, bio, avatarUrl, nameColor, textColor,
-                                "", neonColor, fontFamily, "Normal",
+                                nameBgColor, neonColor, fontFamily, "Normal",
                                 avatarFrame, nameplateStyle, nameShine,
                                 vipWings, profileMusic, vipFamily
                             )
@@ -489,7 +617,8 @@ fun QuickUserCardDialog(
     onReport: (String) -> Unit,
     onAssignRank: (String, Boolean) -> Unit,
     onMute: (String) -> Unit,
-    onBan: (String) -> Unit
+    onBan: (String) -> Unit,
+    onPreviewMusic: (String) -> Unit
 ) {
     val targetRank = DefaultCatalogs.rankFor(target.role, ranks)
     val myRank = DefaultCatalogs.rankFor(myProfile.role, ranks)
@@ -515,11 +644,20 @@ fun QuickUserCardDialog(
                     nameplateStyle = target.nameplateStyle,
                     nameShine = target.nameShine,
                     fontFamilyName = target.fontFamily,
-                    vipWings = target.vipWings
+                    vipWings = target.vipWings,
+                    nameBgColorHex = target.nameBgColor,
+                    neonColorHex = target.neonColor
                 )
                 StyledRankBadge(targetRank)
                 if (target.bio.isNotBlank()) {
                     Text(target.bio, fontSize = 12.sp, color = Color(0xFF64748B))
+                }
+                if (target.profileMusic.isNotBlank()) {
+                    OutlinedButton(onClick = { onPreviewMusic(target.profileMusic) }) {
+                        Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("🎵 تشغيل موسيقى البروفايل", fontSize = 11.sp)
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     StatPillCard("🪙 كوينز", target.coins.toString(), Modifier.weight(1f))
@@ -578,10 +716,12 @@ fun QuickUserCardDialog(
                         Text("صلاحيات الإشراف والمالك", fontWeight = FontWeight.Bold, color = CrimsonOwner, fontSize = 13.sp)
                         if (isSupremeOwner || myRank.permSetRank) {
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                ranks.filter { isSupremeOwner || it.power <= myRank.maxAssignableRank }.take(8).forEach { rk ->
+                                ranks.filter {
+                                    isSupremeOwner || (it.power <= myRank.maxAssignableRank && it.key != "site_owner")
+                                }.forEach { rk ->
                                     FilterChip(
                                         selected = target.role == rk.key,
-                                        onClick = { onAssignRank(rk.key, rk.permAccessPanel) },
+                                        onClick = { onAssignRank(rk.key, rk.permAccessPanel || rk.permPublishNews || rk.permManageRooms) },
                                         label = { Text("${rk.icon} ${rk.label}", fontSize = 11.sp) }
                                     )
                                 }
@@ -787,6 +927,7 @@ fun LeaderboardsDialog(
 fun SocialHubDialog(
     initialTab: Int,
     myUid: String,
+    canPublishNews: Boolean,
     notifications: List<NotificationItem>,
     friendships: List<Friendship>,
     privateMessages: List<PrivateMessage>,
@@ -799,12 +940,25 @@ fun SocialHubDialog(
     onRemoveFriend: (String) -> Unit,
     onSendPm: (PublicProfile, String) -> Unit,
     onCreateWallPost: (String) -> Unit,
-    onLikeWallPost: (String) -> Unit
+    onLikeWallPost: (String) -> Unit,
+    onPublishNews: (title: String, content: String, imageUrl: String) -> Unit
 ) {
+    val context = LocalContext.current
     var tab by remember { mutableIntStateOf(initialTab) }
     var wallInput by remember { mutableStateOf("") }
     var pmPartner by remember { mutableStateOf(profiles.firstOrNull { it.userId != myUid }) }
     var pmDraft by remember { mutableStateOf("") }
+    var showNewsComposer by remember { mutableStateOf(false) }
+    var newsTitle by remember { mutableStateOf("") }
+    var newsBody by remember { mutableStateOf("") }
+    var newsImage by remember { mutableStateOf("") }
+    val newsImgPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            encodeUriToSmallBase64(context, uri, 360)?.let { newsImage = it }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -958,20 +1112,116 @@ fun SocialHubDialog(
                             }
                         }
 
-                        else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (newsPosts.isEmpty()) item { Text("لا توجد أخبار منشورة بعد.", color = Color.Gray) }
-                            items(newsPosts) { news ->
-                                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB))) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("📰 ${news.title}", fontWeight = FontWeight.Bold, color = RoyalBlue)
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(news.content)
-                                        Text("بواسطة: ${news.authorName}", fontSize = 11.sp, color = Color.Gray)
+                        else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (canPublishNews) {
+                                Button(
+                                    onClick = { showNewsComposer = !showNewsComposer },
+                                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                                    modifier = Modifier.fillMaxWidth().testTag("open_publish_news_button")
+                                ) {
+                                    Text("➕ نشر خبر جديد", fontWeight = FontWeight.Bold)
+                                }
+                                if (showNewsComposer) {
+                                    Surface(color = Color(0xFFF8FAFC), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            OutlinedTextField(value = newsTitle, onValueChange = { newsTitle = it }, label = { Text("عنوان الخبر") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                            OutlinedTextField(value = newsBody, onValueChange = { newsBody = it }, label = { Text("تفاصيل الخبر") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                OutlinedButton(onClick = {
+                                                    newsImgPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                }, modifier = Modifier.weight(1f)) {
+                                                    Text(if (newsImage.isBlank()) "📷 إرفاق صورة" else "صورة مرفقة ✅", fontSize = 11.sp)
+                                                }
+                                                Button(
+                                                    onClick = {
+                                                        if (newsTitle.isNotBlank() && newsBody.isNotBlank()) {
+                                                            onPublishNews(newsTitle, newsBody, newsImage)
+                                                            newsTitle = ""; newsBody = ""; newsImage = ""; showNewsComposer = false
+                                                        }
+                                                    },
+                                                    modifier = Modifier.weight(1f)
+                                                ) { Text("نشر الآن") }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (newsPosts.isEmpty()) item { Text("لا توجد أخبار منشورة بعد.", color = Color.Gray) }
+                                items(newsPosts) { news ->
+                                    val decodedNewsImg = remember(news.imageUrl) {
+                                        if (news.imageUrl.startsWith("data:image")) {
+                                            try {
+                                                val b64 = news.imageUrl.substringAfter("base64,", "")
+                                                val bytes = Base64.decode(b64, Base64.DEFAULT)
+                                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                            } catch (_: Exception) {
+                                                null
+                                            }
+                                        } else null
+                                    }
+                                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB))) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text("📰 ${news.title}", fontWeight = FontWeight.Bold, color = RoyalBlue)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(news.content)
+                                            if (decodedNewsImg != null) {
+                                                Spacer(Modifier.height(6.dp))
+                                                Image(
+                                                    bitmap = decodedNewsImg,
+                                                    contentDescription = news.title,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(10.dp))
+                                                )
+                                            }
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("بواسطة: ${news.authorName}", fontSize = 11.sp, color = Color.Gray)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun RoomOwnerEditDialog(
+    room: ChatRoom,
+    onDismiss: () -> Unit,
+    onSave: (name: String, welcome: String, bgTheme: String, micsEnabled: Boolean) -> Unit
+) {
+    var name by remember { mutableStateOf(room.name) }
+    var welcome by remember { mutableStateOf(room.welcomeMessage) }
+    var theme by remember { mutableStateOf(room.bgTheme) }
+    var mics by remember { mutableStateOf(room.micsEnabled) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(18.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("👑 إدارة وتعديل الغرفة (مالك الغرفة)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = RoyalBlue)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("اسم الغرفة") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = welcome, onValueChange = { welcome = it }, label = { Text("رسالة الترحيب") }, modifier = Modifier.fillMaxWidth())
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DefaultCatalogs.roomThemes.forEach { th ->
+                        FilterChip(selected = theme == th.id, onClick = { theme = th.id }, label = { Text(th.label, fontSize = 11.sp) })
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("تفعيل المايكات الصوتية")
+                    Switch(checked = mics, onCheckedChange = { mics = it })
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("إلغاء") }
+                    Button(
+                        onClick = { onSave(name, welcome, theme, mics); onDismiss() },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue)
+                    ) { Text("حفظ الغرفة") }
                 }
             }
         }
