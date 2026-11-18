@@ -37,23 +37,31 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Report
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
@@ -63,12 +71,9 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -87,11 +92,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -100,18 +106,18 @@ import androidx.core.content.ContextCompat
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shat.alghoraf.auth.GoogleAuthManager
-import com.shat.alghoraf.data.ChatMessage
-import com.shat.alghoraf.data.ChatRoom
 import com.shat.alghoraf.data.DefaultCatalogs
 import com.shat.alghoraf.data.PublicProfile
 import com.shat.alghoraf.data.UiState
+import com.shat.alghoraf.ui.theme.CodyHeaderNavy
 import com.shat.alghoraf.ui.theme.CrimsonOwner
-import com.shat.alghoraf.ui.theme.GoldLight
+import com.shat.alghoraf.ui.theme.FeedLightBg
+import com.shat.alghoraf.ui.theme.GreenAccent
 import com.shat.alghoraf.ui.theme.RoyalBlue
-import com.shat.alghoraf.ui.theme.RoyalBlueDark
 import com.shat.alghoraf.ui.theme.RoyalGold
-import com.shat.alghoraf.ui.theme.WarmBeige
-import com.shat.alghoraf.ui.theme.resolveRoomBackground
+import com.shat.alghoraf.ui.theme.SendSkyBlue
+import com.shat.alghoraf.ui.theme.TopicGreenBg
+import com.shat.alghoraf.ui.theme.TopicGreenText
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -182,6 +188,8 @@ fun ChatRoomScreen(
     var selectedUserForGift by remember { mutableStateOf<PublicProfile?>(null) }
 
     var micsExpanded by remember { mutableStateOf(true) }
+    var showTopicBanner by remember { mutableStateOf(true) }
+    var radioPlaying by remember { mutableStateOf(false) }
     var showEmojiBar by remember { mutableStateOf(false) }
     var showPlusMenu by remember { mutableStateOf(false) }
     var asAdminNotice by remember { mutableStateOf(false) }
@@ -290,8 +298,7 @@ fun ChatRoomScreen(
         return
     }
 
-    val (bgTop, bgBottom) = resolveRoomBackground(activeRoom.bgTheme)
-    val isDarkTheme = activeRoom.bgTheme == "night_obsidian"
+    val isDarkTheme = false
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -369,6 +376,35 @@ fun ChatRoomScreen(
                             }
                         }
                     }
+                    if (isRoomOwnerForActive) {
+                        NavigationDrawerItem(
+                            selected = false,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                showRoomOwnerDialog = true
+                            },
+                            icon = { Icon(Icons.Default.Settings, contentDescription = null, tint = RoyalGold) },
+                            label = { Text("👑 إدارة الغرفة الحالية", fontWeight = FontWeight.Bold) }
+                        )
+                    }
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            showSocialTab = 4
+                        },
+                        icon = { Icon(Icons.Default.Newspaper, contentDescription = null, tint = RoyalBlue) },
+                        label = { Text("📰 الأخبار والإعلانات", fontWeight = FontWeight.SemiBold) }
+                    )
+                    NavigationDrawerItem(
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            showReportDialog = true
+                        },
+                        icon = { Icon(Icons.Default.Report, contentDescription = null, tint = CrimsonOwner) },
+                        label = { Text("🚨 إبلاغ الإدارة", fontWeight = FontWeight.SemiBold) }
+                    )
                     if (myRank.permAccessPanel || isSupremeOwner) {
                         NavigationDrawerItem(
                             selected = false,
@@ -386,41 +422,45 @@ fun ChatRoomScreen(
     ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = bgTop,
+            containerColor = FeedLightBg,
             topBar = {
-                // CodyChat Royal Blue Top Bar (#1A45E5)
+                // CodyChat Compact Dark Navy Header (48dp - #0B2239)
                 Surface(
-                    color = RoyalBlue,
-                    shadowElevation = 4.dp,
+                    color = CodyHeaderNavy,
+                    shadowElevation = 3.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .height(48.dp)
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Profile Avatar with Green Dot
+                        // Profile Avatar with Gold Ring & Green Online Dot
                         Box(modifier = Modifier.testTag("top_profile_avatar")) {
                             AvatarWithFrame(
                                 avatarUrl = myProfile.avatarUrl,
                                 name = myProfile.shownName,
-                                frameId = myProfile.avatarFrame,
-                                size = 42.dp,
+                                frameId = if (myProfile.avatarFrame == "none") "gold_royal" else myProfile.avatarFrame,
+                                size = 34.dp,
                                 showOnlineDot = true,
                                 isOnline = true,
                                 onClick = { showProfileDialog = true }
                             )
                         }
 
-                        // Quick Action Icons with Arabic Labels (إبلاغ، إشعار، طلب، رسالة)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            TopQuickAction(Icons.Default.Report, "إبلاغ", onClick = { showReportDialog = true }, tag = "top_report_btn")
+                        Spacer(Modifier.width(6.dp))
+
+                        // Quick Action Icons with Small White Labels (اشعار، طلب، رسالة)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             TopQuickAction(
                                 icon = Icons.Default.Notifications,
-                                label = "إشعار",
+                                label = "اشعار",
                                 badgeCount = unreadNotifCount,
                                 onClick = { showSocialTab = 0 },
                                 tag = "top_notif_btn"
@@ -429,130 +469,148 @@ fun ChatRoomScreen(
                             TopQuickAction(Icons.Default.Mail, "رسالة", onClick = { showSocialTab = 2 }, tag = "top_pm_btn")
                         }
 
-                        // Two Prominent Golden Circles (الأثرياء، الكبار)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            GoldRankCircle("الأثرياء", "🪙") { showLeaderboardTab = 0 }
-                            GoldRankCircle("الكبار", "👑") { showLeaderboardTab = 1 }
+                        Spacer(Modifier.weight(1f))
+
+                        // Gold Crown (الاثرياء) & Orange Diamond (الكبار)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            HeaderRankAction(label = "الاثرياء", emoji = "👑", tintBg = Color(0x33F59E0B)) { showLeaderboardTab = 0 }
+                            HeaderRankAction(label = "الكبار", emoji = "🔶", tintBg = Color(0x33F97316)) { showLeaderboardTab = 1 }
                         }
 
-                        // Drawer Menu Button (☰)
-                        IconButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            modifier = Modifier.size(48.dp).testTag("drawer_menu_button")
+                        Spacer(Modifier.width(6.dp))
+
+                        // Green Sidebar Menu Button (☰)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(GreenAccent)
+                                .clickable { scope.launch { drawerState.open() } }
+                                .testTag("drawer_menu_button"),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Menu, contentDescription = "القائمة الجانبية", tint = Color.White)
+                            Icon(Icons.Default.Menu, contentDescription = "القائمة الجانبية", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             },
             bottomBar = {
-                Surface(
-                    color = RoyalBlue,
-                    shadowElevation = 6.dp,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .imePadding()
                 ) {
-                    Column(modifier = Modifier.navigationBarsPadding()) {
-                        AnimatedVisibility(visible = showPlusMenu) {
+                    // 1. Calm Light-Green Topic Banner (#D8F3DC)
+                    AnimatedVisibility(visible = showTopicBanner) {
+                        Surface(
+                            color = TopicGreenBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(RoyalBlueDark)
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                PlusMenuAction(Icons.Default.Image, "صورة") {
-                                    showPlusMenu = false
-                                    imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                }
-                                PlusMenuAction(
-                                    icon = if (isRecordingAudio) Icons.Default.Stop else Icons.Default.Mic,
-                                    label = if (isRecordingAudio) "إيقاف" else "صوتية"
-                                ) {
-                                    if (!hasAudioPermission) {
-                                        pendingVoiceRecord = true
-                                        audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    } else if (!isRecordingAudio) {
-                                        try {
-                                            val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
-                                            val rec = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                                MediaRecorder(context)
-                                            } else {
-                                                @Suppress("DEPRECATION")
-                                                MediaRecorder()
-                                            }
-                                            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
-                                            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                                            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                                            rec.setOutputFile(file.absolutePath)
-                                            rec.prepare()
-                                            rec.start()
-                                            activeRecorder = rec
-                                            recordedFilePath = file.absolutePath
-                                            isRecordingAudio = true
-                                        } catch (_: Exception) {
-                                            viewModel.showNotice("تعذر بدء التسجيل الصوتي")
-                                        }
-                                    } else {
-                                        try {
-                                            activeRecorder?.stop()
-                                            activeRecorder?.release()
-                                            activeRecorder = null
-                                            isRecordingAudio = false
-                                            val file = recordedFilePath?.let { File(it) }
-                                            if (file != null && file.exists()) {
-                                                val bytes = file.readBytes()
-                                                if (bytes.size <= 450_000) {
-                                                    val b64 = "data:audio/mp4;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
-                                                    viewModel.sendMessage("🎤 رسالة صوتية", msgType = "audio", mediaUrl = b64)
-                                                } else {
-                                                    viewModel.showNotice("المقطع الصوتي طويل جداً")
-                                                }
-                                                file.delete()
-                                            }
-                                        } catch (_: Exception) {
-                                            isRecordingAudio = false
-                                        }
-                                        showPlusMenu = false
-                                    }
-                                }
-                                PlusMenuAction(Icons.Default.PlayArrow, "يوتيوب") {
-                                    showPlusMenu = false
-                                    showYoutubeDialog = true
-                                }
-                                PlusMenuAction(Icons.Default.Forum, "الحائط") {
-                                    showPlusMenu = false
-                                    showSocialTab = 3
-                                }
-                                if (myRank.permAccessPanel || isSupremeOwner) {
-                                    PlusMenuAction(Icons.Default.Campaign, if (asAdminNotice) "إلغاء تنبيه" else "إشعار إدارة") {
-                                        asAdminNotice = !asAdminNotice
-                                        showPlusMenu = false
-                                    }
-                                }
-                            }
-                        }
-
-                        AnimatedVisibility(visible = showEmojiBar) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.White)
-                                    .horizontalScroll(rememberScrollState())
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                DefaultCatalogs.quickEmojis.forEach { emoji ->
-                                    Text(
-                                        text = emoji,
-                                        fontSize = 22.sp,
-                                        modifier = Modifier.clickable { draftMessage += emoji }
-                                    )
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEAB308),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "الموضوع:",
+                                    color = TopicGreenText,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp
+                                )
+                                Text(
+                                    text = activeRoom.welcomeMessage.ifBlank { settings.marqueeText },
+                                    color = TopicGreenText,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "إغلاق الموضوع",
+                                    tint = TopicGreenText,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clickable { showTopicBanner = false }
+                                )
+                            }
+                        }
+                    }
+
+                    // Expandable Plus Menu & Emoji Bar
+                    AnimatedVisibility(visible = showPlusMenu) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CodyHeaderNavy)
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            PlusMenuAction(Icons.Default.Image, "صورة") {
+                                showPlusMenu = false
+                                imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
+                            PlusMenuAction(Icons.Default.PlayArrow, "يوتيوب") {
+                                showPlusMenu = false
+                                showYoutubeDialog = true
+                            }
+                            PlusMenuAction(Icons.Default.Newspaper, "الأخبار") {
+                                showPlusMenu = false
+                                showSocialTab = 4
+                            }
+                            PlusMenuAction(Icons.Default.Forum, "الحائط") {
+                                showPlusMenu = false
+                                showSocialTab = 3
+                            }
+                            PlusMenuAction(Icons.Default.Report, "إبلاغ") {
+                                showPlusMenu = false
+                                showReportDialog = true
+                            }
+                            if (myRank.permAccessPanel || isSupremeOwner) {
+                                PlusMenuAction(Icons.Default.Campaign, if (asAdminNotice) "إلغاء تنبيه" else "إشعار") {
+                                    asAdminNotice = !asAdminNotice
+                                    showPlusMenu = false
                                 }
                             }
                         }
+                    }
 
+                    AnimatedVisibility(visible = showEmojiBar) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White)
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            DefaultCatalogs.quickEmojis.forEach { emoji ->
+                                Text(
+                                    text = emoji,
+                                    fontSize = 22.sp,
+                                    modifier = Modifier.clickable { draftMessage += emoji }
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. White Input Bar (Send Circle -> Oval Pill with Yellow Emoji -> Voice Mic & Plus)
+                    Surface(
+                        color = Color.White,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -560,60 +618,207 @@ fun ChatRoomScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            IconButton(
-                                onClick = { showPlusMenu = !showPlusMenu },
-                                modifier = Modifier.size(44.dp).clip(CircleShape).background(RoyalBlueDark).testTag("plus_menu_button")
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = "المرفقات والإضافات", tint = Color.White)
-                            }
-                            IconButton(
-                                onClick = { showEmojiBar = !showEmojiBar },
-                                modifier = Modifier.size(42.dp)
-                            ) {
-                                Icon(Icons.Default.EmojiEmotions, contentDescription = "الإيموجيات", tint = RoyalGold)
-                            }
-                            OutlinedTextField(
-                                value = draftMessage,
-                                onValueChange = { draftMessage = it },
-                                placeholder = {
-                                    Text(
-                                        if (asAdminNotice) "اكتب إشعار الإدارة هنا..." else "اكتب رسالتك هنا...",
-                                        fontSize = 13.sp,
-                                        color = Color(0xFF64748B)
-                                    )
-                                },
-                                modifier = Modifier.weight(1f).testTag("message_input"),
-                                shape = RoundedCornerShape(22.dp),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color.White,
-                                    unfocusedContainerColor = Color.White,
-                                    focusedBorderColor = RoyalGold,
-                                    unfocusedBorderColor = Color.Transparent
-                                )
-                            )
-                            IconButton(
-                                onClick = {
-                                    val txt = draftMessage.trim()
-                                    if (txt.isNotEmpty()) {
-                                        viewModel.sendMessage(txt, asAdminNotice = asAdminNotice)
-                                        draftMessage = ""
-                                        asAdminNotice = false
-                                        if (settings.soundEffectsEnabled) {
-                                            try {
-                                                ToneGenerator(AudioManager.STREAM_NOTIFICATION, 45)
-                                                    .startTone(ToneGenerator.TONE_PROP_BEEP, 80)
-                                            } catch (_: Exception) { }
+                            // Right: Sky-Blue Circular Send Button
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(SendSkyBlue)
+                                    .clickable {
+                                        val txt = draftMessage.trim()
+                                        if (txt.isNotEmpty()) {
+                                            viewModel.sendMessage(txt, asAdminNotice = asAdminNotice)
+                                            draftMessage = ""
+                                            asAdminNotice = false
+                                            if (settings.soundEffectsEnabled) {
+                                                try {
+                                                    ToneGenerator(AudioManager.STREAM_NOTIFICATION, 45)
+                                                        .startTone(ToneGenerator.TONE_PROP_BEEP, 80)
+                                                } catch (_: Exception) { }
+                                            }
                                         }
                                     }
-                                },
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(RoyalGold)
-                                    .testTag("send_message_button")
+                                    .testTag("send_message_button"),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "إرسال", tint = Color.Black)
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "إرسال", tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+
+                            // Center: Oval Input Pill with Yellow Emoji Inside
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(FeedLightBg)
+                                    .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(50))
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                    if (draftMessage.isEmpty()) {
+                                        Text(
+                                            text = if (asAdminNotice) "اكتب إشعار الإدارة..." else "اكتب هنا...",
+                                            fontSize = 13.sp,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = draftMessage,
+                                        onValueChange = { draftMessage = it },
+                                        singleLine = true,
+                                        textStyle = TextStyle(color = Color(0xFF0F172A), fontSize = 13.5.sp),
+                                        cursorBrush = SolidColor(SendSkyBlue),
+                                        modifier = Modifier.fillMaxWidth().testTag("message_input")
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.EmojiEmotions,
+                                    contentDescription = "الإيموجيات",
+                                    tint = Color(0xFFEAB308),
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clickable { showEmojiBar = !showEmojiBar }
+                                )
+                            }
+
+                            // Left: Voice Mic Button & Plus (+)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isRecordingAudio) Color(0xFFEF4444) else FeedLightBg)
+                                    .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                                    .clickable {
+                                        if (!hasAudioPermission) {
+                                            pendingVoiceRecord = true
+                                            audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        } else if (!isRecordingAudio) {
+                                            try {
+                                                val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
+                                                val rec = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                                    MediaRecorder(context)
+                                                } else {
+                                                    @Suppress("DEPRECATION")
+                                                    MediaRecorder()
+                                                }
+                                                rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+                                                rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                                                rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                                                rec.setOutputFile(file.absolutePath)
+                                                rec.prepare()
+                                                rec.start()
+                                                activeRecorder = rec
+                                                recordedFilePath = file.absolutePath
+                                                isRecordingAudio = true
+                                                viewModel.showNotice("🎙️ جاري تسجيل الصوت... اضغط مجدداً للإرسال")
+                                            } catch (_: Exception) {
+                                                viewModel.showNotice("تعذر بدء التسجيل الصوتي")
+                                            }
+                                        } else {
+                                            try {
+                                                activeRecorder?.stop()
+                                                activeRecorder?.release()
+                                                activeRecorder = null
+                                                isRecordingAudio = false
+                                                val file = recordedFilePath?.let { File(it) }
+                                                if (file != null && file.exists()) {
+                                                    val bytes = file.readBytes()
+                                                    if (bytes.size <= 450_000) {
+                                                        val b64 = "data:audio/mp4;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+                                                        viewModel.sendMessage("🎤 رسالة صوتية", msgType = "audio", mediaUrl = b64)
+                                                    } else {
+                                                        viewModel.showNotice("المقطع الصوتي طويل جداً")
+                                                    }
+                                                    file.delete()
+                                                }
+                                            } catch (_: Exception) {
+                                                isRecordingAudio = false
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isRecordingAudio) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = "رسالة صوتية",
+                                    tint = if (isRecordingAudio) Color.White else CodyHeaderNavy,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(FeedLightBg)
+                                    .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                                    .clickable { showPlusMenu = !showPlusMenu }
+                                    .testTag("plus_menu_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "المرفقات والإضافات", tint = CodyHeaderNavy, modifier = Modifier.size(19.dp))
+                            }
+                        }
+                    }
+
+                    // 3. Fixed Dark Navy Footer Bar (#0B2239)
+                    Surface(
+                        color = CodyHeaderNavy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .height(48.dp)
+                                .padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FooterNavAction(Icons.Default.Settings, "الخيارات") {
+                                    showProfileDialog = true
+                                }
+                                FooterNavAction(Icons.Default.Groups, "متواجدين (${visibleProfiles.count { it.isOnline }})") {
+                                    scope.launch { drawerState.open() }
+                                }
+                                FooterNavAction(Icons.Default.Home, "الغرف") {
+                                    scope.launch { drawerState.open() }
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FooterNavAction(Icons.Default.Refresh, "تحديث") {
+                                    viewModel.refreshActiveRoom()
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(GreenAccent)
+                                        .border(1.5.dp, Color(0xFF86EFAC), CircleShape)
+                                        .clickable {
+                                            radioPlaying = !radioPlaying
+                                            val track = myProfile.profileMusic.ifBlank { "preset:calm_lofi" }
+                                            viewModel.previewProfileMusic(if (radioPlaying) track else "")
+                                            viewModel.showNotice(if (radioPlaying) "📻 تم تشغيل الراديو" else "⏹️ تم إيقاف الراديو")
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (radioPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "الراديو",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -624,9 +829,9 @@ fun ChatRoomScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(Brush.verticalGradient(listOf(bgTop, bgBottom)))
+                    .background(FeedLightBg)
             ) {
-                // 1. Voice Mic Slots (1..5 Purple Circles)
+                // 1. White Strip with 5 Royal Blue Mics (#1A237E) & Blue Divider Buttons
                 if (activeRoom.micsEnabled) {
                     VoiceMicStrip(
                         mics = mics,
@@ -647,100 +852,15 @@ fun ChatRoomScreen(
                         onLeaveMic = { slot -> viewModel.leaveMicSlot(slot) },
                         onAdminMuteMic = { slot, mute -> viewModel.adminMuteMic(slot, mute) },
                         onOpenMicSettings = {
-                            if (!hasAudioPermission) audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            else viewModel.showNotice("إعدادات المايك: التقاط الصوت مفعل والمزامنة نشطة ✅")
+                            if (isSupremeOwner || myRank.permAccessPanel || isRoomOwnerForActive) {
+                                showYoutubeDialog = true
+                            } else if (!hasAudioPermission) {
+                                audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            } else {
+                                viewModel.showNotice("إعدادات المايك: التقاط الصوت مفعل والمزامنة نشطة ✅")
+                            }
                         }
                     )
-                }
-
-                // 2. Wide Welcome Announcement Marquee Bar
-                Surface(
-                    color = Color(0xFFDBEAFE),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "📢 ${activeRoom.welcomeMessage.ifBlank { settings.marqueeText }}",
-                        color = RoyalBlueDark,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                    )
-                }
-
-                // 3. Warm Beige/Gold Active Room Card + Synced YouTube Player Bar
-                Surface(
-                    color = WarmBeige,
-                    shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.weight(1f).clickable { scope.launch { drawerState.open() } }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(RoyalGold.copy(alpha = 0.25f))
-                                    .border(1.dp, RoyalGold, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(activeRoom.icon, fontSize = 18.sp)
-                            }
-                            Column {
-                                Text(activeRoom.name, fontWeight = FontWeight.Bold, color = Color(0xFF78350F), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("متصلون: ${visibleProfiles.count { it.isOnline }} • نقاط: ${activeRoom.activityPoints}", fontSize = 11.sp, color = Color(0xFF92400E))
-                            }
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (isRoomOwnerForActive) {
-                                Surface(
-                                    color = Color(0xFFFEF3C7),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.clickable { showRoomOwnerDialog = true }
-                                ) {
-                                    Text("👑 الغرفة", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                                }
-                            }
-                            if (activeRoom.youtubeIsPlaying && activeRoom.youtubeVideoId.isNotBlank()) {
-                                Surface(
-                                    color = Color(0xFFDC2626),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.clickable {
-                                        if (isSupremeOwner || myRank.permAccessPanel || isRoomOwnerForActive) {
-                                            showYoutubeDialog = true
-                                        } else {
-                                            youtubeMutedLocally = !youtubeMutedLocally
-                                        }
-                                    }
-                                ) {
-                                    Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                        Text(activeRoom.youtubeTitle.ifBlank { "يوتيوب" }, color = Color.White, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                            Surface(
-                                color = Color.White,
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.clickable { showSocialTab = 4 }.testTag("news_chip_button")
-                            ) {
-                                Text("📰 الأخبار", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RoyalBlue, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                            }
-                        }
-                    }
                 }
 
                 if (activeRoom.youtubeIsPlaying && activeRoom.youtubeVideoId.isNotBlank()) {
@@ -754,7 +874,7 @@ fun ChatRoomScreen(
                     )
                 }
 
-                // 4. Messages Feed
+                // 2. Clean Light Messages Feed (#F8F9FA)
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when (val state = messagesState) {
                         is UiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -769,7 +889,7 @@ fun ChatRoomScreen(
                                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                                     Text(
                                         "لا توجد رسائل في ${activeRoom.name} بعد — كن أول من يرحب بالجميع!",
-                                        color = if (isDarkTheme) Color.LightGray else Color(0xFF64748B),
+                                        color = Color(0xFF64748B),
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
@@ -782,27 +902,28 @@ fun ChatRoomScreen(
                                     items(msgs, key = { it.id.ifBlank { "${it.senderId}_${it.createdAt}" } }) { msg ->
                                         val senderProfile = allProfiles.firstOrNull { it.userId == msg.senderId }
                                         val senderRank = DefaultCatalogs.rankFor(senderProfile?.role ?: msg.senderRole, ranks)
+                                        val cardProfile = senderProfile ?: PublicProfile(
+                                            userId = msg.senderId,
+                                            username = msg.senderName,
+                                            displayName = msg.senderName,
+                                            role = msg.senderRole,
+                                            avatarUrl = msg.avatarUrl,
+                                            avatarFrame = msg.avatarFrame,
+                                            nameColor = msg.nameColor,
+                                            nameplateStyle = msg.nameplateStyle,
+                                            nameShine = msg.nameShine,
+                                            vipWings = msg.vipWings
+                                        )
                                         ChatMessageRow(
                                             message = msg,
                                             rank = senderRank,
-                                            canModerate = isSupremeOwner || myRank.permClearRoom || myRank.permBan,
+                                            canModerate = isSupremeOwner || myRank.permClearRoom || myRank.permBan || myRank.permMute,
                                             isMyMessage = msg.senderId == viewModel.currentUserId,
-                                            onSenderClick = {
-                                                val cardProfile = senderProfile ?: PublicProfile(
-                                                    userId = msg.senderId,
-                                                    username = msg.senderName,
-                                                    displayName = msg.senderName,
-                                                    role = msg.senderRole,
-                                                    avatarUrl = msg.avatarUrl,
-                                                    avatarFrame = msg.avatarFrame,
-                                                    nameColor = msg.nameColor,
-                                                    nameplateStyle = msg.nameplateStyle,
-                                                    nameShine = msg.nameShine,
-                                                    vipWings = msg.vipWings
-                                                )
-                                                selectedUserForCard = cardProfile
-                                            },
+                                            onSenderClick = { selectedUserForCard = cardProfile },
                                             onDeleteClick = { if (msg.id.isNotBlank()) viewModel.deleteMessage(msg.id) },
+                                            onMentionClick = { draftMessage += "@${msg.senderName} " },
+                                            onPmClick = { selectedUserForCard = cardProfile },
+                                            onMuteClick = { viewModel.muteUser(cardProfile, "كتم من الإدارة") },
                                             onPlayAudio = { dataUrl ->
                                                 try {
                                                     val b64 = dataUrl.substringAfter("base64,", "")
@@ -1015,29 +1136,50 @@ private fun TopQuickAction(
     ) {
         if (badgeCount > 0) {
             BadgedBox(badge = { Badge(containerColor = Color(0xFFEF4444)) { Text(badgeCount.toString(), color = Color.White, fontSize = 9.sp) } }) {
-                Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(19.dp))
+                Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(17.dp))
             }
         } else {
-            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(19.dp))
+            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(17.dp))
         }
-        Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun GoldRankCircle(label: String, emoji: String, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onClick() }) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(GoldLight, RoyalGold)))
-                .border(1.dp, Color.White, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(emoji, fontSize = 13.sp)
-        }
-        Text(label, color = GoldLight, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+private fun HeaderRankAction(
+    label: String,
+    emoji: String,
+    tintBg: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(tintBg)
+            .clickable { onClick() }
+            .padding(horizontal = 5.dp, vertical = 2.dp)
+    ) {
+        Text(emoji, fontSize = 13.sp)
+        Text(label, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun FooterNavAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(18.dp))
+        Text(label, color = Color.White, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 

@@ -1562,7 +1562,24 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
     io.to(`room:${targetRoomId}`).emit('room_notice', {
       roomId: targetRoomId,
       kind: 'join',
-      text: `✨ انضم (${rank.icon} ${rank.label}) "${entry.name}" إلى الغرفة.`
+      text: `✓ هذا المستخدم انضم للغرفة`,
+      user: {
+        key: entry.key,
+        name: entry.name,
+        role: entry.role,
+        rankIcon: rank.icon,
+        rankLabel: rank.label,
+        avatarUrl: entry.avatarUrl || '',
+        avatarFrame: entry.avatarFrame || 'none',
+        nameColor: entry.nameColor || '#0f172a',
+        nameBgColor: entry.nameBgColor || '',
+        neonColor: entry.neonColor || '',
+        fontFamily: entry.fontFamily || 'Normal',
+        fontStyle: entry.fontStyle || 'Normal',
+        nameplateStyle: entry.nameplateStyle || 'default',
+        nameShine: entry.nameShine || 'none',
+        vipWings: Boolean(entry.vipWings)
+      }
     });
   }
 }
@@ -2245,6 +2262,19 @@ io.on('connection', (socket) => {
     if (!isMgr) return;
     db.clearRoomMessages(entry.roomId);
     io.to(`room:${entry.roomId}`).emit('room_cleared', { roomId: entry.roomId, byName: entry.name });
+    await db.flushWrites();
+  });
+
+  socket.on('delete_message', async ({ msgId } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId || !msgId) return;
+    const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'clear_room');
+    const roomMsgs = db.getRoomMessages(entry.roomId, 200);
+    const target = roomMsgs.find((m) => String(m.id) === String(msgId) || String(m.doc_id) === String(msgId));
+    if (!target) return;
+    if (!isMgr && target.sender_key !== entry.key) return;
+    db.deleteMessageById(msgId);
+    io.to(`room:${entry.roomId}`).emit('message_deleted', { roomId: entry.roomId, msgId: String(msgId) });
     await db.flushWrites();
   });
 

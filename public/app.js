@@ -61,7 +61,9 @@
     mediaRecorder: null,
     recordedChunks: [],
     isRecordingAudio: false,
-    typingTimeout: null
+    typingTimeout: null,
+    micsCollapsed: false,
+    radioPlaying: false
   };
 
   const $ = (id) => document.getElementById(id);
@@ -277,7 +279,15 @@
     const leftWing = wings ? '<span class="vip-wing">🪽</span>' : role === 'site_owner' ? '<span class="vip-wing">👑</span>' : '';
     const rightWing = wings ? '<span class="vip-wing">🪽</span>' : '';
 
-    return `<span class="${classes.join(' ')}" style="${styles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>`;
+    // Ensure readable text contrast on clean light white message rows when default #ffffff is saved
+    const lowerColor = String(nameColor || '').trim().toLowerCase();
+    const hasCustomSurface = Boolean(nameBg) || (nameplate && nameplate !== 'default');
+    const resolvedStyles = [...styles];
+    if (shine === 'none' && !hasCustomSurface && (!nameColor || lowerColor === '#ffffff' || lowerColor === '#fff')) {
+      resolvedStyles[0] = 'color:#0f172a';
+    }
+
+    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>`;
   }
 
   function formatAvatarHTML(userObj, sizeClass = '') {
@@ -406,7 +416,10 @@
     $('roomBannerDesc').textContent = r.description || '';
     $('roomBannerImg').src = r.image_url || '/assets/rooms/default.svg';
     $('roomActivityBadge').textContent = `🔥 ${r.activity_points || 0} تفاعل`;
-    $('roomSettingsBtn').classList.toggle('hidden', !state.isRoomManager);
+    $('roomSettingsBtn')?.classList.toggle('hidden', !state.isRoomManager);
+
+    const topicTxt = r.welcome_message || r.description || state.settings?.marquee_text || 'أهلاً بكم في شات الغرف المباشر!';
+    if ($('topicBannerText')) $('topicBannerText').textContent = topicTxt;
 
     const stage = $('chatStage');
     stage.className = `chat-stage theme-${r.bg_theme || 'warm_peach'}`;
@@ -564,32 +577,39 @@
         iAmMuted = Boolean(m.isSelfMuted || m.isAdminMuted);
       }
       const isMuted = Boolean(m.isSelfMuted || m.isAdminMuted);
+      const micIconSvg = isMuted
+        ? '🔇'
+        : '<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a1 1 0 1 0-2 0 3 3 0 1 1-6 0 1 1 0 1 0-2 0 5 5 0 0 0 4 4.9V19H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.1A5 5 0 0 0 17 11z"/></svg>';
       const avatarContent = isOccupied && m.holderAvatar
         ? `<img src="${escapeHtml(m.holderAvatar)}" alt="${escapeHtml(m.holderName)}" />`
-        : isOccupied
-          ? `<span>${escapeHtml((m.holderName || 'م').slice(0, 1))}</span>`
-          : '🎙️';
+        : micIconSvg;
       const title = isOccupied
         ? `${m.holderName}${isMuted ? ' (مكتوم)' : ' (يتحدث)'}`
         : `صعود على المايك ${m.slot}`;
+      const underLabel = isOccupied ? `${m.slot}•${m.holderName}` : String(m.slot);
 
       return `
-        <button
-          type="button"
-          class="mic-slot-btn ${isOccupied ? 'occupied' : ''} ${isMuted ? 'muted-slot' : ''}"
-          data-mic-slot="${m.slot}"
-          title="${escapeHtml(title)}"
-        >
-          ${avatarContent}
-          <span class="mic-num-badge">${isMuted ? '🔇' : m.slot}</span>
-        </button>
+        <div class="mic-slot-item">
+          <button
+            type="button"
+            class="mic-slot-btn ${isOccupied ? 'occupied' : ''} ${isMuted ? 'muted-slot' : ''}"
+            data-mic-slot="${m.slot}"
+            title="${escapeHtml(title)}"
+          >
+            ${avatarContent}
+          </button>
+          <span class="mic-slot-num-lbl">${escapeHtml(underLabel)}</span>
+        </div>
       `;
     }).join('');
 
-    $('leaveMicBtn').classList.toggle('hidden', !iHoldMic);
-    $('toggleSelfMicMuteBtn').classList.toggle('hidden', !iHoldMic);
-    $('toggleSelfMicMuteBtn').textContent = state.isSelfMicMuted || iAmMuted ? '🔇' : '🎙️';
-    $('toggleSelfMicMuteBtn').classList.toggle('danger', state.isSelfMicMuted || iAmMuted);
+    $('micSelfFloating')?.classList.toggle('hidden', !iHoldMic);
+    $('leaveMicBtn')?.classList.toggle('hidden', !iHoldMic);
+    $('toggleSelfMicMuteBtn')?.classList.toggle('hidden', !iHoldMic);
+    if ($('toggleSelfMicMuteBtn')) {
+      $('toggleSelfMicMuteBtn').textContent = state.isSelfMicMuted || iAmMuted ? '🔇' : '🎙️';
+      $('toggleSelfMicMuteBtn').classList.toggle('danger', state.isSelfMicMuted || iAmMuted);
+    }
   }
 
   // ==========================================
@@ -614,15 +634,23 @@
       bodyHtml = `<audio controls src="${escapeHtml(msg.media_url)}" class="msg-audio-player"></audio>`;
     } else {
       const prefix = isAdminNotice ? '<span class="admin-notice-prefix">إشعار من الإدارة:</span>' : '';
-      const textColor = isAdminNotice ? '#ffffff' : escapeHtml(msg.text_color || '#ffffff');
+      const rawTxtColor = String(msg.text_color || '').trim();
+      const lowerTxt = rawTxtColor.toLowerCase();
+      const readableColor = isAdminNotice
+        ? '#7f1d1d'
+        : (!rawTxtColor || lowerTxt === '#ffffff' || lowerTxt === '#fff' ? '#111827' : escapeHtml(rawTxtColor));
       const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:'${escapeHtml(msg.font_family)}',sans-serif;` : '';
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
       const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
-      bodyHtml = `<div class="msg-content" style="color:${textColor};${ff}${fw}${fi}">${prefix}${renderContentWithEmojis(msg.content)}</div>`;
+      bodyHtml = `<div class="msg-content" style="color:${readableColor};${ff}${fw}${fi}">${prefix}${renderContentWithEmojis(msg.content)}</div>`;
     }
 
+    const isMe = state.user && msg.sender_key === state.user.key;
+    const canDelete = isMe || state.user?.role === 'site_owner' || state.isRoomManager || hasPerm('clear_room');
+    const canMute = !isMe && (state.user?.role === 'site_owner' || state.isRoomManager || hasPerm('mute'));
+
     row.innerHTML = `
-      <div class="msg-avatar-trigger" style="cursor:pointer">${formatAvatarHTML(msg, 'sm')}</div>
+      <div class="msg-avatar-trigger" style="cursor:pointer">${formatAvatarHTML(msg, '')}</div>
       <div class="msg-body-col">
         <div class="msg-meta-row">
           ${roleBadgeHTML(msg.sender_role)}
@@ -631,9 +659,19 @@
         </div>
         ${bodyHtml}
       </div>
+      <div class="msg-actions-wrap">
+        <button type="button" class="msg-dots-btn" title="خيارات الرسالة">•••</button>
+        <div class="msg-dots-menu hidden">
+          <button type="button" data-msg-act="mention">@ منشن</button>
+          ${!isMe ? '<button type="button" data-msg-act="pm">✉️ رسالة خاصة</button>' : ''}
+          <button type="button" data-msg-act="profile">👤 بطاقة العضو</button>
+          ${canMute ? '<button type="button" data-msg-act="mute">🔇 كتم العضو</button>' : ''}
+          ${canDelete && msg.id ? '<button type="button" class="danger" data-msg-act="delete">🗑️ حذف الرسالة</button>' : ''}
+        </div>
+      </div>
     `;
 
-    const openTarget = () => openQuickUserModal({
+    const targetObj = {
       key: msg.sender_key,
       name: msg.sender_name,
       role: msg.sender_role,
@@ -642,10 +680,42 @@
       nameplateStyle: msg.nameplate_style,
       nameShine: msg.name_shine,
       vipWings: msg.vip_wings,
-      nameColor: msg.name_color
-    });
+      nameColor: msg.name_color,
+      nameBgColor: msg.name_bg_color,
+      neonColor: msg.neon_color
+    };
+    const openTarget = () => openQuickUserModal(targetObj);
     row.querySelector('.msg-avatar-trigger').addEventListener('click', openTarget);
     row.querySelector('.msg-name-trigger').addEventListener('click', openTarget);
+
+    const dotsBtn = row.querySelector('.msg-dots-btn');
+    const dotsMenu = row.querySelector('.msg-dots-menu');
+    dotsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = dotsMenu.classList.contains('hidden');
+      document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
+      if (willOpen) dotsMenu.classList.remove('hidden');
+    });
+    dotsMenu.querySelectorAll('button[data-msg-act]').forEach((actBtn) => {
+      actBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dotsMenu.classList.add('hidden');
+        const act = actBtn.dataset.msgAct;
+        if (act === 'mention') {
+          $('messageInput').value += `@${msg.sender_name} `;
+          $('messageInput').focus();
+        } else if (act === 'pm') {
+          openSocialModal('pm', targetObj);
+        } else if (act === 'profile') {
+          openTarget();
+        } else if (act === 'mute') {
+          state.socket?.emit('admin_mute', { targetKey: msg.sender_key, minutes: 15 });
+        } else if (act === 'delete' && msg.id) {
+          state.socket?.emit('delete_message', { msgId: msg.id });
+        }
+      });
+    });
+
     return row;
   }
 
@@ -677,11 +747,35 @@
     feed.scrollTop = feed.scrollHeight;
   }
 
-  function appendRoomNotice(text) {
+  function appendRoomNotice(payload) {
     const feed = $('chatFeed');
+    const isJoinObj = payload && typeof payload === 'object' && payload.kind === 'join' && payload.user;
+    if (isJoinObj) {
+      const u = payload.user;
+      const row = document.createElement('div');
+      row.className = 'cody-msg-row cody-join-row';
+      row.innerHTML = `
+        <div class="msg-avatar-trigger" style="cursor:pointer">${formatAvatarHTML(u, '')}</div>
+        <div class="msg-body-col">
+          <div class="msg-meta-row">
+            ${roleBadgeHTML(u.role)}
+            <span class="msg-name-trigger" style="cursor:pointer">${formatNameHTML(u)}</span>
+          </div>
+          <div class="join-maroon-bar">✓ هذا المستخدم انضم للغرفة</div>
+        </div>
+        <button type="button" class="msg-dots-btn" title="خيارات">•••</button>
+      `;
+      row.querySelector('.msg-avatar-trigger').addEventListener('click', () => openQuickUserModal(u));
+      row.querySelector('.msg-name-trigger').addEventListener('click', () => openQuickUserModal(u));
+      row.querySelector('.msg-dots-btn').addEventListener('click', () => openQuickUserModal(u));
+      feed.appendChild(row);
+      feed.scrollTop = feed.scrollHeight;
+      return;
+    }
+
     const div = document.createElement('div');
     div.className = 'room-notice-row';
-    div.textContent = text;
+    div.textContent = typeof payload === 'string' ? payload : (payload?.text || '');
     feed.appendChild(div);
     feed.scrollTop = feed.scrollHeight;
   }
@@ -2268,8 +2362,15 @@
       }
     });
 
-    socket.on('room_notice', ({ roomId, text }) => {
-      if (state.currentRoom?.id === roomId) appendRoomNotice(text);
+    socket.on('room_notice', (data) => {
+      if (state.currentRoom?.id === data?.roomId) appendRoomNotice(data);
+    });
+
+    socket.on('message_deleted', ({ roomId, msgId }) => {
+      if (state.currentRoom?.id !== roomId) return;
+      state.messages = state.messages.filter((m) => String(m.id) !== String(msgId));
+      const el = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(String(msgId))}"]`);
+      if (el) el.remove();
     });
 
     socket.on('room_cleared', ({ roomId, byName }) => {
@@ -2568,17 +2669,17 @@
     $('dropLogoutBtn').addEventListener('click', logoutUser);
 
     // Top quick icons
-    $('topReportBtn').addEventListener('click', () => openSocialModal('report'));
-    $('topNotifBtn').addEventListener('click', () => openSocialModal('notifications'));
-    $('topFriendsBtn').addEventListener('click', () => openSocialModal('friends'));
-    $('topPmBtn').addEventListener('click', () => openSocialModal('pm'));
-    $('goldRichBtn').addEventListener('click', () => openLeaderboardsModal('rich'));
-    $('goldVipsBtn').addEventListener('click', () => openLeaderboardsModal('activeMembers'));
+    $('topReportBtn')?.addEventListener('click', () => openSocialModal('report'));
+    $('topNotifBtn')?.addEventListener('click', () => openSocialModal('notifications'));
+    $('topFriendsBtn')?.addEventListener('click', () => openSocialModal('friends'));
+    $('topPmBtn')?.addEventListener('click', () => openSocialModal('pm'));
+    $('goldRichBtn')?.addEventListener('click', () => openLeaderboardsModal('rich'));
+    $('goldVipsBtn')?.addEventListener('click', () => openLeaderboardsModal('activeMembers'));
 
     // Sidebar & Main Drawer
-    $('toggleUsersDrawerBtn').addEventListener('click', () => $('usersSidePanel').classList.toggle('open'));
-    $('closeUsersSideBtn').addEventListener('click', () => $('usersSidePanel').classList.remove('open'));
-    $('menuDrawerBtn').addEventListener('click', () => {
+    $('toggleUsersDrawerBtn')?.addEventListener('click', () => $('usersSidePanel').classList.toggle('open'));
+    $('closeUsersSideBtn')?.addEventListener('click', () => $('usersSidePanel').classList.remove('open'));
+    $('menuDrawerBtn')?.addEventListener('click', () => {
       $('drawerBackdrop').classList.remove('hidden');
       $('mainDrawer').classList.remove('hidden');
     });
@@ -2586,8 +2687,8 @@
       $('drawerBackdrop').classList.add('hidden');
       $('mainDrawer').classList.add('hidden');
     };
-    $('closeMainDrawerBtn').addEventListener('click', closeMainDrawer);
-    $('drawerBackdrop').addEventListener('click', closeMainDrawer);
+    $('closeMainDrawerBtn')?.addEventListener('click', closeMainDrawer);
+    $('drawerBackdrop')?.addEventListener('click', closeMainDrawer);
 
     document.querySelectorAll('.drawer-item[data-drawer]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -2614,6 +2715,7 @@
         else if (action === 'wall') openSocialModal('wall');
         else if (action === 'leaderboards') openLeaderboardsModal('rich');
         else if (action === 'customize') openCustomizeModal('account');
+        else if (action === 'report') openSocialModal('report');
         else if (action === 'stealth') $('dropStealthBtn').click();
         else if (action === 'admin') openAdminPanel('stats');
         else if (action === 'logout') logoutUser();
@@ -2621,7 +2723,7 @@
     });
 
     // Mics 1..5 click
-    $('micSlotsContainer').addEventListener('click', (e) => {
+    $('micSlotsContainer')?.addEventListener('click', (e) => {
       const btn = e.target.closest('.mic-slot-btn');
       if (!btn) return;
       const slot = Number(btn.dataset.micSlot);
@@ -2641,8 +2743,8 @@
       }
     });
 
-    $('leaveMicBtn').addEventListener('click', leaveVoiceMic);
-    $('toggleSelfMicMuteBtn').addEventListener('click', () => {
+    $('leaveMicBtn')?.addEventListener('click', leaveVoiceMic);
+    $('toggleSelfMicMuteBtn')?.addEventListener('click', () => {
       state.isSelfMicMuted = !state.isSelfMicMuted;
       if (state.localStream) {
         state.localStream.getAudioTracks().forEach((t) => {
@@ -2653,29 +2755,72 @@
       renderMics();
     });
 
+    // Mics collapse divider buttons + Topic close + Footer bar buttons
+    $('toggleMicsCollapseBtn')?.addEventListener('click', () => {
+      state.micsCollapsed = !state.micsCollapsed;
+      $('micsCollapsibleWrap')?.classList.toggle('hidden', state.micsCollapsed);
+    });
+    $('micsAndYtSettingsBtn')?.addEventListener('click', () => {
+      state.ytBarOpen = !state.ytBarOpen;
+      $('roomBannerCard')?.classList.toggle('hidden', !state.ytBarOpen);
+      renderRoomYoutubeBar();
+    });
+    $('closeTopicBannerBtn')?.addEventListener('click', () => {
+      $('topicBannerBar')?.classList.add('hidden');
+    });
+    $('footerOptionsBtn')?.addEventListener('click', () => openCustomizeModal('options'));
+    $('footerRefreshBtn')?.addEventListener('click', () => {
+      if (state.socket && state.currentRoom) {
+        state.socket.emit('join_room', { roomId: state.currentRoom.id, silent: true });
+      }
+      showToast('تم تحديث الغرفة والرسائل 🔄');
+    });
+    $('footerRadioBtn')?.addEventListener('click', () => {
+      state.radioPlaying = !state.radioPlaying;
+      $('footerRadioBtn')?.classList.toggle('playing', state.radioPlaying);
+      if ($('footerRadioBtn')) $('footerRadioBtn').textContent = state.radioPlaying ? '⏸️' : '▶️';
+      if (state.radioPlaying) {
+        const musicRef = state.user?.profileMusic || 'preset:calm_lofi';
+        playProfileMusic(musicRef);
+        showToast('📻 تم تشغيل بث الراديو');
+      } else {
+        stopProfileMusic();
+        showToast('⏹️ تم إيقاف الراديو');
+      }
+    });
+
     // Room switch & YouTube
-    $('switchRoomsBtn').addEventListener('click', openRoomsModal);
-    $('roomSettingsBtn').addEventListener('click', () => openAdminPanel('rooms', state.currentRoom?.id || null));
-    $('toggleYoutubeBarBtn').addEventListener('click', () => {
+    $('switchRoomsBtn')?.addEventListener('click', openRoomsModal);
+    $('roomSettingsBtn')?.addEventListener('click', () => openAdminPanel('rooms', state.currentRoom?.id || null));
+    $('toggleYoutubeBarBtn')?.addEventListener('click', () => {
       state.ytBarOpen = !state.ytBarOpen;
       renderRoomYoutubeBar();
     });
-    $('ytCloseViewBtn').addEventListener('click', () => {
+    $('plusYoutubeBtn')?.addEventListener('click', () => {
+      $('plusDropdown')?.classList.add('hidden');
+      state.ytBarOpen = true;
+      renderRoomYoutubeBar();
+    });
+    $('plusReportBtn')?.addEventListener('click', () => {
+      $('plusDropdown')?.classList.add('hidden');
+      openSocialModal('report');
+    });
+    $('ytCloseViewBtn')?.addEventListener('click', () => {
       state.ytBarOpen = false;
       $('roomYoutubeBar').classList.add('hidden');
     });
-    $('ytMuteLocalBtn').addEventListener('click', () => {
+    $('ytMuteLocalBtn')?.addEventListener('click', () => {
       state.ytLocalMuted = !state.ytLocalMuted;
       renderRoomYoutubeBar();
     });
-    $('ytPlayRoomBtn').addEventListener('click', () => {
+    $('ytPlayRoomBtn')?.addEventListener('click', () => {
       const url = $('ytUrlInput').value.trim();
       state.socket.emit('room_youtube_set', { roomId: state.currentRoom?.id, url, isPlaying: true }, (res) => {
         if (res?.error) showToast(res.error, true);
         else $('ytUrlInput').value = '';
       });
     });
-    $('ytStopBtn').addEventListener('click', () => {
+    $('ytStopBtn')?.addEventListener('click', () => {
       state.socket.emit('room_youtube_set', { roomId: state.currentRoom?.id, url: '', isPlaying: false });
     });
 
@@ -2810,9 +2955,12 @@
       $('custNeonColor').dataset.cleared = '1';
       updateCustomizePreview();
     });
-    $('custUploadAvatarBtn').addEventListener('click', async () => {
+    $('custUploadAvatarBtn')?.addEventListener('click', () => {
+      $('custAvatarFile')?.click();
+    });
+    $('custAvatarFile')?.addEventListener('change', async () => {
       const file = $('custAvatarFile').files[0];
-      if (!file) return showToast('اختر صورة أولاً.', true);
+      if (!file) return;
       try {
         const fd = new FormData();
         fd.append('file', file);
@@ -2820,9 +2968,11 @@
         state.user.avatarUrl = res.url;
         updateCustomizePreview();
         renderUserIdentity();
-        showToast('تم رفع الصورة الشخصية بنجاح!');
+        showToast('✅ تم رفع وحفظ الصورة الشخصية في قاعدة البيانات بنجاح!');
       } catch (err) {
         showToast(err.message, true);
+      } finally {
+        $('custAvatarFile').value = '';
       }
     });
     $('custStealthToggle').addEventListener('change', async () => {
@@ -2924,6 +3074,7 @@
       if (!e.target.closest('.profile-trigger-wrap')) $('profileDropdown').classList.add('hidden');
       if (!e.target.closest('.plus-menu-wrap')) $('plusDropdown').classList.add('hidden');
       if (!e.target.closest('#emojiPopover') && !e.target.closest('#emojiPickerBtn')) $('emojiPopover').classList.add('hidden');
+      if (!e.target.closest('.msg-actions-wrap')) document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
     });
   }
 

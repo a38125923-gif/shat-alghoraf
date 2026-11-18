@@ -2646,6 +2646,19 @@ function clearRoomMessages(roomId) {
   enqueueBatchDelete('messages', docIds);
 }
 
+function deleteMessageById(msgId) {
+  const idStr = String(msgId || '');
+  if (!idStr) return null;
+  for (const [k, m] of store.messagesById.entries()) {
+    if (String(m.id) === idStr || String(k) === idStr || String(m.doc_id) === idStr) {
+      store.messagesById.delete(k);
+      enqueueBatchDelete('messages', [String(m.doc_id || k)]);
+      return m;
+    }
+  }
+  return null;
+}
+
 // ==========================================
 // MUTES & BANS
 // ==========================================
@@ -3265,6 +3278,7 @@ module.exports = {
   addMessage,
   getRoomMessages,
   clearRoomMessages,
+  deleteMessageById,
   setMute,
   removeMute,
   getActiveMute,

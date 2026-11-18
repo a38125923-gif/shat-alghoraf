@@ -164,7 +164,15 @@ fun ProfileCustomizerDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            encodeUriToSmallBase64(context, uri, 220)?.let { avatarUrl = it }
+            encodeUriToSmallBase64(context, uri, 220)?.let { newUrl ->
+                avatarUrl = newUrl
+                onSave(
+                    displayName, bio, newUrl, nameColor, textColor,
+                    nameBgColor, neonColor, fontFamily, "Normal",
+                    avatarFrame, nameplateStyle, nameShine,
+                    vipWings, profileMusic, vipFamily
+                )
+            }
         }
     }
 
@@ -234,7 +242,7 @@ fun ProfileCustomizerDialog(
                                     ) {
                                         Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("تغيير الصورة الشخصية")
+                                        Text("📷 تغيير الصورة الشخصية")
                                     }
                                     Text("🪙 رصيدك: ${profile.coins} كوينز • ⭐ التفاعل: ${profile.activityPoints}", fontSize = 12.sp, color = Color(0xFF475569))
                                 }

@@ -62,18 +62,18 @@
 
     <!-- MAIN CHAT WORKSPACE -->
     <div id="appView" class="app-view hidden">
-      <!-- TOP ROYAL BLUE BAR -->
+      <!-- TOP DARK NAVY COMPACT HEADER (48px - #0b2239) -->
       <header id="topBar" class="cody-topbar">
         <div class="topbar-right">
           <div class="profile-trigger-wrap">
             <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي ولوحة التحكم">
-              <span id="topAvatarWrap" class="avatar-wrap frame-none">
+              <span id="topAvatarWrap" class="avatar-wrap frame-gold_royal">
                 <img id="topAvatarImg" src="" alt="صورتي" class="hidden" />
                 <span id="topAvatarLetter" class="avatar-letter">ع</span>
               </span>
               <span class="online-dot"></span>
             </button>
-            <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">👻 متخفي</span>
+            <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">👻</span>
 
             <div id="profileDropdown" class="profile-dropdown hidden">
               <div class="dropdown-header">
@@ -90,14 +90,10 @@
           </div>
 
           <div class="quick-top-actions">
-            <button type="button" id="topReportBtn" class="top-icon-btn" title="إبلاغ الإدارة">
-              <span class="ti-ico">🚨</span>
-              <span class="ti-lbl">إبلاغ</span>
-            </button>
             <button type="button" id="topNotifBtn" class="top-icon-btn" title="الإشعارات">
               <span class="ti-ico">🔔</span>
               <span id="notifBadge" class="badge-count hidden">0</span>
-              <span class="ti-lbl">إشعار</span>
+              <span class="ti-lbl">اشعار</span>
             </button>
             <button type="button" id="topFriendsBtn" class="top-icon-btn" title="طلبات الصداقة">
               <span class="ti-ico">🤝</span>
@@ -112,39 +108,46 @@
           </div>
         </div>
 
+        <div class="topbar-spacer"></div>
+
         <div class="topbar-left">
           <div class="gold-circles-group">
-            <button type="button" id="goldRichBtn" class="gold-circle-btn" title="الأثرياء">
-              <span class="gc-ico">💰</span>
-              <span class="gc-lbl">الأثرياء</span>
-            </button>
-            <button type="button" id="goldVipsBtn" class="gold-circle-btn" title="الكبار والتفاعل">
+            <button type="button" id="goldRichBtn" class="gold-circle-btn crown-btn" title="الأثرياء">
               <span class="gc-ico">👑</span>
+              <span class="gc-lbl">الاثرياء</span>
+            </button>
+            <button type="button" id="goldVipsBtn" class="gold-circle-btn diamond-btn" title="الكبار والتفاعل">
+              <span class="gc-ico">🔶</span>
               <span class="gc-lbl">الكبار</span>
             </button>
           </div>
-          <button type="button" id="toggleUsersDrawerBtn" class="top-users-btn" title="المتواجدون في الغرفة">
-            <span>👥</span>
-            <span id="roomOnlineCounter">0</span>
-          </button>
           <button type="button" id="menuDrawerBtn" class="menu-burger-btn" title="القائمة">☰</button>
         </div>
       </header>
 
-      <!-- MICS 1..5 + ROOM CARD + YOUTUBE BAR -->
+      <!-- MICS 1..5 (#1a237e) + BLUE DIVIDER BUTTONS + YOUTUBE BAR -->
       <section class="mics-and-room-strip">
-        <div class="mics-bar-row">
+        <div id="micsCollapsibleWrap" class="mics-bar-row">
           <div id="micSlotsContainer" class="mic-slots-row"></div>
-          <div class="mic-extra-actions">
+          <div class="mic-self-floating hidden" id="micSelfFloating">
             <button type="button" id="toggleSelfMicMuteBtn" class="mini-ctrl-btn hidden" title="كتم/فتح المايك الخاص بك">🎙️</button>
             <button type="button" id="leaveMicBtn" class="mini-ctrl-btn danger hidden" title="نزول من المايك">🔇</button>
-            <button type="button" id="toggleYoutubeBarBtn" class="mini-ctrl-btn" title="يوتيوب الغرفة">🎬</button>
-            <button type="button" id="roomSettingsBtn" class="mini-ctrl-btn hidden" title="إعدادات الغرفة">⚙️</button>
-            <button type="button" id="switchRoomsBtn" class="mini-ctrl-btn" title="تبديل الغرفة">↕️</button>
           </div>
         </div>
 
-        <div id="roomBannerCard" class="room-banner-card">
+        <!-- THIN BLUE LINE WITH TWO SMALL CENTERED BLUE CIRCULAR BUTTONS -->
+        <div class="mics-blue-divider">
+          <span class="blue-divider-line"></span>
+          <div class="blue-divider-btns">
+            <button type="button" id="toggleMicsCollapseBtn" class="divider-circle-btn" title="تبديل / تصغير المايكات">↕️</button>
+            <button type="button" id="micsAndYtSettingsBtn" class="divider-circle-btn" title="إعدادات المايكات ومشغل يوتيوب">⚙️</button>
+            <button type="button" id="toggleYoutubeBarBtn" class="divider-circle-btn yt-dot-btn hidden" title="مشغل يوتيوب الغرفة">🎬</button>
+          </div>
+          <span class="blue-divider-line"></span>
+        </div>
+
+        <!-- COLLAPSIBLE ROOM META STRIP (HIDDEN BY DEFAULT UNTIL TOGGLED OR YT ACTIVE) -->
+        <div id="roomBannerCard" class="room-banner-card hidden">
           <img id="roomBannerImg" src="/assets/rooms/general.svg" alt="صورة الغرفة" class="room-banner-thumb" />
           <div class="room-banner-info">
             <div class="room-banner-title-row">
@@ -153,6 +156,7 @@
             </div>
             <div id="roomBannerDesc" class="room-banner-desc">الغرفة الرئيسية للتعارف والدردشة</div>
           </div>
+          <button type="button" id="roomSettingsBtn" class="mini-ctrl-btn hidden" title="إعدادات الغرفة">⚙️</button>
         </div>
 
         <!-- COLLAPSIBLE SYNCED YOUTUBE PLAYER BAR -->
@@ -181,7 +185,7 @@
         </div>
       </section>
 
-      <!-- MAIN BODY (FEED + DESKTOP ONLINE SIDEBAR) -->
+      <!-- MAIN BODY (LIGHT FEED #f8f9fa + SIDEBAR) -->
       <div class="chat-workspace-body">
         <main id="chatStage" class="chat-stage">
           <div id="chatFeed" class="chat-feed"></div>
@@ -197,35 +201,74 @@
         </aside>
       </div>
 
-      <!-- BOTTOM ROYAL BLUE INPUT BAR -->
-      <footer id="bottomBar" class="cody-bottombar">
-        <div class="plus-menu-wrap">
-          <button type="button" id="plusMenuBtn" class="bottom-circle-btn" title="إضافات وخيارات">+</button>
-          <div id="plusDropdown" class="plus-dropdown hidden">
-            <button type="button" id="plusUploadImageBtn" class="drop-item">🖼️ إرسال صورة</button>
-            <button type="button" id="plusAdminNoticeBtn" class="drop-item hidden">📢 إرسال كإشعار إدارة</button>
-            <button type="button" id="plusCustomizeTextBtn" class="drop-item">🎨 تخصيص الخط والألوان والنيون</button>
-            <button type="button" id="plusClearRoomBtn" class="drop-item danger hidden">🧹 مسح رسائل الغرفة</button>
-          </div>
+      <!-- TOPIC BANNER (#d8f3dc) ABOVE INPUT BAR -->
+      <div id="topicBannerBar" class="topic-banner-bar">
+        <div class="topic-banner-content">
+          <span class="topic-warn-ico">⚠️</span>
+          <strong class="topic-title-lbl">الموضوع:</strong>
+          <span id="topicBannerText" class="topic-text-val">أهلاً بكم في شات الغرف المباشر، نتمنى لكم أطيب الأوقات!</span>
         </div>
+        <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق">×</button>
+      </div>
 
-        <button type="button" id="emojiPickerBtn" class="bottom-circle-btn" title="إيموجي وملصقات">😊</button>
-        <button type="button" id="voiceRecordBtn" class="bottom-circle-btn" title="تسجيل رسالة صوتية">🎤</button>
+      <!-- WHITE INPUT BAR -->
+      <section id="bottomBar" class="cody-input-bar">
+        <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">➤</button>
 
-        <div class="input-box-wrap">
-          <span id="adminNoticeModePill" class="admin-mode-pill hidden" title="إلغاء وضع إشعار الإدارة">📢 إشعار إدارة ✕</span>
+        <div class="input-pill-wrap">
+          <span id="adminNoticeModePill" class="admin-mode-pill hidden" title="إلغاء وضع إشعار الإدارة">📢 إشعار ✕</span>
           <input
             type="text"
             id="messageInput"
-            placeholder="اكتب رسالتك هنا..."
+            placeholder="اكتب هنا..."
             maxlength="1000"
             autocomplete="off"
           />
+          <button type="button" id="emojiPickerBtn" class="inside-emoji-btn" title="إيموجي وملصقات">😊</button>
         </div>
 
-        <button type="button" id="sendMsgBtn" class="send-msg-btn">إرسال</button>
+        <div class="input-left-tools">
+          <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="تسجيل رسالة صوتية">🎤</button>
+          <div class="plus-menu-wrap">
+            <button type="button" id="plusMenuBtn" class="input-tool-btn" title="إضافات وخيارات">+</button>
+            <div id="plusDropdown" class="plus-dropdown hidden">
+              <button type="button" id="plusUploadImageBtn" class="drop-item">🖼️ إرسال صورة</button>
+              <button type="button" id="plusYoutubeBtn" class="drop-item">🎬 مشغل يوتيوب الغرفة</button>
+              <button type="button" id="plusReportBtn" class="drop-item">🚨 إبلاغ الإدارة</button>
+              <button type="button" id="plusAdminNoticeBtn" class="drop-item hidden">📢 إرسال كإشعار إدارة</button>
+              <button type="button" id="plusCustomizeTextBtn" class="drop-item">🎨 تخصيص الخط والألوان</button>
+              <button type="button" id="plusClearRoomBtn" class="drop-item danger hidden">🧹 مسح رسائل الغرفة</button>
+            </div>
+          </div>
+        </div>
 
         <input type="file" id="chatImageFileInput" accept="image/*" class="hidden" />
+      </section>
+
+      <!-- FIXED DARK NAVY FOOTER BAR (#0b2239) -->
+      <footer id="codyFooterBar" class="cody-footerbar">
+        <div class="footer-right-group">
+          <button type="button" id="footerOptionsBtn" class="footer-nav-btn" title="الخيارات">
+            <span class="fn-ico">⚙️</span>
+            <span class="fn-lbl">الخيارات</span>
+          </button>
+          <button type="button" id="toggleUsersDrawerBtn" class="footer-nav-btn" title="المتواجدون في الغرفة">
+            <span class="fn-ico">👥 <span id="roomOnlineCounter" class="footer-count-pill">0</span></span>
+            <span class="fn-lbl">متواجدين</span>
+          </button>
+          <button type="button" id="switchRoomsBtn" class="footer-nav-btn" title="الغرف">
+            <span class="fn-ico">🏠</span>
+            <span class="fn-lbl">الغرف</span>
+          </button>
+        </div>
+
+        <div class="footer-left-group">
+          <button type="button" id="footerRefreshBtn" class="footer-nav-btn" title="تحديث">
+            <span class="fn-ico">🔄</span>
+            <span class="fn-lbl">تحديث</span>
+          </button>
+          <button type="button" id="footerRadioBtn" class="footer-radio-btn" title="الراديو والمشغل الصوتي">▶️</button>
+        </div>
       </footer>
 
       <!-- EMOJI & STICKERS POPOVER -->
@@ -252,6 +295,7 @@
           <button type="button" class="drawer-item" data-drawer="wall">🧱 جدار المنشورات</button>
           <button type="button" class="drawer-item" data-drawer="leaderboards">🏆 الكبار والأثرياء</button>
           <button type="button" class="drawer-item" data-drawer="customize">🎨 تخصيص الملف والإضافات</button>
+          <button type="button" class="drawer-item" data-drawer="report">🚨 إبلاغ الإدارة</button>
           <button type="button" class="drawer-item hidden" id="drawerStealthBtn" data-drawer="stealth">👻 وضع التخفي</button>
           <button type="button" class="drawer-item hidden" id="drawerAdminBtn" data-drawer="admin">⚙️ لوحة التحكم</button>
           <button type="button" class="drawer-item danger" data-drawer="logout">🚪 تسجيل الخروج</button>
@@ -322,8 +366,8 @@
             <div class="upload-row">
               <label>الصورة الشخصية (تدعم الصور المتحركة GIF)</label>
               <div class="inline-row">
-                <input type="file" id="custAvatarFile" accept="image/*" />
-                <button type="button" id="custUploadAvatarBtn" class="btn-secondary btn-sm">رفع الصورة</button>
+                <input type="file" id="custAvatarFile" accept="image/*" class="hidden" />
+                <button type="button" id="custUploadAvatarBtn" class="btn-primary btn-sm" style="width:100%;">📷 تغيير الصورة الشخصية</button>
               </div>
             </div>
 

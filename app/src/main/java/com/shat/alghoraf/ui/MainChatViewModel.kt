@@ -172,8 +172,26 @@ class MainChatViewModel(
     fun switchRoom(roomId: String) {
         if (roomId.isBlank() || roomId == _activeRoomId.value) return
         _activeRoomId.value = roomId
+        val me = (myProfile.value as? UiState.Success)?.data
+        val profiles = (publicProfiles.value as? UiState.Success)?.data.orEmpty()
         viewModelScope.launch {
             repository.sendHeartbeat(roomId, true)
+            if (me != null && !me.isStealth) {
+                repository.sendRoomMessage(
+                    roomId = roomId,
+                    sender = me,
+                    content = "✓ هذا المستخدم انضم للغرفة",
+                    msgType = "system",
+                    roomProfiles = profiles
+                )
+            }
+        }
+    }
+
+    fun refreshActiveRoom() {
+        viewModelScope.launch {
+            repository.sendHeartbeat(_activeRoomId.value, true)
+            _toastMessage.value = "تم تحديث الغرفة والرسائل 🔄"
         }
     }
 

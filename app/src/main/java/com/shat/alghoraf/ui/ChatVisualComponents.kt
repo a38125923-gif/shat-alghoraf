@@ -37,23 +37,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,12 +78,12 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.google.firebase.Timestamp
 import com.shat.alghoraf.data.ChatMessage
-import com.shat.alghoraf.data.DefaultCatalogs
 import com.shat.alghoraf.data.RankConfig
 import com.shat.alghoraf.data.RoomMicSlot
 import com.shat.alghoraf.ui.theme.CairoFontFamily
 import com.shat.alghoraf.ui.theme.CrimsonOwner
-import com.shat.alghoraf.ui.theme.MicPurple
+import com.shat.alghoraf.ui.theme.JoinMaroon
+import com.shat.alghoraf.ui.theme.MicRoyalBlue
 import com.shat.alghoraf.ui.theme.OnlineGreen
 import com.shat.alghoraf.ui.theme.RoyalBlue
 import com.shat.alghoraf.ui.theme.RoyalGold
@@ -296,7 +300,13 @@ fun StyledChatName(
     val customBgColor = if (nameBgColorHex.isNotBlank()) parseHexColor(nameBgColorHex, Color.Transparent) else Color.Transparent
     val neonGlowColor = if (neonColorHex.isNotBlank()) parseHexColor(neonColorHex, Color.Transparent) else Color.Transparent
     val hasPlateOrBg = plateBrush != null || customBgColor != Color.Transparent
-    val baseColor = if (plateBrush != null) Color.White else parseHexColor(nameColorHex, RoyalBlue)
+    val cleanHex = nameColorHex.trim().lowercase()
+    val rawParsedColor = if (cleanHex.isBlank() || cleanHex == "#ffffff" || cleanHex == "#fff") {
+        Color(0xFF0F172A)
+    } else {
+        parseHexColor(nameColorHex, Color(0xFF0F172A))
+    }
+    val baseColor = if (plateBrush != null) Color.White else rawParsedColor
     val shadow = if (neonGlowColor != Color.Transparent) {
         Shadow(color = neonGlowColor, offset = Offset(0f, 0f), blurRadius = 14f)
     } else null
@@ -407,166 +417,161 @@ fun VoiceMicStrip(
     onOpenMicSettings: () -> Unit
 ) {
     Surface(
-        color = Color(0xFFF3E8FF),
-        tonalElevation = 2.dp,
+        color = Color.White,
+        shadowElevation = 1.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            AnimatedVisibility(visible = isExpanded) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    IconButton(
-                        onClick = onOpenMicSettings,
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .testTag("mic_settings_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "إعدادات المايك",
-                            tint = MicPurple,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onToggleExpand,
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .testTag("mic_collapse_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = "طي أو توسيع المايكات",
-                            tint = MicPurple,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                AnimatedVisibility(visible = isExpanded) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        mics.forEach { slot ->
-                            val occupied = slot.holderUid.isNotBlank()
-                            val isMine = slot.holderUid == currentUid
-                            val muted = slot.isMutedByUser || slot.isMutedByAdmin
-                            val activeSpeaking = occupied && !muted && (slot.isTalking || (isMine && liveMicLevel > 0.08f))
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                    mics.forEach { slot ->
+                        val occupied = slot.holderUid.isNotBlank()
+                        val isMine = slot.holderUid == currentUid
+                        val muted = slot.isMutedByUser || slot.isMutedByAdmin
+                        val activeSpeaking = occupied && !muted && (slot.isTalking || (isMine && liveMicLevel > 0.08f))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .width(56.dp)
+                                .testTag("mic_slot_${slot.slotNumber}")
+                        ) {
+                            Box(
                                 modifier = Modifier
-                                    .width(50.dp)
-                                    .testTag("mic_slot_${slot.slotNumber}")
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            when {
-                                                occupied && !muted -> MicPurple
-                                                occupied && muted -> Color(0xFF94A3B8)
-                                                else -> MicPurple.copy(alpha = 0.85f)
-                                            }
-                                        )
-                                        .border(
-                                            width = when {
-                                                activeSpeaking -> 3.dp
-                                                isMine -> 2.5.dp
-                                                else -> 1.5.dp
-                                            },
-                                            color = when {
-                                                activeSpeaking -> OnlineGreen
-                                                isMine -> RoyalGold
-                                                else -> Color.White
-                                            },
-                                            shape = CircleShape
-                                        )
-                                        .clickable { onMicClick(slot) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (!occupied) {
-                                        Text(
-                                            text = slot.slotNumber.toString(),
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
-                                        )
-                                    } else {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(
-                                                imageVector = if (muted) Icons.Default.MicOff else Icons.Default.Mic,
-                                                contentDescription = slot.holderName,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = slot.slotNumber.toString(),
-                                                color = GoldLightCompat,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when {
+                                            occupied && muted -> Color(0xFF475569)
+                                            else -> MicRoyalBlue
                                         }
-                                    }
-                                }
-                                if (occupied) {
-                                    Text(
-                                        text = slot.holderName,
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = Color(0xFF4C1D95),
-                                        fontWeight = FontWeight.SemiBold
                                     )
-                                    if (isMine || isAdminUser) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                            if (isMine) {
-                                                Text(
-                                                    text = if (slot.isMutedByUser) "🎙️" else "🔇",
-                                                    fontSize = 10.sp,
-                                                    modifier = Modifier.clickable { onMicClick(slot) }
-                                                )
-                                            }
-                                            if (isAdminUser && !isMine) {
-                                                Text(
-                                                    text = if (slot.isMutedByAdmin) "🔊" else "🔇",
-                                                    fontSize = 10.sp,
-                                                    modifier = Modifier.clickable {
-                                                        onAdminMuteMic(slot.slotNumber.toInt(), !slot.isMutedByAdmin)
-                                                    }
-                                                )
-                                            }
-                                            Text(
-                                                text = "❌",
-                                                fontSize = 9.sp,
-                                                modifier = Modifier.clickable {
-                                                    onLeaveMic(slot.slotNumber.toInt())
-                                                }
-                                            )
-                                        }
+                                    .border(
+                                        width = when {
+                                            activeSpeaking -> 2.5.dp
+                                            isMine -> 2.dp
+                                            else -> 1.5.dp
+                                        },
+                                        color = when {
+                                            activeSpeaking -> OnlineGreen
+                                            isMine -> RoyalGold
+                                            else -> Color(0xFFC5CAE9)
+                                        },
+                                        shape = CircleShape
+                                    )
+                                    .clickable { onMicClick(slot) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (occupied && muted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = if (occupied) slot.holderName else "مايك ${slot.slotNumber}",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                            Text(
+                                text = if (occupied) "${slot.slotNumber}•${slot.holderName}" else slot.slotNumber.toString(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MicRoyalBlue,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (occupied && (isMine || isAdminUser)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    if (isMine) {
+                                        Text(
+                                            text = if (slot.isMutedByUser) "🎙️" else "🔇",
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.clickable { onMicClick(slot) }
+                                        )
                                     }
-                                } else {
+                                    if (isAdminUser && !isMine) {
+                                        Text(
+                                            text = if (slot.isMutedByAdmin) "🔊" else "🔇",
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.clickable {
+                                                onAdminMuteMic(slot.slotNumber.toInt(), !slot.isMutedByAdmin)
+                                            }
+                                        )
+                                    }
                                     Text(
-                                        text = if (hasAudioPermission) "مايك ${slot.slotNumber}" else "صوت ${slot.slotNumber}",
+                                        text = "❌",
                                         fontSize = 9.sp,
-                                        color = Color(0xFF6B21A8)
+                                        modifier = Modifier.clickable {
+                                            onLeaveMic(slot.slotNumber.toInt())
+                                        }
                                     )
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    thickness = 1.5.dp,
+                    color = MicRoyalBlue.copy(alpha = 0.75f)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(MicRoyalBlue)
+                            .border(1.dp, Color.White, CircleShape)
+                            .clickable { onToggleExpand() }
+                            .testTag("mic_collapse_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = "تبديل أو تصغير المايكات",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(MicRoyalBlue)
+                            .border(1.dp, Color.White, CircleShape)
+                            .clickable { onOpenMicSettings() }
+                            .testTag("mic_settings_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "إعدادات المايك ويوتيوب",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    thickness = 1.5.dp,
+                    color = MicRoyalBlue.copy(alpha = 0.75f)
+                )
             }
         }
     }
@@ -664,21 +669,25 @@ fun ChatMessageRow(
     isMyMessage: Boolean,
     onSenderClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onPlayAudio: (String) -> Unit
+    onPlayAudio: (String) -> Unit,
+    onMentionClick: () -> Unit = {},
+    onPmClick: () -> Unit = {},
+    onMuteClick: () -> Unit = {}
 ) {
     val timeLabel = remember(message.createdAt) {
         val ts = message.createdAt ?: Timestamp.now()
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(ts.toDate())
     }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     if (message.isGift || message.msgType == "gift") {
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(8.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 3.dp)
-                .border(1.dp, RoyalGold, RoundedCornerShape(14.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .border(1.dp, RoyalGold, RoundedCornerShape(8.dp))
         ) {
             Row(
                 modifier = Modifier.padding(10.dp),
@@ -711,24 +720,24 @@ fun ChatMessageRow(
             } else null
         }
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
-            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F5)),
+            shape = RoundedCornerShape(8.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-                .border(2.dp, CrimsonOwner, RoundedCornerShape(14.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .border(1.5.dp, JoinMaroon, RoundedCornerShape(8.dp))
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Default.Campaign, contentDescription = null, tint = CrimsonOwner, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Campaign, contentDescription = null, tint = JoinMaroon, modifier = Modifier.size(18.dp))
                     Text(
                         text = "إشعار من الإدارة:",
-                        color = CrimsonOwner,
+                        color = JoinMaroon,
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
                     Text(
                         text = message.senderName,
@@ -750,7 +759,7 @@ fun ChatMessageRow(
                         bitmap = decodedNoticeImg,
                         contentDescription = "صورة الإشعار",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(10.dp))
+                        modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(8.dp))
                     )
                 }
             }
@@ -758,6 +767,7 @@ fun ChatMessageRow(
         return
     }
 
+    val isJoinNotice = message.msgType == "system" && message.content.contains("انضم")
     val decodedMedia = remember(message.mediaUrl) {
         if (message.mediaUrl.startsWith("data:image")) {
             try {
@@ -770,28 +780,26 @@ fun ChatMessageRow(
         } else null
     }
 
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (isMyMessage) Color(0xFFF8FAFF) else Color.White
-        ),
-        shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(6.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 3.dp)
+            .padding(horizontal = 6.dp, vertical = 1.5.dp)
+            .border(1.dp, Color(0xFFE9ECEF), RoundedCornerShape(6.dp))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 7.dp),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             AvatarWithFrame(
                 avatarUrl = message.avatarUrl,
                 name = message.senderName,
                 frameId = message.avatarFrame,
-                size = 42.dp,
+                size = 40.dp,
                 onClick = onSenderClick
             )
 
@@ -799,9 +807,10 @@ fun ChatMessageRow(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Box(modifier = Modifier.clickable { onSenderClick() }) {
+                    StyledRankBadge(rank = rank)
+                    Box(modifier = Modifier.weight(1f, fill = false).clickable { onSenderClick() }) {
                         StyledChatName(
                             name = message.senderName,
                             nameColorHex = message.nameColor,
@@ -813,37 +822,38 @@ fun ChatMessageRow(
                             neonColorHex = message.neonColor
                         )
                     }
-                    StyledRankBadge(rank = rank)
-                    Spacer(modifier = Modifier.weight(1f))
                     Text(
                         text = timeLabel,
                         fontSize = 10.sp,
                         color = Color(0xFF94A3B8)
                     )
-                    if (canModerate || isMyMessage) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "حذف الرسالة",
-                            tint = Color(0xFFCBD5E1),
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { onDeleteClick() }
-                        )
-                    }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
-                if (message.msgType == "audio" && message.mediaUrl.isNotBlank()) {
+                if (isJoinNotice) {
+                    Surface(
+                        color = JoinMaroon,
+                        shape = RoundedCornerShape(5.dp)
+                    ) {
+                        Text(
+                            text = "✓ هذا المستخدم انضم للغرفة",
+                            color = Color.White,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
+                } else if (message.msgType == "audio" && message.mediaUrl.isNotBlank()) {
                     Surface(
                         color = RoyalBlue.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .clickable { onPlayAudio(message.mediaUrl) }
                             .padding(vertical = 2.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -858,9 +868,15 @@ fun ChatMessageRow(
                     }
                 } else {
                     if (message.content.isNotBlank()) {
+                        val cleanedHex = message.textColor.trim().lowercase()
+                        val readableTextColor = if (cleanedHex.isBlank() || cleanedHex == "#ffffff" || cleanedHex == "#fff") {
+                            Color(0xFF111827)
+                        } else {
+                            parseHexColor(message.textColor, Color(0xFF111827))
+                        }
                         Text(
                             text = message.content,
-                            color = parseHexColor(message.textColor, Color(0xFF1E293B)),
+                            color = readableTextColor,
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -873,7 +889,7 @@ fun ChatMessageRow(
                             modifier = Modifier
                                 .widthIn(max = 260.dp)
                                 .height(160.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(10.dp))
                         )
                     } else if (message.mediaUrl.startsWith("http")) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -884,7 +900,66 @@ fun ChatMessageRow(
                             modifier = Modifier
                                 .widthIn(max = 260.dp)
                                 .height(160.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(10.dp))
+                        )
+                    }
+                }
+            }
+
+            Box {
+                Icon(
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = "خيارات الرسالة",
+                    tint = Color(0xFF64748B),
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable { menuExpanded = true }
+                        .padding(4.dp)
+                )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("@ منشن") },
+                        onClick = {
+                            menuExpanded = false
+                            onMentionClick()
+                        }
+                    )
+                    if (!isMyMessage) {
+                        DropdownMenuItem(
+                            text = { Text("✉️ رسالة خاصة") },
+                            onClick = {
+                                menuExpanded = false
+                                onPmClick()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("👤 بطاقة العضو") },
+                        onClick = {
+                            menuExpanded = false
+                            onSenderClick()
+                        }
+                    )
+                    if (canModerate && !isMyMessage) {
+                        DropdownMenuItem(
+                            text = { Text("🔇 كتم العضو") },
+                            onClick = {
+                                menuExpanded = false
+                                onMuteClick()
+                            }
+                        )
+                    }
+                    if (canModerate || isMyMessage) {
+                        DropdownMenuItem(
+                            text = { Text("🗑️ حذف الرسالة", color = CrimsonOwner) },
+                            onClick = {
+                                menuExpanded = false
+                                onDeleteClick()
+                            }
                         )
                     }
                 }
