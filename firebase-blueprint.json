@@ -1,0 +1,423 @@
+{
+  "entities": {
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private authenticated user record storing email, account role, coins, and moderation flags.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address (PII)" },
+        "username": { "type": "string", "description": "Unique display/login username" },
+        "role": { "type": "string", "description": "Rank key assigned to the user" },
+        "coins": { "type": "integer", "description": "Virtual gift coins balance" },
+        "isStealth": { "type": "boolean", "description": "Owner stealth visibility flag" },
+        "isBanned": { "type": "boolean", "description": "Whether account is banned" },
+        "banReason": { "type": "string", "description": "Reason for account ban" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "username", "role", "coins", "isStealth", "isBanned", "banReason", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted RBAC document authorizing administrative moderation and CMS access.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string" },
+        "grantedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "role", "grantedBy", "createdAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Public chat identity, visual customizations, leaderboards, and live room presence (no PII).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "bio": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "nameColor": { "type": "string" },
+        "textColor": { "type": "string" },
+        "nameBgColor": { "type": "string" },
+        "neonColor": { "type": "string" },
+        "fontFamily": { "type": "string" },
+        "fontStyle": { "type": "string" },
+        "avatarFrame": { "type": "string" },
+        "nameplateStyle": { "type": "string" },
+        "nameShine": { "type": "string" },
+        "vipWings": { "type": "boolean" },
+        "profileMusic": { "type": "string" },
+        "vipFamily": { "type": "string" },
+        "coins": { "type": "integer" },
+        "activityPoints": { "type": "integer" },
+        "giftsReceived": { "type": "integer" },
+        "giftsSent": { "type": "integer" },
+        "isStealth": { "type": "boolean" },
+        "isOnline": { "type": "boolean" },
+        "isPublic": { "type": "boolean" },
+        "currentRoomId": { "type": "string" },
+        "lastSeenAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "username", "displayName", "role", "coins", "activityPoints", "giftsReceived", "giftsSent", "isStealth", "isOnline", "isPublic", "currentRoomId", "createdAt", "updatedAt"]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "Chat room metadata, theme, synchronized YouTube media, and activity score.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "bgTheme": { "type": "string" },
+        "wallpaperUrl": { "type": "string" },
+        "welcomeMessage": { "type": "string" },
+        "minRankPower": { "type": "integer" },
+        "micsEnabled": { "type": "boolean" },
+        "ownerUserId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "activityPoints": { "type": "integer" },
+        "youtubeVideoId": { "type": "string" },
+        "youtubeTitle": { "type": "string" },
+        "youtubeIsPlaying": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "bgTheme", "minRankPower", "micsEnabled", "activityPoints", "youtubeIsPlaying", "isActive", "createdBy", "createdAt", "updatedAt"]
+    },
+    "RoomMicSlot": {
+      "title": "RoomMicSlot",
+      "description": "One of the 5 numbered voice microphone slots in a room.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "slotNumber": { "type": "integer" },
+        "holderUid": { "type": "string" },
+        "holderName": { "type": "string" },
+        "holderAvatar": { "type": "string" },
+        "holderRole": { "type": "string" },
+        "isMutedByUser": { "type": "boolean" },
+        "isMutedByAdmin": { "type": "boolean" },
+        "isTalking": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "slotNumber", "holderUid", "holderName", "isMutedByUser", "isMutedByAdmin", "isTalking", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Room chat message with full visual rank, frame, shine, gift, and media metadata.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "nameColor": { "type": "string" },
+        "textColor": { "type": "string" },
+        "nameBgColor": { "type": "string" },
+        "neonColor": { "type": "string" },
+        "fontFamily": { "type": "string" },
+        "fontStyle": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "avatarFrame": { "type": "string" },
+        "nameplateStyle": { "type": "string" },
+        "nameShine": { "type": "string" },
+        "vipWings": { "type": "boolean" },
+        "isAdminNotice": { "type": "boolean" },
+        "isGift": { "type": "boolean" },
+        "giftName": { "type": "string" },
+        "giftEmoji": { "type": "string" },
+        "giftRecipientName": { "type": "string" },
+        "msgType": { "type": "string", "enum": ["text", "image", "audio", "gift", "admin_notice", "system"] },
+        "content": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "senderId", "senderName", "senderRole", "msgType", "content", "isAdminNotice", "isGift", "createdAt"]
+    },
+    "RankConfig": {
+      "title": "RankConfig",
+      "description": "Rank visual styling, power level, and permission matrix.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "label": { "type": "string" },
+        "icon": { "type": "string" },
+        "bgColor": { "type": "string" },
+        "textColor": { "type": "string" },
+        "power": { "type": "integer" },
+        "tierOrder": { "type": "integer" },
+        "isSystem": { "type": "boolean" },
+        "permMute": { "type": "boolean" },
+        "permKick": { "type": "boolean" },
+        "permBan": { "type": "boolean" },
+        "permSetRank": { "type": "boolean" },
+        "permClearRoom": { "type": "boolean" },
+        "permManageRooms": { "type": "boolean" },
+        "permAccessPanel": { "type": "boolean" },
+        "permRoomOwner": { "type": "boolean" },
+        "permPublishNews": { "type": "boolean" },
+        "permUseAddons": { "type": "boolean" },
+        "maxAssignableRank": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["key", "label", "icon", "bgColor", "textColor", "power", "isActive", "createdAt", "updatedAt"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "CMS site settings controlled by administrators.",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "siteDescription": { "type": "string" },
+        "welcomeBanner": { "type": "string" },
+        "marqueeText": { "type": "string" },
+        "defaultRoomId": { "type": "string" },
+        "allowGuestMics": { "type": "boolean" },
+        "soundEffectsEnabled": { "type": "boolean" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["siteName", "welcomeBanner", "marqueeText", "defaultRoomId", "isPublic", "createdAt", "updatedAt"]
+    },
+    "NewsPost": {
+      "title": "NewsPost",
+      "description": "Published community news & updates.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "title", "content", "isPublished", "createdAt", "updatedAt"]
+    },
+    "WallPost": {
+      "title": "WallPost",
+      "description": "Public social wall post.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "likesCount": { "type": "integer" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "content", "likesCount", "isPublic", "createdAt", "updatedAt"]
+    },
+    "PrivateMessage": {
+      "title": "PrivateMessage",
+      "description": "Private 1-to-1 chat message.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "receiverName": { "type": "string" },
+        "content": { "type": "string" },
+        "participants": { "type": "array" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "receiverId", "receiverName", "content", "participants", "isRead", "createdAt"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Friend request or accepted friendship.",
+      "type": "object",
+      "properties": {
+        "requesterId": { "type": "string" },
+        "requesterName": { "type": "string" },
+        "requesterAvatar": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "targetAvatar": { "type": "string" },
+        "participants": { "type": "array" },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requesterId", "requesterName", "targetId", "targetName", "participants", "status", "createdAt", "updatedAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "In-app user notification.",
+      "type": "object",
+      "properties": {
+        "recipientId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "senderId", "senderName", "type", "title", "body", "isRead", "createdAt"]
+    },
+    "GiftTransaction": {
+      "title": "GiftTransaction",
+      "description": "Virtual gift sent between users.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "giftId": { "type": "string" },
+        "giftName": { "type": "string" },
+        "giftEmoji": { "type": "string" },
+        "cost": { "type": "integer" },
+        "reward": { "type": "integer" },
+        "roomId": { "type": "string" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "recipientId", "recipientName", "giftId", "giftName", "giftEmoji", "cost", "reward", "roomId", "isPublic", "createdAt"]
+    },
+    "UserReport": {
+      "title": "UserReport",
+      "description": "Moderation abuse report submitted by a user.",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "roomId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterId", "reporterName", "targetId", "targetName", "roomId", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "BanRecord": {
+      "title": "BanRecord",
+      "description": "Account ban record enforced by moderators.",
+      "type": "object",
+      "properties": {
+        "targetUserId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "bannedById": { "type": "string" },
+        "bannedByName": { "type": "string" },
+        "reason": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetUserId", "targetName", "bannedById", "bannedByName", "reason", "isActive", "createdAt", "updatedAt"]
+    },
+    "MuteRecord": {
+      "title": "MuteRecord",
+      "description": "Temporary room mute record enforced by moderators.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "targetUserId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "mutedById": { "type": "string" },
+        "reason": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "targetUserId", "targetName", "mutedById", "reason", "isActive", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private user account profiles with PII isolation."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin lookup table managed by the Supreme Owner."
+    },
+    "/public_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Public chat member cards, addons, leaderboards, and presence."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/ChatRoom" },
+      "description": "Chat rooms, backgrounds, and synchronized YouTube media state."
+    },
+    "/rooms/{roomId}/mics/{slotNumber}": {
+      "schema": { "$ref": "#/entities/RoomMicSlot" },
+      "description": "Five numbered voice mic slots per chat room."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Real-time room messages, media, gifts, and admin notices."
+    },
+    "/ranks/{rankKey}": {
+      "schema": { "$ref": "#/entities/RankConfig" },
+      "description": "Dynamic rank matrix with styling and permission flags."
+    },
+    "/site_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Global CMS site settings."
+    },
+    "/news/{newsId}": {
+      "schema": { "$ref": "#/entities/NewsPost" },
+      "description": "Published community news feed."
+    },
+    "/wall_posts/{postId}": {
+      "schema": { "$ref": "#/entities/WallPost" },
+      "description": "Public member wall posts."
+    },
+    "/private_messages/{pmId}": {
+      "schema": { "$ref": "#/entities/PrivateMessage" },
+      "description": "Private messages scoped to two participants."
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Friendships and friend requests scoped to two participants."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "User notifications scoped to recipientId."
+    },
+    "/gifts/{giftTxId}": {
+      "schema": { "$ref": "#/entities/GiftTransaction" },
+      "description": "Gift transfer audit log."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/UserReport" },
+      "description": "User moderation reports."
+    },
+    "/bans/{banId}": {
+      "schema": { "$ref": "#/entities/BanRecord" },
+      "description": "Banned accounts."
+    },
+    "/mutes/{muteId}": {
+      "schema": { "$ref": "#/entities/MuteRecord" },
+      "description": "Muted users per room."
+    }
+  }
+}

@@ -3,118 +3,556 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 160;
-    }
-
-    // Registered Users Collection (persists accounts, emails, passwords, ranks, colors, avatars, addons, stealth, activity)
-    match /users/{userId} {
-      allow read: if true;
-      allow create, update: if isValidId(userId) &&
-                               request.resource.data.username is string &&
-                               request.resource.data.username.size() >= 2 &&
-                               request.resource.data.username.size() <= 40 &&
-                               request.resource.data.email is string &&
-                               request.resource.data.role is string;
-      allow delete: if isValidId(userId);
-    }
-
-    // Chat Room Messages Collection
-    match /messages/{messageId} {
-      allow read: if true;
-      allow create, update: if isValidId(messageId) &&
-                               request.resource.data.room_id is string &&
-                               request.resource.data.sender_key is string &&
-                               request.resource.data.sender_name is string &&
-                               request.resource.data.msg_type in ['text', 'image', 'audio', 'gift', 'admin_notice', 'system'];
-      allow delete: if isValidId(messageId);
-    }
-
-    // Chat Rooms Collection
-    match /rooms/{roomId} {
-      allow read: if true;
-      allow create, update: if isValidId(roomId) &&
-                               request.resource.data.name is string &&
-                               request.resource.data.name.size() >= 1 &&
-                               request.resource.data.name.size() <= 80;
-      allow delete: if isValidId(roomId);
-    }
-
-    match /room_staff/{staffId} {
-      allow read: if true;
-      allow write: if isValidId(staffId);
-    }
-
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isValidId(settingId);
-    }
-
-    match /ranks/{rankKey} {
-      allow read: if true;
-      allow create, update: if isValidId(rankKey) &&
-                               request.resource.data.key is string &&
-                               request.resource.data.label is string;
-      allow delete: if isValidId(rankKey);
-    }
-
-    match /custom_emojis/{emojiId} {
-      allow read: if true;
-      allow write: if isValidId(emojiId);
-    }
-
-    match /bans/{banId} {
-      allow read: if true;
-      allow write: if isValidId(banId);
-    }
-
-    match /mutes/{muteId} {
-      allow read: if true;
-      allow write: if isValidId(muteId);
-    }
-
-    match /private_messages/{pmId} {
-      allow read: if true;
-      allow write: if isValidId(pmId);
-    }
-
-    match /friendships/{friendshipId} {
-      allow read: if true;
-      allow write: if isValidId(friendshipId);
-    }
-
-    match /wall_posts/{postId} {
-      allow read: if true;
-      allow write: if isValidId(postId);
-    }
-
-    match /news/{newsId} {
-      allow read: if true;
-      allow write: if isValidId(newsId);
-    }
-
-    match /gifts/{giftId} {
-      allow read: if true;
-      allow write: if isValidId(giftId);
-    }
-
-    match /reports/{reportId} {
-      allow read: if true;
-      allow write: if isValidId(reportId);
-    }
-
-    match /notifications/{notifId} {
-      allow read: if true;
-      allow write: if isValidId(notifId);
-    }
-
-    match /counters/{counterId} {
-      allow read: if true;
-      allow write: if isValidId(counterId);
-    }
-
+    // Global safety net catch-all
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // Core primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSupremeOwner() {
+      return isSignedIn() &&
+             request.auth.token.email != null &&
+             request.auth.token.email == 'a38125923@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSupremeOwner() ||
+             (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isImmutableCreatedAt() {
+      return !('createdAt' in existing()) || incoming().createdAt == existing().createdAt;
+    }
+
+    // Entity validation helpers
+    function isValidUserPrivate(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+             data.username is string && data.username.size() >= 2 && data.username.size() <= 40 &&
+             data.role is string && data.role.size() >= 2 && data.role.size() <= 40 &&
+             data.coins is int && data.coins >= 0 && data.coins <= 100000000 &&
+             data.isStealth is bool &&
+             data.isBanned is bool &&
+             data.banReason is string && data.banReason.size() <= 300 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAdminRecord(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.role is string && data.role.size() >= 2 && data.role.size() <= 40 &&
+             data.grantedBy is string && data.grantedBy.size() >= 1 && data.grantedBy.size() <= 128 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidPublicProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 2 && data.username.size() <= 40 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50 &&
+             data.role is string && data.role.size() >= 2 && data.role.size() <= 40 &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 240)) &&
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 450000)) &&
+             (!('nameColor' in data) || (data.nameColor is string && data.nameColor.size() <= 30)) &&
+             (!('textColor' in data) || (data.textColor is string && data.textColor.size() <= 30)) &&
+             (!('nameBgColor' in data) || (data.nameBgColor is string && data.nameBgColor.size() <= 30)) &&
+             (!('neonColor' in data) || (data.neonColor is string && data.neonColor.size() <= 30)) &&
+             (!('fontFamily' in data) || (data.fontFamily is string && data.fontFamily.size() <= 40)) &&
+             (!('fontStyle' in data) || (data.fontStyle is string && data.fontStyle.size() <= 40)) &&
+             (!('avatarFrame' in data) || (data.avatarFrame is string && data.avatarFrame.size() <= 40)) &&
+             (!('nameplateStyle' in data) || (data.nameplateStyle is string && data.nameplateStyle.size() <= 40)) &&
+             (!('nameShine' in data) || (data.nameShine is string && data.nameShine.size() <= 40)) &&
+             (!('vipWings' in data) || data.vipWings is bool) &&
+             (!('profileMusic' in data) || (data.profileMusic is string && data.profileMusic.size() <= 80)) &&
+             (!('vipFamily' in data) || (data.vipFamily is string && data.vipFamily.size() <= 60)) &&
+             data.coins is int && data.coins >= 0 && data.coins <= 100000000 &&
+             data.activityPoints is int && data.activityPoints >= 0 && data.activityPoints <= 100000000 &&
+             data.giftsReceived is int && data.giftsReceived >= 0 && data.giftsReceived <= 100000000 &&
+             data.giftsSent is int && data.giftsSent >= 0 && data.giftsSent <= 100000000 &&
+             data.isStealth is bool &&
+             data.isOnline is bool &&
+             data.isPublic is bool &&
+             data.currentRoomId is string && data.currentRoomId.size() >= 1 && data.currentRoomId.size() <= 64 &&
+             (!('lastSeenAt' in data) || isValidTimestamp(data.lastSeenAt)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRoom(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 300)) &&
+             (!('icon' in data) || (data.icon is string && data.icon.size() <= 16)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 350000)) &&
+             data.bgTheme is string && data.bgTheme.size() >= 1 && data.bgTheme.size() <= 40 &&
+             (!('wallpaperUrl' in data) || (data.wallpaperUrl is string && data.wallpaperUrl.size() <= 350000)) &&
+             (!('welcomeMessage' in data) || (data.welcomeMessage is string && data.welcomeMessage.size() <= 300)) &&
+             data.minRankPower is int && data.minRankPower >= 0 && data.minRankPower <= 100 &&
+             data.micsEnabled is bool &&
+             (!('ownerUserId' in data) || (data.ownerUserId is string && data.ownerUserId.size() <= 128)) &&
+             (!('ownerName' in data) || (data.ownerName is string && data.ownerName.size() <= 60)) &&
+             data.activityPoints is int && data.activityPoints >= 0 && data.activityPoints <= 100000000 &&
+             (!('youtubeVideoId' in data) || (data.youtubeVideoId is string && data.youtubeVideoId.size() <= 120)) &&
+             (!('youtubeTitle' in data) || (data.youtubeTitle is string && data.youtubeTitle.size() <= 120)) &&
+             data.youtubeIsPlaying is bool &&
+             data.isActive is bool &&
+             data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRoomMicSlot(data, roomId) {
+      return data.roomId is string && data.roomId == roomId &&
+             data.slotNumber is int && data.slotNumber >= 1 && data.slotNumber <= 5 &&
+             data.holderUid is string && data.holderUid.size() <= 128 &&
+             data.holderName is string && data.holderName.size() <= 60 &&
+             (!('holderAvatar' in data) || (data.holderAvatar is string && data.holderAvatar.size() <= 350000)) &&
+             (!('holderRole' in data) || (data.holderRole is string && data.holderRole.size() <= 40)) &&
+             data.isMutedByUser is bool &&
+             data.isMutedByAdmin is bool &&
+             data.isTalking is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidChatMessage(data) {
+      return data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 64 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.senderRole is string && data.senderRole.size() >= 1 && data.senderRole.size() <= 40 &&
+             data.msgType in ['text', 'image', 'audio', 'gift', 'admin_notice', 'system'] &&
+             data.content is string && data.content.size() <= 2000 &&
+             (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 650000)) &&
+             (!('nameColor' in data) || (data.nameColor is string && data.nameColor.size() <= 30)) &&
+             (!('textColor' in data) || (data.textColor is string && data.textColor.size() <= 30)) &&
+             (!('nameBgColor' in data) || (data.nameBgColor is string && data.nameBgColor.size() <= 30)) &&
+             (!('neonColor' in data) || (data.neonColor is string && data.neonColor.size() <= 30)) &&
+             (!('fontFamily' in data) || (data.fontFamily is string && data.fontFamily.size() <= 40)) &&
+             (!('fontStyle' in data) || (data.fontStyle is string && data.fontStyle.size() <= 40)) &&
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 350000)) &&
+             (!('avatarFrame' in data) || (data.avatarFrame is string && data.avatarFrame.size() <= 40)) &&
+             (!('nameplateStyle' in data) || (data.nameplateStyle is string && data.nameplateStyle.size() <= 40)) &&
+             (!('nameShine' in data) || (data.nameShine is string && data.nameShine.size() <= 40)) &&
+             (!('vipWings' in data) || data.vipWings is bool) &&
+             data.isAdminNotice is bool &&
+             data.isGift is bool &&
+             (!('giftName' in data) || (data.giftName is string && data.giftName.size() <= 60)) &&
+             (!('giftEmoji' in data) || (data.giftEmoji is string && data.giftEmoji.size() <= 16)) &&
+             (!('giftRecipientName' in data) || (data.giftRecipientName is string && data.giftRecipientName.size() <= 60)) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidRankConfig(data) {
+      return data.key is string && data.key.size() >= 1 && data.key.size() <= 50 &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 60 &&
+             data.icon is string && data.icon.size() <= 16 &&
+             data.bgColor is string && data.bgColor.size() <= 24 &&
+             data.textColor is string && data.textColor.size() <= 24 &&
+             data.power is int && data.power >= 0 && data.power <= 100 &&
+             data.isActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSiteSettings(data) {
+      return data.siteName is string && data.siteName.size() >= 1 && data.siteName.size() <= 80 &&
+             (!('siteDescription' in data) || (data.siteDescription is string && data.siteDescription.size() <= 200)) &&
+             data.welcomeBanner is string && data.welcomeBanner.size() <= 300 &&
+             data.marqueeText is string && data.marqueeText.size() <= 400 &&
+             data.defaultRoomId is string && data.defaultRoomId.size() >= 1 && data.defaultRoomId.size() <= 64 &&
+             data.isPublic is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidNewsPost(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 450000)) &&
+             data.isPublished is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWallPost(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 1000 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 450000)) &&
+             data.likesCount is int && data.likesCount >= 0 && data.likesCount <= 10000000 &&
+             data.isPublic is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidPrivateMessage(data) {
+      return data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.receiverId is string && data.receiverId.size() >= 1 && data.receiverId.size() <= 128 &&
+             data.receiverName is string && data.receiverName.size() >= 1 && data.receiverName.size() <= 60 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 1500 &&
+             data.participants is list && data.participants.size() == 2 &&
+             data.participants[0] is string && data.participants[1] is string &&
+             data.isRead is bool &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidFriendship(data) {
+      return data.requesterId is string && data.requesterId.size() >= 1 && data.requesterId.size() <= 128 &&
+             data.requesterName is string && data.requesterName.size() >= 1 && data.requesterName.size() <= 60 &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 60 &&
+             data.participants is list && data.participants.size() == 2 &&
+             data.participants[0] is string && data.participants[1] is string &&
+             data.status in ['pending', 'accepted'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidNotification(data) {
+      return data.recipientId is string && data.recipientId.size() >= 1 && data.recipientId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.type is string && data.type.size() >= 1 && data.type.size() <= 40 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.body is string && data.body.size() >= 1 && data.body.size() <= 400 &&
+             data.isRead is bool &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidGiftTransaction(data) {
+      return data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.recipientId is string && data.recipientId.size() >= 1 && data.recipientId.size() <= 128 &&
+             data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 60 &&
+             data.giftId is string && data.giftId.size() >= 1 && data.giftId.size() <= 40 &&
+             data.giftName is string && data.giftName.size() >= 1 && data.giftName.size() <= 60 &&
+             data.giftEmoji is string && data.giftEmoji.size() >= 1 && data.giftEmoji.size() <= 16 &&
+             data.cost is int && data.cost > 0 && data.cost <= 100000 &&
+             data.reward is int && data.reward >= 0 && data.reward <= 100000 &&
+             data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 64 &&
+             data.isPublic is bool &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidReport(data) {
+      return data.reporterId is string && data.reporterId.size() >= 1 && data.reporterId.size() <= 128 &&
+             data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 60 &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 60 &&
+             data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 64 &&
+             data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 400 &&
+             data.status in ['open', 'resolved'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidBanRecord(data) {
+      return data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128 &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 60 &&
+             data.bannedById is string && data.bannedById.size() >= 1 && data.bannedById.size() <= 128 &&
+             data.bannedByName is string && data.bannedByName.size() >= 1 && data.bannedByName.size() <= 60 &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 300 &&
+             data.isActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMuteRecord(data) {
+      return data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 64 &&
+             data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128 &&
+             data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 60 &&
+             data.mutedById is string && data.mutedById.size() >= 1 && data.mutedById.size() <= 128 &&
+             data.reason is string && data.reason.size() <= 300 &&
+             data.isActive is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // 1. Private Users (PII Isolated)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isSupremeOwner());
+      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'email', 'username', 'role', 'coins', 'isStealth', 'isBanned', 'banReason', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'username', 'role', 'coins', 'isStealth', 'isBanned', 'banReason', 'createdAt', 'updatedAt']) &&
+                       isValidUserPrivate(incoming()) &&
+                       (
+                         (isSupremeOwner() && incoming().role == 'site_owner' && incoming().isBanned == false) ||
+                         (incoming().role == 'member' && incoming().isStealth == false && incoming().isBanned == false && incoming().coins <= 1500)
+                       );
+      allow update: if isSignedIn() && isValidId(userId) &&
+                       isValidUserPrivate(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       isImmutableCreatedAt() &&
+                       (
+                         isSupremeOwner() ||
+                         (isAdmin() && existing().role != 'site_owner' && incoming().role != 'site_owner') ||
+                         (isOwner(userId) &&
+                          incoming().email == existing().email &&
+                          incoming().role == existing().role &&
+                          incoming().isStealth == existing().isStealth &&
+                          incoming().isBanned == existing().isBanned &&
+                          incoming().banReason == existing().banReason &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['username', 'coins', 'updatedAt']))
+                       );
+      allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner();
+    }
+
+    // 2. Trusted Admins Collection
+    match /admins/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && isSupremeOwner();
+      allow create: if isSignedIn() && isValidId(userId) && isSupremeOwner() && isValidAdminRecord(incoming());
+      allow update: if isSignedIn() && isValidId(userId) && isSupremeOwner() && isValidAdminRecord(incoming()) && isImmutableCreatedAt();
+      allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner() && userId != request.auth.uid;
+    }
+
+    // 3. Public Profiles & Live Presence / Leaderboards (Zero PII)
+    match /public_profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (resource.data.isPublic == true || resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.isPublic == true;
+      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().isPublic == true &&
+                       isValidPublicProfile(incoming()) &&
+                       (
+                         (isSupremeOwner() && incoming().role == 'site_owner') ||
+                         (incoming().role == 'member' && incoming().isStealth == false && incoming().coins <= 1500)
+                       );
+      allow update: if isSignedIn() && isValidId(userId) &&
+                       isValidPublicProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().isPublic == true &&
+                       isImmutableCreatedAt() &&
+                       (
+                         isSupremeOwner() ||
+                         (isAdmin() && existing().role != 'site_owner' && incoming().role != 'site_owner') ||
+                         (isOwner(userId) &&
+                          incoming().role == existing().role &&
+                          incoming().isStealth == existing().isStealth &&
+                          incoming().giftsReceived == existing().giftsReceived &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'username', 'displayName', 'bio', 'avatarUrl', 'nameColor', 'textColor',
+                            'nameBgColor', 'neonColor', 'fontFamily', 'fontStyle', 'avatarFrame',
+                            'nameplateStyle', 'nameShine', 'vipWings', 'profileMusic', 'vipFamily',
+                            'coins', 'activityPoints', 'giftsSent', 'isOnline', 'currentRoomId',
+                            'lastSeenAt', 'updatedAt'
+                          ])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['giftsReceived', 'coins', 'updatedAt']) &&
+                          incoming().coins >= existing().coins &&
+                          incoming().giftsReceived >= existing().giftsReceived)
+                       );
+      allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner();
+    }
+
+    // 4. Chat Rooms & Mics Subcollection
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && resource.data.isActive == true;
+      allow create: if isSignedIn() && isValidId(roomId) && isAdmin() && isValidRoom(incoming()) && incoming().isActive == true;
+      allow update: if isSignedIn() && isValidId(roomId) &&
+                       isValidRoom(incoming()) &&
+                       isImmutableCreatedAt() &&
+                       (
+                         isAdmin() ||
+                         (incoming().isActive == true &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'activityPoints', 'youtubeVideoId', 'youtubeTitle', 'youtubeIsPlaying', 'updatedAt'
+                          ]))
+                       );
+      allow delete: if isSignedIn() && isValidId(roomId) && isAdmin() && roomId != 'general';
+
+      match /mics/{slotNumber} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber);
+        allow list: if isSignedIn() && resource.data.roomId == roomId;
+        allow create: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber) &&
+                         isValidRoomMicSlot(incoming(), roomId) &&
+                         (incoming().holderUid == '' || incoming().holderUid == request.auth.uid || isAdmin());
+        allow update: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber) &&
+                         isValidRoomMicSlot(incoming(), roomId) &&
+                         isImmutableCreatedAt() &&
+                         (
+                           isAdmin() ||
+                           (existing().holderUid == '' && incoming().holderUid == request.auth.uid && incoming().isMutedByAdmin == false) ||
+                           (existing().holderUid == request.auth.uid &&
+                            (incoming().holderUid == '' || incoming().holderUid == request.auth.uid) &&
+                            incoming().isMutedByAdmin == existing().isMutedByAdmin)
+                         );
+        allow delete: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber) && isAdmin();
+      }
+    }
+
+    // 5. Chat Messages
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId) && resource.data.roomId is string;
+      allow list: if isSignedIn() && resource.data.roomId is string && resource.data.roomId.size() > 0;
+      allow create: if isSignedIn() && isValidId(messageId) &&
+                       isValidChatMessage(incoming()) &&
+                       incoming().senderId == request.auth.uid &&
+                       (incoming().isAdminNotice == false || isAdmin()) &&
+                       (incoming().msgType != 'admin_notice' || isAdmin());
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(messageId) && (existing().senderId == request.auth.uid || isAdmin());
+    }
+
+    // 6. Ranks Matrix
+    match /ranks/{rankKey} {
+      allow get: if isSignedIn() && isValidId(rankKey) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && resource.data.isActive == true;
+      allow create: if isSignedIn() && isValidId(rankKey) && isAdmin() && isValidRankConfig(incoming());
+      allow update: if isSignedIn() && isValidId(rankKey) && isAdmin() && isValidRankConfig(incoming()) && isImmutableCreatedAt();
+      allow delete: if isSignedIn() && isValidId(rankKey) && isAdmin() && rankKey != 'site_owner' && rankKey != 'member';
+    }
+
+    // 7. Site CMS Settings
+    match /site_settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId) && resource.data.isPublic == true;
+      allow list: if isSignedIn() && resource.data.isPublic == true;
+      allow create: if isSignedIn() && isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming());
+      allow update: if isSignedIn() && isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming()) && isImmutableCreatedAt();
+      allow delete: if false;
+    }
+
+    // 8. News Feed
+    match /news/{newsId} {
+      allow get: if isSignedIn() && isValidId(newsId) && (resource.data.isPublished == true || isAdmin());
+      allow list: if isSignedIn() && resource.data.isPublished == true;
+      allow create: if isSignedIn() && isValidId(newsId) && isAdmin() && incoming().authorId == request.auth.uid && isValidNewsPost(incoming());
+      allow update: if isSignedIn() && isValidId(newsId) && isAdmin() && isValidNewsPost(incoming()) && isImmutableCreatedAt();
+      allow delete: if isSignedIn() && isValidId(newsId) && isAdmin();
+    }
+
+    // 9. Public Wall Posts
+    match /wall_posts/{postId} {
+      allow get: if isSignedIn() && isValidId(postId) && (resource.data.isPublic == true || resource.data.authorId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.isPublic == true;
+      allow create: if isSignedIn() && isValidId(postId) && incoming().authorId == request.auth.uid && isValidWallPost(incoming());
+      allow update: if isSignedIn() && isValidId(postId) &&
+                       isValidWallPost(incoming()) &&
+                       incoming().authorId == existing().authorId &&
+                       isImmutableCreatedAt() &&
+                       (
+                         isAdmin() ||
+                         existing().authorId == request.auth.uid ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt'])
+                       );
+      allow delete: if isSignedIn() && isValidId(postId) && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // 10. Private Messages (Strictly scoped to participants)
+    match /private_messages/{pmId} {
+      allow get: if isSignedIn() && isValidId(pmId) && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && isValidId(pmId) &&
+                       isValidPrivateMessage(incoming()) &&
+                       incoming().senderId == request.auth.uid &&
+                       request.auth.uid in incoming().participants;
+      allow update: if isSignedIn() && isValidId(pmId) &&
+                       isValidPrivateMessage(incoming()) &&
+                       request.auth.uid == existing().receiverId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isSignedIn() && isValidId(pmId) && (request.auth.uid in existing().participants || isAdmin());
+    }
+
+    // 11. Friendships (Strictly scoped to participants)
+    match /friendships/{friendshipId} {
+      allow get: if isSignedIn() && isValidId(friendshipId) && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && isValidId(friendshipId) &&
+                       isValidFriendship(incoming()) &&
+                       incoming().requesterId == request.auth.uid &&
+                       request.auth.uid in incoming().participants &&
+                       incoming().status == 'pending';
+      allow update: if isSignedIn() && isValidId(friendshipId) &&
+                       isValidFriendship(incoming()) &&
+                       isImmutableCreatedAt() &&
+                       request.auth.uid == existing().targetId &&
+                       existing().status == 'pending' &&
+                       incoming().status == 'accepted' &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(friendshipId) && request.auth.uid in existing().participants;
+    }
+
+    // 12. Personal Notifications
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && isValidId(notifId) && resource.data.recipientId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(notifId) &&
+                       isValidNotification(incoming()) &&
+                       incoming().senderId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(notifId) &&
+                       isValidNotification(incoming()) &&
+                       existing().recipientId == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isSignedIn() && isValidId(notifId) && (existing().recipientId == request.auth.uid || isAdmin());
+    }
+
+    // 13. Gift Transactions
+    match /gifts/{giftTxId} {
+      allow get: if isSignedIn() && isValidId(giftTxId) &&
+                    (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid || resource.data.isPublic == true);
+      allow list: if isSignedIn() && resource.data.isPublic == true;
+      allow create: if isSignedIn() && isValidId(giftTxId) &&
+                       isValidGiftTransaction(incoming()) &&
+                       incoming().senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // 14. Reports
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (resource.data.reporterId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.reporterId == request.auth.uid || isSupremeOwner());
+      allow create: if isSignedIn() && isValidId(reportId) &&
+                       isValidReport(incoming()) &&
+                       incoming().reporterId == request.auth.uid &&
+                       incoming().status == 'open';
+      allow update: if isSignedIn() && isValidId(reportId) && isAdmin() && isValidReport(incoming()) && isImmutableCreatedAt();
+      allow delete: if isSignedIn() && isValidId(reportId) && isAdmin();
+    }
+
+    // 15. Bans
+    match /bans/{banId} {
+      allow get: if isSignedIn() && isValidId(banId) && (resource.data.targetUserId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.targetUserId == request.auth.uid || isSupremeOwner());
+      allow create: if isSignedIn() && isValidId(banId) && isAdmin() && isValidBanRecord(incoming()) && incoming().targetUserId != request.auth.uid;
+      allow update: if isSignedIn() && isValidId(banId) && isAdmin() && isValidBanRecord(incoming()) && isImmutableCreatedAt();
+      allow delete: if isSignedIn() && isValidId(banId) && isAdmin();
+    }
+
+    // 16. Mutes
+    match /mutes/{muteId} {
+      allow get: if isSignedIn() && isValidId(muteId) && (resource.data.targetUserId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.targetUserId == request.auth.uid || isSupremeOwner());
+      allow create: if isSignedIn() && isValidId(muteId) && isAdmin() && isValidMuteRecord(incoming()) && incoming().targetUserId != request.auth.uid;
+      allow update: if isSignedIn() && isValidId(muteId) && isAdmin() && isValidMuteRecord(incoming()) && isImmutableCreatedAt();
+      allow delete: if isSignedIn() && isValidId(muteId) && isAdmin();
     }
   }
 }
