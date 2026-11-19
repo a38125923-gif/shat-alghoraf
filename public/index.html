@@ -252,7 +252,7 @@
         <!-- SLIDE-OVER ONLINE USERS DRAWER -->
         <aside id="usersSidePanel" class="users-side-panel">
           <div class="users-panel-head">
-            <span><i class="fa-solid fa-users"></i> المتواجدون (<span id="sideOnlineCount">0</span>)</span>
+            <span><i class="fa-solid fa-users"></i> المتواجدون (<span id="sideOnlineCount">0</span>/<span id="sideTotalCount">0</span>)</span>
             <button type="button" id="closeUsersSideBtn" class="close-side-btn"><i class="fa-solid fa-xmark"></i></button>
           </div>
           <div id="roomUsersList" class="users-list"></div>
@@ -327,7 +327,7 @@
           </div>
         </div>
 
-        <input type="file" id="chatImageFileInput" accept="image/*,image/gif" class="hidden" />
+        <input type="file" id="chatImageFileInput" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
       </section>
 
       <!-- FIXED DARK CHARCOAL FOOTER BAR (#18181b) -->
@@ -460,8 +460,8 @@
               <i class="fa-solid fa-palette"></i>
             </button>
           </div>
-          <input type="file" id="custCoverFile" accept="image/*,image/gif" class="hidden" />
-          <input type="file" id="custAvatarFile" accept="image/*,image/gif" class="hidden" />
+          <input type="file" id="custCoverFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
+          <input type="file" id="custAvatarFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
         </div>
 
         <!-- SIDE-BY-SIDE 85x85 AVATAR + IDENTITY INFO -->
@@ -665,8 +665,40 @@
                   <input type="range" id="custFontSize" min="12" max="20" step="1" value="14" style="width:100%;padding:4px 0;" />
                 </div>
               </div>
+
+              <!-- ANIMATED NAME CONTROLS -->
+              <div class="name-anim-control-box" id="custNameAnimSection">
+                <div class="name-anim-box-head">
+                  <label><i class="fa-solid fa-wand-magic-sparkles" style="color:#7c3aed;"></i> حركة الاسم المتحركة في الغرف</label>
+                  <button type="button" id="custNameAnimOffBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-ban"></i> إيقاف الحركة</button>
+                </div>
+                <div class="form-grid-2" style="margin-top:6px;">
+                  <div>
+                    <label>نمط الحركة</label>
+                    <select id="custNameAnim">
+                      <option value="none">ثابت (بدون حركة)</option>
+                      <option value="pulse">نبض ملكي متوهج</option>
+                      <option value="color_wave">تموج ألوان الطيف</option>
+                      <option value="gradient_glow">بريق التدرج الذهبي</option>
+                      <option value="gentle_shake">اهتزاز خفيف جذاب</option>
+                      <option value="float_bounce">طفو وانسياب ناعم</option>
+                      <option value="neon_flicker">وميض النيون السريع</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>سرعة الحركة</label>
+                    <select id="custNameAnimSpeed">
+                      <option value="slow">بطيء (ناعم)</option>
+                      <option value="normal">متوسط (قياسي)</option>
+                      <option value="fast">سريع (نابض)</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="custNameAnimPills" class="name-anim-pills-row"></div>
+              </div>
+
               <div style="margin-top:8px;">
-                <button type="button" id="saveNameStyleQuickBtn" class="btn-primary btn-sm btn-full"><i class="fa-solid fa-check"></i> حفظ ألوان والخط وتطبيقها فوراً</button>
+                <button type="button" id="saveNameStyleQuickBtn" class="btn-primary btn-sm btn-full"><i class="fa-solid fa-check"></i> حفظ ألوان والخط والحركة وتطبيقها فوراً</button>
               </div>
               <div class="form-grid-2" style="margin-top:6px;">
                 <div>
@@ -811,7 +843,7 @@
             <input type="text" id="newsTitleInput" placeholder="عنوان الخبر..." maxlength="120" />
             <textarea id="newsContentInput" rows="3" placeholder="تفاصيل الخبر أو الإعلان..." maxlength="2000"></textarea>
             <div class="inline-row">
-              <input type="file" id="newsImageFile" accept="image/*,image/gif" />
+              <input type="file" id="newsImageFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
               <input type="text" id="newsImageUrl" placeholder="أو رابط صورة الخبر (اختياري)" />
             </div>
             <button type="button" id="submitNewsBtn" class="btn-primary"><i class="fa-solid fa-rocket"></i> نشر الخبر للجميع</button>

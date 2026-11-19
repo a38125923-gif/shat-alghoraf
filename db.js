@@ -937,6 +937,7 @@ function enqueueBatchDelete(colName, docIds) {
 // ==========================================
 const store = {
   usersById: new Map(),
+  guestsByKey: new Map(),
   ranksByKey: new Map(),
   siteSettings: { ...DEFAULT_SITE_SETTINGS },
   roomsById: new Map(),
@@ -1002,6 +1003,8 @@ function normalizeUserDoc(docId, data) {
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
     name_shine: String(data.name_shine || 'none'),
+    name_anim: String(data.name_anim || 'none'),
+    name_anim_speed: String(data.name_anim_speed || 'normal'),
     profile_bg_effect: String(data.profile_bg_effect || 'none'),
     vip_wings: data.vip_wings ? 1 : 0,
     profile_music: String(data.profile_music || ''),
@@ -1036,6 +1039,40 @@ function normalizeUserDoc(docId, data) {
   };
 }
 
+function normalizeGuestDoc(docId, data = {}) {
+  const rawKey = String(data.key || docId || '').replace(/^guest_/, 'guest:');
+  const key = rawKey.startsWith('guest:') ? rawKey : `guest:${rawKey}`;
+  const cleanName = String(data.name || data.display_name || 'زائر').trim().slice(0, 24) || 'زائر';
+  return {
+    key,
+    isGuest: true,
+    name: cleanName,
+    display_name: cleanName,
+    username: cleanName,
+    role: 'guest',
+    name_color: String(data.name_color || '#0f172a'),
+    text_color: String(data.text_color || '#111827'),
+    name_bg_color: String(data.name_bg_color || ''),
+    neon_color: String(data.neon_color || ''),
+    font_family: String(data.font_family || 'Normal'),
+    font_style: String(data.font_style || 'Normal'),
+    font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
+    avatar_url: String(data.avatar_url || ''),
+    cover_url: String(data.cover_url || ''),
+    avatar_frame: String(data.avatar_frame || 'none'),
+    nameplate_style: String(data.nameplate_style || 'default'),
+    name_shine: String(data.name_shine || 'none'),
+    name_anim: String(data.name_anim || 'none'),
+    name_anim_speed: String(data.name_anim_speed || 'normal'),
+    vip_wings: data.vip_wings ? 1 : 0,
+    bio: String(data.bio || ''),
+    last_ip: String(data.last_ip || ''),
+    last_device_id: String(data.last_device_id || ''),
+    last_seen_at: String(data.last_seen_at || data.created_at || nowIso()),
+    created_at: String(data.created_at || nowIso())
+  };
+}
+
 function normalizeMessageDoc(docId, data) {
   const numericId = Number(data.id) || Number(docId) || 0;
   return {
@@ -1056,6 +1093,8 @@ function normalizeMessageDoc(docId, data) {
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
     name_shine: String(data.name_shine || 'none'),
+    name_anim: String(data.name_anim || 'none'),
+    name_anim_speed: String(data.name_anim_speed || 'normal'),
     vip_wings: data.vip_wings ? 1 : 0,
     is_admin_notice: Boolean(data.is_admin_notice),
     is_gift: Boolean(data.is_gift),
@@ -1214,6 +1253,23 @@ function attachRealtimeListeners() {
       }
       if (initialUsersReady && hooks.onUsersChanged) hooks.onUsersChanged();
       initialUsersReady = true;
+    })
+  );
+
+  let initialGuestsReady = false;
+  unsubscribers.push(
+    fsListen('guests', (changes) => {
+      for (const ch of changes) {
+        const d = ch.data || {};
+        const g = normalizeGuestDoc(ch.id, d);
+        if (ch.type === 'removed') {
+          store.guestsByKey.delete(g.key);
+        } else {
+          store.guestsByKey.set(g.key, g);
+        }
+      }
+      if (initialGuestsReady && hooks.onUsersChanged) hooks.onUsersChanged();
+      initialGuestsReady = true;
     })
   );
 
@@ -1448,6 +1504,7 @@ async function init(eventHooks = {}) {
     const fetchAllCollections = () =>
       Promise.all([
         fsGetAll('users'),
+        fsGetAll('guests'),
         fsGetAll('ranks'),
         fsGetAll('settings'),
         fsGetAll('rooms'),
@@ -1476,6 +1533,7 @@ async function init(eventHooks = {}) {
 
     const [
       usersDocs,
+      guestsDocs,
       ranksDocs,
       settingsDocs,
       roomsDocs,
@@ -1504,6 +1562,11 @@ async function init(eventHooks = {}) {
       const u = normalizeUserDoc(d.id, d.data);
       store.usersById.set(u.id, u);
       store.counters.users = Math.max(store.counters.users, u.id);
+    }
+
+    for (const d of guestsDocs) {
+      const g = normalizeGuestDoc(d.id, d.data);
+      store.guestsByKey.set(g.key, g);
     }
 
     for (const d of ranksDocs) {
@@ -1686,6 +1749,7 @@ function getStorageStatus() {
     initialized,
     counts: {
       users: store.usersById.size,
+      guests: store.guestsByKey.size,
       messages: store.messagesById.size,
       rooms: store.roomsById.size,
       ranks: store.ranksByKey.size,
@@ -2116,6 +2180,8 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
     avatar_frame: role === 'site_owner' ? 'kings_crown' : 'none',
     nameplate_style: role === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
+    name_anim: 'none',
+    name_anim_speed: 'normal',
     profile_bg_effect: role === 'site_owner' ? 'aurora_glow' : 'none',
     vip_wings: role === 'site_owner' ? 1 : 0,
     profile_music: '',
@@ -2388,6 +2454,8 @@ function updateUserCustomization(
     avatarFrame,
     nameplateStyle,
     nameShine,
+    nameAnim,
+    nameAnimSpeed,
     profileBgEffect,
     vipWings,
     profileMusic,
@@ -2427,6 +2495,8 @@ function updateUserCustomization(
     avatar_frame: avatarFrame !== undefined ? avatarFrame || 'none' : current.avatar_frame || 'none',
     nameplate_style: nameplateStyle !== undefined ? nameplateStyle || 'default' : current.nameplate_style || 'default',
     name_shine: nameShine !== undefined ? String(nameShine || 'none').trim().slice(0, 30) : current.name_shine || 'none',
+    name_anim: nameAnim !== undefined ? String(nameAnim || 'none').trim().slice(0, 30) : current.name_anim || 'none',
+    name_anim_speed: nameAnimSpeed !== undefined ? String(nameAnimSpeed || 'normal').trim().slice(0, 16) : current.name_anim_speed || 'normal',
     profile_bg_effect:
       profileBgEffect !== undefined ? String(profileBgEffect || 'none').trim().slice(0, 36) : current.profile_bg_effect || 'none',
     vip_wings: vipWings !== undefined ? (vipWings ? 1 : 0) : current.vip_wings ? 1 : 0,
@@ -2483,6 +2553,8 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     avatar_frame: safeRole === 'site_owner' ? 'kings_crown' : 'none',
     nameplate_style: safeRole === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
+    name_anim: 'none',
+    name_anim_speed: 'normal',
     profile_bg_effect: safeRole === 'site_owner' ? 'aurora_glow' : 'none',
     vip_wings: safeRole === 'site_owner' ? 1 : 0,
     profile_music: '',
@@ -2648,6 +2720,64 @@ function getAllRegisteredUsers() {
       return safe;
     })
     .sort((a, b) => getRankSortWeight(b.role) - getRankSortWeight(a.role) || a.id - b.id);
+}
+
+// ==========================================
+// PERSISTENT GUESTS HELPERS
+// ==========================================
+function upsertGuest({ key, name, ipAddress = '', deviceId = '', nameColor, textColor, nameBgColor, neonColor, fontFamily, fontStyle, fontSize, avatarUrl, avatarFrame, nameplateStyle, nameShine, nameAnim, nameAnimSpeed, bio } = {}) {
+  if (!key || !String(key).startsWith('guest:')) return null;
+  const existing = store.guestsByKey.get(key);
+  const cleanName = name !== undefined && String(name).trim()
+    ? String(name).trim().slice(0, 24)
+    : existing?.name || 'زائر';
+  const now = nowIso();
+  const docObj = normalizeGuestDoc(key, {
+    ...(existing || {}),
+    key,
+    name: cleanName,
+    display_name: cleanName,
+    username: cleanName,
+    name_color: nameColor !== undefined ? nameColor : existing?.name_color || '#0f172a',
+    text_color: textColor !== undefined ? textColor : existing?.text_color || '#111827',
+    name_bg_color: nameBgColor !== undefined ? nameBgColor : existing?.name_bg_color || '',
+    neon_color: neonColor !== undefined ? neonColor : existing?.neon_color || '',
+    font_family: fontFamily !== undefined ? fontFamily : existing?.font_family || 'Normal',
+    font_style: fontStyle !== undefined ? fontStyle : existing?.font_style || 'Normal',
+    font_size: fontSize !== undefined ? fontSize : existing?.font_size || 14,
+    avatar_url: avatarUrl !== undefined ? avatarUrl : existing?.avatar_url || '',
+    avatar_frame: avatarFrame !== undefined ? avatarFrame : existing?.avatar_frame || 'none',
+    nameplate_style: nameplateStyle !== undefined ? nameplateStyle : existing?.nameplate_style || 'default',
+    name_shine: nameShine !== undefined ? nameShine : existing?.name_shine || 'none',
+    name_anim: nameAnim !== undefined ? nameAnim : existing?.name_anim || 'none',
+    name_anim_speed: nameAnimSpeed !== undefined ? nameAnimSpeed : existing?.name_anim_speed || 'normal',
+    bio: bio !== undefined ? bio : existing?.bio || '',
+    last_ip: ipAddress || existing?.last_ip || '',
+    last_device_id: deviceId || existing?.last_device_id || '',
+    last_seen_at: now,
+    created_at: existing?.created_at || now
+  });
+  store.guestsByKey.set(docObj.key, docObj);
+  enqueueSet('guests', safeDocId(docObj.key), docObj, true);
+  return { ...docObj };
+}
+
+function findGuestByKey(key) {
+  if (!key) return null;
+  const g = store.guestsByKey.get(String(key));
+  return g ? { ...g } : null;
+}
+
+function getAllGuests() {
+  return [...store.guestsByKey.values()]
+    .map((g) => ({ ...g }))
+    .sort((a, b) => String(b.last_seen_at || '').localeCompare(String(a.last_seen_at || '')));
+}
+
+function updateGuestCustomization(key, patch = {}) {
+  const existing = store.guestsByKey.get(String(key));
+  if (!existing) return null;
+  return upsertGuest({ key: existing.key, ...patch });
 }
 
 // ==========================================
@@ -2975,6 +3105,8 @@ function addMessage({
   avatarFrame,
   nameplateStyle,
   nameShine,
+  nameAnim,
+  nameAnimSpeed,
   vipWings,
   isAdminNotice,
   isGift,
@@ -3009,6 +3141,8 @@ function addMessage({
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
     name_shine: nameShine || 'none',
+    name_anim: nameAnim || 'none',
+    name_anim_speed: nameAnimSpeed || 'normal',
     vip_wings: vipWings ? 1 : 0,
     is_admin_notice: Boolean(isAdminNotice),
     is_gift: Boolean(isGift),
@@ -3815,6 +3949,10 @@ module.exports = {
   updateUserRole,
   forceChangeUserDisplayName,
   getAllRegisteredUsers,
+  upsertGuest,
+  findGuestByKey,
+  getAllGuests,
+  updateGuestCustomization,
   getAllRooms,
   getRoomById,
   getRoomStaff,

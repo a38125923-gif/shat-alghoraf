@@ -3,6 +3,17 @@
   const ROOM_KEY = 'arabic_chat_room_v3';
   const DEVICE_ID_KEY = 'arabic_chat_device_id_v1';
   const REF_KEY = 'arabic_chat_ref_v1';
+  const GUEST_PROFILE_KEY = 'arabic_chat_guest_profile_v1';
+
+  const NAME_ANIM_OPTIONS = [
+    { id: 'none', label: 'ثابت (بدون حركة)' },
+    { id: 'pulse', label: 'نبض ملكي' },
+    { id: 'color_wave', label: 'تموج ألوان الطيف' },
+    { id: 'gradient_glow', label: 'تدرج ذهبي' },
+    { id: 'gentle_shake', label: 'اهتزاز خفيف' },
+    { id: 'float_bounce', label: 'طفو ناعم' },
+    { id: 'neon_flicker', label: 'وميض النيون' }
+  ];
 
   function getOrCreateDeviceId() {
     let did = localStorage.getItem(DEVICE_ID_KEY);
@@ -446,6 +457,8 @@
     const role = userObj.sender_role || userObj.role || 'member';
     const isQuizBot = uKey === 'system:quizbot' || uKey === 'system:official';
     const shine = userObj.name_shine || userObj.nameShine || 'none';
+    const nameAnim = userObj.name_anim || userObj.nameAnim || 'none';
+    const nameAnimSpeed = userObj.name_anim_speed || userObj.nameAnimSpeed || 'normal';
     const wings = Boolean(userObj.vip_wings || userObj.vipWings);
     const nameplate = userObj.nameplate_style || userObj.nameplateStyle || 'default';
     const nameColor = userObj.name_color || userObj.nameColor || '#111827';
@@ -458,6 +471,10 @@
     const classes = ['sender-name-btn'];
     if (nameplate && nameplate !== 'default') classes.push(`nameplate-${nameplate}`);
     if (shine && shine !== 'none') classes.push(`shine-${shine}`);
+    if (nameAnim && nameAnim !== 'none') {
+      classes.push(`name-anim-${nameAnim}`);
+      classes.push(`name-anim-speed-${nameAnimSpeed}`);
+    }
 
     const styles = [];
     if (shine === 'none') styles.push(`color:${escapeHtml(nameColor)}`);
@@ -493,7 +510,7 @@
       ? '<span class="room-king-badge" title="الأكثر تفاعلاً في الغرفة"><i class="fa-solid fa-crown"></i> ملك الغرفة</span>'
       : '';
 
-    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
+    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span class="name-anim-text">${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
   }
 
   function frameOrnamentHtml(frame) {
@@ -1244,6 +1261,8 @@
       avatarFrame: msg.avatar_frame,
       nameplateStyle: msg.nameplate_style,
       nameShine: msg.name_shine,
+      nameAnim: msg.name_anim || 'none',
+      nameAnimSpeed: msg.name_anim_speed || 'normal',
       vipWings: msg.vip_wings,
       nameColor: msg.name_color,
       nameBgColor: msg.name_bg_color,
@@ -1273,6 +1292,10 @@
             <div class="msg-actions-wrap">
               <button type="button" class="msg-dots-btn" title="خيارات الرسالة والعضو"><i class="fa-solid fa-ellipsis-vertical"></i></button>
               <div class="msg-dots-menu hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:800;font-size:12.5px;">
+                  <span>خيارات: ${escapeHtml(msg.sender_name || 'العضو')}</span>
+                  <button type="button" class="btn-secondary btn-xs msg-dots-close-btn" style="padding:2px 8px;min-height:24px;">✕</button>
+                </div>
                 <button type="button" data-msg-act="mention"><i class="fa-solid fa-bullhorn"></i> نداء العضو</button>
                 ${!isMe ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
                 <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
@@ -1315,6 +1338,10 @@
       const willOpen = dotsMenu.classList.contains('hidden');
       document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
       if (willOpen) dotsMenu.classList.remove('hidden');
+    });
+    dotsMenu.querySelector('.msg-dots-close-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dotsMenu.classList.add('hidden');
     });
     dotsMenu.querySelectorAll('button[data-msg-act]').forEach((actBtn) => {
       actBtn.addEventListener('click', async (e) => {
@@ -1435,17 +1462,56 @@
 
   function renderRoomUsers() {
     const list = $('roomUsersList');
-    const count = state.roomUsers.length;
-    const boosted = Math.max(count, Number(state.currentRoom?.onlineCount || 0));
-    $('roomOnlineCounter').textContent = String(boosted);
-    $('sideOnlineCount').textContent = String(count);
+    if (!list) return;
 
-    list.innerHTML = state.roomUsers.map((u) => `
-      <div class="user-row-card" data-user-key="${escapeHtml(u.key)}">
-        <div class="user-row-avatar-btn" style="cursor:pointer" title="بطاقة العضو">${formatAvatarHTML(u, 'sm')}</div>
+    const mergedMap = new Map();
+    for (const m of state.persistentMembers || []) {
+      if (!m || !m.key) continue;
+      mergedMap.set(m.key, { ...m, online: Boolean(m.online), inCurrentRoom: false });
+    }
+    for (const ou of state.onlineUsers || []) {
+      if (!ou || !ou.key) continue;
+      const prev = mergedMap.get(ou.key) || {};
+      mergedMap.set(ou.key, { ...prev, ...ou, online: true });
+    }
+    for (const ru of state.roomUsers || []) {
+      if (!ru || !ru.key) continue;
+      const prev = mergedMap.get(ru.key) || {};
+      mergedMap.set(ru.key, { ...prev, ...ru, online: true, inCurrentRoom: true });
+    }
+
+    const mergedUsers = Array.from(mergedMap.values()).sort((a, b) => {
+      const aOn = a.online ? 1 : 0;
+      const bOn = b.online ? 1 : 0;
+      if (bOn !== aOn) return bOn - aOn;
+      const aRm = a.inCurrentRoom ? 1 : 0;
+      const bRm = b.inCurrentRoom ? 1 : 0;
+      if (bRm !== aRm) return bRm - aRm;
+      const pDiff = (Number(getRank(b.role)?.power) || 0) - (Number(getRank(a.role)?.power) || 0);
+      if (pDiff !== 0) return pDiff;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+    });
+
+    const onlineCount = mergedUsers.filter((u) => u.online).length;
+    const roomOnlineCount = state.roomUsers.length;
+    const boosted = Math.max(roomOnlineCount, Number(state.currentRoom?.onlineCount || 0));
+    if ($('roomOnlineCounter')) $('roomOnlineCounter').textContent = String(boosted);
+    if ($('sideOnlineCount')) $('sideOnlineCount').textContent = String(onlineCount);
+    if ($('sideTotalCount')) $('sideTotalCount').textContent = String(mergedUsers.length);
+
+    list.innerHTML = mergedUsers.map((u) => `
+      <div class="user-row-card ${u.online ? 'is-online' : 'is-offline'}" data-user-key="${escapeHtml(u.key)}">
+        <div class="user-row-avatar-btn" style="cursor:pointer" title="بطاقة العضو">
+          ${formatAvatarHTML(u, 'sm')}
+          <span class="member-presence-dot ${u.online ? 'online' : 'offline'}" title="${u.online ? 'متصل الآن' : 'غير متصل'}"></span>
+        </div>
         <div class="user-row-info">
           <div class="user-row-name user-row-name-btn" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u)}</div>
-          <div>${roleBadgeHTML(u.role)} <span class="muted">🔥${u.activityPoints || 0}</span></div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px;">
+            ${roleBadgeHTML(u.role)}
+            <span class="user-status-chip ${u.online ? 'online' : 'offline'}">${u.online ? '🟢 متصل' : '⚪ غير متصل'}</span>
+            <span class="muted">🔥${u.activityPoints || 0}</span>
+          </div>
         </div>
         <div class="user-row-actions">
           <button type="button" class="user-mini-ping-btn" title="نداء العضو"><i class="fa-solid fa-bullhorn"></i></button>
@@ -1454,7 +1520,7 @@
     `).join('');
 
     list.querySelectorAll('.user-row-card').forEach((card) => {
-      const u = state.roomUsers.find((x) => x.key === card.dataset.userKey);
+      const u = mergedUsers.find((x) => x.key === card.dataset.userKey);
       if (!u) return;
       card.querySelector('.user-row-avatar-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1502,6 +1568,8 @@
       avatar_frame: u.avatarFrame,
       nameplate_style: u.nameplateStyle,
       name_shine: u.nameShine,
+      name_anim: u.nameAnim || 'none',
+      name_anim_speed: u.nameAnimSpeed || 'normal',
       vip_wings: u.vipWings,
       is_admin_notice: isAdminNotice,
       msg_type: 'text',
@@ -1579,6 +1647,10 @@
     const canKick = isOwner || state.isRoomManager || hasPerm('kick');
     const canRank = Boolean(targetUserId) && (isOwner || hasPerm('set_rank'));
     return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:800;font-size:13px;">
+        <span><i class="fa-solid fa-shield-halved" style="color:#b71c4a;"></i> خيارات الإدارة</span>
+        <button type="button" id="quModMenuCloseBtn" class="btn-secondary btn-xs" style="padding:2px 8px;min-height:24px;">✕</button>
+      </div>
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quWarnBtn"><i class="fa-solid fa-triangle-exclamation"></i><span>توجيه تحذير</span></button>' : ''}
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم مؤقت (15د)</span></button>' : ''}
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quUnmuteBtn"><i class="fa-solid fa-volume-high"></i><span>فك الكتم</span></button>' : ''}
@@ -1610,6 +1682,8 @@
     if (!u.vipFamily && liveMatch?.vipFamily) u.vipFamily = liveMatch.vipFamily;
     if (!u.coverUrl && liveMatch?.coverUrl) u.coverUrl = liveMatch.coverUrl;
     if (!u.profileBgEffect && liveMatch?.profileBgEffect) u.profileBgEffect = liveMatch.profileBgEffect;
+    if (!u.nameAnim && liveMatch?.nameAnim) u.nameAnim = liveMatch.nameAnim;
+    if (!u.nameAnimSpeed && liveMatch?.nameAnimSpeed) u.nameAnimSpeed = liveMatch.nameAnimSpeed;
 
     const isMe = state.user && u.key === state.user.key;
     if (isMe && !state.user?.isGuest) {
@@ -1655,9 +1729,6 @@
                 <button type="button" class="hero-circle-glass-btn" id="quModMenuToggleBtn" title="خيارات الإدارة">
                   <i class="fa-solid fa-bars"></i>
                 </button>
-                <div id="quModMenuDropdown" class="mod-menu-dropdown hidden">
-                  ${renderModMenuItemsHTML(u, targetUserId, isOwner, canMod, canBan)}
-                </div>
               </div>
             ` : ''}
             ${hasMusic ? `<button type="button" class="hero-circle-glass-btn" id="quMusicToggleBtn" title="موسيقى البروفايل"><i class="fa-solid fa-music"></i></button>` : ''}
@@ -1771,6 +1842,11 @@
             ` : ''}
           </div>
         </div>
+        ${(canMod || canBan || isOwner) && !isTargetOwner ? `
+          <div id="quModMenuDropdown" class="mod-menu-dropdown hidden">
+            ${renderModMenuItemsHTML(u, targetUserId, isOwner, canMod, canBan)}
+          </div>
+        ` : ''}
       </div>
     `;
 
@@ -1782,6 +1858,10 @@
     $('quModMenuToggleBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       $('quModMenuDropdown')?.classList.toggle('hidden');
+    });
+    $('quModMenuCloseBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      $('quModMenuDropdown')?.classList.add('hidden');
     });
     $('quOpenModDrawerInsideBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2145,6 +2225,9 @@
       $('custFontSize').value = String(fsz);
       if ($('custFontSizeVal')) $('custFontSizeVal').textContent = String(fsz);
     }
+    if ($('custNameAnim')) $('custNameAnim').value = u.nameAnim || 'none';
+    if ($('custNameAnimSpeed')) $('custNameAnimSpeed').value = u.nameAnimSpeed || 'normal';
+    renderCustNameAnimPills();
     $('custVipWingsToggle').checked = Boolean(u.vipWings);
 
     if ($('custAllowCallsToggle')) $('custAllowCallsToggle').checked = u.allowCalls !== false;
@@ -2400,9 +2483,28 @@
     });
   }
 
+  function renderCustNameAnimPills() {
+    const box = $('custNameAnimPills');
+    if (!box) return;
+    const current = $('custNameAnim')?.value || 'none';
+    box.innerHTML = NAME_ANIM_OPTIONS.map((opt) => `
+      <button type="button" class="name-anim-pill-btn${current === opt.id ? ' active' : ''}" data-anim-id="${opt.id}">
+        ${escapeHtml(opt.label)}
+      </button>
+    `).join('');
+    box.querySelectorAll('.name-anim-pill-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if ($('custNameAnim')) $('custNameAnim').value = btn.dataset.animId;
+        updateCustomizePreview();
+      });
+    });
+  }
+
   function updateCustomizePreview() {
     const u = state.user;
     if (!u) return;
+    const selectedAnim = $('custNameAnim') ? $('custNameAnim').value : (u.nameAnim || 'none');
+    const selectedSpeed = $('custNameAnimSpeed') ? $('custNameAnimSpeed').value : (u.nameAnimSpeed || 'normal');
     const previewObj = {
       ...u,
       name: $('custDisplayName').value.trim() || u.name,
@@ -2412,6 +2514,8 @@
       fontFamily: $('custFontFamily').value,
       fontStyle: $('custFontStyle').value,
       fontSize: $('custFontSize') ? Number($('custFontSize').value) : (u.fontSize || 14),
+      nameAnim: selectedAnim,
+      nameAnimSpeed: selectedSpeed,
       vipWings: $('custVipWingsToggle').checked
     };
     if ($('custFontSizeVal') && $('custFontSize')) {
@@ -2484,6 +2588,9 @@
         </div>
       `;
     }
+    $('custNameAnimPills')?.querySelectorAll('.name-anim-pill-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.animId === selectedAnim);
+    });
     renderNameColorSwatches();
   }
 
@@ -2517,6 +2624,8 @@
           fontFamily: $('custFontFamily').value,
           fontStyle: $('custFontStyle').value,
           fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
+          nameAnim: $('custNameAnim')?.value || 'none',
+          nameAnimSpeed: $('custNameAnimSpeed')?.value || 'normal',
           vipWings: $('custVipWingsToggle').checked,
           profileMusic
         }
@@ -3200,6 +3309,10 @@
                 <div class="wall-post-menu-wrap">
                   <button type="button" class="msg-dots-btn wall-dots-btn"><i class="fa-solid fa-ellipsis"></i></button>
                   <div class="msg-dots-menu hidden">
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:800;font-size:12.5px;">
+                      <span>خيارات المنشور</span>
+                      <button type="button" class="btn-secondary btn-xs msg-dots-close-btn" style="padding:2px 8px;min-height:24px;">✕</button>
+                    </div>
                     <button type="button" data-wall-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
                     <button type="button" data-wall-act="report"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ</button>
                     ${canDel ? '<button type="button" class="danger" data-wall-act="delete"><i class="fa-solid fa-trash"></i> حذف المنشور</button>' : ''}
@@ -3323,7 +3436,13 @@
       const dotsMenu = card.querySelector('.msg-dots-menu');
       dotsBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
-        dotsMenu.classList.toggle('hidden');
+        const willOpen = dotsMenu.classList.contains('hidden');
+        document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
+        if (willOpen) dotsMenu.classList.remove('hidden');
+      });
+      dotsMenu?.querySelector('.msg-dots-close-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dotsMenu.classList.add('hidden');
       });
       dotsMenu?.querySelectorAll('button[data-wall-act]').forEach((actBtn) => {
         actBtn.addEventListener('click', async () => {
@@ -3637,7 +3756,7 @@
             </div>
           </div>
           <div class="inline-row">
-            <input type="file" id="rkIconFile" accept="image/*" />
+            <input type="file" id="rkIconFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
             <input type="text" id="rkImgUrl" value="${escapeHtml(editRk?.image_url || '')}" placeholder="أو رابط صورة أيقونة صغيرة للرتبة" style="flex:1" />
           </div>
           <div>
@@ -3804,7 +3923,7 @@
             </select>
           </div>
           <div class="inline-row" style="flex-wrap:wrap;">
-            <input type="file" id="admRoomWallpaperFile" accept="image/*" />
+            <input type="file" id="admRoomWallpaperFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
             <input type="text" id="admRoomWallpaperUrl" value="${escapeHtml(editRm?.wallpaper_url || '')}" placeholder="رابط صورة خلفية الغرفة (اختياري)" style="flex:1" />
             <label class="switch-label"><input type="checkbox" id="admRoomMicsEnabled" ${!editRm || editRm.mics_enabled !== 0 ? 'checked' : ''} /><span>🎙️ تفعيل المايكات</span></label>
           </div>
@@ -3943,7 +4062,7 @@
           <input type="text" id="admNewsTitle" placeholder="عنوان الخبر" />
           <textarea id="admNewsContent" rows="3" placeholder="تفاصيل الخبر..."></textarea>
           <div class="inline-row">
-            <input type="file" id="admNewsFile" accept="image/*" />
+            <input type="file" id="admNewsFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
             <button type="button" id="admNewsPublishBtn" class="btn-primary btn-sm" ${!canPub ? 'disabled' : ''}>🚀 نشر</button>
           </div>
         </div>
@@ -4035,7 +4154,7 @@
           <strong>➕ إضافة إيموجي / ملصق مخصص</strong>
           <div class="inline-row">
             <input type="text" id="admEmojiCode" placeholder="الكود مثال: :وردة:" />
-            <input type="file" id="admEmojiFile" accept="image/*" />
+            <input type="file" id="admEmojiFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
             <button type="button" id="admAddEmojiBtn" class="btn-primary btn-sm">رفع وإضافة</button>
           </div>
         </div>
@@ -4462,9 +4581,40 @@
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000
+      reconnectionDelayMax: 6000,
+      timeout: 20000
     });
     state.socket = socket;
+
+    socket.on('connect', () => {
+      socket.emit('heartbeat', { ts: Date.now() });
+    });
+
+    socket.io.on('reconnect_attempt', () => {
+      socket.auth = {
+        token: state.token,
+        roomId: state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general',
+        deviceId: state.deviceId
+      };
+    });
+
+    if (!state.reconnectBound) {
+      state.reconnectBound = true;
+      const recoverConnection = () => {
+        if (state.token && state.user && state.socket && !state.socket.connected) {
+          state.socket.auth = {
+            token: state.token,
+            roomId: state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general',
+            deviceId: state.deviceId
+          };
+          state.socket.connect();
+        }
+      };
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') recoverConnection();
+      });
+      window.addEventListener('online', recoverConnection);
+    }
 
     // 10-second continuous heartbeat
     state.heartbeatTimer = setInterval(() => {
@@ -4492,6 +4642,7 @@
       applySiteSettings(data.settings);
       updateNotificationBadge(data.unreadNotifCount || 0);
       renderUserIdentity();
+      renderRoomUsers();
 
       if (!state.deepLinkHandled) {
         state.deepLinkHandled = true;
@@ -4550,10 +4701,12 @@
 
     socket.on('online_users_global', (list) => {
       state.onlineUsers = list || [];
+      renderRoomUsers();
     });
 
     socket.on('persistent_members', (list) => {
       state.persistentMembers = list || [];
+      renderRoomUsers();
     });
 
     socket.on('new_message', (msg) => {
@@ -4819,6 +4972,9 @@
     state.user = user;
     state.token = token;
     localStorage.setItem(TOKEN_KEY, token);
+    if (user?.isGuest && user?.key) {
+      localStorage.setItem(GUEST_PROFILE_KEY, JSON.stringify({ key: user.key, name: user.name || '' }));
+    }
     $('authView').classList.add('hidden');
     $('appView').classList.remove('hidden');
     connectSocket();
@@ -4828,7 +4984,14 @@
     stopLocalMicStream();
     closeAllMicPeers();
     if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
-    if (state.socket) state.socket.disconnect();
+    if (state.socket) {
+      try {
+        state.socket.emit('explicit_logout');
+      } catch {
+        // ignore
+      }
+      state.socket.disconnect();
+    }
     state.socket = null;
     state.user = null;
     state.token = '';
@@ -4941,7 +5104,20 @@
     $('guestForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        const res = await api('/api/guest', { method: 'POST', body: { name: $('guestName').value } });
+        let savedGuestKey = '';
+        try {
+          const saved = JSON.parse(localStorage.getItem(GUEST_PROFILE_KEY) || 'null');
+          if (saved && saved.key) savedGuestKey = String(saved.key);
+        } catch {
+          // ignore
+        }
+        const res = await api('/api/guest', {
+          method: 'POST',
+          body: { name: $('guestName').value, guestKey: savedGuestKey }
+        });
+        if (res?.user?.key) {
+          localStorage.setItem(GUEST_PROFILE_KEY, JSON.stringify({ key: res.user.key, name: res.user.name }));
+        }
         enterApp(res.user, res.token);
       } catch (err) {
         $('authError').textContent = err.message;
@@ -5359,9 +5535,14 @@
     $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
       b.addEventListener('click', () => switchNameStyleTab(b.dataset.namestyleTab));
     });
-    ['custDisplayName', 'custBioInput', 'custNameColor', 'custTextColor', 'custFontFamily', 'custFontStyle', 'custFontSize', 'custVipWingsToggle'].forEach((id) => {
+    ['custDisplayName', 'custBioInput', 'custNameColor', 'custTextColor', 'custFontFamily', 'custFontStyle', 'custFontSize', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'].forEach((id) => {
       $(id)?.addEventListener('input', updateCustomizePreview);
       $(id)?.addEventListener('change', updateCustomizePreview);
+    });
+    $('custNameAnimOffBtn')?.addEventListener('click', () => {
+      if ($('custNameAnim')) $('custNameAnim').value = 'none';
+      updateCustomizePreview();
+      showToast('تم اختيار وضع الاسم الثابت (اضغط حفظ لتثبيت التعديل).');
     });
     $('custNameBgColor').addEventListener('input', () => {
       $('custNameBgColor').dataset.cleared = '0';
@@ -5559,14 +5740,26 @@
       if (!e.target.closest('.plus-menu-wrap')) $('plusDropdown').classList.add('hidden');
       if (!e.target.closest('#emojiPopover') && !e.target.closest('#emojiPickerBtn')) $('emojiPopover').classList.add('hidden');
       if (!e.target.closest('#radioPopover') && !e.target.closest('#footerRadioSwitchBtn')) $('radioPopover')?.classList.add('hidden');
-      if (!e.target.closest('.mod-menu-wrap')) document.querySelectorAll('.mod-menu-dropdown').forEach((m) => m.classList.add('hidden'));
-      if (!e.target.closest('.msg-actions-wrap')) document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
+      if (!e.target.closest('.mod-menu-wrap') && !e.target.closest('#quModMenuDropdown') && !e.target.closest('#quOpenModDrawerInsideBtn')) {
+        document.querySelectorAll('.mod-menu-dropdown').forEach((m) => m.classList.add('hidden'));
+      }
+      if (!e.target.closest('.msg-actions-wrap') && !e.target.closest('.wall-post-menu-wrap')) {
+        document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
+      }
     });
   }
 
   async function bootstrap() {
     const refParam = new URLSearchParams(window.location.search).get('ref');
     if (refParam) localStorage.setItem(REF_KEY, String(refParam).trim());
+    try {
+      const savedGuest = JSON.parse(localStorage.getItem(GUEST_PROFILE_KEY) || 'null');
+      if (savedGuest?.name && $('guestName') && !$('guestName').value) {
+        $('guestName').value = savedGuest.name;
+      }
+    } catch {
+      // ignore
+    }
     bindEvents();
     try {
       const pub = await api('/api/settings/public');

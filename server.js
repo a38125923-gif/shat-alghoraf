@@ -56,6 +56,32 @@ const NAME_SHINES = [
   { id: 'royal_aura', label: 'هالة البنفسج الملكية', previewColor: '#c084fc' }
 ];
 
+const NAME_ANIMATIONS = [
+  { id: 'none', label: 'ثابت (بدون حركة)' },
+  { id: 'pulse', label: 'نبض ملكي متوهج' },
+  { id: 'color_wave', label: 'تموج ألوان الطيف' },
+  { id: 'gradient_glow', label: 'بريق التدرج الذهبي' },
+  { id: 'gentle_shake', label: 'اهتزاز خفيف جذاب' },
+  { id: 'float_bounce', label: 'طفو وانسياب ناعم' },
+  { id: 'neon_flicker', label: 'وميض النيون السريع' }
+];
+
+const NAME_ANIM_SPEEDS = [
+  { id: 'slow', label: 'بطيء' },
+  { id: 'normal', label: 'متوسط' },
+  { id: 'fast', label: 'سريع' }
+];
+
+function normalizeNameAnim(val) {
+  const clean = String(val || 'none').trim();
+  return NAME_ANIMATIONS.some((a) => a.id === clean) ? clean : 'none';
+}
+
+function normalizeNameAnimSpeed(val) {
+  const clean = String(val || 'normal').trim();
+  return NAME_ANIM_SPEEDS.some((s) => s.id === clean) ? clean : 'normal';
+}
+
 const PROFILE_BG_EFFECTS = [
   { id: 'none', label: 'بدون خلفية متحركة', preview: '#1e293b' },
   { id: 'animated_flames', label: 'لهب ذهبي متوهج', preview: '#ea580c' },
@@ -250,6 +276,8 @@ function mapUserRow(u) {
     avatarFrame: u.avatar_frame || 'none',
     nameplateStyle: u.nameplate_style || 'default',
     nameShine: u.name_shine || 'none',
+    nameAnim: normalizeNameAnim(u.name_anim),
+    nameAnimSpeed: normalizeNameAnimSpeed(u.name_anim_speed),
     profileBgEffect: u.profile_bg_effect || 'none',
     vipWings: Boolean(u.vip_wings),
     profileMusic: u.profile_music || '',
@@ -278,6 +306,45 @@ function mapUserRow(u) {
   };
 }
 
+function mapGuestRow(g, fallbackKey = '', fallbackName = 'زائر') {
+  const key = g?.key || fallbackKey;
+  const name = g?.name || fallbackName || 'زائر';
+  return {
+    key,
+    userId: null,
+    isGuest: true,
+    name,
+    displayName: g?.display_name || name,
+    username: g?.username || name,
+    role: 'guest',
+    rank: db.getRankByKey('guest'),
+    nameColor: g?.name_color || '#0f172a',
+    textColor: g?.text_color || '#111827',
+    nameBgColor: g?.name_bg_color || '',
+    neonColor: g?.neon_color || '',
+    fontFamily: g?.font_family || 'Normal',
+    fontStyle: g?.font_style || 'Normal',
+    fontSize: Math.max(12, Math.min(20, Number(g?.font_size) || 14)),
+    avatarUrl: g?.avatar_url || '',
+    coverUrl: g?.cover_url || '',
+    avatarFrame: g?.avatar_frame || 'none',
+    nameplateStyle: g?.nameplate_style || 'default',
+    nameShine: g?.name_shine || 'none',
+    nameAnim: normalizeNameAnim(g?.name_anim),
+    nameAnimSpeed: normalizeNameAnimSpeed(g?.name_anim_speed),
+    profileBgEffect: 'none',
+    vipWings: Boolean(g?.vip_wings),
+    profileMusic: '',
+    bio: g?.bio || '',
+    coins: 0,
+    vipFamily: '',
+    isStealth: false,
+    activityPoints: 0,
+    giftsReceived: 0,
+    giftsSent: 0
+  };
+}
+
 function resolveAuthFromRequest(req) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
@@ -285,36 +352,9 @@ function resolveAuthFromRequest(req) {
   if (!payload) return null;
 
   if (payload.isGuest) {
-    return {
-      key: payload.key,
-      userId: null,
-      isGuest: true,
-      name: payload.name || 'زائر',
-      displayName: payload.name || 'زائر',
-      username: payload.name || 'زائر',
-      role: 'guest',
-      rank: db.getRankByKey('guest'),
-      nameColor: '#ffffff',
-      textColor: '#ffffff',
-      nameBgColor: '',
-      neonColor: '',
-      fontFamily: 'Normal',
-      fontStyle: 'Normal',
-      fontSize: 14,
-      avatarUrl: '',
-      avatarFrame: 'none',
-      nameplateStyle: 'default',
-      nameShine: 'none',
-      vipWings: false,
-      profileMusic: '',
-      bio: '',
-      coins: 0,
-      vipFamily: '',
-      isStealth: false,
-      activityPoints: 0,
-      giftsReceived: 0,
-      giftsSent: 0
-    };
+    const saved = db.findGuestByKey(payload.key);
+    const guestObj = saved || db.upsertGuest({ key: payload.key, name: payload.name || 'زائر' });
+    return mapGuestRow(guestObj, payload.key, payload.name || 'زائر');
   }
 
   if (payload.userId) {
@@ -368,15 +408,34 @@ function requireOwner(req, res, next) {
 }
 
 // ==========================================
-// MULTER UPLOADS
+// MULTER UPLOADS (PRESERVE GIF / WEBP ANIMATIONS 100%)
 // ==========================================
-function makeUploader(subdir, allowedPrefix, maxBytes = 12 * 1024 * 1024) {
+const MIME_TO_EXT = {
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/png': '.png',
+  'image/apng': '.png',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/svg+xml': '.svg',
+  'audio/webm': '.webm',
+  'audio/ogg': '.ogg',
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/wav': '.wav'
+};
+
+function makeUploader(subdir, allowedPrefix, maxBytes = 15 * 1024 * 1024) {
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, path.join(UPLOAD_ROOT, subdir)),
     filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname || '').toLowerCase() || (allowedPrefix === 'audio/' ? '.webm' : '.png');
-      const safeExt = /^[.a-z0-9]{2,8}$/.test(ext) ? ext : '.bin';
-      cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${safeExt}`);
+      const mime = String(file.mimetype || '').toLowerCase();
+      const mimeExt = MIME_TO_EXT[mime] || '';
+      const origExt = path.extname(file.originalname || '').toLowerCase();
+      const ext = mime === 'image/gif' || mime === 'image/webp'
+        ? mimeExt
+        : (origExt && /^[.a-z0-9]{2,8}$/.test(origExt) ? origExt : mimeExt || (allowedPrefix === 'audio/' ? '.webm' : '.png'));
+      cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
     }
   });
   return multer({
@@ -389,14 +448,14 @@ function makeUploader(subdir, allowedPrefix, maxBytes = 12 * 1024 * 1024) {
   });
 }
 
-const uploadAvatar = makeUploader('avatars', 'image/', 8 * 1024 * 1024);
-const uploadCover = makeUploader('covers', 'image/', 10 * 1024 * 1024);
-const uploadImage = makeUploader('images', 'image/', 10 * 1024 * 1024);
-const uploadAudio = makeUploader('audio', 'audio/', 12 * 1024 * 1024);
-const uploadWallpaper = makeUploader('wallpapers', 'image/', 12 * 1024 * 1024);
-const uploadEmoji = makeUploader('emojis', 'image/', 4 * 1024 * 1024);
-const uploadRankIcon = makeUploader('rank_icons', 'image/', 3 * 1024 * 1024);
-const uploadNewsImg = makeUploader('news', 'image/', 10 * 1024 * 1024);
+const uploadAvatar = makeUploader('avatars', 'image/', 15 * 1024 * 1024);
+const uploadCover = makeUploader('covers', 'image/', 15 * 1024 * 1024);
+const uploadImage = makeUploader('images', 'image/', 15 * 1024 * 1024);
+const uploadAudio = makeUploader('audio', 'audio/', 15 * 1024 * 1024);
+const uploadWallpaper = makeUploader('wallpapers', 'image/', 15 * 1024 * 1024);
+const uploadEmoji = makeUploader('emojis', 'image/', 8 * 1024 * 1024);
+const uploadRankIcon = makeUploader('rank_icons', 'image/', 6 * 1024 * 1024);
+const uploadNewsImg = makeUploader('news', 'image/', 12 * 1024 * 1024);
 
 // ==========================================
 // REAL-TIME STATE MAPS
@@ -404,6 +463,7 @@ const uploadNewsImg = makeUploader('news', 'image/', 10 * 1024 * 1024);
 const onlineSockets = new Map(); // socketId -> user session entry
 const roomMics = new Map(); // roomId -> [slot1..slot5]
 const pendingGrace = new Map(); // key -> { timeout, lastRoomId }
+const recentRoomPresence = new Map(); // key -> { roomId, at }
 const roomActivitySpam = new Map(); // key -> { count, resetAt }
 const guestShadowMutedKeys = new Set();
 const guestFrozenKeys = new Set();
@@ -565,6 +625,8 @@ function getRoomUsersList(roomId) {
         avatarFrame: entry.avatarFrame,
         nameplateStyle: entry.nameplateStyle,
         nameShine: entry.nameShine || 'none',
+        nameAnim: entry.nameAnim || 'none',
+        nameAnimSpeed: entry.nameAnimSpeed || 'normal',
         profileBgEffect: entry.profileBgEffect || 'none',
         vipWings: Boolean(entry.vipWings),
         profileMusic: entry.profileMusic || '',
@@ -614,6 +676,8 @@ function buildGlobalOnlineUsers() {
       avatarFrame: entry.avatarFrame,
       nameplateStyle: entry.nameplateStyle,
       nameShine: entry.nameShine || 'none',
+      nameAnim: entry.nameAnim || 'none',
+      nameAnimSpeed: entry.nameAnimSpeed || 'normal',
       profileBgEffect: entry.profileBgEffect || 'none',
       vipWings: Boolean(entry.vipWings),
       profileMusic: entry.profileMusic || '',
@@ -644,13 +708,14 @@ function buildGlobalOnlineUsers() {
 }
 
 function buildPersistentMembersList() {
-  const onlineKeys = new Set();
+  const onlineByKey = new Map();
   for (const entry of onlineSockets.values()) {
-    if (!isStealthEntry(entry)) onlineKeys.add(entry.key);
+    if (!isStealthEntry(entry)) onlineByKey.set(entry.key, entry);
   }
-  return db.getAllRegisteredUsers().map((u) => {
+  const registered = db.getAllRegisteredUsers().map((u) => {
     const key = `user:${u.id}`;
     const isStealth = isUserStealth(u);
+    const live = onlineByKey.get(key);
     const ratingCount = Number(u.rating_count) || 0;
     const ratingAvg = ratingCount > 0 ? Number(((Number(u.rating_sum) || 0) / ratingCount).toFixed(1)) : 5.0;
     return {
@@ -667,6 +732,8 @@ function buildPersistentMembersList() {
       avatarFrame: u.avatar_frame || 'none',
       nameplateStyle: u.nameplate_style || 'default',
       nameShine: u.name_shine || 'none',
+      nameAnim: normalizeNameAnim(u.name_anim),
+      nameAnimSpeed: normalizeNameAnimSpeed(u.name_anim_speed),
       profileBgEffect: u.profile_bg_effect || 'none',
       vipWings: Boolean(u.vip_wings),
       profileMusic: u.profile_music || '',
@@ -680,14 +747,77 @@ function buildPersistentMembersList() {
       ratingAvg,
       ratingCount,
       isGhosted: Boolean(u.is_ghosted),
+      isStealth,
       nameColor: u.name_color || '#0f172a',
+      nameBgColor: u.name_bg_color || '',
+      neonColor: u.neon_color || '',
+      fontFamily: u.font_family || 'Normal',
+      fontStyle: u.font_style || 'Normal',
       vipFamily: u.vip_family || '',
       coins: Number(u.coins) || 0,
       activityPoints: Number(u.activity_points) || 0,
       giftsReceived: Number(u.gifts_received) || 0,
-      online: !isStealth && onlineKeys.has(key)
+      roomId: live?.roomId || null,
+      online: !isStealth && Boolean(live)
     };
   });
+
+  const guestRank = db.getRankByKey('guest');
+  const persistedGuests = db.getAllGuests().map((g) => {
+    const live = onlineByKey.get(g.key);
+    return {
+      key: g.key,
+      userId: null,
+      isGuest: true,
+      username: g.name,
+      name: g.name,
+      displayName: g.display_name || g.name,
+      role: 'guest',
+      rank: guestRank,
+      avatarUrl: g.avatar_url || '',
+      coverUrl: g.cover_url || '',
+      avatarFrame: g.avatar_frame || 'none',
+      nameplateStyle: g.nameplate_style || 'default',
+      nameShine: g.name_shine || 'none',
+      nameAnim: normalizeNameAnim(g.name_anim),
+      nameAnimSpeed: normalizeNameAnimSpeed(g.name_anim_speed),
+      profileBgEffect: 'none',
+      vipWings: Boolean(g.vip_wings),
+      profileMusic: '',
+      bio: g.bio || '',
+      age: '',
+      gender: '',
+      country: '',
+      allowCalls: true,
+      allowPm: true,
+      likesCount: 0,
+      ratingAvg: 5.0,
+      ratingCount: 0,
+      isGhosted: false,
+      isStealth: false,
+      nameColor: g.name_color || '#0f172a',
+      nameBgColor: g.name_bg_color || '',
+      neonColor: g.neon_color || '',
+      fontFamily: g.font_family || 'Normal',
+      fontStyle: g.font_style || 'Normal',
+      vipFamily: '',
+      coins: 0,
+      activityPoints: 0,
+      giftsReceived: 0,
+      roomId: live?.roomId || null,
+      online: Boolean(live)
+    };
+  });
+
+  return [...registered, ...persistedGuests]
+    .filter((m) => !m.isStealth)
+    .sort(
+      (a, b) =>
+        (b.online ? 1 : 0) - (a.online ? 1 : 0) ||
+        (b.role === 'site_owner' ? 1 : 0) - (a.role === 'site_owner' ? 1 : 0) ||
+        db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) ||
+        String(a.name || '').localeCompare(String(b.name || ''), 'ar')
+    );
 }
 
 function buildRoomsPayload() {
@@ -747,6 +877,8 @@ function syncUserAcrossSockets(io, userId) {
         avatarFrame: mapped.avatarFrame,
         nameplateStyle: mapped.nameplateStyle,
         nameShine: mapped.nameShine,
+        nameAnim: mapped.nameAnim,
+        nameAnimSpeed: mapped.nameAnimSpeed,
         profileBgEffect: mapped.profileBgEffect,
         vipWings: mapped.vipWings,
         profileMusic: mapped.profileMusic,
@@ -927,45 +1059,22 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.post('/api/guest', (req, res) => {
+app.post('/api/guest', async (req, res) => {
   const rawName = String(req.body?.name || '').trim().slice(0, 22);
   const name = rawName.length >= 2 ? rawName : `زائر_${Math.floor(100 + Math.random() * 900)}`;
   const ip = getClientIp(req);
   const deviceId = String(req.headers['x-device-id'] || req.body?.deviceId || '').trim().slice(0, 128);
-  const key = `guest:${crypto.randomBytes(6).toString('hex')}`;
-  const ban = db.isTargetBanned({ ipAddress: ip, deviceId });
+  const requestedGuestKey = String(req.body?.guestKey || '').trim();
+  const isValidExistingGuestKey = /^guest:[a-f0-9]{8,32}$/i.test(requestedGuestKey);
+  const key = isValidExistingGuestKey ? requestedGuestKey : `guest:${crypto.randomBytes(6).toString('hex')}`;
+  const ban = db.isTargetBanned({ targetKey: key, ipAddress: ip, deviceId });
   if (ban) return res.status(403).json({ error: `هذا الجهاز محظور: ${ban.reason}` });
 
-  const token = signToken({ key, name, isGuest: true });
-  const user = {
-    key,
-    userId: null,
-    isGuest: true,
-    name,
-    displayName: name,
-    username: name,
-    role: 'guest',
-    rank: db.getRankByKey('guest'),
-    nameColor: '#ffffff',
-    textColor: '#ffffff',
-    nameBgColor: '',
-    neonColor: '',
-    fontFamily: 'Normal',
-    fontStyle: 'Normal',
-    avatarUrl: '',
-    avatarFrame: 'none',
-    nameplateStyle: 'default',
-    nameShine: 'none',
-    vipWings: false,
-    profileMusic: '',
-    bio: '',
-    coins: 0,
-    vipFamily: '',
-    isStealth: false,
-    activityPoints: 0,
-    giftsReceived: 0,
-    giftsSent: 0
-  };
+  const guestRow = db.upsertGuest({ key, name, ipAddress: ip, deviceId });
+  await db.flushWrites();
+  const user = mapGuestRow(guestRow, key, name);
+  const token = signToken({ key, name: user.name, isGuest: true });
+  io.emit('persistent_members', buildPersistentMembersList());
   return res.json({ token, user });
 });
 
@@ -1275,6 +1384,8 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     avatarFrame,
     nameplateStyle,
     nameShine,
+    nameAnim,
+    nameAnimSpeed,
     profileBgEffect,
     vipWings,
     profileMusic,
@@ -1314,6 +1425,8 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     avatarFrame,
     nameplateStyle,
     nameShine,
+    nameAnim: nameAnim !== undefined ? normalizeNameAnim(nameAnim) : undefined,
+    nameAnimSpeed: nameAnimSpeed !== undefined ? normalizeNameAnimSpeed(nameAnimSpeed) : undefined,
     profileBgEffect,
     vipWings,
     profileMusic,
@@ -1336,6 +1449,8 @@ app.get('/api/shop/items', (_req, res) => {
     frames: SHOP_FRAMES,
     nameplates: SHOP_NAMEPLATES,
     shines: NAME_SHINES,
+    nameAnimations: NAME_ANIMATIONS,
+    nameAnimSpeeds: NAME_ANIM_SPEEDS,
     profileBackgrounds: PROFILE_BG_EFFECTS,
     rankBadgeStyles: RANK_BADGE_STYLES,
     musicPresets: PROFILE_MUSIC_PRESETS,
@@ -1350,7 +1465,7 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
   const isClearing =
     itemId === 'none' || itemId === 'default' || itemId === '' || itemId === false || itemId === 0;
 
-  if (!isClearing && !canUseAddons) {
+  if (!isClearing && type !== 'name_anim' && type !== 'name_anim_speed' && !canUseAddons) {
     return res.status(403).json({ error: 'رتبتك لا تملك صلاحية استخدام الإضافات حالياً.' });
   }
 
@@ -1370,6 +1485,10 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
     const exists = NAME_SHINES.some((s) => s.id === itemId);
     if (!exists) return res.status(400).json({ error: 'اللمعة غير موجودة.' });
     patch = { nameShine: itemId };
+  } else if (type === 'name_anim') {
+    patch = { nameAnim: normalizeNameAnim(itemId) };
+  } else if (type === 'name_anim_speed') {
+    patch = { nameAnimSpeed: normalizeNameAnimSpeed(itemId) };
   } else if (type === 'bg_effect') {
     const exists = PROFILE_BG_EFFECTS.some((b) => b.id === itemId);
     if (!exists) return res.status(400).json({ error: 'الخلفية المتحركة غير موجودة.' });
@@ -2879,8 +2998,9 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
   broadcastRoomUsers(io, targetRoomId);
   broadcastRoomsList(io);
   broadcastGlobalOnlineUsers(io);
+  io.emit('persistent_members', buildPersistentMembersList());
 
-  // Never broadcast join notice if stealth active, or silent reconnect, or rejoining same room during active grace
+  // Suppress redundant join notice on silent reconnect, grace recovery, or recent presence in same room
   const pending = pendingGrace.get(entry.key);
   const rejoiningSameRoom = pending && pending.lastRoomId === targetRoomId;
   if (pending) {
@@ -2888,7 +3008,13 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
     pendingGrace.delete(entry.key);
   }
 
-  if (!isSilentReconnect && !rejoiningSameRoom && oldRoomId !== targetRoomId && !isStealthEntry(entry)) {
+  const recent = recentRoomPresence.get(entry.key);
+  const recentlyInSameRoom = Boolean(
+    recent && recent.roomId === targetRoomId && Date.now() - recent.at < 20 * 60 * 1000
+  );
+  recentRoomPresence.set(entry.key, { roomId: targetRoomId, at: Date.now() });
+
+  if (!isSilentReconnect && !rejoiningSameRoom && !recentlyInSameRoom && oldRoomId !== targetRoomId && !isStealthEntry(entry)) {
     const rank = db.getRankByKey(entry.role);
     const isOwnerJoin = entry.role === 'site_owner';
     if (isOwnerJoin) {
@@ -2918,6 +3044,8 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
         fontStyle: entry.fontStyle || 'Normal',
         nameplateStyle: entry.nameplateStyle || 'default',
         nameShine: entry.nameShine || 'none',
+        nameAnim: entry.nameAnim || 'none',
+        nameAnimSpeed: entry.nameAnimSpeed || 'normal',
         vipWings: Boolean(entry.vipWings)
       }
     });
@@ -2938,49 +3066,20 @@ io.use((socket, next) => {
       }
       const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId });
       if (ban) return next(new Error(`BANNED:${ban.reason}`));
+      const persistedGuest = db.upsertGuest({
+        key: payload.key,
+        name: payload.name || 'زائر',
+        ipAddress: ip,
+        deviceId
+      });
+      const mappedGuest = mapGuestRow(persistedGuest, payload.key, payload.name || 'زائر');
       socket.authSession = {
         socketId: socket.id,
-        key: payload.key,
-        userId: null,
-        isGuest: true,
-        name: payload.name || 'زائر',
-        displayName: payload.name || 'زائر',
-        username: payload.name || 'زائر',
+        ...mappedGuest,
         email: '',
-        role: 'guest',
-        nameColor: '#0f172a',
-        textColor: '#111827',
-        nameBgColor: '',
-        neonColor: '',
-        fontFamily: 'Normal',
-        fontStyle: 'Normal',
-        fontSize: 14,
-        avatarUrl: '',
-        coverUrl: '',
-        avatarFrame: 'none',
-        nameplateStyle: 'default',
-        nameShine: 'none',
-        profileBgEffect: 'none',
-        vipWings: false,
-        profileMusic: '',
-        bio: '',
-        age: '',
-        gender: '',
-        country: '',
-        allowCalls: true,
-        allowPm: true,
-        likesCount: 0,
-        ratingAvg: 5.0,
-        ratingCount: 0,
         isGhosted: false,
         isShadowMuted: guestShadowMutedKeys.has(payload.key),
         isFrozen: guestFrozenKeys.has(payload.key),
-        coins: 0,
-        vipFamily: '',
-        isStealth: false,
-        activityPoints: 0,
-        giftsReceived: 0,
-        giftsSent: 0,
         ipAddress: ip,
         deviceId,
         roomId: null,
@@ -3020,10 +3119,25 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const session = socket.authSession;
+
+  // Deduplicate stale socket for the exact same user + device without emitting disconnect churn
+  let replacedSameDevice = false;
+  for (const [oldSid, oldEntry] of [...onlineSockets.entries()]) {
+    if (oldSid !== socket.id && oldEntry.key === session.key && (!session.deviceId || oldEntry.deviceId === session.deviceId)) {
+      replacedSameDevice = true;
+      onlineSockets.delete(oldSid);
+      const oldSock = io.sockets.sockets.get(oldSid);
+      if (oldSock) {
+        oldSock._replacedByNewSocket = true;
+        oldSock.disconnect(true);
+      }
+    }
+  }
+
   onlineSockets.set(socket.id, session);
 
   const pending = pendingGrace.get(session.key);
-  const wasGraceReconnect = Boolean(pending);
+  const wasGraceReconnect = Boolean(pending) || replacedSameDevice;
   const initialRoomId = socket.handshake.auth?.roomId || (pending && pending.lastRoomId) || 'general';
   const validRoom = db.getRoomById(initialRoomId) ? initialRoomId : db.getAllRooms()[0]?.id || 'general';
 
@@ -3044,8 +3158,17 @@ io.on('connection', (socket) => {
 
   socket.on('heartbeat', (_data, cb) => {
     const entry = onlineSockets.get(socket.id);
-    if (entry) entry.lastHeartbeat = Date.now();
+    if (entry) {
+      entry.lastHeartbeat = Date.now();
+      if (entry.roomId) recentRoomPresence.set(entry.key, { roomId: entry.roomId, at: Date.now() });
+    }
     if (typeof cb === 'function') cb({ ok: true, ts: Date.now() });
+  });
+
+  socket.on('explicit_logout', () => {
+    socket._explicitLogout = true;
+    const entry = onlineSockets.get(socket.id);
+    if (entry) recentRoomPresence.delete(entry.key);
   });
 
   socket.on('join_room', ({ roomId, password }, cb) => {
@@ -3178,6 +3301,8 @@ io.on('connection', (socket) => {
         avatarFrame: entry.avatarFrame,
         nameplateStyle: entry.nameplateStyle,
         nameShine: entry.nameShine,
+        nameAnim: entry.nameAnim || 'none',
+        nameAnimSpeed: entry.nameAnimSpeed || 'normal',
         vipWings: entry.vipWings,
         isAdminNotice,
         isGhostOnly,
@@ -3967,25 +4092,45 @@ io.on('connection', (socket) => {
     const oldRoomId = entry.roomId;
     const key = entry.key;
     onlineSockets.delete(socket.id);
-    releaseUserMicsInRoom(key, oldRoomId);
-    pauseQuizBotIfRoomEmpty(oldRoomId);
 
-    // Grace period keeps transient disconnect silent without emitting any leave notice
+    if (socket._replacedByNewSocket) return;
+
+    const stillHasActiveSocket = [...onlineSockets.values()].some((o) => o.key === key);
+    if (stillHasActiveSocket) {
+      broadcastRoomUsers(io, oldRoomId);
+      broadcastGlobalOnlineUsers(io);
+      return;
+    }
+
+    if (socket._explicitLogout) {
+      releaseUserMicsInRoom(key, oldRoomId);
+      pauseQuizBotIfRoomEmpty(oldRoomId);
+      recentRoomPresence.delete(key);
+      broadcastRoomUsers(io, oldRoomId);
+      broadcastGlobalOnlineUsers(io);
+      broadcastRoomsList(io);
+      io.emit('persistent_members', buildPersistentMembersList());
+      return;
+    }
+
+    // Transient disconnect grace window: avoid offline flicker and mic/presence churn on quick drops
+    recentRoomPresence.set(key, { roomId: oldRoomId, at: Date.now() });
     const prevGrace = pendingGrace.get(key);
     if (prevGrace) clearTimeout(prevGrace.timeout);
 
     const timeout = setTimeout(() => {
       pendingGrace.delete(key);
+      const reconnected = [...onlineSockets.values()].some((o) => o.key === key);
+      if (reconnected) return;
+      releaseUserMicsInRoom(key, oldRoomId);
+      pauseQuizBotIfRoomEmpty(oldRoomId);
       broadcastRoomUsers(io, oldRoomId);
       broadcastGlobalOnlineUsers(io);
       broadcastRoomsList(io);
       io.emit('persistent_members', buildPersistentMembersList());
-    }, 25000);
+    }, 18000);
 
     pendingGrace.set(key, { timeout, lastRoomId: oldRoomId });
-    broadcastRoomUsers(io, oldRoomId);
-    broadcastGlobalOnlineUsers(io);
-    broadcastRoomsList(io);
   });
 });
 
