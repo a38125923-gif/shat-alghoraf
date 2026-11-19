@@ -592,6 +592,7 @@ const DEFAULT_SITE_SETTINGS = {
   lucky_box_min: 50,
   lucky_box_max: 500,
   referral_bonus: 200,
+  quiz_bot_enabled: 1,
   updated_at: new Date().toISOString()
 };
 
@@ -1024,6 +1025,7 @@ function normalizeUserDoc(docId, data) {
     invited_by: data.invited_by ? Number(data.invited_by) : null,
     invites_count: Number(data.invites_count) || 0,
     activity_points: Number(data.activity_points) || 0,
+    quiz_points: Number(data.quiz_points) || 0,
     gifts_received: Number(data.gifts_received) || 0,
     gifts_sent: Number(data.gifts_sent) || 0,
     last_ip: String(data.last_ip || ''),
@@ -1094,6 +1096,9 @@ function normalizeRoomDoc(docId, data) {
     youtube_video_id: String(data.youtube_video_id || ''),
     youtube_title: String(data.youtube_title || ''),
     youtube_is_playing: data.youtube_is_playing ? 1 : 0,
+    youtube_mini_mode: data.youtube_mini_mode ? 1 : 0,
+    youtube_by_key: String(data.youtube_by_key || ''),
+    youtube_by_name: String(data.youtube_by_name || ''),
     youtube_updated_at: String(data.youtube_updated_at || ''),
     created_by: String(data.created_by || 'system'),
     created_at: String(data.created_at || nowIso())
@@ -2055,6 +2060,8 @@ function updateSiteSettings(patch = {}) {
       patch.referral_bonus !== undefined
         ? Math.max(0, Math.min(5000, Number(patch.referral_bonus) || 200))
         : Number(cur.referral_bonus ?? 200),
+    quiz_bot_enabled:
+      patch.quiz_bot_enabled !== undefined ? (patch.quiz_bot_enabled ? 1 : 0) : cur.quiz_bot_enabled !== 0 ? 1 : 0,
     updated_at: nowIso()
   };
 
@@ -2126,6 +2133,7 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
     is_stealth: 0,
     is_ghosted: 0,
     activity_points: 0,
+    quiz_points: 0,
     gifts_received: 0,
     gifts_sent: 0,
     last_ip: ipAddress || '',
@@ -2356,6 +2364,14 @@ function incrementActivityPoints({ userId, roomId, userDelta = 1, roomDelta = 1 
   }
 }
 
+function incrementQuizPoints(userId, delta = 10) {
+  const u = store.usersById.get(Number(userId));
+  if (!u) return null;
+  u.quiz_points = Math.max(0, (Number(u.quiz_points) || 0) + (Number(delta) || 0));
+  enqueueSet('users', String(u.id), { quiz_points: u.quiz_points }, true);
+  return { ...u };
+}
+
 function updateUserCustomization(
   userId,
   {
@@ -2484,6 +2500,7 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     is_stealth: 0,
     is_ghosted: 0,
     activity_points: 0,
+    quiz_points: 0,
     gifts_received: 0,
     gifts_sent: 0,
     last_ip: '',
@@ -2724,12 +2741,15 @@ function isRoomManager(roomId, userId, userRole) {
   return isRoomStaffMember(roomId, userId);
 }
 
-function setRoomYoutube(roomId, { videoId = '', title = '', isPlaying = false }) {
+function setRoomYoutube(roomId, { videoId = '', title = '', isPlaying = false, miniMode = false, startedByKey = '', startedByName = '' }) {
   const r = store.roomsById.get(roomId);
   if (!r) return null;
   r.youtube_video_id = String(videoId || '').trim().slice(0, 32);
   r.youtube_title = String(title || '').trim().slice(0, 120);
   r.youtube_is_playing = isPlaying && r.youtube_video_id ? 1 : 0;
+  r.youtube_mini_mode = r.youtube_is_playing && miniMode ? 1 : 0;
+  r.youtube_by_key = r.youtube_is_playing ? String(startedByKey || '').slice(0, 80) : '';
+  r.youtube_by_name = r.youtube_is_playing ? String(startedByName || '').slice(0, 60) : '';
   r.youtube_updated_at = nowIso();
   enqueueSet(
     'rooms',
@@ -2738,6 +2758,9 @@ function setRoomYoutube(roomId, { videoId = '', title = '', isPlaying = false })
       youtube_video_id: r.youtube_video_id,
       youtube_title: r.youtube_title,
       youtube_is_playing: r.youtube_is_playing,
+      youtube_mini_mode: r.youtube_mini_mode,
+      youtube_by_key: r.youtube_by_key,
+      youtube_by_name: r.youtube_by_name,
       youtube_updated_at: r.youtube_updated_at
     },
     true
@@ -2758,6 +2781,9 @@ function sanitizeRoomForPublic(room) {
     youtube_video_id: String(room.youtube_video_id || ''),
     youtube_title: String(room.youtube_title || ''),
     youtube_is_playing: room.youtube_is_playing ? 1 : 0,
+    youtube_mini_mode: room.youtube_mini_mode ? 1 : 0,
+    youtube_by_key: String(room.youtube_by_key || ''),
+    youtube_by_name: String(room.youtube_by_name || ''),
     youtube_updated_at: String(room.youtube_updated_at || ''),
     staff: getRoomStaff(room.id)
   };
@@ -3780,6 +3806,7 @@ module.exports = {
   updateUserCredentials,
   deleteUserAccountPermanently,
   incrementActivityPoints,
+  incrementQuizPoints,
   updateUserCustomization,
   adminCreateUser,
   adminUpdateUserAccount,

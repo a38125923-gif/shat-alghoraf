@@ -25,12 +25,15 @@ for (const sub of UPLOAD_SUBDIRS) {
 const SHOP_FRAMES = [
   { id: 'owner_sovereign', label: 'التاج السيادي للمالك 👑', price: 0, tier: 'owner', ownerOnly: true, preview: '#fbbf24' },
   { id: 'none', label: 'بدون إطار', price: 0, tier: 'free', preview: '#64748b' },
-  { id: 'kings_crown', label: 'تاج الملوك KINGS', price: 0, tier: 'vip', preview: '#fbbf24' },
+  { id: 'kings_crown', label: 'تاج الملوك الذهبي 👑', price: 0, tier: 'vip', preview: '#fbbf24' },
   { id: 'gold_royal', label: 'الإطار الذهبي الملكي', price: 0, tier: 'vip', preview: '#f59e0b' },
-  { id: 'fire_gold', label: 'إطار اللهب الذهبي', price: 0, tier: 'vip', preview: '#f97316' },
-  { id: 'diamond_ring', label: 'الإطار الماسي', price: 0, tier: 'vip', preview: '#38bdf8' },
+  { id: 'fire_gold', label: 'إطار اللهب الناري 🔥', price: 0, tier: 'vip', preview: '#f97316' },
+  { id: 'lightning_bolt', label: 'إطار البرق الكهربائي ⚡', price: 0, tier: 'vip', preview: '#38bdf8' },
+  { id: 'hearts_roses', label: 'إطار القلوب والورود 🌹', price: 0, tier: 'vip', preview: '#f43f5e' },
+  { id: 'neon_rainbow', label: 'إطار نيون RGB المضيء', price: 0, tier: 'vip', preview: '#ec4899' },
+  { id: 'rgb_cyber_neon', label: 'إطار RGB الدوّار المتوهج', price: 0, tier: 'vip', preview: '#22d3ee' },
+  { id: 'diamond_ring', label: 'الإطار الماسي المتوهج 💎', price: 0, tier: 'vip', preview: '#38bdf8' },
   { id: 'emerald_crown', label: 'إطار الزمرد الملكي', price: 0, tier: 'vip', preview: '#10b981' },
-  { id: 'neon_rainbow', label: 'إطار قوس قزح المضيء', price: 0, tier: 'vip', preview: '#ec4899' },
   { id: 'royal_wings', label: 'إطار الأجنحة الملكية', price: 0, tier: 'vip', preview: '#eab308' },
   { id: 'plasma_violet', label: 'إطار البلازما البنفسجي', price: 0, tier: 'vip', preview: '#a855f7' }
 ];
@@ -62,12 +65,18 @@ const PROFILE_BG_EFFECTS = [
 ];
 
 const RANK_BADGE_STYLES = [
-  { id: 'crown_royal', label: 'تاج ملكي متحرك', iconClass: 'fa-solid fa-crown' },
-  { id: 'gold_eagle', label: 'نسر ذهبي مجنح', iconClass: 'fa-solid fa-feather-pointed' },
+  { id: 'gold_crown', label: 'تاج ذهبي ملكي', iconClass: 'fa-solid fa-crown' },
+  { id: 'silver_crown', label: 'تاج فضي لامع', iconClass: 'fa-solid fa-crown' },
+  { id: 'royal_shield', label: 'درع ذهبي ملكي', iconClass: 'fa-solid fa-shield-halved' },
+  { id: 'silver_shield', label: 'درع الحماية الفضي', iconClass: 'fa-solid fa-shield' },
+  { id: 'gold_star', label: 'نجمة ذهبية متلألئة', iconClass: 'fa-solid fa-star' },
+  { id: 'diamond_gem', label: 'ماسة براقة', iconClass: 'fa-solid fa-gem' },
+  { id: 'vip_wings', label: 'أجنحة VIP ملكية', iconClass: 'fa-solid fa-feather-pointed' },
   { id: 'silver_wing', label: 'جناح فضي لامع', iconClass: 'fa-solid fa-dove' },
-  { id: 'diamond_medal', label: 'وسام ماسي متوهج', iconClass: 'fa-solid fa-gem' },
-  { id: 'royal_shield', label: 'درع الحماية الملكي', iconClass: 'fa-solid fa-shield-halved' },
-  { id: 'neon_badge', label: 'شارة نيون حديثة', iconClass: 'fa-solid fa-certificate' }
+  { id: 'gold_eagle', label: 'نسر ذهبي مجنح', iconClass: 'fa-solid fa-feather-pointed' },
+  { id: 'neon_badge', label: 'شارة نيون حديثة', iconClass: 'fa-solid fa-certificate' },
+  { id: 'crown_royal', label: 'التاج الملكي الكلاسيكي', iconClass: 'fa-solid fa-crown' },
+  { id: 'diamond_medal', label: 'وسام ماسي متوهج', iconClass: 'fa-solid fa-gem' }
 ];
 
 const RADIO_STATIONS = [
@@ -103,6 +112,49 @@ const PROFILE_MUSIC_PRESETS = [
   { id: 'preset:royal_oud', label: 'نغمة شرقية ملكية' },
   { id: 'preset:ambient_stars', label: 'أوتار ليلية ناعمة' }
 ];
+
+const ALLOWED_PROFILE_FONTS = new Set([
+  'Normal',
+  'Kalam',
+  'Signika',
+  'Grandmaster',
+  'Comic Neue',
+  'Quicksand',
+  'Orbitron',
+  'Lemonada',
+  'Grenze Gotisch',
+  'Merienda',
+  'Amita',
+  'Averia Libre',
+  'Turret Road',
+  'Sansita',
+  'Comfortaa',
+  'Charm',
+  'Lobster Two',
+  'Cairo',
+  'Tajawal',
+  'Amiri',
+  'Changa',
+  'Reem Kufi'
+]);
+
+function normalizeProfileFont(raw) {
+  const clean = String(raw || '').trim();
+  if (!clean) return 'Normal';
+  for (const f of ALLOWED_PROFILE_FONTS) {
+    if (f.toLowerCase() === clean.toLowerCase()) return f;
+  }
+  return 'Normal';
+}
+
+function textContainsMemberName(text, memberName) {
+  const cleanText = String(text || '').toLowerCase();
+  const cleanName = String(memberName || '').trim().toLowerCase();
+  if (!cleanText || cleanName.length < 2) return false;
+  const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|[\\s،.!؟@:\\-\\(\\)\\[\\]\\"'/])${escaped}(?:$|[\\s،.!؟:\\-\\(\\)\\[\\]\\"'/])`, 'i');
+  return re.test(cleanText);
+}
 
 const app = express();
 app.set('trust proxy', true);
@@ -220,6 +272,7 @@ function mapUserRow(u) {
     lastLuckyBoxAt: Number(u.last_lucky_box_at) || 0,
     invitesCount: Number(u.invites_count) || 0,
     activityPoints: Number(u.activity_points) || 0,
+    quizPoints: Number(u.quiz_points) || 0,
     giftsReceived: Number(u.gifts_received) || 0,
     giftsSent: Number(u.gifts_sent) || 0
   };
@@ -357,26 +410,52 @@ const guestFrozenKeys = new Set();
 const roomQuizBots = new Map();
 
 const QUIZ_BANK = [
-  { q: 'ما هي أكبر قارة في العالم من حيث المساحة؟', a: ['آسيا', 'اسيا', 'asia'] },
-  { q: 'كم عدد أركان الإسلام؟', a: ['5', '٥', 'خمسة', 'خمس'] },
-  { q: 'ما هي عاصمة المملكة العربية السعودية؟', a: ['الرياض', 'رياض'] },
-  { q: 'ما هو أطول نهر في العالم؟', a: ['النيل', 'نهر النيل', 'الامازون', 'الأمازون'] },
-  { q: 'كم عدد سور القرآن الكريم؟', a: ['114', '١١٤', 'مائة وأربعة عشر'] },
-  { q: 'ما هي عاصمة مصر؟', a: ['القاهرة', 'القاهره'] },
-  { q: 'ما هو الكوكب الملقب بالكوكب الأحمر؟', a: ['المريخ', 'مريخ'] },
-  { q: 'كم عدد أيام السنة الكبيسة؟', a: ['366', '٣٦٦'] },
-  { q: 'ما هي لغة البرازيل الرسمية؟', a: ['البرتغالية', 'البرتغاليه', 'برتغالية'] },
-  { q: 'ما هو العنصر الكيميائي الذي رمزه Au؟', a: ['الذهب', 'ذهب'] },
-  { q: 'ما هي عاصمة الإمارات العربية المتحدة؟', a: ['أبوظبي', 'ابوظبي', 'أبو ظبي', 'ابو ظبي'] },
-  { q: 'كم عدد قلوب الأخطبوط؟', a: ['3', '٣', 'ثلاثة', 'ثلاث'] },
-  { q: 'ما هو أسرع حيوان بري في العالم؟', a: ['الفهد', 'فهد', 'الشيتا'] },
-  { q: 'في أي دولة يقع برج إيفل؟', a: ['فرنسا'] },
-  { q: 'ما هو أقرب كوكب إلى الشمس؟', a: ['عطارد'] },
-  { q: 'كم عدد حروف اللغة العربية؟', a: ['28', '٢٨', 'ثمانية وعشرون'] },
-  { q: 'ما هي عاصمة الأردن؟', a: ['عمان'] },
-  { q: 'ما هو أكبر محيط على وجه الأرض؟', a: ['الهادي', 'المحيط الهادي', 'الهادئ'] },
-  { q: 'ما اسم صوت الأسد؟', a: ['زئير', 'الزئير'] },
-  { q: 'كم ساعة في اليوم الواحد؟', a: ['24', '٢٤', 'أربع وعشرون'] }
+  // عواصم
+  { category: 'عواصم', q: 'ما هي عاصمة المملكة العربية السعودية؟', displayAnswer: 'الرياض', a: ['الرياض', 'رياض'] },
+  { category: 'عواصم', q: 'ما هي عاصمة مصر؟', displayAnswer: 'القاهرة', a: ['القاهرة', 'القاهره', 'قاهرة'] },
+  { category: 'عواصم', q: 'ما هي عاصمة الإمارات العربية المتحدة؟', displayAnswer: 'أبوظبي', a: ['أبوظبي', 'ابوظبي', 'أبو ظبي', 'ابو ظبي'] },
+  { category: 'عواصم', q: 'ما هي عاصمة الأردن؟', displayAnswer: 'عمان', a: ['عمان'] },
+  { category: 'عواصم', q: 'ما هي عاصمة المغرب؟', displayAnswer: 'الرباط', a: ['الرباط', 'رباط'] },
+  { category: 'عواصم', q: 'ما هي عاصمة العراق؟', displayAnswer: 'بغداد', a: ['بغداد'] },
+  { category: 'عواصم', q: 'ما هي عاصمة لبنان؟', displayAnswer: 'بيروت', a: ['بيروت'] },
+  { category: 'عواصم', q: 'ما هي عاصمة اليابان؟', displayAnswer: 'طوكيو', a: ['طوكيو'] },
+  { category: 'عواصم', q: 'ما هي عاصمة إيطاليا؟', displayAnswer: 'روما', a: ['روما'] },
+  { category: 'عواصم', q: 'ما هي عاصمة إسبانيا؟', displayAnswer: 'مدريد', a: ['مدريد'] },
+  // دينية
+  { category: 'دينية', q: 'كم عدد أركان الإسلام؟', displayAnswer: 'خمسة', a: ['5', '٥', 'خمسة', 'خمس'] },
+  { category: 'دينية', q: 'كم عدد سور القرآن الكريم؟', displayAnswer: '114', a: ['114', '١١٤', 'مائة وأربعة عشر'] },
+  { category: 'دينية', q: 'ما هي أطول سورة في القرآن الكريم؟', displayAnswer: 'البقرة', a: ['البقرة', 'سورة البقرة', 'البقره'] },
+  { category: 'دينية', q: 'ما هي السورة التي تسمى قلب القرآن؟', displayAnswer: 'يس', a: ['يس', 'سورة يس', 'ياسين'] },
+  { category: 'دينية', q: 'من هو النبي الملقب بخليل الله؟', displayAnswer: 'إبراهيم', a: ['إبراهيم', 'ابراهيم', 'سيدنا إبراهيم'] },
+  { category: 'دينية', q: 'في أي شهر أُنزل القرآن الكريم؟', displayAnswer: 'رمضان', a: ['رمضان', 'شهر رمضان'] },
+  { category: 'دينية', q: 'ما هي أول قبلة للمسلمين؟', displayAnswer: 'المسجد الأقصى', a: ['المسجد الاقصى', 'الأقصى', 'الاقصى', 'القدس', 'بيت المقدس'] },
+  { category: 'دينية', q: 'كم عدد الصلوات المفروضة في اليوم والليلة؟', displayAnswer: 'خمس', a: ['5', '٥', 'خمس', 'خمسة'] },
+  { category: 'دينية', q: 'ما اسم الغار الذي تعبّد فيه النبي محمد ﷺ؟', displayAnswer: 'حراء', a: ['حراء', 'غار حراء'] },
+  { category: 'دينية', q: 'من هو أول الخلفاء الراشدين؟', displayAnswer: 'أبو بكر الصديق', a: ['ابو بكر', 'أبو بكر', 'ابو بكر الصديق', 'أبو بكر الصديق'] },
+  // ثقافية وعلمية
+  { category: 'ثقافية', q: 'ما هي أكبر قارة في العالم من حيث المساحة؟', displayAnswer: 'آسيا', a: ['آسيا', 'اسيا', 'asia'] },
+  { category: 'ثقافية', q: 'ما هو أطول نهر في العالم؟', displayAnswer: 'النيل', a: ['النيل', 'نهر النيل', 'الامازون', 'الأمازون'] },
+  { category: 'ثقافية', q: 'ما هو الكوكب الملقب بالكوكب الأحمر؟', displayAnswer: 'المريخ', a: ['المريخ', 'مريخ'] },
+  { category: 'ثقافية', q: 'كم عدد أيام السنة الكبيسة؟', displayAnswer: '366', a: ['366', '٣٦٦'] },
+  { category: 'ثقافية', q: 'ما هي لغة البرازيل الرسمية؟', displayAnswer: 'البرتغالية', a: ['البرتغالية', 'البرتغاليه', 'برتغالية'] },
+  { category: 'ثقافية', q: 'ما هو العنصر الكيميائي الذي رمزه Au؟', displayAnswer: 'الذهب', a: ['الذهب', 'ذهب'] },
+  { category: 'ثقافية', q: 'كم عدد قلوب الأخطبوط؟', displayAnswer: 'ثلاثة', a: ['3', '٣', 'ثلاثة', 'ثلاث'] },
+  { category: 'ثقافية', q: 'ما هو أسرع حيوان بري في العالم؟', displayAnswer: 'الفهد', a: ['الفهد', 'فهد', 'الشيتا'] },
+  { category: 'ثقافية', q: 'في أي دولة يقع برج إيفل؟', displayAnswer: 'فرنسا', a: ['فرنسا'] },
+  { category: 'ثقافية', q: 'ما هو أقرب كوكب إلى الشمس؟', displayAnswer: 'عطارد', a: ['عطارد'] },
+  { category: 'ثقافية', q: 'كم عدد حروف اللغة العربية؟', displayAnswer: '28', a: ['28', '٢٨', 'ثمانية وعشرون'] },
+  { category: 'ثقافية', q: 'ما هو أكبر محيط على وجه الأرض؟', displayAnswer: 'الهادي', a: ['الهادي', 'المحيط الهادي', 'الهادئ'] },
+  { category: 'ثقافية', q: 'ما اسم صوت الأسد؟', displayAnswer: 'زئير', a: ['زئير', 'الزئير'] },
+  { category: 'ثقافية', q: 'كم ساعة في اليوم الواحد؟', displayAnswer: '24', a: ['24', '٢٤', 'أربع وعشرون'] },
+  // ألغاز
+  { category: 'ألغاز', q: 'ما هو الشيء الذي يمشي بلا أرجل ويبكي بلا عيون؟', displayAnswer: 'السحاب', a: ['السحاب', 'الغيم', 'السحابة', 'الغيمة'] },
+  { category: 'ألغاز', q: 'ما هو الشيء الذي كلما أخذت منه كبر؟', displayAnswer: 'الحفرة', a: ['الحفرة', 'الحفره', 'حفرة'] },
+  { category: 'ألغاز', q: 'ما هو الشيء الذي يكتب ولا يقرأ؟', displayAnswer: 'القلم', a: ['القلم', 'قلم'] },
+  { category: 'ألغاز', q: 'ما هو الشيء الذي له أسنان ولا يعض؟', displayAnswer: 'المشط', a: ['المشط', 'مشط'] },
+  { category: 'ألغاز', q: 'ما هو الشيء الذي يدخل الماء ولا يبتل؟', displayAnswer: 'الضوء', a: ['الضوء', 'ضوء', 'الشعاع', 'الظل'] },
+  { category: 'ألغاز', q: 'ما هو الباب الذي لا يمكن فتحه؟', displayAnswer: 'الباب المفتوح', a: ['الباب المفتوح', 'المفتوح'] },
+  { category: 'ألغاز', q: 'ما هو الشيء الذي تذبحه وتبكي عليه؟', displayAnswer: 'البصل', a: ['البصل', 'بصل', 'البصلة'] },
+  { category: 'ألغاز', q: 'ما هو الشيء الذي له عين واحدة ولا يرى؟', displayAnswer: 'الإبرة', a: ['الإبرة', 'الابرة', 'الابره', 'إبرة'] }
 ];
 
 function isVpnOrProxyRequest(reqOrSocket) {
@@ -480,6 +559,7 @@ function getRoomUsersList(roomId) {
         neonColor: entry.neonColor,
         fontFamily: entry.fontFamily,
         fontStyle: entry.fontStyle,
+        fontSize: entry.fontSize || 14,
         avatarUrl: entry.avatarUrl,
         coverUrl: entry.coverUrl || '',
         avatarFrame: entry.avatarFrame,
@@ -661,6 +741,7 @@ function syncUserAcrossSockets(io, userId) {
         neonColor: mapped.neonColor,
         fontFamily: mapped.fontFamily,
         fontStyle: mapped.fontStyle,
+        fontSize: mapped.fontSize,
         avatarUrl: mapped.avatarUrl,
         coverUrl: mapped.coverUrl,
         avatarFrame: mapped.avatarFrame,
@@ -687,6 +768,7 @@ function syncUserAcrossSockets(io, userId) {
         vipFamily: mapped.vipFamily,
         isStealth: mapped.isStealth,
         activityPoints: mapped.activityPoints,
+        quizPoints: mapped.quizPoints,
         giftsReceived: mapped.giftsReceived,
         giftsSent: mapped.giftsSent
       });
@@ -932,6 +1014,22 @@ app.post('/api/upload/cover', requireRegistered, uploadCover.single('file'), (re
   return res.json({ url });
 });
 
+app.delete('/api/profile/avatar', requireRegistered, async (req, res) => {
+  const updated = db.updateUserCustomization(req.authUser.userId, { avatarUrl: '' });
+  if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ ok: true, user: mapUserRow(updated) });
+});
+
+app.delete('/api/profile/cover', requireRegistered, async (req, res) => {
+  const updated = db.updateUserCustomization(req.authUser.userId, { coverUrl: '' });
+  if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ ok: true, user: mapUserRow(updated) });
+});
+
 app.post('/api/upload/image', requireAuth, (req, res, next) => {
   if (req.authUser.isGuest && Number(db.getSiteSettings().lock_guest_images) === 1) {
     return res.status(403).json({ error: 'إرسال الصور للزوار مقفل حالياً من قبل المالك.' });
@@ -977,18 +1075,65 @@ app.get('/api/radio/stations', (_req, res) => {
   res.json({ stations: RADIO_STATIONS });
 });
 
+function collectYoutubeVideoRenderers(node, out = [], seen = new Set()) {
+  if (!node || typeof node !== 'object' || out.length >= 14) return out;
+  if (node.videoRenderer && node.videoRenderer.videoId) {
+    const vr = node.videoRenderer;
+    if (!seen.has(vr.videoId)) {
+      seen.add(vr.videoId);
+      const title = (vr.title?.runs || []).map((r) => r.text).join('') || vr.title?.simpleText || '';
+      const author = (vr.ownerText?.runs || []).map((r) => r.text).join('') || (vr.longBylineText?.runs || []).map((r) => r.text).join('') || 'YouTube';
+      const duration = vr.lengthText?.simpleText || vr.thumbnailOverlays?.find((o) => o?.thumbnailOverlayTimeStatusRenderer)?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText || 'فيديو';
+      out.push({
+        videoId: vr.videoId,
+        title: (title || 'فيديو يوتيوب').slice(0, 120),
+        author: author.slice(0, 60),
+        duration,
+        thumbnail: `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`
+      });
+    }
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      collectYoutubeVideoRenderers(item, out, seen);
+      if (out.length >= 14) break;
+    }
+  } else {
+    for (const val of Object.values(node)) {
+      if (val && typeof val === 'object') {
+        collectYoutubeVideoRenderers(val, out, seen);
+        if (out.length >= 14) break;
+      }
+    }
+  }
+  return out;
+}
+
+const FALLBACK_YOUTUBE_SONGS = [
+  { videoId: 'jfKfPfyJRdk', title: 'موسيقى هادئة للدردشة والتركيز - Lofi Radio', author: 'Lofi Girl', duration: 'مباشر' },
+  { videoId: '5qap5aO4i9A', title: 'أنغام هادئة واسترخاء ليلي', author: 'ChillHop', duration: 'HD' },
+  { videoId: '4xDzrJKXOOY', title: 'موسيقى سهرة واسترخاء سينث', author: 'Synth Radio', duration: 'مباشر' },
+  { videoId: 'rUxyKA_-grg', title: 'أجواء مطر وموسيقى هادئة', author: 'Sleep Radio', duration: 'مباشر' },
+  { videoId: 'DWcJFNfaw9c', title: 'موسيقى كافيه عربية وهادئة', author: 'Coffee Jazz', duration: 'HD' },
+  { videoId: 'n61ULEU7CO0', title: 'تلاوة عطرة ومريحة للقلب', author: 'Quran Recitation', duration: 'HD' }
+];
+
 app.get('/api/youtube/search', requireAuth, async (req, res) => {
   const q = String(req.query?.q || '').trim().slice(0, 120);
-  if (!q) return res.status(400).json({ error: 'أدخل كلمة البحث عن فيديو يوتيوب.' });
+  if (!q) return res.status(400).json({ error: 'أدخل كلمة البحث عن أغنية أو فيديو يوتيوب.' });
+
+  const results = [];
+  // 1. Direct YouTube search HTML parse
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
+    const timer = setTimeout(() => controller.abort(), 5500);
     const ytRes = await fetch(
       `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
       {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36',
           'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
         }
       }
@@ -996,52 +1141,61 @@ app.get('/api/youtube/search', requireAuth, async (req, res) => {
     clearTimeout(timer);
     const html = await ytRes.text();
     const match = html.match(/var ytInitialData\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
-    const results = [];
     if (match && match[1]) {
       const parsed = JSON.parse(match[1]);
-      const sections =
-        parsed?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-      for (const sec of sections) {
-        const items = sec?.itemSectionRenderer?.contents || [];
-        for (const item of items) {
-          const vr = item.videoRenderer;
-          if (!vr || !vr.videoId) continue;
-          const title = (vr.title?.runs || []).map((r) => r.text).join('') || vr.title?.simpleText || q;
-          const author = (vr.ownerText?.runs || []).map((r) => r.text).join('') || 'YouTube';
-          const duration = vr.lengthText?.simpleText || 'فيديو';
+      collectYoutubeVideoRenderers(parsed, results);
+    }
+  } catch {
+    // ignore primary scrape error and try Piped/Invidious fallback
+  }
+
+  // 2. Fallback to Piped public JSON API if YouTube HTML returned nothing
+  if (results.length === 0) {
+    for (const apiBase of ['https://pipedapi.kavin.rocks', 'https://pipedapi.tokhmi.xyz']) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3500);
+        const pRes = await fetch(`${apiBase}/search?q=${encodeURIComponent(q)}&filter=videos`, {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' }
+        });
+        clearTimeout(timer);
+        if (!pRes.ok) continue;
+        const pData = await pRes.json();
+        const items = Array.isArray(pData?.items) ? pData.items : [];
+        for (const it of items) {
+          const vid = extractYouTubeId(it.url || '');
+          if (!vid) continue;
+          const durSec = Number(it.duration) || 0;
+          const durText = durSec > 0 ? `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, '0')}` : 'فيديو';
           results.push({
-            videoId: vr.videoId,
-            title: title.slice(0, 120),
-            author: author.slice(0, 60),
-            duration,
-            thumbnail: `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`
+            videoId: vid,
+            title: String(it.title || q).slice(0, 120),
+            author: String(it.uploaderName || 'YouTube').slice(0, 60),
+            duration: durText,
+            thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
           });
           if (results.length >= 12) break;
         }
-        if (results.length >= 12) break;
+        if (results.length > 0) break;
+      } catch {
+        // try next mirror
       }
     }
-    return res.json({ results });
-  } catch (err) {
+  }
+
+  // 3. Last-resort safe fallback catalog
+  if (results.length === 0) {
     return res.json({
-      results: [
-        {
-          videoId: 'jfKfPfyJRdk',
-          title: `بث موسيقى هادئة - ${q}`,
-          author: 'Lofi Radio',
-          duration: 'مباشر',
-          thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg'
-        },
-        {
-          videoId: '5qap5aO4i9A',
-          title: 'أنغام عربية واسترخاء',
-          author: 'Music Stream',
-          duration: 'HD',
-          thumbnail: 'https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg'
-        }
-      ]
+      results: FALLBACK_YOUTUBE_SONGS.map((item, idx) => ({
+        ...item,
+        title: idx === 0 ? `${q} — ${item.title}` : item.title,
+        thumbnail: `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`
+      }))
     });
   }
+
+  return res.json({ results });
 });
 
 // ==========================================
@@ -1152,7 +1306,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     textColor,
     nameBgColor,
     neonColor,
-    fontFamily,
+    fontFamily: fontFamily !== undefined ? normalizeProfileFont(fontFamily) : undefined,
     fontStyle,
     fontSize,
     avatarUrl,
@@ -1580,6 +1734,12 @@ app.get('/api/leaderboards', (_req, res) => {
   for (const e of onlineSockets.values()) {
     if (!isStealthEntry(e)) onlineKeys.add(e.key);
   }
+  const adminActionCounts = new Map();
+  for (const log of db.getAdminLogs(500)) {
+    if (log.actor_key) {
+      adminActionCounts.set(log.actor_key, (adminActionCounts.get(log.actor_key) || 0) + 1);
+    }
+  }
   const mapEntry = (u) => ({
     key: `user:${u.id}`,
     name: db.getEffectiveName(u),
@@ -1591,6 +1751,8 @@ app.get('/api/leaderboards', (_req, res) => {
     vipWings: Boolean(u.vip_wings),
     coins: Number(u.coins) || 0,
     activityPoints: Number(u.activity_points) || 0,
+    quizPoints: Number(u.quiz_points) || 0,
+    adminActionsCount: adminActionCounts.get(`user:${u.id}`) || 0,
     giftsReceived: Number(u.gifts_received) || 0,
     vipFamily: u.vip_family || '',
     online: !isUserStealth(u) && onlineKeys.has(`user:${u.id}`)
@@ -1605,6 +1767,29 @@ app.get('/api/leaderboards', (_req, res) => {
     .sort((a, b) => (b.activity_points || 0) - (a.activity_points || 0) || (b.gifts_received || 0) - (a.gifts_received || 0))
     .slice(0, 25)
     .map(mapEntry);
+  const quizLeaders = [...all]
+    .sort((a, b) => (b.quiz_points || 0) - (a.quiz_points || 0) || (b.activity_points || 0) - (a.activity_points || 0))
+    .slice(0, 25)
+    .map(mapEntry);
+  const adminActivity = [...all]
+    .filter((u) => {
+      if (u.role === 'member' || u.role === 'guest') return false;
+      return (
+        u.role === 'site_owner' ||
+        db.hasPermission(u.role, 'access_panel') ||
+        db.hasPermission(u.role, 'mute') ||
+        db.hasPermission(u.role, 'kick') ||
+        db.hasPermission(u.role, 'ban') ||
+        db.getRankPower(u.role) >= 50
+      );
+    })
+    .map(mapEntry)
+    .sort(
+      (a, b) =>
+        (b.activityPoints + b.adminActionsCount * 5) - (a.activityPoints + a.adminActionsCount * 5) ||
+        db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role)
+    )
+    .slice(0, 25);
 
   const famMap = new Map();
   for (const u of all) {
@@ -1622,7 +1807,7 @@ app.get('/api/leaderboards', (_req, res) => {
     .sort((a, b) => (b.activity_points || 0) - (a.activity_points || 0) || (b.onlineCount || 0) - (a.onlineCount || 0))
     .slice(0, 20);
 
-  return res.json({ rich, vips, families, activeMembers, activeRooms });
+  return res.json({ rich, vips, families, activeMembers, activeRooms, quizLeaders, adminActivity });
 });
 
 // ==========================================
@@ -1992,55 +2177,255 @@ app.post('/api/lucky-box/claim', requireRegistered, async (req, res) => {
   return res.json({ ok: true, prize: result.prize, user: mapUserRow(result.user) });
 });
 
-function startRoomQuizRound(roomId, rewardCoins = 100) {
-  const bot = roomQuizBots.get(roomId);
-  if (!bot || !bot.active) return;
-  const qObj = QUIZ_BANK[bot.qIndex % QUIZ_BANK.length];
-  bot.qIndex += 1;
-  bot.currentQ = qObj;
+function clearQuizBotTimers(bot) {
+  if (!bot) return;
+  if (bot.timer) { clearTimeout(bot.timer); bot.timer = null; }
+  if (bot.hintTimer) { clearTimeout(bot.hintTimer); bot.hintTimer = null; }
+  if (bot.endTimer) { clearTimeout(bot.endTimer); bot.endTimer = null; }
+  if (bot.nextTimer) { clearTimeout(bot.nextTimer); bot.nextTimer = null; }
+}
+
+function getRoomHumanCount(roomId) {
+  let count = 0;
+  for (const e of onlineSockets.values()) {
+    if (e.roomId === roomId) count += 1;
+  }
+  return count;
+}
+
+function buildQuizHintText(rawAnswer) {
+  const ans = String(rawAnswer || '').trim();
+  const compact = ans.replace(/\s+/g, '');
+  const firstChar = compact.slice(0, 1) || '?';
+  const letterCount = compact.length;
+  return `أول حرف: "${firstChar}" • عدد الحروف: ${letterCount}`;
+}
+
+function emitQuizBotMessage(roomId, content, textColor = '#1e1b4b', nameBgColor = '#1e1b4b') {
   const msg = db.addMessage({
     roomId,
     senderKey: 'system:quizbot',
     senderName: '🤖 بوت المسابقات',
     senderRole: 'site_owner',
     nameColor: '#fbbf24',
-    textColor: '#1e1b4b',
-    nameBgColor: '#1e1b4b',
+    textColor,
+    nameBgColor,
     isAdminNotice: true,
     msgType: 'text',
-    content: `🎯 سؤال المسابقة (الجائزة: +${bot.rewardCoins} عملة): ${qObj.q}`
+    content
   });
   io.to(`room:${roomId}`).emit('new_message', msg);
 }
 
+function emitQuizBotState(roomId) {
+  const bot = roomQuizBots.get(roomId);
+  io.to(`room:${roomId}`).emit('quiz_bot_state', {
+    roomId,
+    active: Boolean(bot && bot.active),
+    hintSent: Boolean(bot && bot.hintSent),
+    pausedEmpty: Boolean(bot && bot.pausedEmpty),
+    enabledSetting: Number(db.getSiteSettings().quiz_bot_enabled) !== 0
+  });
+}
+
+function startRoomQuizRound(roomId) {
+  const bot = roomQuizBots.get(roomId);
+  if (!bot || !bot.active) return;
+  clearQuizBotTimers(bot);
+
+  if (getRoomHumanCount(roomId) === 0) {
+    bot.currentQ = null;
+    bot.hintSent = false;
+    bot.pausedEmpty = true;
+    return;
+  }
+
+  bot.pausedEmpty = false;
+  const qObj = QUIZ_BANK[bot.qIndex % QUIZ_BANK.length];
+  bot.qIndex = (bot.qIndex + 1) % QUIZ_BANK.length;
+  bot.currentQ = qObj;
+  bot.roundStartedAt = Date.now();
+  bot.hintSent = false;
+
+  emitQuizBotMessage(
+    roomId,
+    `🎯 [${qObj.category}] ${qObj.q} (⏱️ 25 ثانية | 100 نقطة قبل التلميح)`
+  );
+  emitQuizBotState(roomId);
+
+  // After 12s -> auto-send first letter + letter count hint
+  bot.hintTimer = setTimeout(() => {
+    const curBot = roomQuizBots.get(roomId);
+    if (!curBot || !curBot.active || curBot.currentQ !== qObj) return;
+    curBot.hintSent = true;
+    const hintDesc = buildQuizHintText(qObj.displayAnswer || qObj.a[0]);
+    emitQuizBotMessage(
+      roomId,
+      `💡 تلميح: ${hintDesc} — الإجابة الآن بـ 50 نقطة ثم 25 نقطة في الثواني الأخيرة!`,
+      '#92400e',
+      '#78350f'
+    );
+    emitQuizBotState(roomId);
+  }, 12000);
+
+  // After 25s -> reveal answer and advance to next question
+  bot.endTimer = setTimeout(() => {
+    const curBot = roomQuizBots.get(roomId);
+    if (!curBot || !curBot.active || curBot.currentQ !== qObj) return;
+    clearQuizBotTimers(curBot);
+    curBot.currentQ = null;
+    curBot.hintSent = false;
+    const answerLabel = qObj.displayAnswer || qObj.a[0];
+    emitQuizBotMessage(
+      roomId,
+      `⏰ انتهى الوقت! الإجابة الصحيحة هي: "${answerLabel}" — جاري الانتقال للسؤال التالي...`,
+      '#991b1b',
+      '#7f1d1d'
+    );
+    emitQuizBotState(roomId);
+    curBot.nextTimer = setTimeout(() => startRoomQuizRound(roomId), 3500);
+  }, 25000);
+}
+
+function startQuizBotInRoom(roomId, rewardCoins = 100) {
+  const prev = roomQuizBots.get(roomId);
+  clearQuizBotTimers(prev);
+  const bot = {
+    active: true,
+    qIndex: Math.floor(Math.random() * QUIZ_BANK.length),
+    currentQ: null,
+    roundStartedAt: 0,
+    hintSent: false,
+    pausedEmpty: false,
+    hintTimer: null,
+    endTimer: null,
+    nextTimer: null,
+    timer: null,
+    rewardCoins
+  };
+  roomQuizBots.set(roomId, bot);
+  if (roomId === 'competitions') {
+    db.updateSiteSettings({ quiz_bot_enabled: 1 });
+  }
+  startRoomQuizRound(roomId);
+  emitQuizBotState(roomId);
+}
+
+function stopQuizBotInRoom(roomId, silent = false) {
+  const prev = roomQuizBots.get(roomId);
+  clearQuizBotTimers(prev);
+  roomQuizBots.delete(roomId);
+  if (roomId === 'competitions') {
+    db.updateSiteSettings({ quiz_bot_enabled: 0 });
+  }
+  if (!silent) {
+    io.to(`room:${roomId}`).emit('room_notice', {
+      roomId,
+      text: '🛑 تم إيقاف بوت المسابقات التلقائي في هذه الغرفة.'
+    });
+  }
+  emitQuizBotState(roomId);
+}
+
+function ensureCompetitionsQuizBotRunning(roomId) {
+  if (roomId !== 'competitions') return;
+  if (Number(db.getSiteSettings().quiz_bot_enabled) === 0) return;
+  if (getRoomHumanCount('competitions') === 0) return;
+
+  const existing = roomQuizBots.get('competitions');
+  if (!existing) {
+    const bot = {
+      active: true,
+      qIndex: Math.floor(Math.random() * QUIZ_BANK.length),
+      currentQ: null,
+      roundStartedAt: 0,
+      hintSent: false,
+      pausedEmpty: false,
+      hintTimer: null,
+      endTimer: null,
+      nextTimer: null,
+      timer: null,
+      rewardCoins: 100
+    };
+    roomQuizBots.set('competitions', bot);
+    bot.nextTimer = setTimeout(() => startRoomQuizRound('competitions'), 1500);
+    return;
+  }
+  if (existing.active && existing.pausedEmpty && !existing.currentQ && !existing.nextTimer) {
+    existing.pausedEmpty = false;
+    existing.nextTimer = setTimeout(() => startRoomQuizRound('competitions'), 1500);
+  }
+}
+
+function pauseQuizBotIfRoomEmpty(roomId) {
+  if (!roomId) return;
+  const bot = roomQuizBots.get(roomId);
+  if (!bot || !bot.active) return;
+  if (getRoomHumanCount(roomId) === 0) {
+    clearQuizBotTimers(bot);
+    bot.currentQ = null;
+    bot.hintSent = false;
+    bot.pausedEmpty = true;
+  }
+}
+
+function isQuizAnswerMatch(rawMsg, acceptedAnswers) {
+  const normMsg = normalizeArabicText(rawMsg).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!normMsg) return false;
+  const msgWords = normMsg.split(' ');
+  return acceptedAnswers.some((ans) => {
+    const normAns = normalizeArabicText(ans).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (!normAns) return false;
+    if (normMsg === normAns) return true;
+    const bareAns = normAns.startsWith('ال') && normAns.length >= 4 ? normAns.slice(2) : normAns;
+    const bareMsg = normMsg.startsWith('ال') && normMsg.length >= 4 ? normMsg.slice(2) : normMsg;
+    if (bareMsg === bareAns) return true;
+    if (normAns.includes(' ')) {
+      return normMsg.includes(normAns);
+    }
+    return msgWords.some((w) => w === normAns || (bareAns.length >= 3 && (w === bareAns || w === `ال${bareAns}`)));
+  });
+}
+
 function checkQuizBotAnswer(entry, content) {
+  if (!entry || entry.key === 'system:quizbot') return;
   const bot = roomQuizBots.get(entry.roomId);
   if (!bot || !bot.active || !bot.currentQ) return;
-  const norm = normalizeArabicText(content);
-  const matched = bot.currentQ.a.some((ans) => norm.includes(normalizeArabicText(ans)));
-  if (!matched) return;
+  const qObj = bot.currentQ;
+  if (!isQuizAnswerMatch(content, qObj.a)) return;
 
-  const reward = bot.rewardCoins || 100;
+  const elapsedSec = Math.max(0, (Date.now() - (bot.roundStartedAt || Date.now())) / 1000);
+  let earnedPoints = 100;
+  let speedLabel = 'قبل التلميح ⚡';
+  if (bot.hintSent || elapsedSec >= 12) {
+    if (elapsedSec >= 20) {
+      earnedPoints = 25;
+      speedLabel = 'في الثواني الأخيرة ⏱️';
+    } else {
+      earnedPoints = 50;
+      speedLabel = 'بعد التلميح 💡';
+    }
+  }
+
+  clearQuizBotTimers(bot);
   bot.currentQ = null;
+  bot.hintSent = false;
+
   if (entry.userId) {
-    db.adjustUserCoins(entry.userId, reward);
+    db.adjustUserCoins(entry.userId, earnedPoints);
+    db.incrementQuizPoints(entry.userId, earnedPoints);
     syncUserAcrossSockets(io, entry.userId);
   }
-  const winMsg = db.addMessage({
-    roomId: entry.roomId,
-    senderKey: 'system:quizbot',
-    senderName: '🤖 بوت المسابقات',
-    senderRole: 'site_owner',
-    nameColor: '#fbbf24',
-    textColor: '#166534',
-    nameBgColor: '#14532d',
-    isAdminNotice: true,
-    msgType: 'text',
-    content: `🏆 أحسنت يا "${entry.name}"! إجابة صحيحة وحصلت على +${reward} عملة ذهبية!`
-  });
-  io.to(`room:${entry.roomId}`).emit('new_message', winMsg);
-  if (bot.timer) clearTimeout(bot.timer);
-  bot.timer = setTimeout(() => startRoomQuizRound(entry.roomId, reward), 4500);
+
+  const answerLabel = qObj.displayAnswer || qObj.a[0];
+  emitQuizBotMessage(
+    entry.roomId,
+    `🏆 أحسنت يا "${entry.name}"! الإجابة (${answerLabel}) صحيحة [${speedLabel}] وحصلت على +${earnedPoints} نقطة مسابقة!${entry.userId ? '' : ' (سجّل لحفظ نقاطك)'}`,
+    '#166534',
+    '#14532d'
+  );
+  emitQuizBotState(entry.roomId);
+  bot.nextTimer = setTimeout(() => startRoomQuizRound(entry.roomId), 3500);
 }
 
 app.get('/api/owner/suite', requireOwner, (_req, res) => {
@@ -2362,19 +2747,17 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   }
 
   if (action === 'quiz_bot') {
-    const targetRoomId = roomId || 'general';
+    const targetRoomId = roomId || 'competitions';
     if (!db.getRoomById(targetRoomId)) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-    const prev = roomQuizBots.get(targetRoomId);
-    if (prev?.timer) clearTimeout(prev.timer);
     if (!enabled) {
-      roomQuizBots.delete(targetRoomId);
-      io.to(`room:${targetRoomId}`).emit('room_notice', { roomId: targetRoomId, text: '🛑 تم إيقاف بوت المسابقات في هذه الغرفة.' });
+      stopQuizBotInRoom(targetRoomId);
+      db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'إيقاف بوت المسابقات', targetKey: targetRoomId });
+      await db.flushWrites();
       return res.json({ ok: true, active: false });
     }
     const reward = Math.max(10, Math.min(2000, Number(rewardCoins) || 100));
-    roomQuizBots.set(targetRoomId, { active: true, qIndex: Math.floor(Math.random() * QUIZ_BANK.length), currentQ: null, timer: null, rewardCoins: reward });
-    startRoomQuizRound(targetRoomId, reward);
-    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تشغيل بوت المسابقات', targetKey: targetRoomId, details: `الجائزة ${reward}` });
+    startQuizBotInRoom(targetRoomId, reward);
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تشغيل بوت المسابقات', targetKey: targetRoomId, details: 'نظام تدرجي 100/50/25' });
     await db.flushWrites();
     return res.json({ ok: true, active: true });
   }
@@ -2467,11 +2850,14 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
     socket.leave(`room:${oldRoomId}`);
     entry.roomId = null;
     broadcastRoomUsers(io, oldRoomId);
+    pauseQuizBotIfRoomEmpty(oldRoomId);
   }
 
   entry.roomId = targetRoomId;
   socket.join(`room:${targetRoomId}`);
 
+  ensureCompetitionsQuizBotRunning(targetRoomId);
+  const qBot = roomQuizBots.get(targetRoomId);
   const messages = db.getRoomMessages(targetRoomId, 100, entry.key);
   const pubRoom = db.sanitizeRoomForPublic(room);
   const isManager = db.isRoomManager(targetRoomId, entry.userId, entry.role);
@@ -2482,7 +2868,12 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
     messages,
     mics: getPublicMicSlots(targetRoomId),
     users: getRoomUsersList(targetRoomId),
-    roomKingKey: computeRoomKingKey(targetRoomId)
+    roomKingKey: computeRoomKingKey(targetRoomId),
+    quizBot: {
+      active: Boolean(qBot && qBot.active),
+      hintSent: Boolean(qBot && qBot.hintSent),
+      enabledSetting: Number(db.getSiteSettings().quiz_bot_enabled) !== 0
+    }
   });
 
   broadcastRoomUsers(io, targetRoomId);
@@ -2818,15 +3209,14 @@ io.on('connection', (socket) => {
       broadcastRoomsList(io);
       if (msgType === 'text') checkQuizBotAnswer(entry, content);
 
-      // Smart Mention & Recipient-Only Ping Alert
-      if (msgType === 'text' && content.includes('@')) {
-        const lowerContent = content.toLowerCase();
+      // Smart Mention (No @ required) & Recipient-Only Audio/Notification Ping
+      if (msgType === 'text' && content) {
         const mentionedKeys = new Set();
         for (const other of onlineSockets.values()) {
           if (other.key === entry.key || isStealthEntry(other)) continue;
-          const n1 = String(other.name || '').trim().toLowerCase();
-          const n2 = String(other.username || '').trim().toLowerCase();
-          if ((n1 && lowerContent.includes(`@${n1}`)) || (n2 && lowerContent.includes(`@${n2}`))) {
+          const n1 = String(other.name || '').trim();
+          const n2 = String(other.username || '').trim();
+          if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
             mentionedKeys.add(other.key);
           }
         }
@@ -3064,28 +3454,48 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // SYNCHRONIZED ROOM YOUTUBE PLAYER
+  // SYNCHRONIZED ROOM YOUTUBE PLAYER + MIC MINI AUDIO BAR
   // ==========================================
-  socket.on('room_youtube_set', async ({ roomId, url, title, isPlaying } = {}, cb) => {
+  socket.on('room_youtube_set', async ({ roomId, url, title, isPlaying, miniMode } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
     const targetRoomId = roomId || entry?.roomId;
     if (!entry || !targetRoomId) return;
-    if (!db.isRoomManager(targetRoomId, entry.userId, entry.role)) {
-      if (typeof cb === 'function') cb({ error: 'تشغيل يوتيوب الغرفة متاح لمالك الغرفة والإدارة فقط.' });
+
+    const currentRoom = db.getRoomById(targetRoomId);
+    if (!currentRoom) return;
+
+    const isMgr = db.isRoomManager(targetRoomId, entry.userId, entry.role);
+    const slots = ensureRoomMicSlots(targetRoomId);
+    const isOnMic = slots.some((s) => s.holderKey === entry.key);
+    const isFrozen = (entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner';
+    const isMuted = Boolean(db.getActiveMute(entry.key, targetRoomId));
+
+    if (!isMgr && (isFrozen || isMuted)) {
+      if (typeof cb === 'function') cb({ error: 'لا يمكنك تشغيل أو تعديل يوتيوب أثناء التجميد أو الكتم.' });
       return;
     }
 
     const rawUrl = String(url || '').trim();
     const videoId = rawUrl === '' ? '' : extractYouTubeId(rawUrl);
     if (rawUrl !== '' && !videoId) {
-      if (typeof cb === 'function') cb({ error: 'رابط يوتيوب غير صالح. أرسل رابط فيديو يوتيوب صحيح.' });
+      if (typeof cb === 'function') cb({ error: 'رابط يوتيوب غير صالح. استخدم البحث بالاسم أو رابط فيديو صحيح.' });
       return;
     }
 
+    if (videoId === '' && !isMgr && !isOnMic && currentRoom.youtube_by_key !== entry.key) {
+      if (typeof cb === 'function') cb({ error: 'يمكن لمن شغّل المقطع أو المتحدث على المايك أو الإدارة فقط إيقاف التشغيل.' });
+      return;
+    }
+
+    const resolvedMiniMode = miniMode !== undefined ? Boolean(miniMode) : isOnMic;
+    const cleanTitle = String(title || (videoId ? 'مقطع يوتيوب الغرفة' : '')).slice(0, 120);
     const updated = db.setRoomYoutube(targetRoomId, {
       videoId,
-      title: String(title || (videoId ? 'فيديو يوتيوب الغرفة' : '')).slice(0, 120),
-      isPlaying: Boolean(videoId && isPlaying !== false)
+      title: cleanTitle,
+      isPlaying: Boolean(videoId && isPlaying !== false),
+      miniMode: Boolean(videoId && resolvedMiniMode),
+      startedByKey: entry.key,
+      startedByName: entry.name
     });
     if (!updated) return;
 
@@ -3095,11 +3505,40 @@ io.on('connection', (socket) => {
       youtubeVideoId: pub.youtube_video_id,
       youtubeTitle: pub.youtube_title,
       youtubeIsPlaying: Boolean(pub.youtube_is_playing),
+      youtubeMiniMode: Boolean(pub.youtube_mini_mode),
+      youtubeByKey: pub.youtube_by_key,
+      youtubeByName: pub.youtube_by_name,
       byName: entry.name
     });
+    if (videoId) {
+      io.to(`room:${targetRoomId}`).emit('room_notice', {
+        roomId: targetRoomId,
+        text: `🎵 شارك "${entry.name}" مقطع يوتيوب: ${cleanTitle}${resolvedMiniMode ? ' (شريط صوتي تحت المايك)' : ''}`
+      });
+    }
     broadcastRoomsList(io);
     await db.flushWrites();
     if (typeof cb === 'function') cb({ ok: true, room: pub });
+  });
+
+  socket.on('quiz_bot_toggle', async ({ roomId, enabled } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'هذا الخيار متاح لصاحب الموقع فقط.' });
+      return;
+    }
+    const targetRoomId = roomId || entry.roomId || 'competitions';
+    if (!db.getRoomById(targetRoomId)) {
+      if (typeof cb === 'function') cb({ error: 'الغرفة غير موجودة.' });
+      return;
+    }
+    if (enabled) {
+      startQuizBotInRoom(targetRoomId, 100);
+    } else {
+      stopQuizBotInRoom(targetRoomId);
+    }
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true, active: Boolean(enabled) });
   });
 
   // ==========================================
@@ -3168,15 +3607,120 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // MODERATION SOCKET ACTIONS
+  // MODERATION SOCKET ACTIONS (WITH HIERARCHICAL IMMUNITY)
   // ==========================================
+  function resolveTargetInfo(targetKey) {
+    let targetName = targetKey || 'عضو';
+    let targetRole = 'guest';
+    let targetEmail = '';
+    let targetIp = '';
+    let targetDevice = '';
+    if (String(targetKey || '').startsWith('user:')) {
+      const uid = Number(String(targetKey).replace('user:', ''));
+      const row = Number.isNaN(uid) ? null : db.findUserById(uid);
+      if (row) {
+        targetName = db.getEffectiveName(row);
+        targetRole = row.role || 'member';
+        targetEmail = row.email || '';
+        targetIp = row.last_ip || '';
+        targetDevice = row.last_device_id || '';
+      }
+    }
+    for (const o of onlineSockets.values()) {
+      if (o.key === targetKey) {
+        targetName = o.name || targetName;
+        targetRole = o.role || targetRole;
+        targetEmail = o.email || targetEmail;
+        targetIp = o.ipAddress || targetIp;
+        targetDevice = o.deviceId || targetDevice;
+        break;
+      }
+    }
+    return { targetName, targetRole, targetEmail, targetIp, targetDevice };
+  }
+
+  function canModerateWithImmunity(actorEntry, targetKey) {
+    if (!actorEntry || !targetKey) return { allowed: false, reason: 'هدف غير صالح.' };
+    if (targetKey === actorEntry.key) return { allowed: false, reason: 'لا يمكنك تنفيذ هذا الإجراء على نفسك.' };
+    if (db.isProtectedSupremeOwnerKey(targetKey)) {
+      return { allowed: false, reason: 'حساب صاحب الموقع محمي بالكامل.' };
+    }
+    const info = resolveTargetInfo(targetKey);
+    if (info.targetRole === 'site_owner' && actorEntry.role !== 'site_owner') {
+      return { allowed: false, reason: 'لا يمكنك التحكم بصاحب الموقع.' };
+    }
+    if (actorEntry.role !== 'site_owner') {
+      const myPower = db.getRankPower(actorEntry.role);
+      const targetPower = db.getRankPower(info.targetRole);
+      if (targetPower >= myPower) {
+        return { allowed: false, reason: 'الحصانة المتدرجة: لا يمكنك التحكم بعضو أعلى منك أو مساوٍ لك في الرتبة.' };
+      }
+    }
+    return { allowed: true, info };
+  }
+
+  socket.on('admin_warn', async ({ targetKey, reason = 'مخالفة قوانين الغرفة' } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const isMgr =
+      entry.role === 'site_owner' ||
+      db.isRoomManager(entry.roomId, entry.userId, entry.role) ||
+      canDo(entry.role, 'mute') ||
+      canDo(entry.role, 'kick') ||
+      canDo(entry.role, 'ban');
+    if (!isMgr) {
+      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية توجيه التحذيرات.' });
+      return;
+    }
+    const check = canModerateWithImmunity(entry, targetKey);
+    if (!check.allowed) {
+      socket.emit('error_toast', { message: check.reason });
+      if (typeof cb === 'function') cb({ error: check.reason });
+      return;
+    }
+    const cleanReason = String(reason || 'مخالفة قوانين الغرفة').trim().slice(0, 240);
+    db.addAdminLog({
+      actorKey: entry.key,
+      actorName: entry.name,
+      actorRole: entry.role,
+      action: 'تحذير إداري',
+      targetKey,
+      targetName: check.info.targetName,
+      details: cleanReason
+    });
+    const notif = db.addNotification({
+      targetKey,
+      title: `⚠️ تحذير إداري من ${entry.name}`,
+      body: cleanReason,
+      category: 'warning'
+    });
+    emitNotificationToUser(io, targetKey, notif);
+    for (const [sid, o] of onlineSockets.entries()) {
+      if (o.key === targetKey) {
+        io.to(sid).emit('admin_warning', {
+          byName: entry.name,
+          byRole: entry.role,
+          reason: cleanReason,
+          roomId: entry.roomId
+        });
+      }
+    }
+    io.to(`room:${entry.roomId}`).emit('room_notice', {
+      roomId: entry.roomId,
+      text: `⚠️ وجّه "${entry.name}" تحذيراً إدارياً إلى "${check.info.targetName}": ${cleanReason}`
+    });
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
   socket.on('admin_mute', async ({ targetKey, minutes = 10, unmute = false } = {}) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || !entry.roomId) return;
     const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
     if (!isMgr) return;
-    if (db.isProtectedSupremeOwnerKey(targetKey)) {
-      socket.emit('error_toast', { message: 'لا يمكن كتم صاحب الموقع.' });
+    const check = canModerateWithImmunity(entry, targetKey);
+    if (!check.allowed) {
+      socket.emit('error_toast', { message: check.reason });
       return;
     }
 
@@ -3184,18 +3728,18 @@ io.on('connection', (socket) => {
       db.removeMute(targetKey, entry.roomId);
       io.to(`room:${entry.roomId}`).emit('room_notice', {
         roomId: entry.roomId,
-        text: `🔊 قام "${entry.name}" بفك الكتم عن العضو.`
+        text: `🔊 قام "${entry.name}" بفك الكتم عن "${check.info.targetName}".`
       });
-      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'فك كتم', targetKey, details: entry.roomId });
+      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'فك كتم', targetKey, targetName: check.info.targetName, details: entry.roomId });
     } else {
       const mins = Math.max(1, Math.min(1440, Number(minutes) || 10));
       db.setMute(targetKey, entry.roomId, mins * 60 * 1000, entry.name);
       releaseUserMicsInRoom(targetKey, entry.roomId);
       io.to(`room:${entry.roomId}`).emit('room_notice', {
         roomId: entry.roomId,
-        text: `🔇 قام "${entry.name}" بكتم عضو لمدة ${mins} دقيقة.`
+        text: `🔇 قام "${entry.name}" بكتم "${check.info.targetName}" لمدة ${mins} دقيقة.`
       });
-      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'كتم عضو', targetKey, details: `${mins} دقيقة (${entry.roomId})` });
+      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'كتم عضو', targetKey, targetName: check.info.targetName, details: `${mins} دقيقة (${entry.roomId})` });
     }
     await db.flushWrites();
   });
@@ -3204,14 +3748,15 @@ io.on('connection', (socket) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || !entry.roomId) return;
     const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
-    if (!isMgr || db.isProtectedSupremeOwnerKey(targetKey)) return;
+    if (!isMgr) return;
+    const check = canModerateWithImmunity(entry, targetKey);
+    if (!check.allowed) {
+      socket.emit('error_toast', { message: check.reason });
+      return;
+    }
 
     for (const [sid, o] of onlineSockets.entries()) {
       if (o.key === targetKey && o.roomId === entry.roomId) {
-        if (entry.role !== 'site_owner' && db.getRankPower(o.role) >= db.getRankPower(entry.role)) {
-          socket.emit('error_toast', { message: 'لا يمكنك طرد رتبة أعلى منك أو مساوية لك.' });
-          return;
-        }
         db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'طرد من الغرفة', targetKey, targetName: o.name, details: entry.roomId });
         io.to(sid).emit('kicked', { reason: `تم طردك من الغرفة بواسطة ${entry.name}` });
         const s = io.sockets.sockets.get(sid);
@@ -3224,26 +3769,13 @@ io.on('connection', (socket) => {
   socket.on('admin_ban', async ({ targetKey, reason = 'حظر إداري', banType = 'ban' } = {}) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'ban'))) return;
-    if (db.isProtectedSupremeOwnerKey(targetKey)) return;
-
-    let targetName = targetKey;
-    let targetEmail = '';
-    let targetIp = '';
-    let targetDevice = '';
-    for (const o of onlineSockets.values()) {
-      if (o.key === targetKey) {
-        if (entry.role !== 'site_owner' && db.getRankPower(o.role) >= db.getRankPower(entry.role)) {
-          socket.emit('error_toast', { message: 'لا يمكنك حظر رتبة أعلى منك أو مساوية لك.' });
-          return;
-        }
-        targetName = o.name;
-        targetEmail = o.email || '';
-        targetIp = o.ipAddress || '';
-        targetDevice = o.deviceId || '';
-        break;
-      }
+    const check = canModerateWithImmunity(entry, targetKey);
+    if (!check.allowed) {
+      socket.emit('error_toast', { message: check.reason });
+      return;
     }
 
+    const { targetName, targetEmail, targetIp, targetDevice } = check.info;
     db.banTarget({
       targetKey,
       targetName,
@@ -3401,6 +3933,13 @@ io.on('connection', (socket) => {
     const target = roomMsgs.find((m) => String(m.id) === String(msgId) || String(m.doc_id) === String(msgId));
     if (!target) return;
     if (!isMgr && target.sender_key !== entry.key) return;
+    if (target.sender_key !== entry.key && entry.role !== 'site_owner') {
+      const check = canModerateWithImmunity(entry, target.sender_key);
+      if (!check.allowed) {
+        socket.emit('error_toast', { message: check.reason });
+        return;
+      }
+    }
     db.deleteMessageById(msgId);
     io.to(`room:${entry.roomId}`).emit('message_deleted', { roomId: entry.roomId, msgId: String(msgId) });
     await db.flushWrites();
@@ -3429,6 +3968,7 @@ io.on('connection', (socket) => {
     const key = entry.key;
     onlineSockets.delete(socket.id);
     releaseUserMicsInRoom(key, oldRoomId);
+    pauseQuizBotIfRoomEmpty(oldRoomId);
 
     // Grace period keeps transient disconnect silent without emitting any leave notice
     const prevGrace = pendingGrace.get(key);

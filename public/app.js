@@ -56,8 +56,9 @@
   ];
 
   const NAME_COLOR_SWATCHES = [
-    '#0f172a', '#1e293b', '#b71c4a', '#dc2626', '#ea580c', '#d97706',
-    '#16a34a', '#0d9488', '#0284c7', '#1a45e5', '#7c3aed', '#db2777'
+    '#0f172a', '#1e293b', '#334155', '#64748b', '#ffffff', '#b71c4a',
+    '#dc2626', '#ef4444', '#ea580c', '#d97706', '#eab308', '#16a34a',
+    '#0d9488', '#0284c7', '#1a45e5', '#4f46e5', '#7c3aed', '#db2777'
   ];
 
   const RANK_ICON_PRESETS = [
@@ -66,13 +67,41 @@
   ];
 
   const RANK_BADGE_STYLES = [
-    { id: 'crown_royal', label: 'تاج ملكي', iconClass: 'fa-solid fa-crown' },
-    { id: 'gold_eagle', label: 'نسر ذهبي', iconClass: 'fa-solid fa-feather-pointed' },
-    { id: 'silver_wing', label: 'جناح فضي', iconClass: 'fa-solid fa-dove' },
-    { id: 'diamond_medal', label: 'وسام ماسي', iconClass: 'fa-solid fa-gem' },
+    { id: 'gold_crown', label: 'تاج ذهبي ملكي', iconClass: 'fa-solid fa-crown' },
+    { id: 'silver_crown', label: 'تاج فضي', iconClass: 'fa-solid fa-crown' },
     { id: 'royal_shield', label: 'درع ملكي', iconClass: 'fa-solid fa-shield-halved' },
-    { id: 'neon_badge', label: 'شارة نيون', iconClass: 'fa-solid fa-certificate' }
+    { id: 'silver_shield', label: 'درع فضي محصّن', iconClass: 'fa-solid fa-shield' },
+    { id: 'gold_star', label: 'نجمة ذهبية متلألئة', iconClass: 'fa-solid fa-star' },
+    { id: 'diamond_gem', label: 'ماسة زرقاء براقة', iconClass: 'fa-solid fa-gem' },
+    { id: 'vip_wings', label: 'أجنحة VIP ملكية', iconClass: 'fa-solid fa-feather-pointed' },
+    { id: 'silver_wing', label: 'جناح فضي', iconClass: 'fa-solid fa-dove' },
+    { id: 'gold_eagle', label: 'نسر ذهبي', iconClass: 'fa-solid fa-feather-pointed' },
+    { id: 'neon_badge', label: 'شارة نيون متوهجة', iconClass: 'fa-solid fa-certificate' },
+    { id: 'crown_royal', label: 'تاج السيادة', iconClass: 'fa-solid fa-crown' },
+    { id: 'diamond_medal', label: 'وسام ماسي', iconClass: 'fa-solid fa-gem' }
   ];
+
+  const BUILT_IN_RANK_SVGS = {
+    gold_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="gCrown" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="55%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><path fill="url(#gCrown)" stroke="#78350f" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2z"/><circle cx="12" cy="4.2" r="1.4" fill="#ef4444"/><circle cx="4.4" cy="7.5" r="1.1" fill="#38bdf8"/><circle cx="19.6" cy="7.5" r="1.1" fill="#38bdf8"/></svg>',
+    crown_royal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="gCrownR" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fde047"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#a16207"/></linearGradient></defs><path fill="url(#gCrownR)" stroke="#713f12" stroke-width="1" d="M2.5 18.5h19L20 8l-4.8 4.2L12 4.5 8.8 12.2 4 8l-1.5 10.5zM4 20.5h16v1.8H4z"/><circle cx="12" cy="14" r="1.5" fill="#dc2626"/></svg>',
+    silver_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="sCrown" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#cbd5e1"/><stop offset="100%" stop-color="#64748b"/></linearGradient></defs><path fill="url(#sCrown)" stroke="#334155" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.3" fill="#38bdf8"/></svg>',
+    royal_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="rShield" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><path fill="#1e293b" stroke="url(#rShield)" stroke-width="1.8" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="url(#rShield)" d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z"/></svg>',
+    silver_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="sShield" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="60%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/></linearGradient></defs><path fill="url(#sShield)" stroke="#1e293b" stroke-width="1.3" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="#0ea5e9" d="M12 6.5l3 5.5-3 5.5-3-5.5z"/></svg>',
+    gold_star: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="gStar" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef9c3"/><stop offset="50%" stop-color="#facc15"/><stop offset="100%" stop-color="#d97706"/></linearGradient></defs><path fill="url(#gStar)" stroke="#92400e" stroke-width="1.1" d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17l-5.9 3.2 1.2-6.5-4.8-4.6 6.6-.9z"/></svg>',
+    diamond_gem: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="dGem" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e0f2fe"/><stop offset="45%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><path fill="url(#dGem)" stroke="#1e40af" stroke-width="1" d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5z"/><path fill="rgba(255,255,255,0.45)" d="M6.5 3.5 9 9l3-5.5zm5.5 0L9 9h6z"/></svg>',
+    diamond_medal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="dMed" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fae8ff"/><stop offset="50%" stop-color="#a855f7"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs><path fill="url(#dMed)" stroke="#312e81" stroke-width="1" d="M7 3h10l4 5.5L12 21 3 8.5 7 3z"/></svg>',
+    vip_wings: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="vWing" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fde047"/><stop offset="100%" stop-color="#ea580c"/></linearGradient></defs><path fill="url(#vWing)" stroke="#7c2d12" stroke-width="0.8" d="M2 7c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2-2.2 1-4.5.7-6-.8.8 1.8 3.2 2.8 5.5 2.5L12 19l3-2.8c2.3.3 4.7-.7 5.5-2.5-1.5 1.5-3.8 1.8-6 .8 2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2 1.5-3 4-5.5 8-5.5-4.5-.8-8 1-10 4.2C10 8 6.5 6.2 2 7z"/><circle cx="12" cy="11" r="2.2" fill="#facc15" stroke="#7c2d12" stroke-width="0.7"/></svg>',
+    silver_wing: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#e2e8f0" stroke="#475569" stroke-width="0.9" d="M3 8c4.5 0 7.5 2.8 9 6-2.5.8-5.5.1-7-2 1.4 2.5 4 3.8 6.5 4-2.2 1-4.6.6-6-.8.9 1.8 3.4 2.7 5.8 2.3L12 19l8.5-7c-3.5-.3-6.5 1-8.5 3.3C10.5 10.5 7 7.7 3 8z"/></svg>',
+    gold_eagle: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="0.9" d="M12 4l2.2 3.2 7.3-1.7-3.5 5 2 3-5.2-1.2L12 20.5 9.2 12.3 4 13.5l2-3-3.5-5 7.3 1.7z"/></svg>',
+    neon_badge: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="nBad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="50%" stop-color="#ec4899"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs><path fill="url(#nBad)" stroke="#ffffff" stroke-width="0.9" d="M12 2l2.3 2.7 3.5-.5.8 3.4 3.2 1.5-1.3 3.3 1.3 3.3-3.2 1.5-.8 3.4-3.5-.5L12 22l-2.3-2.7-3.5.5-.8-3.4-3.2-1.5 1.3-3.3-1.3-3.3 3.2-1.5.8-3.4 3.5.5z"/><path fill="#ffffff" d="M12 7.5l1.3 2.9 3.1.4-2.2 2.2.5 3.1-2.7-1.5-2.7 1.5.5-3.1-2.2-2.2 3.1-.4z"/></svg>'
+  };
+
+  const FRAME_ORNAMENT_SVGS = {
+    lightning_bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#38bdf8" stroke="#ffffff" stroke-width="1.2" d="M13 2L4.5 13.5H11L9.5 22 19.5 10.5H13z"/></svg>',
+    hearts_roses: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#f43f5e" stroke="#ffe4e6" stroke-width="1.1" d="M12 20.5s-7-4.4-9-8.8C1.5 8.4 3.7 4.8 7.3 4.8c2 0 3.7 1.1 4.7 2.7 1-1.6 2.7-2.7 4.7-2.7 3.6 0 5.8 3.6 4.3 6.9-2 4.4-9 8.8-9 8.8z"/></svg>',
+    fire_gold: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fb923c" stroke="#fef08a" stroke-width="1" d="M12.5 2c1.5 3.5-.5 5.5 1.5 8 .8-1.4 1.5-2.3 1.7-3.6 2.8 2 4.3 4.8 4.3 7.8a8 8 0 1 1-16 0c0-3.8 2.6-7.6 8.5-12.2z"/></svg>',
+    royal_wings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="0.9" d="M2 8c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2L12 19l2.5-3.5c2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2C15.5 10.5 18 8 22 8c-4.5-.8-8 1-10 4.2C10 9 6.5 7.2 2 8z"/></svg>'
+  };
 
   const DEFAULT_RADIO_STATIONS = [
     {
@@ -132,6 +161,9 @@
     adminNoticeMode: false,
     ytLocalMuted: false,
     ytBarOpen: false,
+    ytSearchTimer: null,
+    ytForceVideo: false,
+    quizBotState: { active: false, hintSent: false, enabledSetting: true },
     activeCustomizeTab: 'info',
     activeNameStyleTab: 'color',
     activeLeaderboardTab: 'rich',
@@ -162,7 +194,10 @@
     activeSlidePmTarget: null,
     roomKingKey: null,
     activeOwnerSubTab: 'surveillance',
-    ownerSuite: null
+    ownerSuite: null,
+    deferredInstallPrompt: null,
+    activeStoreTab: 'frames',
+    rankPickerTarget: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -352,6 +387,9 @@
     if (r.image_url) {
       return `<img src="${escapeHtml(r.image_url)}" class="rank-badge-img" alt="" />`;
     }
+    if (r.badge_style && BUILT_IN_RANK_SVGS[r.badge_style]) {
+      return BUILT_IN_RANK_SVGS[r.badge_style];
+    }
     const styleObj = RANK_BADGE_STYLES.find((s) => s.id === r.badge_style);
     if (styleObj) {
       return `<i class="${escapeHtml(styleObj.iconClass)}"></i>`;
@@ -367,6 +405,39 @@
       return `<span class="rank-icon-mini ${styleClass}" title="${escapeHtml(r.label)}" style="background:${escapeHtml(r.bg_color)};color:${escapeHtml(r.text_color)}">${iconHtml}</span>`;
     }
     return `<span class="rank-badge ${styleClass}" style="background:${escapeHtml(r.bg_color)};color:${escapeHtml(r.text_color)}">${iconHtml}<span>${escapeHtml(r.label)}</span></span>`;
+  }
+
+  function resolveFontFamilyCss(ff) {
+    const clean = String(ff || '').trim();
+    if (!clean || clean === 'Normal') return "'Cairo', 'Tajawal', sans-serif";
+    if (clean === 'Grandmaster') return "'Grandstander', 'Cairo', sans-serif";
+    return `'${escapeHtml(clean)}', 'Cairo', sans-serif`;
+  }
+
+  function canManageTargetUser(target) {
+    if (!state.user || !target) return false;
+    if (target.key && target.key === state.user.key) return false;
+    if (
+      target.isSupremeOwner ||
+      target.role === 'site_owner' ||
+      String(target.email || '').toLowerCase() === 'a38125923@gmail.com'
+    ) {
+      return false;
+    }
+    if (state.user.role === 'site_owner') return true;
+    const myPower = Number(getRank(state.user.role)?.power) || 0;
+    const targetPower = Number(getRank(target.role)?.power) || 0;
+    return myPower > targetPower;
+  }
+
+  function getAssignableRanksForActor() {
+    if (!state.user) return [];
+    const isOwner = state.user.role === 'site_owner';
+    const myRank = getRank(state.user.role);
+    const ceiling = isOwner ? 100 : (Number(myRank?.max_assignable_rank) || 0);
+    return (state.ranks || [])
+      .filter((r) => r.key !== 'guest' && r.key !== 'site_owner' && (isOwner || Number(r.power) <= ceiling))
+      .sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
   }
 
   function formatNameHTML(userObj) {
@@ -398,7 +469,7 @@
       styles.push('background-color:#f4f4f5');
     }
     if (neon) styles.push(`text-shadow:0 0 8px ${escapeHtml(neon)}, 0 0 14px ${escapeHtml(neon)}`);
-    if (ff && ff !== 'Normal') styles.push(`font-family:'${escapeHtml(ff)}', sans-serif`);
+    if (ff && ff !== 'Normal') styles.push(`font-family:${resolveFontFamilyCss(ff)}`);
     if (fs === 'Bold') styles.push('font-weight:900');
     if (fs === 'Italic') styles.push('font-style:italic');
     styles.push(`font-size:${fontSize}px`);
@@ -425,6 +496,24 @@
     return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
   }
 
+  function frameOrnamentHtml(frame) {
+    const svg = FRAME_ORNAMENT_SVGS[frame];
+    return svg ? `<span class="frame-svg-ornament" aria-hidden="true">${svg}</span>` : '';
+  }
+
+  function syncFrameOrnament(wrapEl, frame) {
+    if (!wrapEl) return;
+    wrapEl.querySelectorAll('.frame-svg-ornament').forEach((n) => n.remove());
+    const svg = FRAME_ORNAMENT_SVGS[frame];
+    if (svg) {
+      const sp = document.createElement('span');
+      sp.className = 'frame-svg-ornament';
+      sp.setAttribute('aria-hidden', 'true');
+      sp.innerHTML = svg;
+      wrapEl.appendChild(sp);
+    }
+  }
+
   function formatAvatarHTML(userObj, sizeClass = '') {
     const name = String(userObj.sender_name || userObj.name || 'ع').trim();
     const avatarUrl = userObj.avatar_url || userObj.avatarUrl || '';
@@ -433,7 +522,7 @@
     const inner = avatarUrl
       ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(name)}" />`
       : `<span class="avatar-letter">${letter}</span>`;
-    return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}</span>`;
+    return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}${frameOrnamentHtml(frame)}</span>`;
   }
 
   function formatTimeAgo(dateInput) {
@@ -460,14 +549,14 @@
     const input = $('messageInput');
     if (!clean || !input) return;
     const prefix = input.value && !input.value.endsWith(' ') ? ' ' : '';
-    input.value = `${input.value}${prefix}@${clean} `;
+    input.value = `${input.value}${prefix}${clean} `;
     input.focus();
   }
 
   function findKnownUserByMention(mentionText) {
     const target = String(mentionText || '').trim().toLowerCase();
     if (!target) return null;
-    const pools = [state.roomUsers, state.onlineUsers, state.persistentMembers];
+    const pools = [state.roomUsers, state.onlineUsers, state.persistentMembers, state.user ? [state.user] : []];
     for (const pool of pools) {
       for (const u of pool || []) {
         const n1 = String(u.name || u.displayName || '').trim().toLowerCase();
@@ -476,6 +565,34 @@
       }
     }
     return null;
+  }
+
+  function doesTextContainName(rawText, candidateName) {
+    const text = String(rawText || '').trim().toLowerCase();
+    const clean = String(candidateName || '').trim().toLowerCase();
+    if (!text || clean.length < 2) return false;
+    const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[\\s،,.!?:"'()\\-])${escaped}(?=$|[\\s،,.!?:"'()\\-])`, 'i');
+    return re.test(text);
+  }
+
+  function collectKnownUsersForMentions() {
+    const knownNames = [];
+    const seen = new Set();
+    const pools = [state.roomUsers, state.onlineUsers, state.persistentMembers, state.user ? [state.user] : []];
+    for (const pool of pools) {
+      for (const u of pool || []) {
+        for (const nm of [u.name, u.displayName, u.username]) {
+          const clean = String(nm || '').trim();
+          if (clean.length >= 2 && !seen.has(clean.toLowerCase())) {
+            seen.add(clean.toLowerCase());
+            knownNames.push({ name: clean, user: u });
+          }
+        }
+      }
+    }
+    knownNames.sort((a, b) => b.name.length - a.name.length);
+    return knownNames;
   }
 
   function renderContentWithEmojis(rawText) {
@@ -493,37 +610,34 @@
 
   function renderMessageTextWithMentions(rawText) {
     let html = renderContentWithEmojis(rawText);
-    const knownNames = [];
-    const seen = new Set();
-    for (const pool of [state.roomUsers, state.onlineUsers, state.persistentMembers]) {
-      for (const u of pool || []) {
-        for (const nm of [u.name, u.username]) {
-          const clean = String(nm || '').trim();
-          if (clean && !seen.has(clean.toLowerCase())) {
-            seen.add(clean.toLowerCase());
-            knownNames.push({ name: clean, user: u });
-          }
-        }
-      }
-    }
-    knownNames.sort((a, b) => b.name.length - a.name.length);
+    const knownNames = collectKnownUsersForMentions();
+    const tokens = [];
+
     for (const item of knownNames) {
       const esc = escapeHtml(item.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const bg = item.user.nameBgColor || item.user.name_bg_color || '#18181b';
-      const fg = item.user.nameBgColor || item.user.name_bg_color
+      const fg = (item.user.nameBgColor || item.user.name_bg_color)
         ? (item.user.nameColor || item.user.name_color || '#ffffff')
         : '#ffffff';
-      html = html.replace(
-        new RegExp(`@${esc}`, 'gi'),
-        `<span class="mention-inline-badge" data-mention-name="${escapeHtml(item.name)}" style="background:${escapeHtml(bg)};color:${escapeHtml(fg)};">@${escapeHtml(item.name)}</span>`
-      );
+      const re = new RegExp(`(^|\\s|>)@?${esc}(?=$|\\s|<|[،,.!?:"'()\\-])`, 'gi');
+      html = html.replace(re, (match, lead) => {
+        if (/<[^>]*$/.test(html.slice(0, html.indexOf(match)))) return match;
+        const idx = tokens.length;
+        tokens.push(
+          `<span class="mention-inline-badge" data-mention-name="${escapeHtml(item.name)}" style="background:${escapeHtml(bg)};color:${escapeHtml(fg)};">${escapeHtml(item.name)}</span>`
+        );
+        return `${lead}\u0000MTOK${idx}\u0000`;
+      });
     }
-    // Highlight any unmatched @token cleanly as well
+
+    // Legacy @token fallback (clean display)
     html = html.replace(
-      /(^|\s)@([^\s<>"'&]{2,30})/g,
-      '$1<span class="mention-inline-badge" data-mention-name="$2" style="background:#18181b;color:#facc15;">@$2</span>'
+      /(^|\s)@([^\s<>"'&\u0000]{2,30})/g,
+      '$1<span class="mention-inline-badge" data-mention-name="$2" style="background:#18181b;color:#facc15;">$2</span>'
     );
-    return html;
+
+    html = html.replace(/\u0000MTOK(\d+)\u0000/g, (_m, i) => tokens[Number(i)] || '');
+    return { html, hasMention: tokens.length > 0 || html.includes('mention-inline-badge') };
   }
 
   function applySiteSettings(s) {
@@ -592,6 +706,7 @@
     if (!u) return;
     const wrap = $('topAvatarWrap');
     wrap.className = `avatar-wrap frame-${u.avatarFrame || 'none'}`;
+    syncFrameOrnament(wrap, u.avatarFrame || 'none');
     if (u.avatarUrl) {
       $('topAvatarImg').src = u.avatarUrl;
       $('topAvatarImg').classList.remove('hidden');
@@ -604,9 +719,8 @@
 
     const isOwner = u.role === 'site_owner';
     const isStealth = isOwner && Boolean(u.isStealth);
-    $('topStealthBadge').classList.toggle('hidden', !isStealth);
-    $('dropStealthBtn').classList.toggle('hidden', !isOwner);
-    $('drawerStealthBtn').classList.toggle('hidden', !isOwner);
+    $('topStealthBadge')?.classList.toggle('hidden', !isStealth);
+    $('dropStealthBtn')?.classList.toggle('hidden', !isOwner);
     $('dropOwnerSuiteBtn')?.classList.toggle('hidden', !isOwner);
     $('drawerOwnerSuiteBtn')?.classList.toggle('hidden', !isOwner);
     $('admOwnerSuiteTabBtn')?.classList.toggle('hidden', !isOwner);
@@ -615,12 +729,11 @@
     $('dropUserRole').innerHTML = `${roleBadgeHTML(u.role)}`;
     $('dropUserCoins').innerHTML = `<i class="fa-solid fa-coins"></i> ${u.coins || 0} عملة • <i class="fa-solid fa-fire"></i> ${u.activityPoints || 0} تفاعل`;
 
-    $('dropStealthBtn').innerHTML = isStealth
-      ? '<i class="fa-solid fa-eye"></i> إلغاء وضع التخفي'
-      : '<i class="fa-solid fa-user-secret"></i> تفعيل وضع التخفي';
-    $('drawerStealthBtn').innerHTML = isStealth
-      ? '<i class="fa-solid fa-eye"></i> إلغاء التخفي'
-      : '<i class="fa-solid fa-user-secret"></i> وضع التخفي';
+    if ($('dropStealthBtn')) {
+      $('dropStealthBtn').innerHTML = isStealth
+        ? '<i class="fa-solid fa-eye"></i> إلغاء وضع التخفي'
+        : '<i class="fa-solid fa-user-secret"></i> تفعيل وضع التخفي';
+    }
 
     const isFrozen = Boolean(u.isFrozen && !isOwner);
     const fBanner = $('frozenUserBanner');
@@ -632,10 +745,10 @@
     }
 
     const canPanel = isOwner || hasPerm('access_panel');
-    $('dropAdminBtn').classList.toggle('hidden', !canPanel);
-    $('drawerAdminBtn').classList.toggle('hidden', !canPanel);
-    $('plusAdminNoticeBtn').classList.toggle('hidden', !canPanel);
-    $('plusClearRoomBtn').classList.toggle('hidden', !(isOwner || hasPerm('clear_room') || state.isRoomManager));
+    $('dropAdminBtn')?.classList.toggle('hidden', !canPanel);
+    $('drawerAdminBtn')?.classList.toggle('hidden', !isOwner);
+    $('plusAdminNoticeBtn')?.classList.toggle('hidden', !canPanel);
+    $('plusClearRoomBtn')?.classList.toggle('hidden', !(isOwner || hasPerm('clear_room') || state.isRoomManager));
   }
 
   function renderRoomBanner() {
@@ -689,46 +802,120 @@
     }
 
     renderRoomYoutubeBar();
+    renderQuizBotRoomBar();
+  }
+
+  function renderQuizBotRoomBar() {
+    const bar = $('quizBotRoomBar');
+    if (!bar) return;
+    const r = state.currentRoom;
+    const isQuizRoom = Boolean(r && (r.id === 'competitions' || state.quizBotState?.active));
+    bar.classList.toggle('hidden', !isQuizRoom);
+    if (!isQuizRoom) return;
+
+    const isActive = Boolean(state.quizBotState?.active);
+    const statusTxt = $('quizBotStatusText');
+    if (statusTxt) {
+      statusTxt.textContent = isActive
+        ? 'بوت المسابقات نشط • 100 / 50 / 25 نقطة (تلميح بعد 12ث)'
+        : 'بوت المسابقات متوقف حالياً في هذه الغرفة';
+    }
+    const toggleBtn = $('roomQuizToggleBtn');
+    const toggleLbl = $('roomQuizToggleLbl');
+    const isOwner = state.user?.role === 'site_owner';
+    if (toggleBtn) {
+      toggleBtn.classList.toggle('hidden', !isOwner);
+      toggleBtn.classList.toggle('stopped', !isActive);
+      if (toggleLbl) toggleLbl.textContent = isActive ? 'إيقاف البوت' : 'تشغيل البوت';
+    }
   }
 
   function renderRoomYoutubeBar() {
     const r = state.currentRoom;
     if (!r) return;
     const hasVideo = Boolean(r.youtube_video_id && r.youtube_is_playing);
-    $('ytManagerForm').classList.toggle('hidden', !state.isRoomManager);
-    $('ytStopBtn').classList.toggle('hidden', !(state.isRoomManager && hasVideo));
-    $('toggleYoutubeBarBtn').classList.toggle('active', hasVideo || state.ytBarOpen);
+    const canSearchYt = Boolean(state.user && !(state.user.isFrozen && state.user.role !== 'site_owner'));
+    const isOnMic = (state.mics || []).some((m) => m.holderKey === state.user?.key);
+    const canStopYt = Boolean(state.isRoomManager || (r.youtube_by_key && r.youtube_by_key === state.user?.key) || isOnMic);
+
+    $('ytManagerForm')?.classList.toggle('hidden', !canSearchYt);
+    $('ytStopBtn')?.classList.toggle('hidden', !(canStopYt && hasVideo));
+    $('toggleYoutubeBarBtn')?.classList.toggle('active', hasVideo || state.ytBarOpen);
+
+    const miniBar = $('micMiniYoutubeBar');
+    const ytPlayer = $('ytPlayerContainer');
+    const ytIframe = $('ytIframe');
+    const showMiniBar = hasVideo && Boolean(r.youtube_mini_mode) && !state.ytForceVideo;
 
     if (hasVideo) {
-      $('roomYoutubeBar').classList.remove('hidden');
-      $('ytNowPlayingLabel').innerHTML = `<i class="fa-brands fa-youtube" style="color:#ef4444"></i> يوتيوب الغرفة: ${escapeHtml(r.youtube_title || r.youtube_video_id)}`;
-      $('ytPlayerContainer').classList.remove('hidden');
+      const displayTitle = r.youtube_title || r.youtube_video_id;
+      const bySuffix = r.youtube_by_name ? ` • ${r.youtube_by_name}` : '';
+      $('ytNowPlayingLabel').innerHTML = `<i class="fa-brands fa-youtube" style="color:#ef4444"></i> ${escapeHtml(displayTitle)}${escapeHtml(bySuffix)}`;
+
+      if (miniBar) {
+        miniBar.classList.toggle('hidden', !showMiniBar);
+        if ($('micMiniYtTitle')) $('micMiniYtTitle').textContent = displayTitle;
+        if ($('micMiniYtBy')) {
+          $('micMiniYtBy').textContent = r.youtube_by_name || '';
+          $('micMiniYtBy').classList.toggle('hidden', !r.youtube_by_name);
+        }
+        if ($('micMiniYtMuteBtn')) {
+          $('micMiniYtMuteBtn').innerHTML = state.ytLocalMuted
+            ? '<i class="fa-solid fa-volume-xmark"></i>'
+            : '<i class="fa-solid fa-volume-high"></i>';
+        }
+        if ($('micMiniYtExpandBtn')) {
+          $('micMiniYtExpandBtn').innerHTML = state.ytForceVideo
+            ? '<i class="fa-solid fa-compress"></i>'
+            : '<i class="fa-solid fa-tv"></i>';
+        }
+        $('micMiniYtStopBtn')?.classList.toggle('hidden', !canStopYt);
+      }
+
+      $('ytSwitchMiniBtn')?.classList.toggle('hidden', showMiniBar);
+      $('roomYoutubeBar')?.classList.toggle('hidden', !(state.ytBarOpen || !showMiniBar));
+
+      if (ytPlayer) {
+        ytPlayer.classList.remove('hidden');
+        ytPlayer.classList.toggle('yt-audio-only-frame', showMiniBar);
+      }
+
       const targetSrc = `https://www.youtube.com/embed/${encodeURIComponent(r.youtube_video_id)}?autoplay=1&enablejsapi=1${state.ytLocalMuted ? '&mute=1' : ''}`;
-      if ($('ytIframe').dataset.videoId !== r.youtube_video_id || $('ytIframe').dataset.muted !== String(state.ytLocalMuted)) {
-        $('ytIframe').src = targetSrc;
-        $('ytIframe').dataset.videoId = r.youtube_video_id;
-        $('ytIframe').dataset.muted = String(state.ytLocalMuted);
+      if (ytIframe && (ytIframe.dataset.videoId !== r.youtube_video_id || ytIframe.dataset.muted !== String(state.ytLocalMuted))) {
+        ytIframe.src = targetSrc;
+        ytIframe.dataset.videoId = r.youtube_video_id;
+        ytIframe.dataset.muted = String(state.ytLocalMuted);
       }
     } else {
-      $('ytPlayerContainer').classList.add('hidden');
-      if ($('ytIframe').src) {
-        $('ytIframe').src = '';
-        delete $('ytIframe').dataset.videoId;
+      miniBar?.classList.add('hidden');
+      $('ytSwitchMiniBtn')?.classList.add('hidden');
+      if (ytPlayer) {
+        ytPlayer.classList.add('hidden');
+        ytPlayer.classList.remove('yt-audio-only-frame');
       }
-      $('ytNowPlayingLabel').innerHTML = '<i class="fa-brands fa-youtube" style="color:#ef4444"></i> مشغل يوتيوب الغرفة';
-      $('roomYoutubeBar').classList.toggle('hidden', !state.ytBarOpen);
+      if (ytIframe && ytIframe.src) {
+        ytIframe.src = '';
+        delete ytIframe.dataset.videoId;
+      }
+      $('ytNowPlayingLabel').innerHTML = '<i class="fa-brands fa-youtube" style="color:#ef4444"></i> بحث وتشغيل يوتيوب الغرفة';
+      $('roomYoutubeBar')?.classList.toggle('hidden', !state.ytBarOpen);
     }
-    $('ytMuteLocalBtn').innerHTML = state.ytLocalMuted
-      ? '<i class="fa-solid fa-volume-xmark"></i> صامت'
-      : '<i class="fa-solid fa-volume-high"></i> صوت';
+    if ($('ytMuteLocalBtn')) {
+      $('ytMuteLocalBtn').innerHTML = state.ytLocalMuted
+        ? '<i class="fa-solid fa-volume-xmark"></i> صامت'
+        : '<i class="fa-solid fa-volume-high"></i> صوت';
+    }
   }
 
-  async function performYouTubeSearch() {
-    const q = $('ytSearchInput')?.value?.trim() || '';
-    if (!q) return showToast('أدخل اسم الأغنية أو الفيديو للبحث في يوتيوب.', true);
+  async function performYouTubeSearch(queryOverride) {
+    const q = (typeof queryOverride === 'string' ? queryOverride : ($('ytSearchInput')?.value || '')).trim();
     const resBox = $('ytSearchResults');
+    if (!q) {
+      if (resBox) resBox.classList.add('hidden');
+      return showToast('أدخل اسم الأغنية أو الفيديو للبحث في يوتيوب.', true);
+    }
     resBox.classList.remove('hidden');
-    resBox.innerHTML = '<div class="muted" style="color:#cbd5e1;padding:6px;">جاري البحث في يوتيوب...</div>';
+    resBox.innerHTML = '<div class="muted" style="color:#cbd5e1;padding:6px;">جاري البحث المباشر في يوتيوب...</div>';
     try {
       const data = await api(`/api/youtube/search?q=${encodeURIComponent(q)}`);
       const results = data.results || [];
@@ -751,11 +938,21 @@
         card.addEventListener('click', () => {
           const videoId = card.dataset.vid;
           const title = card.dataset.title;
-          state.socket.emit('room_youtube_set', { roomId: state.currentRoom?.id, url: videoId, title, isPlaying: true }, (res) => {
+          const iAmOnMic = (state.mics || []).some((m) => m.holderKey === state.user?.key);
+          state.socket.emit('room_youtube_set', {
+            roomId: state.currentRoom?.id,
+            url: videoId,
+            title,
+            isPlaying: true,
+            miniMode: iAmOnMic
+          }, (res) => {
             if (res?.error) showToast(res.error, true);
             else {
-              showToast(`تم تشغيل: ${title}`);
+              state.ytForceVideo = false;
+              if (iAmOnMic) state.ytBarOpen = false;
+              showToast(iAmOnMic ? `تم تشغيل الصوت تحت المايك: ${title}` : `تم تشغيل في الغرفة: ${title}`);
               resBox.classList.add('hidden');
+              renderRoomYoutubeBar();
             }
           });
         });
@@ -999,23 +1196,19 @@
     const isGift = Boolean(msg.is_gift);
     const isOwnerSender = msg.sender_role === 'site_owner' && msg.sender_key !== 'system:quizbot' && msg.sender_key !== 'system:official';
     const rawContent = String(msg.content || '');
-    const hasMention = msg.msg_type === 'text' && rawContent.includes('@');
-    const myName = String(state.user?.name || '').trim().toLowerCase();
-    const myUser = String(state.user?.username || '').trim().toLowerCase();
+    const myName = String(state.user?.name || '').trim();
+    const myUser = String(state.user?.username || '').trim();
     const mentionsMe =
-      hasMention &&
-      ((myName && rawContent.toLowerCase().includes(`@${myName}`)) ||
-        (myUser && rawContent.toLowerCase().includes(`@${myUser}`)));
-
-    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${isOwnerSender && !isAdminNotice ? ' owner-royal-msg-row' : ''}`;
-    if (msg.client_msg_id) row.dataset.clientMsgId = msg.client_msg_id;
-    if (msg.id) row.dataset.msgId = String(msg.id);
+      msg.msg_type === 'text' &&
+      msg.sender_key !== state.user?.key &&
+      (doesTextContainName(rawContent, myName) || doesTextContainName(rawContent, myUser));
 
     const timeStr = formatTimeAgo(msg.created_at_ms || msg.created_at);
     const msgFontSize = Math.max(12, Math.min(20, Number(msg.font_size || msg.fontSize) || 13.5));
 
     let inlineTextHtml = '';
     let mediaBelowHtml = '';
+    let hasMention = false;
     if (msg.msg_type === 'image' && msg.media_url) {
       mediaBelowHtml = `<img src="${escapeHtml(msg.media_url)}" class="msg-media-img" alt="صورة" onclick="window.open(this.src,'_blank')" />`;
     } else if (msg.msg_type === 'audio' && msg.media_url) {
@@ -1023,22 +1216,47 @@
     } else if (msg.msg_type === 'sticker') {
       inlineTextHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
     } else {
+      const rendered = renderMessageTextWithMentions(msg.content);
+      hasMention = rendered.hasMention;
       const prefix = isAdminNotice ? '<span class="admin-notice-prefix">إشعار الإدارة</span>' : '';
       const rawTxtColor = String(msg.text_color || '').trim();
       const lowerTxt = rawTxtColor.toLowerCase();
       const readableColor = isAdminNotice
         ? '#7f1d1d'
         : (!rawTxtColor || lowerTxt === '#ffffff' || lowerTxt === '#fff' ? '#111827' : escapeHtml(rawTxtColor));
-      const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:'${escapeHtml(msg.font_family)}',sans-serif;` : '';
+      const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:${resolveFontFamilyCss(msg.font_family)};` : '';
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
-      const fi = msg.font_style === 'Italic' || hasMention ? 'font-style:italic;' : '';
-      inlineTextHtml = `<span class="msg-text-inline${hasMention ? ' mention-italic' : ''}" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${renderMessageTextWithMentions(msg.content)}</span>`;
+      const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
+      inlineTextHtml = `<span class="msg-text-inline" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
+
+    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${isOwnerSender && !isAdminNotice ? ' owner-royal-msg-row' : ''}`;
+    if (msg.client_msg_id) row.dataset.clientMsgId = msg.client_msg_id;
+    if (msg.id) row.dataset.msgId = String(msg.id);
 
     const isMe = state.user && msg.sender_key === state.user.key;
     const isOwner = state.user?.role === 'site_owner';
-    const canDelete = isMe || isOwner || state.isRoomManager || hasPerm('clear_room');
-    const canMute = !isMe && (isOwner || state.isRoomManager || hasPerm('mute'));
+    const targetObj = {
+      key: msg.sender_key,
+      name: msg.sender_name,
+      role: msg.sender_role,
+      avatarUrl: msg.avatar_url,
+      avatarFrame: msg.avatar_frame,
+      nameplateStyle: msg.nameplate_style,
+      nameShine: msg.name_shine,
+      vipWings: msg.vip_wings,
+      nameColor: msg.name_color,
+      nameBgColor: msg.name_bg_color,
+      neonColor: msg.neon_color
+    };
+    const canActOnTarget = !isMe && canManageTargetUser(targetObj);
+    const canClearRoom = isOwner || state.isRoomManager || hasPerm('clear_room');
+    const canDelete = (isMe && Boolean(msg.id)) || (Boolean(msg.id) && canActOnTarget && canClearRoom);
+    const canWarn = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('ban'));
+    const canMute = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('mute'));
+    const canKick = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('kick'));
+    const canBan = canActOnTarget && (isOwner || hasPerm('ban'));
+    const canRank = canActOnTarget && String(msg.sender_key || '').startsWith('user:') && (isOwner || hasPerm('set_rank'));
 
     row.innerHTML = `
       <div class="msg-avatar-trigger" style="cursor:pointer" title="عرض البطاقة">${formatAvatarHTML(msg, '')}</div>
@@ -1053,14 +1271,19 @@
             <span class="msg-time">${escapeHtml(timeStr)}</span>
             ${hasMention ? '<button type="button" class="msg-dismiss-btn" title="تجاهل الإشارة">&times;</button>' : ''}
             <div class="msg-actions-wrap">
-              <button type="button" class="msg-dots-btn" title="خيارات الرسالة"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+              <button type="button" class="msg-dots-btn" title="خيارات الرسالة والعضو"><i class="fa-solid fa-ellipsis-vertical"></i></button>
               <div class="msg-dots-menu hidden">
-                <button type="button" data-msg-act="mention"><i class="fa-solid fa-at"></i> نداء / منشن</button>
+                <button type="button" data-msg-act="mention"><i class="fa-solid fa-bullhorn"></i> نداء العضو</button>
                 ${!isMe ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
                 <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
                 ${isOwner && msg.msg_type === 'text' ? '<button type="button" data-msg-act="pin"><i class="fa-solid fa-thumbtack"></i> تثبيت في الغرفة</button>' : ''}
-                ${canMute ? '<button type="button" data-msg-act="mute"><i class="fa-solid fa-volume-xmark"></i> كتم العضو</button>' : ''}
-                ${canDelete && msg.id ? '<button type="button" class="danger" data-msg-act="delete"><i class="fa-solid fa-trash"></i> حذف الرسالة</button>' : ''}
+                ${canDelete ? '<button type="button" class="danger" data-msg-act="delete"><i class="fa-solid fa-trash"></i> حذف الرسالة</button>' : ''}
+                ${canClearRoom ? '<button type="button" class="danger" data-msg-act="clear_room"><i class="fa-solid fa-broom"></i> مسح الغرفة</button>' : ''}
+                ${canWarn ? '<button type="button" data-msg-act="warn"><i class="fa-solid fa-triangle-exclamation"></i> تحذير العضو</button>' : ''}
+                ${canMute ? '<button type="button" data-msg-act="mute"><i class="fa-solid fa-volume-xmark"></i> كتم مؤقت</button>' : ''}
+                ${canKick ? '<button type="button" data-msg-act="kick"><i class="fa-solid fa-door-open"></i> طرد من الغرفة</button>' : ''}
+                ${canRank ? '<button type="button" data-msg-act="rank"><i class="fa-solid fa-award"></i> رفع / تنزيل الرتبة</button>' : ''}
+                ${canBan ? '<button type="button" class="danger" data-msg-act="ban"><i class="fa-solid fa-ban"></i> حظر نهائي</button>' : ''}
               </div>
             </div>
           </div>
@@ -1069,19 +1292,6 @@
       </div>
     `;
 
-    const targetObj = {
-      key: msg.sender_key,
-      name: msg.sender_name,
-      role: msg.sender_role,
-      avatarUrl: msg.avatar_url,
-      avatarFrame: msg.avatar_frame,
-      nameplateStyle: msg.nameplate_style,
-      nameShine: msg.name_shine,
-      vipWings: msg.vip_wings,
-      nameColor: msg.name_color,
-      nameBgColor: msg.name_bg_color,
-      neonColor: msg.neon_color
-    };
     const openTarget = () => openQuickUserModal(targetObj);
     row.querySelector('.msg-avatar-trigger').addEventListener('click', openTarget);
     row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(msg.sender_name));
@@ -1127,10 +1337,32 @@
           } catch (err) {
             showToast(err.message, true);
           }
-        } else if (act === 'mute') {
-          state.socket?.emit('admin_mute', { targetKey: msg.sender_key, minutes: 15 });
         } else if (act === 'delete' && msg.id) {
           state.socket?.emit('delete_message', { msgId: msg.id });
+        } else if (act === 'clear_room') {
+          if (confirm('مسح جميع رسائل هذه الغرفة؟')) state.socket?.emit('admin_clear_room');
+        } else if (act === 'warn') {
+          const reason = prompt(`سبب تحذير "${msg.sender_name}":`, 'مخالفة قوانين الغرفة');
+          if (reason === null) return;
+          state.socket?.emit('admin_warn', { targetKey: msg.sender_key, reason: reason || 'مخالفة قوانين الغرفة' }, (res) => {
+            if (res?.error) showToast(res.error, true);
+            else showToast(`تم إرسال تحذير إداري إلى ${msg.sender_name}.`);
+          });
+        } else if (act === 'mute') {
+          const minsStr = prompt(`مدة كتم "${msg.sender_name}" بالدقائق:`, '15');
+          if (minsStr === null) return;
+          const mins = Math.max(1, Math.min(1440, Number(minsStr) || 15));
+          state.socket?.emit('admin_mute', { targetKey: msg.sender_key, minutes: mins });
+        } else if (act === 'kick') {
+          if (confirm(`طرد "${msg.sender_name}" من الغرفة؟`)) {
+            state.socket?.emit('admin_kick', { targetKey: msg.sender_key });
+          }
+        } else if (act === 'rank') {
+          openQuickRankPickerModal(targetObj);
+        } else if (act === 'ban') {
+          const reason = prompt(`سبب حظر "${msg.sender_name}" نهائياً:`, 'مخالفة القوانين');
+          if (reason === null) return;
+          state.socket?.emit('admin_ban', { targetKey: msg.sender_key, reason: reason || 'حظر من الإدارة', banType: 'ban' });
         }
       });
     });
@@ -1216,7 +1448,7 @@
           <div>${roleBadgeHTML(u.role)} <span class="muted">🔥${u.activityPoints || 0}</span></div>
         </div>
         <div class="user-row-actions">
-          <button type="button" class="user-mini-ping-btn" title="إشارة @">@</button>
+          <button type="button" class="user-mini-ping-btn" title="نداء العضو"><i class="fa-solid fa-bullhorn"></i></button>
         </div>
       </div>
     `).join('');
@@ -1340,10 +1572,19 @@
     if (targetIsProtected) {
       return '<div class="muted" style="padding:8px;font-size:12px;">حساب المالك الأعلى محمي بالكامل.</div>';
     }
+    if (!canManageTargetUser(u)) {
+      return '<div class="muted" style="padding:8px;font-size:12px;">الحصانة المتدرجة: لا يمكنك التحكم بعضو أعلى منك أو مساوٍ لك في الرتبة.</div>';
+    }
+    const canClearRoom = isOwner || state.isRoomManager || hasPerm('clear_room');
+    const canKick = isOwner || state.isRoomManager || hasPerm('kick');
+    const canRank = Boolean(targetUserId) && (isOwner || hasPerm('set_rank'));
     return `
-      ${canMod ? '<button type="button" class="mod-menu-btn" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم 15 دقيقة</span></button>' : ''}
+      ${canMod ? '<button type="button" class="mod-menu-btn" id="quWarnBtn"><i class="fa-solid fa-triangle-exclamation"></i><span>توجيه تحذير</span></button>' : ''}
+      ${canMod ? '<button type="button" class="mod-menu-btn" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم مؤقت (15د)</span></button>' : ''}
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quUnmuteBtn"><i class="fa-solid fa-volume-high"></i><span>فك الكتم</span></button>' : ''}
-      ${canMod ? '<button type="button" class="mod-menu-btn" id="quKickBtn"><i class="fa-solid fa-door-open"></i><span>طرد من الغرفة</span></button>' : ''}
+      ${canKick ? '<button type="button" class="mod-menu-btn" id="quKickBtn"><i class="fa-solid fa-door-open"></i><span>طرد من الغرفة</span></button>' : ''}
+      ${canClearRoom ? '<button type="button" class="mod-menu-btn danger" id="quClearRoomBtn"><i class="fa-solid fa-broom"></i><span>مسح رسائل الغرفة</span></button>' : ''}
+      ${canRank ? '<button type="button" class="mod-menu-btn" id="quSetRankBtn"><i class="fa-solid fa-award"></i><span>رفع / تنزيل الرتبة</span></button>' : ''}
       ${isOwner ? `<button type="button" class="mod-menu-btn" id="quShadowMuteBtn"><i class="fa-solid fa-user-ninja"></i><span>${u.isShadowMuted ? 'إلغاء الكتم الصامت' : 'كتم صامت (مخفي)'}</span></button>` : ''}
       ${isOwner ? `<button type="button" class="mod-menu-btn" id="quFreezeUserBtn"><i class="fa-solid fa-snowflake"></i><span>${u.isFrozen ? 'فك التجميد' : 'تجميد تام'}</span></button>` : ''}
       ${isOwner ? '<button type="button" class="mod-menu-btn" id="quMoveRoomBtn"><i class="fa-solid fa-right-left"></i><span>سحب ونقل لغرفة</span></button>' : ''}
@@ -1380,8 +1621,9 @@
     const targetUserId = isReg ? Number(String(u.key).replace('user:', '')) : null;
     const isOwner = state.user?.role === 'site_owner';
     const isTargetOwner = u.role === 'site_owner' || u.isSupremeOwner;
-    const canMod = !isMe && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick'));
-    const canBan = !isMe && (isOwner || hasPerm('ban'));
+    const allowedByImmunity = !isMe && canManageTargetUser(u);
+    const canMod = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('clear_room') || hasPerm('set_rank'));
+    const canBan = allowedByImmunity && (isOwner || hasPerm('ban'));
     const canGift = !isMe && !state.user?.isGuest;
     const hasMusic = Boolean(u.profileMusic && String(u.profileMusic).trim());
     const { richRank, interactionRank } = computeUserRanks(u.key);
@@ -1402,23 +1644,23 @@
     $('quickUserBody').innerHTML = `
       <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwner ? ' owner-black-gold-theme' : ''}">
         <div class="${isTargetOwner ? 'owner-falling-stars-layer' : 'profile-bg-effect-layer'}"></div>
-        <div class="profile-cover-hero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}')` : ''}">
+        <div class="profile-cover-hero" id="quCoverHero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}')` : ''}">
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
-          <div class="profile-cover-top-actions">
-            <div style="display:flex;gap:6px;align-items:center;">
-              ${(canMod || canBan || isOwner) && !isTargetOwner ? `
-                <div class="mod-menu-wrap" style="position:relative;">
-                  <button type="button" class="hero-icon-btn" id="quModMenuToggleBtn" title="قائمة الإدارة">
-                    <i class="fa-solid fa-bars"></i>
-                  </button>
-                  <div id="quModMenuDropdown" class="mod-menu-dropdown hidden">
-                    ${renderModMenuItemsHTML(u, targetUserId, isOwner, canMod, canBan)}
-                  </div>
+          <div class="profile-cover-overlay"></div>
+          <div class="profile-cover-top-actions cover-actions-left">
+            <button type="button" class="hero-circle-glass-btn" id="quHeroCloseBtn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+            <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة صورة الغلاف"><i class="fa-solid fa-eye"></i></button>
+            ${(canMod || canBan || isOwner) && !isTargetOwner ? `
+              <div class="mod-menu-wrap" style="position:relative;">
+                <button type="button" class="hero-circle-glass-btn" id="quModMenuToggleBtn" title="خيارات الإدارة">
+                  <i class="fa-solid fa-bars"></i>
+                </button>
+                <div id="quModMenuDropdown" class="mod-menu-dropdown hidden">
+                  ${renderModMenuItemsHTML(u, targetUserId, isOwner, canMod, canBan)}
                 </div>
-              ` : ''}
-              ${hasMusic ? `<button type="button" class="hero-icon-btn" id="quMusicToggleBtn" title="موسيقى البروفايل"><i class="fa-solid fa-music"></i></button>` : ''}
-            </div>
-            <button type="button" class="hero-icon-btn" id="quHeroCloseBtn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            ` : ''}
+            ${hasMusic ? `<button type="button" class="hero-circle-glass-btn" id="quMusicToggleBtn" title="موسيقى البروفايل"><i class="fa-solid fa-music"></i></button>` : ''}
           </div>
           <div class="profile-cover-stats-bar">
             <button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-heart" style="color:#fb7185;"></i> <span id="quLikesCount">${Number(u.likesCount || 0)}</span></button>
@@ -1427,25 +1669,28 @@
           </div>
         </div>
 
-        <div class="profile-identity-center">
-          <div class="profile-avatar-lift">
-            ${formatAvatarHTML(u, 'xl')}
+        <div class="profile-identity-header-row">
+          <div class="profile-avatar-85-stage">
+            ${formatAvatarHTML(u, 'profile-avatar-85')}
           </div>
-          <div class="profile-name-row-center">
-            ${roleBadgeHTML(u.role, true)}
-            ${formatNameHTML(u)}
+          <div class="profile-identity-meta-col">
+            <div class="profile-name-row-center">
+              ${roleBadgeHTML(u.role, true)}
+              ${formatNameHTML(u)}
+            </div>
+            <div class="profile-role-subtitle">${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
+            ${u.bio ? `<p class="profile-bio-line">${escapeHtml(u.bio)}</p>` : ''}
+            <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
+              ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
+            </div>
           </div>
-          <div class="profile-role-subtitle">${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
-          ${u.bio ? `<p class="profile-bio-line">${escapeHtml(u.bio)}</p>` : ''}
-          <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
-            ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
-          </div>
-          <div class="qu-quick-action-strip">
-            <button type="button" class="btn-secondary btn-xs" id="quMentionBtn"><i class="fa-solid fa-at"></i> منشن</button>
-            ${!isMe && u.allowPm !== false ? '<button type="button" class="btn-primary btn-xs" id="quPmBtn"><i class="fa-solid fa-envelope"></i> رسالة</button>' : ''}
-            ${!isMe && !state.user?.isGuest && isReg ? '<button type="button" class="btn-secondary btn-xs" id="quFriendBtn"><i class="fa-solid fa-user-plus"></i> صداقة</button>' : ''}
-            ${canGift ? '<button type="button" class="btn-primary btn-xs" style="background:#db2777" id="quGiftBtn"><i class="fa-solid fa-gift"></i> هدية</button>' : ''}
-          </div>
+        </div>
+
+        <div class="qu-quick-action-strip" style="padding:0 14px 10px;">
+          <button type="button" class="btn-secondary btn-xs" id="quMentionBtn"><i class="fa-solid fa-bullhorn"></i> نداء</button>
+          ${!isMe && u.allowPm !== false ? '<button type="button" class="btn-primary btn-xs" id="quPmBtn"><i class="fa-solid fa-envelope"></i> رسالة</button>' : ''}
+          ${!isMe && !state.user?.isGuest && isReg ? '<button type="button" class="btn-secondary btn-xs" id="quFriendBtn"><i class="fa-solid fa-user-plus"></i> صداقة</button>' : ''}
+          ${canGift ? '<button type="button" class="btn-primary btn-xs" style="background:#db2777" id="quGiftBtn"><i class="fa-solid fa-gift"></i> هدية</button>' : ''}
         </div>
 
         <div class="profile-6tabs-bar" id="quTabsBar">
@@ -1519,7 +1764,7 @@
               <div class="info-kv-row"><span><i class="fa-solid fa-phone"></i> استقبال المكالمات</span><strong>${u.allowCalls !== false ? 'مسموح' : 'مغلق'}</strong></div>
               <div class="info-kv-row"><span><i class="fa-solid fa-message"></i> الرسائل الخاصة</span><strong>${u.allowPm !== false ? 'مفتوحة' : 'مغلقة'}</strong></div>
             </div>
-            ${canMod ? `
+            ${(canMod || canBan) ? `
               <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
                 <button type="button" class="btn-secondary btn-xs" id="quOpenModDrawerInsideBtn"><i class="fa-solid fa-gavel"></i> خيارات الإشراف والإدارة</button>
               </div>
@@ -1530,6 +1775,10 @@
     `;
 
     $('quHeroCloseBtn')?.addEventListener('click', () => closeModal('quickUserModal'));
+    $('quCoverPreviewToggleBtn')?.addEventListener('click', () => {
+      $('quCoverHero')?.classList.toggle('cover-preview-clean');
+      $('quCoverPreviewToggleBtn')?.classList.toggle('active');
+    });
     $('quModMenuToggleBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       $('quModMenuDropdown')?.classList.toggle('hidden');
@@ -1600,8 +1849,7 @@
     });
 
     $('quMentionBtn')?.addEventListener('click', () => {
-      $('messageInput').value += `@${u.name} `;
-      $('messageInput').focus();
+      insertMention(u.name);
       closeModal('quickUserModal');
     });
 
@@ -1629,6 +1877,16 @@
     $('quGiftBtn')?.addEventListener('click', openGiftAction);
     $('quSendGiftInsideTabBtn')?.addEventListener('click', openGiftAction);
 
+    $('quWarnBtn')?.addEventListener('click', () => {
+      const reason = prompt(`سبب تحذير "${u.name}":`, 'مخالفة قوانين الغرفة');
+      if (reason === null) return;
+      state.socket.emit('admin_warn', { targetKey: u.key, reason: reason || 'مخالفة قوانين الغرفة' }, (res) => {
+        if (res?.error) showToast(res.error, true);
+        else showToast(`تم إرسال تحذير إداري إلى ${u.name}.`);
+      });
+      closeModal('quickUserModal');
+    });
+
     $('quMuteBtn')?.addEventListener('click', () => {
       state.socket.emit('admin_mute', { targetKey: u.key, minutes: 15 });
       closeModal('quickUserModal');
@@ -1642,6 +1900,18 @@
     $('quKickBtn')?.addEventListener('click', () => {
       state.socket.emit('admin_kick', { targetKey: u.key });
       closeModal('quickUserModal');
+    });
+
+    $('quClearRoomBtn')?.addEventListener('click', () => {
+      if (confirm('مسح جميع رسائل الغرفة الحالية؟')) {
+        state.socket.emit('admin_clear_room');
+        closeModal('quickUserModal');
+      }
+    });
+
+    $('quSetRankBtn')?.addEventListener('click', () => {
+      closeModal('quickUserModal');
+      openQuickRankPickerModal(u);
     });
 
     $('quGhostBtn')?.addEventListener('click', async () => {
@@ -1798,9 +2068,21 @@
   function renderNameColorSwatches() {
     const box = $('nameColorSwatches');
     if (!box) return;
-    box.innerHTML = NAME_COLOR_SWATCHES.map((hex) => `
-      <button type="button" class="swatch-dot" data-swatch="${hex}" style="background:${hex};" title="${hex}"></button>
-    `).join('');
+    let activeHex = '';
+    if (state.activeNameStyleTab === 'color' && $('custNameColor')) {
+      activeHex = ($('custNameColor').value || '').toLowerCase();
+    } else if (state.activeNameStyleTab === 'neon' && $('custNeonColor')) {
+      activeHex = $('custNeonColor').dataset.cleared === '1' ? '' : ($('custNeonColor').value || '').toLowerCase();
+    } else if (state.activeNameStyleTab === 'bg' && $('custNameBgColor')) {
+      activeHex = $('custNameBgColor').dataset.cleared === '1' ? '' : ($('custNameBgColor').value || '').toLowerCase();
+    }
+    box.innerHTML = NAME_COLOR_SWATCHES.map((hex) => {
+      const isActive = activeHex && activeHex === hex.toLowerCase();
+      const whiteCheckFix = isActive && hex.toLowerCase() === '#ffffff'
+        ? 'color:#0f172a;text-shadow:none;'
+        : '';
+      return `<button type="button" class="swatch-dot${isActive ? ' active' : ''}" data-swatch="${hex}" style="background:${hex};${whiteCheckFix}" title="${hex}">${isActive ? '<i class="fa-solid fa-check"></i>' : ''}</button>`;
+    }).join('');
     box.querySelectorAll('.swatch-dot').forEach((dot) => {
       dot.addEventListener('click', () => {
         const hex = dot.dataset.swatch;
@@ -1836,6 +2118,8 @@
     }
 
     const u = state.user;
+    $('custCoverHero')?.classList.remove('cover-preview-clean');
+    $('custCoverPreviewToggleBtn')?.classList.remove('active');
     $('custDisplayName').value = u.displayName || u.name || '';
     $('custVipFamily').value = u.vipFamily || '';
     $('custBioInput').value = u.bio || '';
@@ -1849,7 +2133,12 @@
     $('custNameBgColor').dataset.cleared = u.nameBgColor ? '0' : '1';
     $('custNeonColor').value = /^#[0-9a-f]{6}$/i.test(u.neonColor || '') ? u.neonColor : '#38bdf8';
     $('custNeonColor').dataset.cleared = u.neonColor ? '0' : '1';
-    $('custFontFamily').value = u.fontFamily || 'Cairo';
+    const fontSelect = $('custFontFamily');
+    if (fontSelect) {
+      const wanted = u.fontFamily || 'Normal';
+      const hasOption = Array.from(fontSelect.options).some((opt) => opt.value === wanted);
+      fontSelect.value = hasOption ? wanted : 'Normal';
+    }
     $('custFontStyle').value = u.fontStyle || 'Normal';
     if ($('custFontSize')) {
       const fsz = Math.max(12, Math.min(20, Number(u.fontSize) || 14));
@@ -1981,9 +2270,15 @@
 
     renderCustomizeAddonsGrids(canAddons);
     switchNameStyleTab(state.activeNameStyleTab || 'color');
-    switchCustomizeTab(initialTab === 'account' || initialTab === 'options' || initialTab === 'addons' ? (initialTab === 'account' ? 'info' : 'more') : initialTab);
+    const resolvedTab = initialTab === 'account' ? 'info' : (initialTab === 'options' || initialTab === 'addons' ? 'more' : initialTab);
+    switchCustomizeTab(resolvedTab);
     updateCustomizePreview();
     openModal('customizeModal');
+    if (initialTab === 'options') {
+      setTimeout(() => {
+        $('custNameStyleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+    }
   }
 
   function renderCustomizeAddonsGrids(canAddons) {
@@ -2043,7 +2338,7 @@
 
     $('custFramesGrid').innerHTML = (state.shopItems.frames || []).filter((f) => f.id !== 'none').map((f) => `
       <div class="addon-card ${u.avatarFrame === f.id ? 'active' : ''}">
-        <span class="avatar-wrap sm frame-${f.id}">ع</span>
+        <span class="avatar-wrap sm frame-${f.id}">ع${frameOrnamentHtml(f.id)}</span>
         <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
         <div class="addon-card-actions">
           <button type="button" class="btn-primary btn-xs equip-frame-btn" data-frame-id="${f.id}" ${!canAddons ? 'disabled' : ''}>
@@ -2123,7 +2418,10 @@
       $('custFontSizeVal').textContent = $('custFontSize').value;
     }
     const wrap = $('custPreviewAvatarWrap');
-    if (wrap) wrap.className = `avatar-wrap xl frame-${u.avatarFrame || 'none'}`;
+    if (wrap) {
+      wrap.className = `avatar-wrap profile-avatar-85 frame-${u.avatarFrame || 'none'}`;
+      syncFrameOrnament(wrap, u.avatarFrame || 'none');
+    }
     if (u.avatarUrl) {
       $('custPreviewAvatarImg').src = u.avatarUrl;
       $('custPreviewAvatarImg').classList.remove('hidden');
@@ -2132,6 +2430,9 @@
       $('custPreviewAvatarImg').classList.add('hidden');
       $('custPreviewAvatarLetter').classList.remove('hidden');
       $('custPreviewAvatarLetter').textContent = (previewObj.name || 'ع').slice(0, 1);
+    }
+    if ($('custDeleteAvatarBtn')) {
+      $('custDeleteAvatarBtn').classList.toggle('hidden', !u.avatarUrl);
     }
 
     if ($('custCoverImg') && $('custCoverHero')) {
@@ -2143,6 +2444,9 @@
         $('custCoverImg').classList.add('hidden');
         $('custCoverHero').style.backgroundImage = '';
       }
+    }
+    if ($('custDeleteCoverBtn')) {
+      $('custDeleteCoverBtn').classList.toggle('hidden', !u.coverUrl);
     }
 
     const isOwner = u.role === 'site_owner';
@@ -2160,7 +2464,27 @@
     }
 
     $('custPreviewNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(previewObj)}`;
+    if ($('custPreviewRoleLine')) {
+      $('custPreviewRoleLine').textContent = getRank(u.role).label;
+    }
     $('custPreviewBio').textContent = $('custBioInput').value || u.bio || '';
+
+    const liveBox = $('custNameStyleLivePreview');
+    if (liveBox) {
+      const fontCss = resolveFontFamilyCss(previewObj.fontFamily);
+      const txtCol = escapeHtml($('custTextColor')?.value || u.textColor || '#1e293b');
+      const fWeight = previewObj.fontStyle === 'Bold' ? '800' : '600';
+      const fStyle = previewObj.fontStyle === 'Italic' ? 'italic' : 'normal';
+      const fSz = Math.max(12, Math.min(20, Number(previewObj.fontSize) || 14));
+      liveBox.innerHTML = `
+        <div class="namestyle-live-row">
+          ${roleBadgeHTML(u.role, true)}
+          ${formatNameHTML(previewObj)}
+          <span class="namestyle-live-sample" style="color:${txtCol};font-family:${fontCss};font-weight:${fWeight};font-style:${fStyle};font-size:${fSz}px;">معاينة شكل ولون وحجم الخط مباشرة</span>
+        </div>
+      `;
+    }
+    renderNameColorSwatches();
   }
 
   function switchCustomizeTab(tab) {
@@ -2169,6 +2493,42 @@
     ['info', 'friends', 'gifts', 'relations', 'posts', 'more'].forEach((t) => {
       $(`custPane_${t}`)?.classList.toggle('hidden', t !== tab);
     });
+  }
+
+  async function saveCustomizeProfile(closeAfter = true) {
+    try {
+      const customUrl = $('custMusicCustomUrl')?.value.trim() || '';
+      const profileMusic = customUrl || ($('custMusicPreset')?.value || '');
+      const res = await api('/api/profile/customize', {
+        method: 'POST',
+        body: {
+          displayName: $('custDisplayName').value,
+          vipFamily: $('custVipFamily').value,
+          bio: $('custBioInput').value,
+          age: $('custAgeInput')?.value ? Number($('custAgeInput').value) : 0,
+          gender: $('custGenderSelect')?.value || '',
+          country: $('custCountryInput')?.value || '',
+          allowCalls: $('custAllowCallsToggle') ? $('custAllowCallsToggle').checked : true,
+          allowPm: $('custAllowPmToggle') ? $('custAllowPmToggle').checked : true,
+          nameColor: $('custNameColor').value,
+          textColor: $('custTextColor').value,
+          nameBgColor: $('custNameBgColor').dataset.cleared === '1' ? '' : $('custNameBgColor').value,
+          neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
+          fontFamily: $('custFontFamily').value,
+          fontStyle: $('custFontStyle').value,
+          fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
+          vipWings: $('custVipWingsToggle').checked,
+          profileMusic
+        }
+      });
+      state.user = res.user;
+      renderUserIdentity();
+      updateCustomizePreview();
+      showToast('تم حفظ وتطبيق تعديلات ملفك الشخصي!');
+      if (closeAfter) closeModal('customizeModal');
+    } catch (err) {
+      showToast(err.message, true);
+    }
   }
 
   // ==========================================
@@ -2274,6 +2634,52 @@
       return;
     }
 
+    if (tab === 'adminActivity') {
+      const admins = data.adminActivity || [];
+      body.innerHTML = admins.length
+        ? admins.map((u, i) => `
+            <div class="admin-list-card">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <strong>#${i + 1}</strong>
+                ${formatAvatarHTML(u, 'sm')}
+                <div>
+                  <div>${formatNameHTML(u)} ${u.online ? '🟢' : ''}</div>
+                  <div>${roleBadgeHTML(u.role)}</div>
+                </div>
+              </div>
+              <div style="text-align:left;font-weight:800;">
+                <div>🛡️ ${u.adminActionsCount || 0} إجراء</div>
+                <div class="muted">🔥 ${u.activityPoints || 0} نقطة</div>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="muted">لا يوجد نشاط إداري مسجل بعد.</div>';
+      return;
+    }
+
+    if (tab === 'quizLeaders') {
+      const qList = data.quizLeaders || [];
+      body.innerHTML = qList.length
+        ? qList.map((u, i) => `
+            <div class="admin-list-card">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <strong>#${i + 1}</strong>
+                ${formatAvatarHTML(u, 'sm')}
+                <div>
+                  <div>${formatNameHTML(u)} ${u.online ? '🟢' : ''}</div>
+                  <div>${roleBadgeHTML(u.role)}</div>
+                </div>
+              </div>
+              <div style="text-align:left;font-weight:800;">
+                <div>🏆 ${u.quizPoints || 0} نقطة مسابقة</div>
+                <div class="muted">💰 ${u.coins || 0} عملة</div>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="muted">لا توجد نقاط مسابقات مسجلة بعد.</div>';
+      return;
+    }
+
     const list = tab === 'rich' ? data.rich : tab === 'activeMembers' ? data.activeMembers : data.vips;
     body.innerHTML = (list || []).map((u, i) => `
       <div class="admin-list-card">
@@ -2291,6 +2697,226 @@
         </div>
       </div>
     `).join('');
+  }
+
+  // ==========================================
+  // STORE MODAL (المتجر) & DOWNLOAD APP & QUICK RANK PICKER
+  // ==========================================
+  async function openStoreModal(tab = 'frames') {
+    state.activeStoreTab = tab;
+    document.querySelectorAll('.store-tab').forEach((b) => b.classList.toggle('active', b.dataset.storeTab === tab));
+    $('storeModalBody').innerHTML = '<div class="muted">جاري تحميل المتجر...</div>';
+    openModal('storeModal');
+    try {
+      const res = await api('/api/shop/items');
+      state.shopItems = { ...state.shopItems, ...res };
+    } catch {
+      // keep cached shopItems
+    }
+    renderStoreTab(tab);
+  }
+
+  function renderStoreTab(tab = 'frames') {
+    state.activeStoreTab = tab;
+    document.querySelectorAll('.store-tab').forEach((b) => b.classList.toggle('active', b.dataset.storeTab === tab));
+    const body = $('storeModalBody');
+    const u = state.user;
+    if (!body) return;
+    if (!u || u.isGuest) {
+      body.innerHTML = '<div class="lock-notice"><i class="fa-solid fa-lock"></i> المتجر والإضافات متاحة للأعضاء المسجلين فقط.</div>';
+      return;
+    }
+    const isOwner = u.role === 'site_owner';
+    const canAddons = isOwner || hasPerm('use_addons');
+    const lockHtml = !canAddons
+      ? '<div class="lock-notice" style="margin-bottom:10px;"><i class="fa-solid fa-lock"></i> تفعيل الإضافات غير مفعل لرتبتك الحالية، يمكن للإدارة تفعيله من منشئ الرتب.</div>'
+      : '';
+
+    let itemsHtml = '';
+    if (tab === 'frames') {
+      itemsHtml = `<div class="frames-addon-grid">${(state.shopItems.frames || []).map((f) => `
+        <div class="addon-card ${u.avatarFrame === f.id ? 'active' : ''}">
+          <span class="avatar-wrap sm frame-${f.id}">ع${frameOrnamentHtml(f.id)}</span>
+          <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
+          <button type="button" class="btn-primary btn-xs store-equip-btn" data-equip-type="frame" data-item-id="${escapeHtml(f.id)}" ${!canAddons && f.id !== 'none' ? 'disabled' : ''}>
+            ${u.avatarFrame === f.id ? 'مفعل' : (f.id === 'none' ? 'إزالة' : 'تفعيل')}
+          </button>
+        </div>
+      `).join('')}</div>`;
+    } else if (tab === 'shines') {
+      itemsHtml = `<div class="shine-grid">${(state.shopItems.shines || []).map((s) => `
+        <div class="addon-card ${u.nameShine === s.id ? 'active' : ''}">
+          <div class="${s.id !== 'none' ? `shine-${s.id}` : ''}" style="font-weight:800;font-size:15px;">${escapeHtml(u.name || 'نموذج')}</div>
+          <span class="muted">${escapeHtml(s.label)}</span>
+          <button type="button" class="btn-primary btn-xs store-equip-btn" data-equip-type="shine" data-item-id="${escapeHtml(s.id)}" ${!canAddons && s.id !== 'none' ? 'disabled' : ''}>
+            ${u.nameShine === s.id ? 'مفعل' : 'تفعيل'}
+          </button>
+        </div>
+      `).join('')}</div>`;
+    } else if (tab === 'nameplates') {
+      itemsHtml = `<div class="nameplates-grid">${(state.shopItems.nameplates || []).map((np) => `
+        <div class="addon-card ${u.nameplateStyle === np.id ? 'active' : ''}">
+          <span class="sender-name-btn ${np.id !== 'default' ? `nameplate-${np.id}` : ''}" style="color:#0f172a;">${escapeHtml(u.name || 'الاسم')}</span>
+          <span class="muted">${escapeHtml(np.label)}</span>
+          <button type="button" class="btn-secondary btn-xs store-equip-btn" data-equip-type="nameplate" data-item-id="${escapeHtml(np.id)}" ${!canAddons && np.id !== 'default' ? 'disabled' : ''}>
+            ${u.nameplateStyle === np.id ? 'مفعل' : 'تطبيق'}
+          </button>
+        </div>
+      `).join('')}</div>`;
+    } else if (tab === 'badges') {
+      const badgeList = (state.shopItems.rankBadgeStyles && state.shopItems.rankBadgeStyles.length)
+        ? state.shopItems.rankBadgeStyles
+        : RANK_BADGE_STYLES;
+      itemsHtml = `
+        <div class="addon-card ${u.vipWings ? 'active' : ''}" style="margin-bottom:10px;flex-direction:row;justify-content:space-between;align-items:center;padding:10px 12px;">
+          <div style="text-align:right;">
+            <strong style="font-size:13px;">🪽 أجنحة VIP الملكية بجانب الاسم</strong>
+            <div class="muted">إضافة أجنحة مذهبة تطير بجانب اسمك داخل الغرفة وفي الملف الشخصي</div>
+          </div>
+          <button type="button" class="btn-primary btn-xs store-equip-btn" data-equip-type="wings" data-item-id="${u.vipWings ? '0' : '1'}" ${!canAddons && u.vipWings !== 1 ? 'disabled' : ''}>
+            ${u.vipWings ? 'إزالة الأجنحة' : 'تفعيل الأجنحة'}
+          </button>
+        </div>
+        <div class="muted" style="margin-bottom:6px;font-weight:700;">مكتبة أيقونات الرتب المدمجة (متاحة مجاناً في لوحة التحكم ومنشئ الرتب):</div>
+        <div class="rank-svg-picker-grid">
+          ${badgeList.map((bs) => `
+            <div class="rank-svg-pick-btn" style="cursor:default;">
+              <span class="rank-svg-pick-preview">${BUILT_IN_RANK_SVGS[bs.id] || `<i class="${escapeHtml(bs.iconClass || 'fa-solid fa-crown')}" style="color:#fbbf24"></i>`}</span>
+              <span>${escapeHtml(bs.label)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      itemsHtml = `<div class="shine-grid">${(state.shopItems.profileBackgrounds || []).map((bg) => `
+        <div class="addon-card ${(u.profileBgEffect || 'none') === bg.id ? 'active' : ''}">
+          <div class="bg-swatch-mini ${bg.id !== 'none' ? `bg-effect-${bg.id}` : ''}"></div>
+          <strong style="font-size:12px;">${escapeHtml(bg.label)}</strong>
+          <button type="button" class="btn-primary btn-xs store-equip-btn" data-equip-type="bg_effect" data-item-id="${escapeHtml(bg.id)}" ${!canAddons && bg.id !== 'none' ? 'disabled' : ''}>
+            ${(u.profileBgEffect || 'none') === bg.id ? 'مفعل' : 'تطبيق'}
+          </button>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    body.innerHTML = `
+      <div class="gift-balance-bar" style="margin-bottom:10px;">
+        <span>رصيدك الحالي: <strong>${u.coins || 0}</strong> <i class="fa-solid fa-coins"></i></span>
+        <button type="button" id="storeOpenCustBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-palette"></i> ألوان وخط الاسم</button>
+      </div>
+      ${lockHtml}
+      ${itemsHtml}
+    `;
+
+    $('storeOpenCustBtn')?.addEventListener('click', () => {
+      closeModal('storeModal');
+      openCustomizeModal('options');
+    });
+
+    body.querySelectorAll('.store-equip-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const res = await api('/api/shop/equip', {
+            method: 'POST',
+            body: { type: btn.dataset.equipType, itemId: btn.dataset.itemId }
+          });
+          if (res?.user) state.user = res.user;
+          renderUserIdentity();
+          renderStoreTab(tab);
+          showToast('تم تفعيل الإضافة على حسابك بنجاح!');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+  }
+
+  function openDownloadAppModal() {
+    const body = $('downloadAppBody');
+    if (!body) return;
+    const siteName = state.settings?.site_name || 'شات الغرف';
+    const hasPrompt = Boolean(state.deferredInstallPrompt);
+    body.innerHTML = `
+      <div class="download-app-box">
+        <div class="download-app-hero">
+          <i class="fa-solid fa-mobile-screen-button"></i>
+          <strong>تثبيت تطبيق ${escapeHtml(siteName)}</strong>
+          <p class="muted">افتح الشات كتطبيق مستقل سريع مع إشعارات فورية بلمسة واحدة.</p>
+        </div>
+        ${hasPrompt
+          ? `<button type="button" id="installPwaTriggerBtn" class="btn-primary btn-full"><i class="fa-solid fa-download"></i> تثبيت التطبيق الآن</button>`
+          : ''}
+        <div class="admin-list-card" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <strong><i class="fa-brands fa-android" style="color:#16a34a;"></i> أجهزة أندرويد (Chrome):</strong>
+          <span class="muted">اضغط على القائمة (⋮) في أعلى المتصفح ثم اختر <b>"الإضافة إلى الشاشة الرئيسية"</b> أو <b>"تثبيت التطبيق"</b>.</span>
+        </div>
+        <div class="admin-list-card" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <strong><i class="fa-brands fa-apple" style="color:#0f172a;"></i> أجهزة آيفون (Safari):</strong>
+          <span class="muted">اضغط على زر المشاركة (⬆️) في الأسفل ثم اختر <b>"إضافة إلى الصفحة الرئيسية"</b>.</span>
+        </div>
+        <button type="button" id="copyAppDownloadLinkBtn" class="btn-secondary btn-full"><i class="fa-solid fa-copy"></i> نسخ رابط الموقع</button>
+      </div>
+    `;
+    $('installPwaTriggerBtn')?.addEventListener('click', async () => {
+      const promptEv = state.deferredInstallPrompt;
+      if (!promptEv) return;
+      promptEv.prompt();
+      const choice = await promptEv.userChoice.catch(() => ({ outcome: 'dismissed' }));
+      state.deferredInstallPrompt = null;
+      if (choice?.outcome === 'accepted') {
+        showToast('تم تثبيت التطبيق بنجاح!');
+        closeModal('downloadAppModal');
+      } else {
+        openDownloadAppModal();
+      }
+    });
+    $('copyAppDownloadLinkBtn')?.addEventListener('click', () => {
+      navigator.clipboard?.writeText(window.location.origin).then(
+        () => showToast('تم نسخ رابط الموقع!'),
+        () => showToast(window.location.origin)
+      );
+    });
+    openModal('downloadAppModal');
+  }
+
+  function openQuickRankPickerModal(targetUser) {
+    if (!targetUser) return;
+    if (!canManageTargetUser(targetUser)) {
+      showToast('لا يمكنك تعديل رتبة هذا العضو (حصانة الرتب).', true);
+      return;
+    }
+    const targetUserId = targetUser.userId || targetUser.id;
+    if (!targetUserId) {
+      showToast('لا يمكن تغيير رتبة الزوار، للأعضاء المسجلين فقط.', true);
+      return;
+    }
+    state.rankPickerTarget = targetUser;
+    if ($('rankPickerTargetName')) $('rankPickerTargetName').textContent = targetUser.name || 'العضو';
+    const ranks = getAssignableRanksForActor();
+    const body = $('rankPickerBody');
+    if (!body) return;
+    body.innerHTML = ranks.length
+      ? `<div class="rank-picker-list">${ranks.map((r) => `
+          <button type="button" class="rank-picker-item${targetUser.role === r.key ? ' active' : ''}" data-pick-role="${escapeHtml(r.key)}">
+            <span>${roleBadgeHTML(r.key)}</span>
+            <span class="muted">قوة ${Number(r.power) || 0}${targetUser.role === r.key ? ' • الحالية' : ''}</span>
+          </button>
+        `).join('')}</div>`
+      : '<div class="muted" style="text-align:center;padding:12px;">لا توجد رتب متاحة للرفع أو التنزيل ضمن صلاحياتك.</div>';
+
+    body.querySelectorAll('.rank-picker-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const newRole = btn.dataset.pickRole;
+        state.socket.emit('admin_set_role', { userId: targetUserId, newRole }, (res) => {
+          if (res?.error) showToast(res.error, true);
+          else {
+            showToast(`تم تحديث رتبة "${targetUser.name}" إلى ${getRank(newRole).label}`);
+            closeModal('rankPickerModal');
+          }
+        });
+      });
+    });
+    openModal('rankPickerModal');
   }
 
   // ==========================================
@@ -2988,10 +3614,18 @@
             </div>
           </div>
           <div>
-            <label class="muted">شكل شعار/درع الرتبة الملكي:</label>
+            <label class="muted">مكتبة أيقونات وشارات الرتب المدمجة (SVG متحركة وواضحة):</label>
             <select id="rkBadgeStyle" style="width:100%;">
-              ${badgeStyles.map((bs) => `<option value="${escapeHtml(bs.id)}" ${(editRk?.badge_style || 'crown_royal') === bs.id ? 'selected' : ''}>${escapeHtml(bs.label)}</option>`).join('')}
+              ${badgeStyles.map((bs) => `<option value="${escapeHtml(bs.id)}" ${(editRk?.badge_style || 'gold_crown') === bs.id ? 'selected' : ''}>${escapeHtml(bs.label)}</option>`).join('')}
             </select>
+            <div class="rank-svg-picker-grid" id="rkSvgPickerGrid">
+              ${badgeStyles.map((bs) => `
+                <button type="button" class="rank-svg-pick-btn ${(editRk?.badge_style || 'gold_crown') === bs.id ? 'active' : ''}" data-bstyle="${escapeHtml(bs.id)}">
+                  <span class="rank-svg-pick-preview">${BUILT_IN_RANK_SVGS[bs.id] || `<i class="${escapeHtml(bs.iconClass || 'fa-solid fa-crown')}" style="color:#fbbf24"></i>`}</span>
+                  <span>${escapeHtml(bs.label)}</span>
+                </button>
+              `).join('')}
+            </div>
           </div>
           <div>
             <label class="muted">اختر أيقونة من المكتبة أو اكتب إيموجي:</label>
@@ -3058,6 +3692,18 @@
           $('rkIconInput').value = b.dataset.ic;
         });
       });
+
+      const syncBadgeStyleSelection = (val) => {
+        if ($('rkBadgeStyle')) $('rkBadgeStyle').value = val;
+        $('rkSvgPickerGrid')?.querySelectorAll('.rank-svg-pick-btn').forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.bstyle === val);
+        });
+      };
+
+      $('rkSvgPickerGrid')?.querySelectorAll('.rank-svg-pick-btn').forEach((btn) => {
+        btn.addEventListener('click', () => syncBadgeStyleSelection(btn.dataset.bstyle));
+      });
+      $('rkBadgeStyle')?.addEventListener('change', (e) => syncBadgeStyleSelection(e.target.value));
 
       $('rkSaveBtn').addEventListener('click', async () => {
         try {
@@ -3634,8 +4280,9 @@
             </div>
             <button type="button" id="ownerRainBtn" class="btn-primary btn-sm"><i class="fa-solid fa-cloud-showers-heavy"></i> إطلاق مطر العملات الذهبية</button>
             <hr style="border:none;border-top:1px solid #cbd5e1;" />
+            <div class="muted" style="font-size:11px;">يعمل تلقائياً في غرفة المسابقات بنظام النقاط التدرجي (100 / 50 / 25) وتلميح تلقائي بعد 12 ثانية.</div>
             <div class="form-grid-2">
-              <select id="ownerQuizRoomSel">${roomOpts}</select>
+              <select id="ownerQuizRoomSel">${(state.rooms || []).map((r) => `<option value="${escapeHtml(r.id)}" ${r.id === 'competitions' ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select>
               <input type="number" id="ownerQuizReward" value="100" min="10" max="2000" placeholder="جائزة السؤال" />
             </div>
             <div class="inline-row">
@@ -3870,6 +4517,8 @@
       state.messages = data.messages || [];
       state.mics = data.mics || [];
       state.roomUsers = data.users || [];
+      state.ytForceVideo = false;
+      state.quizBotState = data.quizBot || { active: false };
       localStorage.setItem(ROOM_KEY, data.room.id);
       renderRoomBanner();
       renderMics();
@@ -3941,10 +4590,22 @@
 
     socket.on('room_youtube_updated', (yt) => {
       if (state.currentRoom?.id === yt.roomId) {
+        const changedVid = state.currentRoom.youtube_video_id !== (yt.youtubeVideoId || '');
         state.currentRoom.youtube_video_id = yt.youtubeVideoId || '';
         state.currentRoom.youtube_title = yt.youtubeTitle || '';
         state.currentRoom.youtube_is_playing = yt.youtubeIsPlaying ? 1 : 0;
+        state.currentRoom.youtube_mini_mode = yt.youtubeMiniMode ? 1 : 0;
+        state.currentRoom.youtube_by_key = yt.youtubeByKey || '';
+        state.currentRoom.youtube_by_name = yt.youtubeByName || '';
+        if (changedVid || !yt.youtubeIsPlaying) state.ytForceVideo = false;
         renderRoomYoutubeBar();
+      }
+    });
+
+    socket.on('quiz_bot_state', (qb) => {
+      if (qb && qb.roomId === state.currentRoom?.id) {
+        state.quizBotState = qb;
+        renderQuizBotRoomBar();
       }
     });
 
@@ -4029,13 +4690,20 @@
 
     socket.on('new_notification', (notif) => {
       updateNotificationBadge(notif.unreadCount !== undefined ? notif.unreadCount : (state.social.unreadNotifCount + 1));
-      playNotificationChime(notif.category === 'gift' ? 'gift' : 'notif');
+      if (notif.category !== 'mention' && notif.category !== 'warning') {
+        playNotificationChime(notif.category === 'gift' ? 'gift' : 'notif');
+      }
       showToast(`${notif.title}: ${notif.body}`);
     });
 
     socket.on('mention_alert', ({ fromName, content }) => {
       playNotificationChime('mention');
       showToast(`🔔 نداء من ${fromName}: ${content}`);
+    });
+
+    socket.on('admin_warning', ({ byName, reason }) => {
+      playNotificationChime('mention');
+      showToast(`⚠️ تحذير إداري من ${byName || 'الإدارة'}: ${reason || 'يرجى الالتزام بقوانين الغرفة'}`, true);
     });
 
     socket.on('wall_updated', ({ post }) => {
@@ -4367,6 +5035,11 @@
     $('closeMainDrawerBtn')?.addEventListener('click', closeMainDrawer);
     $('drawerBackdrop')?.addEventListener('click', closeMainDrawer);
 
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      state.deferredInstallPrompt = e;
+    });
+
     document.querySelectorAll('.drawer-item[data-drawer]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const action = btn.dataset.drawer;
@@ -4387,16 +5060,17 @@
         }
         closeMainDrawer();
         if (action === 'rooms') openRoomsModal();
-        else if (action === 'profile') openCustomizeModal('info');
         else if (action === 'room_activity') openLeaderboardsModal('activeRooms');
+        else if (action === 'member_activity') openLeaderboardsModal('activeMembers');
         else if (action === 'news') openNewsModal();
         else if (action === 'wall') openSocialModal('wall');
         else if (action === 'leaderboards') openLeaderboardsModal('rich');
-        else if (action === 'customize') openCustomizeModal('more');
+        else if (action === 'admin_activity') openLeaderboardsModal('adminActivity');
         else if (action === 'report') openSocialModal('report');
-        else if (action === 'lucky_box') claimDailyLuckyBox();
+        else if (action === 'quiz_points') openLeaderboardsModal('quizLeaders');
+        else if (action === 'store') openStoreModal('frames');
+        else if (action === 'download_app') openDownloadAppModal();
         else if (action === 'owner_suite') openAdminPanel('owner_suite');
-        else if (action === 'stealth') $('dropStealthBtn').click();
         else if (action === 'admin') openAdminPanel('stats');
         else if (action === 'logout') logoutUser();
       });
@@ -4490,26 +5164,71 @@
     });
     $('ytCloseViewBtn')?.addEventListener('click', () => {
       state.ytBarOpen = false;
-      $('roomYoutubeBar').classList.add('hidden');
+      $('roomYoutubeBar')?.classList.add('hidden');
+      renderRoomYoutubeBar();
     });
     $('ytMuteLocalBtn')?.addEventListener('click', () => {
       state.ytLocalMuted = !state.ytLocalMuted;
       renderRoomYoutubeBar();
     });
+    $('micMiniYtMuteBtn')?.addEventListener('click', () => {
+      state.ytLocalMuted = !state.ytLocalMuted;
+      renderRoomYoutubeBar();
+    });
+    $('micMiniYtExpandBtn')?.addEventListener('click', () => {
+      state.ytForceVideo = !state.ytForceVideo;
+      state.ytBarOpen = state.ytForceVideo;
+      renderRoomYoutubeBar();
+    });
+    $('ytSwitchMiniBtn')?.addEventListener('click', () => {
+      state.ytForceVideo = false;
+      state.ytBarOpen = false;
+      if (state.currentRoom) state.currentRoom.youtube_mini_mode = 1;
+      renderRoomYoutubeBar();
+    });
+    $('micMiniYtStopBtn')?.addEventListener('click', () => {
+      state.socket?.emit('room_youtube_set', { roomId: state.currentRoom?.id, url: '', isPlaying: false });
+    });
+    $('roomQuizToggleBtn')?.addEventListener('click', () => {
+      if (!state.socket || !state.currentRoom) return;
+      state.socket.emit('quiz_bot_toggle', {
+        roomId: state.currentRoom.id,
+        enabled: !state.quizBotState?.active
+      }, (res) => {
+        if (res?.error) showToast(res.error, true);
+      });
+    });
     $('ytSearchBtn')?.addEventListener('click', () => {
       performYouTubeSearch($('ytSearchInput')?.value || '');
+    });
+    $('ytSearchInput')?.addEventListener('input', () => {
+      clearTimeout(state.ytSearchTimer);
+      const q = ($('ytSearchInput')?.value || '').trim();
+      if (!q) {
+        $('ytSearchResults')?.classList.add('hidden');
+        return;
+      }
+      if (q.length >= 2) {
+        state.ytSearchTimer = setTimeout(() => performYouTubeSearch(q), 380);
+      }
     });
     $('ytSearchInput')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
+        clearTimeout(state.ytSearchTimer);
         performYouTubeSearch($('ytSearchInput').value);
       }
     });
     $('ytPlayRoomBtn')?.addEventListener('click', () => {
       const url = $('ytUrlInput').value.trim();
-      state.socket.emit('room_youtube_set', { roomId: state.currentRoom?.id, url, isPlaying: true }, (res) => {
+      const iAmOnMic = (state.mics || []).some((m) => m.holderKey === state.user?.key);
+      state.socket.emit('room_youtube_set', { roomId: state.currentRoom?.id, url, isPlaying: true, miniMode: iAmOnMic }, (res) => {
         if (res?.error) showToast(res.error, true);
-        else $('ytUrlInput').value = '';
+        else {
+          $('ytUrlInput').value = '';
+          state.ytForceVideo = false;
+          if (iAmOnMic) state.ytBarOpen = false;
+        }
       });
     });
     $('ytStopBtn')?.addEventListener('click', () => {
@@ -4627,11 +5346,20 @@
     document.querySelectorAll('.cust-tab').forEach((b) => {
       b.addEventListener('click', () => switchCustomizeTab(b.dataset.custTab));
     });
-    $('custSwitchToMoreBtn')?.addEventListener('click', () => switchCustomizeTab('more'));
+    $('custSwitchToMoreBtn')?.addEventListener('click', () => {
+      switchCustomizeTab('more');
+      setTimeout(() => $('custNameStyleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+    });
+    $('custCoverPreviewToggleBtn')?.addEventListener('click', () => {
+      const hero = $('custCoverHero');
+      if (!hero) return;
+      const clean = hero.classList.toggle('cover-preview-clean');
+      $('custCoverPreviewToggleBtn')?.classList.toggle('active', clean);
+    });
     $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
       b.addEventListener('click', () => switchNameStyleTab(b.dataset.namestyleTab));
     });
-    ['custDisplayName', 'custBioInput', 'custNameColor', 'custFontFamily', 'custFontStyle', 'custFontSize', 'custVipWingsToggle'].forEach((id) => {
+    ['custDisplayName', 'custBioInput', 'custNameColor', 'custTextColor', 'custFontFamily', 'custFontStyle', 'custFontSize', 'custVipWingsToggle'].forEach((id) => {
       $(id)?.addEventListener('input', updateCustomizePreview);
       $(id)?.addEventListener('change', updateCustomizePreview);
     });
@@ -4669,6 +5397,19 @@
         $('custAvatarFile').value = '';
       }
     });
+    $('custDeleteAvatarBtn')?.addEventListener('click', async () => {
+      if (!confirm('حذف صورتك الشخصية الحالية؟')) return;
+      try {
+        const res = await api('/api/profile/avatar', { method: 'DELETE' });
+        if (res?.user) state.user = res.user;
+        else state.user.avatarUrl = '';
+        updateCustomizePreview();
+        renderUserIdentity();
+        showToast('تم حذف الصورة الشخصية.');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
     $('custUploadCoverBtn')?.addEventListener('click', () => $('custCoverFile')?.click());
     $('custCoverFile')?.addEventListener('change', async () => {
       const file = $('custCoverFile').files[0];
@@ -4684,6 +5425,18 @@
         showToast(err.message, true);
       } finally {
         $('custCoverFile').value = '';
+      }
+    });
+    $('custDeleteCoverBtn')?.addEventListener('click', async () => {
+      if (!confirm('حذف صورة الغلاف الحالية؟')) return;
+      try {
+        const res = await api('/api/profile/cover', { method: 'DELETE' });
+        if (res?.user) state.user = res.user;
+        else state.user.coverUrl = '';
+        updateCustomizePreview();
+        showToast('تم حذف صورة الغلاف.');
+      } catch (err) {
+        showToast(err.message, true);
       }
     });
     $('custCopyLinkBtn')?.addEventListener('click', () => {
@@ -4749,40 +5502,8 @@
       const playing = playProfileMusic(ref);
       $('custMusicPreviewBtn').textContent = playing ? 'إيقاف' : 'تجربة';
     });
-    $('saveCustomizeBtn').addEventListener('click', async () => {
-      try {
-        const customUrl = $('custMusicCustomUrl').value.trim();
-        const profileMusic = customUrl || $('custMusicPreset').value;
-        const res = await api('/api/profile/customize', {
-          method: 'POST',
-          body: {
-            displayName: $('custDisplayName').value,
-            vipFamily: $('custVipFamily').value,
-            bio: $('custBioInput').value,
-            age: $('custAgeInput')?.value ? Number($('custAgeInput').value) : 0,
-            gender: $('custGenderSelect')?.value || '',
-            country: $('custCountryInput')?.value || '',
-            allowCalls: $('custAllowCallsToggle') ? $('custAllowCallsToggle').checked : true,
-            allowPm: $('custAllowPmToggle') ? $('custAllowPmToggle').checked : true,
-            nameColor: $('custNameColor').value,
-            textColor: $('custTextColor').value,
-            nameBgColor: $('custNameBgColor').dataset.cleared === '1' ? '' : $('custNameBgColor').value,
-            neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
-            fontFamily: $('custFontFamily').value,
-            fontStyle: $('custFontStyle').value,
-            fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
-            vipWings: $('custVipWingsToggle').checked,
-            profileMusic
-          }
-        });
-        state.user = res.user;
-        renderUserIdentity();
-        showToast('تم حفظ وتطبيق تعديلات ملفك الشخصي!');
-        closeModal('customizeModal');
-      } catch (err) {
-        showToast(err.message, true);
-      }
-    });
+    $('saveNameStyleQuickBtn')?.addEventListener('click', () => saveCustomizeProfile(false));
+    $('saveCustomizeBtn').addEventListener('click', () => saveCustomizeProfile(true));
 
     // News composer
     $('toggleNewsComposerBtn').addEventListener('click', () => {
@@ -4813,11 +5534,16 @@
       }
     });
 
-    // Leaderboards & Admin Tabs
-    document.querySelectorAll('.lb-tab').forEach((b) => {
+    // Leaderboards, Store & Admin Tabs
+    document.querySelectorAll('.lb-tab:not(.store-tab)').forEach((b) => {
       b.addEventListener('click', () => {
-        document.querySelectorAll('.lb-tab').forEach((x) => x.classList.toggle('active', x === b));
+        document.querySelectorAll('.lb-tab:not(.store-tab)').forEach((x) => x.classList.toggle('active', x === b));
         renderLeaderboardBody(b.dataset.lbTab);
+      });
+    });
+    document.querySelectorAll('.store-tab').forEach((b) => {
+      b.addEventListener('click', () => {
+        renderStoreTab(b.dataset.storeTab);
       });
     });
     document.querySelectorAll('.adm-tab').forEach((b) => {

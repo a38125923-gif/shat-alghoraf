@@ -3,11 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#18181b" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>شات الغرف المباشر</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800&family=Changa:wght@400;600;700&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Amita:wght@400;700&family=Averia+Libre:wght@400;700&family=Cairo:wght@400;600;700;800&family=Changa:wght@400;600;700&family=Charm:wght@400;700&family=Comic+Neue:wght@400;700&family=Comfortaa:wght@400;600;700&family=Grandstander:wght@400;600;700&family=Grenze+Gotisch:wght@400;600;700&family=Kalam:wght@400;700&family=Lemonada:wght@400;600;700&family=Lobster+Two:wght@400;700&family=Merienda:wght@400;700&family=Orbitron:wght@500;700&family=Quicksand:wght@500;700&family=Reem+Kufi:wght@500;700&family=Sansita:wght@400;700&family=Signika:wght@400;600;700&family=Tajawal:wght@400;500;700;800&family=Turret+Road:wght@500;700&display=swap"
       rel="stylesheet"
     />
     <link
@@ -160,14 +162,34 @@
             <button type="button" id="toggleMicsCollapseBtn" class="divider-circle-btn" title="تبديل / تصغير المايكات">
               <i class="fa-solid fa-up-down"></i>
             </button>
-            <button type="button" id="micsAndYtSettingsBtn" class="divider-circle-btn" title="مشغل يوتيوب الغرفة ومعلوماتها">
-              <i class="fa-brands fa-youtube"></i>
+            <button type="button" id="micsAndYtSettingsBtn" class="divider-circle-btn" title="معلومات الغرفة ومشغل يوتيوب">
+              <i class="fa-solid fa-circle-info"></i>
             </button>
-            <button type="button" id="toggleYoutubeBarBtn" class="divider-circle-btn yt-dot-btn hidden" title="مشغل يوتيوب الغرفة">
-              <i class="fa-solid fa-play"></i>
+            <button type="button" id="toggleYoutubeBarBtn" class="divider-circle-btn yt-dot-btn" title="بحث وتشغيل يوتيوب في الغرفة">
+              <i class="fa-brands fa-youtube"></i>
             </button>
           </div>
           <span class="blue-divider-line"></span>
+        </div>
+
+        <!-- COMPACT MINI AUDIO BAR DIRECTLY UNDER MICS -->
+        <div id="micMiniYoutubeBar" class="mic-mini-yt-bar hidden">
+          <div class="mini-yt-eq" aria-hidden="true"><span></span><span></span><span></span></div>
+          <span id="micMiniYtTitle" class="mini-yt-title">جاري تشغيل الصوت...</span>
+          <span id="micMiniYtBy" class="mini-yt-by hidden"></span>
+          <div class="mini-yt-actions">
+            <button type="button" id="micMiniYtMuteBtn" class="mini-yt-btn" title="كتم/تشغيل الصوت محلياً"><i class="fa-solid fa-volume-high"></i></button>
+            <button type="button" id="micMiniYtExpandBtn" class="mini-yt-btn" title="إظهار / إخفاء الفيديو"><i class="fa-solid fa-tv"></i></button>
+            <button type="button" id="micMiniYtStopBtn" class="mini-yt-btn danger hidden" title="إيقاف"><i class="fa-solid fa-stop"></i></button>
+          </div>
+        </div>
+
+        <!-- COMPACT QUIZ BOT STATUS & OWNER TOGGLE BAR (COMPETITIONS ROOM) -->
+        <div id="quizBotRoomBar" class="quiz-bot-room-bar hidden">
+          <span class="quiz-bot-pill"><i class="fa-solid fa-robot"></i> <span id="quizBotStatusText">بوت المسابقات التلقائي نشط • 100 / 50 / 25 نقطة</span></span>
+          <button type="button" id="roomQuizToggleBtn" class="quiz-bot-toggle-btn hidden" title="تشغيل/إيقاف بوت المسابقات">
+            <i class="fa-solid fa-power-off"></i> <span id="roomQuizToggleLbl">إيقاف البوت</span>
+          </button>
         </div>
 
         <!-- COLLAPSIBLE ROOM META STRIP -->
@@ -185,36 +207,37 @@
           </button>
         </div>
 
-        <!-- COLLAPSIBLE SYNCED YOUTUBE PLAYER BAR + SEARCH BY NAME -->
+        <!-- COLLAPSIBLE SYNCED YOUTUBE PLAYER BAR + LIVE SEARCH BY NAME -->
         <div id="roomYoutubeBar" class="room-yt-bar hidden">
           <div class="yt-bar-head">
-            <span id="ytNowPlayingLabel"><i class="fa-brands fa-youtube" style="color:#ef4444"></i> مشغل يوتيوب الغرفة</span>
+            <span id="ytNowPlayingLabel"><i class="fa-brands fa-youtube" style="color:#ef4444"></i> يوتيوب الغرفة</span>
             <div class="yt-bar-controls">
+              <button type="button" id="ytSwitchMiniBtn" class="yt-mini-btn hidden" title="تصغير إلى شريط صوتي أسفل المايك"><i class="fa-solid fa-compress"></i> مصغر</button>
               <button type="button" id="ytMuteLocalBtn" class="yt-mini-btn"><i class="fa-solid fa-volume-high"></i> صوت</button>
               <button type="button" id="ytStopBtn" class="yt-mini-btn danger hidden"><i class="fa-solid fa-stop"></i> إيقاف</button>
               <button type="button" id="ytCloseViewBtn" class="yt-mini-btn"><i class="fa-solid fa-xmark"></i></button>
             </div>
           </div>
-          <div id="ytManagerForm" class="yt-manager-wrap hidden">
+          <div id="ytManagerForm" class="yt-manager-wrap">
             <div class="yt-manager-form">
-              <input type="text" id="ytSearchInput" placeholder="ابحث بالاسم عن أغنية أو فيديو في يوتيوب..." />
+              <input type="text" id="ytSearchInput" placeholder="اكتب اسم الأغنية أو المقطع للبحث الفوري..." autocomplete="off" />
               <button type="button" id="ytSearchBtn" class="btn-primary btn-xs"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>
             </div>
             <div id="ytSearchResults" class="yt-search-results hidden"></div>
             <div class="yt-manager-form">
-              <input type="text" id="ytUrlInput" placeholder="أو ألصق رابط يوتيوب مباشر هنا..." />
-              <button type="button" id="ytPlayRoomBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i> تشغيل الرابط</button>
+              <input type="text" id="ytUrlInput" placeholder="أو ألصق رابط يوتيوب مباشر (اختياري)..." />
+              <button type="button" id="ytPlayRoomBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i> تشغيل</button>
             </div>
           </div>
-          <div id="ytPlayerContainer" class="yt-player-wrap hidden">
-            <iframe
-              id="ytIframe"
-              src=""
-              title="مشغل يوتيوب الغرفة"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            ></iframe>
-          </div>
+        </div>
+        <div id="ytPlayerContainer" class="yt-player-wrap hidden">
+          <iframe
+            id="ytIframe"
+            src=""
+            title="مشغل يوتيوب الغرفة"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
         </div>
       </section>
 
@@ -376,14 +399,15 @@
           <button type="button" class="drawer-item" data-drawer="online"><i class="fa-solid fa-users"></i> الأعضاء المتواجدون</button>
           <button type="button" class="drawer-item" data-drawer="rooms"><i class="fa-solid fa-door-open"></i> قائمة الغرف</button>
           <button type="button" class="drawer-item" data-drawer="room_activity"><i class="fa-solid fa-fire"></i> تفاعل الغرف</button>
+          <button type="button" class="drawer-item" data-drawer="member_activity"><i class="fa-solid fa-chart-line"></i> تفاعل الأعضاء بنقاطهم</button>
           <button type="button" class="drawer-item" data-drawer="news"><i class="fa-solid fa-newspaper"></i> الأخبار</button>
           <button type="button" class="drawer-item" data-drawer="wall"><i class="fa-solid fa-signs-post"></i> جدار المنشورات</button>
           <button type="button" class="drawer-item" data-drawer="leaderboards"><i class="fa-solid fa-trophy"></i> الكبار والأثرياء</button>
-          <button type="button" class="drawer-item" data-drawer="profile"><i class="fa-solid fa-id-card"></i> ملفي الشخصي</button>
-          <button type="button" class="drawer-item" data-drawer="customize"><i class="fa-solid fa-palette"></i> تخصيص الملف والإضافات</button>
+          <button type="button" class="drawer-item" data-drawer="admin_activity"><i class="fa-solid fa-shield-halved"></i> تفاعل الإدارة</button>
           <button type="button" class="drawer-item" data-drawer="report"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
-          <button type="button" class="drawer-item" data-drawer="lucky_box"><i class="fa-solid fa-box-open" style="color:#d97706"></i> صندوق الحظ اليومي</button>
-          <button type="button" class="drawer-item hidden" id="drawerStealthBtn" data-drawer="stealth"><i class="fa-solid fa-user-secret"></i> وضع التخفي</button>
+          <button type="button" class="drawer-item" data-drawer="quiz_points"><i class="fa-solid fa-award"></i> نقاط المسابقات</button>
+          <button type="button" class="drawer-item" data-drawer="store"><i class="fa-solid fa-store"></i> المتجر</button>
+          <button type="button" class="drawer-item" data-drawer="download_app"><i class="fa-solid fa-mobile-screen-button"></i> حمل التطبيق</button>
           <button type="button" class="drawer-item hidden" id="drawerOwnerSuiteBtn" data-drawer="owner_suite"><i class="fa-solid fa-crown" style="color:#d97706"></i> جناح المالك الحصري</button>
           <button type="button" class="drawer-item hidden" id="drawerAdminBtn" data-drawer="admin"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
           <button type="button" class="drawer-item danger" data-drawer="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
@@ -417,40 +441,54 @@
         <div class="profile-cover-hero" id="custCoverHero">
           <img id="custCoverImg" src="" alt="" class="profile-cover-img hidden" />
           <div class="profile-cover-overlay"></div>
-          <div class="profile-cover-top-actions">
-            <button type="button" id="custUploadCoverBtn" class="cover-action-btn" title="تغيير صورة الغلاف (يدعم GIF)">
-              <i class="fa-solid fa-camera"></i> غلاف
+          <div class="profile-cover-top-actions cover-actions-left">
+            <button type="button" class="hero-circle-glass-btn cover-close-x-btn" data-close-modal="customizeModal" title="إغلاق">
+              <i class="fa-solid fa-xmark"></i>
             </button>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <button type="button" id="custSwitchToMoreBtn" class="cover-action-btn" title="الإعدادات والمظهر">
-                <i class="fa-solid fa-pen-to-square"></i> تعديل
-              </button>
-              <button type="button" class="cover-action-btn cover-close-x-btn" data-close-modal="customizeModal" title="إغلاق">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
-            </div>
+            <button type="button" id="custCoverPreviewToggleBtn" class="hero-circle-glass-btn" title="معاينة صورة الغلاف">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+            <button type="button" id="custUploadCoverBtn" class="hero-circle-glass-btn" title="تغيير صورة الغلاف (يدعم GIF)">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+            <button type="button" id="custDeleteCoverBtn" class="hero-circle-glass-btn danger-glass" title="حذف صورة الغلاف">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+          <div class="profile-cover-top-right">
+            <button type="button" id="custSwitchToMoreBtn" class="hero-circle-glass-btn" title="تعديل الألوان والخطوط">
+              <i class="fa-solid fa-palette"></i>
+            </button>
           </div>
           <input type="file" id="custCoverFile" accept="image/*,image/gif" class="hidden" />
           <input type="file" id="custAvatarFile" accept="image/*,image/gif" class="hidden" />
         </div>
 
-        <!-- CENTERED AVATAR + FRAME + LIKES/STARS BAR -->
-        <div class="profile-center-identity">
-          <div class="profile-avatar-stage">
-            <span id="custPreviewAvatarWrap" class="avatar-wrap lg frame-none">
+        <!-- SIDE-BY-SIDE 85x85 AVATAR + IDENTITY INFO -->
+        <div class="profile-identity-header-row">
+          <div class="profile-avatar-stage profile-avatar-85-stage">
+            <span id="custPreviewAvatarWrap" class="avatar-wrap profile-avatar-85 frame-none">
               <img id="custPreviewAvatarImg" src="" alt="" class="hidden" />
               <span id="custPreviewAvatarLetter" class="avatar-letter">ع</span>
             </span>
-            <button type="button" id="custUploadAvatarBtn" class="avatar-cam-fab" title="تغيير الصورة الشخصية (يدعم GIF)">
-              <i class="fa-solid fa-camera"></i>
-            </button>
+            <div class="avatar-inner-actions">
+              <button type="button" id="custUploadAvatarBtn" class="avatar-inner-circle-btn" title="تغيير الصورة الشخصية (يدعم GIF)">
+                <i class="fa-solid fa-camera"></i>
+              </button>
+              <button type="button" id="custDeleteAvatarBtn" class="avatar-inner-circle-btn danger" title="حذف الصورة الشخصية">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
           </div>
-          <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
-          <div id="custPreviewBio" class="cust-preview-bio"></div>
-          <div class="profile-social-counters">
-            <span class="social-pill"><i class="fa-solid fa-heart" style="color:#ef4444"></i> <span id="custLikesCountVal">0</span> إعجاب</span>
-            <span class="social-pill"><i class="fa-solid fa-star" style="color:#f59e0b"></i> <span id="custRatingAvgVal">5.0</span></span>
-            <span class="social-pill"><i class="fa-solid fa-coins" style="color:#eab308"></i> <span id="custTopCoinsVal">0</span></span>
+          <div class="profile-identity-meta-col">
+            <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
+            <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
+            <div id="custPreviewBio" class="cust-preview-bio"></div>
+            <div class="profile-social-counters profile-social-counters-start">
+              <span class="social-pill"><i class="fa-solid fa-heart" style="color:#ef4444"></i> <span id="custLikesCountVal">0</span></span>
+              <span class="social-pill"><i class="fa-solid fa-star" style="color:#f59e0b"></i> <span id="custRatingAvgVal">5.0</span></span>
+              <span class="social-pill"><i class="fa-solid fa-coins" style="color:#eab308"></i> <span id="custTopCoinsVal">0</span></span>
+            </div>
           </div>
         </div>
 
@@ -552,52 +590,64 @@
 
           <!-- TAB 6: المزيد (لون/نيون/خلفية + الإضافات + الحساب + الخصوصية + الخروج) -->
           <div id="custPane_more" class="cust-pane hidden">
-            <!-- NAME COLOR WITH SUB-TABS: لون | نيون | خلفية -->
-            <div class="addon-block">
+            <!-- NAME COLOR WITH LIVE PREVIEW + SUB-TABS: لون | نيون | خلفية + 17 FONTS -->
+            <div class="addon-block" id="custNameStyleSection">
               <div class="addon-block-head">
-                <h4><i class="fa-solid fa-palette"></i> لون الاسم ونص الرسالة</h4>
+                <h4><i class="fa-solid fa-palette"></i> لون الاسم ولون وحجم الخط</h4>
               </div>
+              <div id="custNameStyleLivePreview" class="namestyle-live-preview"></div>
               <div class="sub-pill-tabs" id="nameStyleSubTabs">
                 <button type="button" class="sub-pill-tab active" data-namestyle-tab="color">لون</button>
                 <button type="button" class="sub-pill-tab" data-namestyle-tab="neon">نيون</button>
                 <button type="button" class="sub-pill-tab" data-namestyle-tab="bg">خلفية</button>
               </div>
+              <div class="swatch-grid-boxes" id="nameColorSwatches"></div>
               <div id="nameStylePane_color" class="namestyle-pane">
-                <div class="color-swatches-row" id="nameColorSwatches"></div>
                 <div class="inline-row" style="margin-top:6px;">
                   <label class="muted">تحديد لون مخصص للاسم:</label>
                   <input type="color" id="custNameColor" value="#0f172a" />
                 </div>
               </div>
               <div id="nameStylePane_neon" class="namestyle-pane hidden">
-                <div class="inline-row">
+                <div class="inline-row" style="margin-top:6px;">
                   <label class="muted">لون توهج النيون:</label>
                   <input type="color" id="custNeonColor" value="#38bdf8" />
                   <button type="button" id="custClearNeonBtn" class="btn-secondary btn-xs">إلغاء النيون</button>
                 </div>
               </div>
               <div id="nameStylePane_bg" class="namestyle-pane hidden">
-                <div class="inline-row">
+                <div class="inline-row" style="margin-top:6px;">
                   <label class="muted">لون خلفية الاسم:</label>
                   <input type="color" id="custNameBgColor" value="#1e293b" />
                   <button type="button" id="custClearNameBgBtn" class="btn-secondary btn-xs">بدون خلفية</button>
                 </div>
               </div>
 
-              <div class="form-grid-2" style="margin-top:8px;">
+              <div class="form-grid-2" style="margin-top:10px;">
                 <div>
                   <label>لون نص الرسائل</label>
                   <input type="color" id="custTextColor" value="#111827" />
                 </div>
                 <div>
-                  <label>نوع الخط</label>
+                  <label>نوع الخط (17 خطاً)</label>
                   <select id="custFontFamily">
-                    <option value="Normal">الافتراضي</option>
-                    <option value="Cairo">Cairo (كايرو)</option>
-                    <option value="Tajawal">Tajawal (تجوال)</option>
-                    <option value="Amiri">Amiri (أميري)</option>
-                    <option value="Changa">Changa (تشانغا)</option>
-                    <option value="Reem Kufi">Reem Kufi (كوفي)</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Kalam">Kalam</option>
+                    <option value="Signika">Signika</option>
+                    <option value="Grandmaster">Grandmaster</option>
+                    <option value="Comic Neue">Comic Neue</option>
+                    <option value="Quicksand">Quicksand</option>
+                    <option value="Orbitron">Orbitron</option>
+                    <option value="Lemonada">Lemonada</option>
+                    <option value="Grenze Gotisch">Grenze Gotisch</option>
+                    <option value="Merienda">Merienda</option>
+                    <option value="Amita">Amita</option>
+                    <option value="Averia Libre">Averia Libre</option>
+                    <option value="Turret Road">Turret Road</option>
+                    <option value="Sansita">Sansita</option>
+                    <option value="Comfortaa">Comfortaa</option>
+                    <option value="Charm">Charm</option>
+                    <option value="Lobster Two">Lobster Two</option>
                   </select>
                 </div>
               </div>
@@ -605,7 +655,7 @@
                 <div>
                   <label>نمط الخط</label>
                   <select id="custFontStyle">
-                    <option value="Normal">عادي</option>
+                    <option value="Normal">عادي Normal</option>
                     <option value="Bold">عريض Bold</option>
                     <option value="Italic">مائل Italic</option>
                   </select>
@@ -614,6 +664,9 @@
                   <label>حجم خط الاسم والرسالة (<span id="custFontSizeVal">14</span>px)</label>
                   <input type="range" id="custFontSize" min="12" max="20" step="1" value="14" style="width:100%;padding:4px 0;" />
                 </div>
+              </div>
+              <div style="margin-top:8px;">
+                <button type="button" id="saveNameStyleQuickBtn" class="btn-primary btn-sm btn-full"><i class="fa-solid fa-check"></i> حفظ ألوان والخط وتطبيقها فوراً</button>
               </div>
               <div class="form-grid-2" style="margin-top:6px;">
                 <div>
@@ -779,8 +832,10 @@
           <button type="button" class="lb-tab active" data-lb-tab="rich"><i class="fa-solid fa-coins"></i> الأثرياء</button>
           <button type="button" class="lb-tab" data-lb-tab="activeMembers"><i class="fa-solid fa-fire"></i> تفاعل الأعضاء</button>
           <button type="button" class="lb-tab" data-lb-tab="activeRooms"><i class="fa-solid fa-door-open"></i> تفاعل الغرف</button>
+          <button type="button" class="lb-tab" data-lb-tab="adminActivity"><i class="fa-solid fa-shield-halved"></i> تفاعل الإدارة</button>
+          <button type="button" class="lb-tab" data-lb-tab="quizLeaders"><i class="fa-solid fa-award"></i> نقاط المسابقات</button>
           <button type="button" class="lb-tab" data-lb-tab="vips"><i class="fa-solid fa-crown"></i> الكبار</button>
-          <button type="button" class="lb-tab" data-lb-tab="families"><i class="fa-solid fa-shield-halved"></i> العائلات</button>
+          <button type="button" class="lb-tab" data-lb-tab="families"><i class="fa-solid fa-people-group"></i> العائلات</button>
         </div>
         <div id="leaderboardsBody" class="modal-body"></div>
       </div>
@@ -827,6 +882,46 @@
           <button type="button" class="adm-tab hidden" id="admOwnerSuiteTabBtn" data-adm-tab="owner_suite"><i class="fa-solid fa-crown"></i> جناح المالك</button>
         </div>
         <div id="adminModalBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- 9. STORE MODAL (المتجر) -->
+    <div id="storeModal" class="modal-backdrop hidden">
+      <div class="modal-card modal-card-md">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-store"></i> متجر الإضافات والزينة</h3>
+          <button type="button" class="modal-close" data-close-modal="storeModal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="cust-tabs-nav" id="storeTabsBar">
+          <button type="button" class="lb-tab store-tab active" data-store-tab="frames"><i class="fa-solid fa-crown"></i> الإطارات</button>
+          <button type="button" class="lb-tab store-tab" data-store-tab="shines"><i class="fa-solid fa-wand-magic-sparkles"></i> لمعات الاسم</button>
+          <button type="button" class="lb-tab store-tab" data-store-tab="nameplates"><i class="fa-solid fa-id-badge"></i> أشرطة الأسماء</button>
+          <button type="button" class="lb-tab store-tab" data-store-tab="backgrounds"><i class="fa-solid fa-sparkles"></i> خلفيات البروفايل</button>
+          <button type="button" class="lb-tab store-tab" data-store-tab="badges"><i class="fa-solid fa-shield-halved"></i> أيقونات وأجنحة</button>
+        </div>
+        <div id="storeModalBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- 10. DOWNLOAD APP MODAL (حمل التطبيق) -->
+    <div id="downloadAppModal" class="modal-backdrop hidden">
+      <div class="modal-card modal-card-sm">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-mobile-screen-button"></i> حمل التطبيق على جهازك</h3>
+          <button type="button" class="modal-close" data-close-modal="downloadAppModal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="downloadAppBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- 11. RANK PICKER MODAL (رفع / تنزيل الرتب) -->
+    <div id="rankPickerModal" class="modal-backdrop hidden">
+      <div class="modal-card modal-card-sm">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-award"></i> رفع أو تنزيل رتبة: <span id="rankPickerTargetName">العضو</span></h3>
+          <button type="button" class="modal-close" data-close-modal="rankPickerModal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="rankPickerBody" class="modal-body"></div>
       </div>
     </div>
 
