@@ -2,6 +2,7 @@
   const TOKEN_KEY = 'arabic_chat_token_v3';
   const ROOM_KEY = 'arabic_chat_room_v3';
   const DEVICE_ID_KEY = 'arabic_chat_device_id_v1';
+  const REF_KEY = 'arabic_chat_ref_v1';
 
   function getOrCreateDeviceId() {
     let did = localStorage.getItem(DEVICE_ID_KEY);
@@ -158,7 +159,10 @@
     micsCollapsed: false,
     deepLinkHandled: false,
     activeSlideDrawer: null,
-    activeSlidePmTarget: null
+    activeSlidePmTarget: null,
+    roomKingKey: null,
+    activeOwnerSubTab: 'surveillance',
+    ownerSuite: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -366,8 +370,10 @@
   }
 
   function formatNameHTML(userObj) {
+    const uKey = userObj.sender_key || userObj.key || '';
     const name = escapeHtml(userObj.sender_name || userObj.name || 'عضو');
     const role = userObj.sender_role || userObj.role || 'member';
+    const isQuizBot = uKey === 'system:quizbot' || uKey === 'system:official';
     const shine = userObj.name_shine || userObj.nameShine || 'none';
     const wings = Boolean(userObj.vip_wings || userObj.vipWings);
     const nameplate = userObj.nameplate_style || userObj.nameplateStyle || 'default';
@@ -376,7 +382,7 @@
     const neon = userObj.neon_color || userObj.neonColor || '';
     const ff = userObj.font_family || userObj.fontFamily || 'Normal';
     const fs = userObj.font_style || userObj.fontStyle || 'Normal';
-    const fontSize = Math.max(12, Math.min(20, Number(userObj.font_size || userObj.fontSize) || 13));
+    const fontSize = Math.max(11, Math.min(18, Number(userObj.font_size || userObj.fontSize) || 12));
 
     const classes = ['sender-name-btn'];
     if (nameplate && nameplate !== 'default') classes.push(`nameplate-${nameplate}`);
@@ -386,8 +392,10 @@
     if (shine === 'none') styles.push(`color:${escapeHtml(nameColor)}`);
     if (nameBg) {
       styles.push(`background-color:${escapeHtml(nameBg)}`);
-      styles.push('padding:1px 7px');
-      styles.push('border-radius:4px');
+    } else if (role === 'site_owner' && !isQuizBot && (!nameplate || nameplate === 'default')) {
+      styles.push('background-color:#18181b');
+    } else if (!nameplate || nameplate === 'default') {
+      styles.push('background-color:#f4f4f5');
     }
     if (neon) styles.push(`text-shadow:0 0 8px ${escapeHtml(neon)}, 0 0 14px ${escapeHtml(neon)}`);
     if (ff && ff !== 'Normal') styles.push(`font-family:'${escapeHtml(ff)}', sans-serif`);
@@ -395,17 +403,26 @@
     if (fs === 'Italic') styles.push('font-style:italic');
     styles.push(`font-size:${fontSize}px`);
 
-    const leftWing = wings ? '<span class="vip-wing">🪽</span>' : role === 'site_owner' ? '<span class="vip-wing">👑</span>' : '';
+    const leftWing = wings ? '<span class="vip-wing">🪽</span>' : role === 'site_owner' && !isQuizBot ? '<span class="vip-wing">👑</span>' : '';
     const rightWing = wings ? '<span class="vip-wing">🪽</span>' : '';
 
     const lowerColor = String(nameColor || '').trim().toLowerCase();
-    const hasCustomSurface = Boolean(nameBg) || (nameplate && nameplate !== 'default');
+    const hasCustomSurface = Boolean(nameBg) || (nameplate && nameplate !== 'default') || (role === 'site_owner' && !isQuizBot);
     const resolvedStyles = [...styles];
-    if (shine === 'none' && !hasCustomSurface && (!nameColor || lowerColor === '#ffffff' || lowerColor === '#fff')) {
+    if (role === 'site_owner' && !isQuizBot && shine === 'none' && !nameBg && (!nameColor || lowerColor === '#0f172a' || lowerColor === '#111827')) {
+      resolvedStyles[0] = 'color:#fbbf24';
+    } else if (shine === 'none' && !hasCustomSurface && (!nameColor || lowerColor === '#ffffff' || lowerColor === '#fff')) {
       resolvedStyles[0] = 'color:#111827';
     }
 
-    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>`;
+    const verifiedHtml = role === 'site_owner' && !isQuizBot
+      ? '<i class="fa-solid fa-circle-check owner-verified-badge" title="حساب المالك الموثق"></i>'
+      : '';
+    const kingHtml = uKey && state.roomKingKey && uKey === state.roomKingKey && role !== 'site_owner'
+      ? '<span class="room-king-badge" title="الأكثر تفاعلاً في الغرفة"><i class="fa-solid fa-crown"></i> ملك الغرفة</span>'
+      : '';
+
+    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
   }
 
   function formatAvatarHTML(userObj, sizeClass = '') {
@@ -590,10 +607,10 @@
     $('topStealthBadge').classList.toggle('hidden', !isStealth);
     $('dropStealthBtn').classList.toggle('hidden', !isOwner);
     $('drawerStealthBtn').classList.toggle('hidden', !isOwner);
-    $('dropStealthBtn').textContent = isStealth ? '👁️ إلغاء وضع التخفي' : '👻 تفعيل وضع التخفي';
-    $('drawerStealthBtn').textContent = isStealth ? '👁️ إلغاء التخفي' : '👻 وضع التخفي';
+    $('dropOwnerSuiteBtn')?.classList.toggle('hidden', !isOwner);
+    $('drawerOwnerSuiteBtn')?.classList.toggle('hidden', !isOwner);
+    $('admOwnerSuiteTabBtn')?.classList.toggle('hidden', !isOwner);
 
-    const rk = getRank(u.role);
     $('dropUserName').textContent = u.name;
     $('dropUserRole').innerHTML = `${roleBadgeHTML(u.role)}`;
     $('dropUserCoins').innerHTML = `<i class="fa-solid fa-coins"></i> ${u.coins || 0} عملة • <i class="fa-solid fa-fire"></i> ${u.activityPoints || 0} تفاعل`;
@@ -605,6 +622,15 @@
       ? '<i class="fa-solid fa-eye"></i> إلغاء التخفي'
       : '<i class="fa-solid fa-user-secret"></i> وضع التخفي';
 
+    const isFrozen = Boolean(u.isFrozen && !isOwner);
+    const fBanner = $('frozenUserBanner');
+    if (fBanner) {
+      fBanner.classList.toggle('hidden', !isFrozen);
+      if (isFrozen) {
+        fBanner.innerHTML = '<i class="fa-solid fa-snowflake"></i> حسابك مجمد حالياً من الإدارة (وضع القراءة فقط — لا يمكنك الإرسال أو التنقل).';
+      }
+    }
+
     const canPanel = isOwner || hasPerm('access_panel');
     $('dropAdminBtn').classList.toggle('hidden', !canPanel);
     $('drawerAdminBtn').classList.toggle('hidden', !canPanel);
@@ -615,14 +641,41 @@
   function renderRoomBanner() {
     const r = state.currentRoom;
     if (!r) return;
-    $('roomBannerName').textContent = `${r.name}`;
+    $('roomBannerName').textContent = `${r.name}${r.is_frozen ? ' ❄️' : ''}`;
     $('roomBannerDesc').textContent = r.description || '';
     $('roomBannerImg').src = r.image_url || '/assets/rooms/default.svg';
     $('roomActivityBadge').innerHTML = `<i class="fa-solid fa-fire"></i> ${r.activity_points || 0} تفاعل`;
     $('roomSettingsBtn')?.classList.toggle('hidden', !state.isRoomManager);
 
-    const topicTxt = r.welcome_message || r.description || state.settings?.marquee_text || 'أهلاً بكم في شات الغرف المباشر!';
+    const pinnedBar = $('pinnedRoyalBanner');
+    if (pinnedBar) {
+      const pinText = String(r.pinned_message || '').trim();
+      pinnedBar.classList.toggle('hidden', !pinText);
+      if (pinText) {
+        const isOwner = state.user?.role === 'site_owner';
+        pinnedBar.innerHTML = `
+          <div style="min-width:0;flex:1;display:flex;align-items:center;gap:6px;">
+            <i class="fa-solid fa-thumbtack" style="color:#fbbf24;flex-shrink:0;"></i>
+            <span style="word-break:break-word;"><strong>رسالة مثبتة:</strong> ${escapeHtml(pinText)}</span>
+          </div>
+          ${isOwner ? '<button type="button" id="unpinRoyalBannerBtn" class="yt-mini-btn danger" title="إزالة التثبيت"><i class="fa-solid fa-xmark"></i></button>' : ''}
+        `;
+        $('unpinRoyalBannerBtn')?.addEventListener('click', async () => {
+          try {
+            await api('/api/owner/action', { method: 'POST', body: { action: 'pin_message', roomId: r.id, message: '' } });
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        });
+      }
+    }
+
+    const baseTopic = r.welcome_message || r.description || state.settings?.marquee_text || 'أهلاً بكم في شات الغرف المباشر!';
+    const topicTxt = r.is_frozen ? `❄️ الغرفة مجمدة حالياً (للقراءة فقط) • ${baseTopic}` : baseTopic;
     if ($('topicBannerText')) $('topicBannerText').textContent = topicTxt;
+
+    const boosted = Math.max(state.roomUsers.length, Number(r.onlineCount || 0));
+    if ($('roomOnlineCounter')) $('roomOnlineCounter').textContent = String(boosted);
 
     const stage = $('chatStage');
     stage.className = `chat-stage theme-${r.bg_theme || 'warm_peach'}`;
@@ -944,6 +997,7 @@
     const row = document.createElement('div');
     const isAdminNotice = Boolean(msg.is_admin_notice);
     const isGift = Boolean(msg.is_gift);
+    const isOwnerSender = msg.sender_role === 'site_owner' && msg.sender_key !== 'system:quizbot' && msg.sender_key !== 'system:official';
     const rawContent = String(msg.content || '');
     const hasMention = msg.msg_type === 'text' && rawContent.includes('@');
     const myName = String(state.user?.name || '').trim().toLowerCase();
@@ -953,20 +1007,21 @@
       ((myName && rawContent.toLowerCase().includes(`@${myName}`)) ||
         (myUser && rawContent.toLowerCase().includes(`@${myUser}`)));
 
-    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}`;
+    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${isOwnerSender && !isAdminNotice ? ' owner-royal-msg-row' : ''}`;
     if (msg.client_msg_id) row.dataset.clientMsgId = msg.client_msg_id;
     if (msg.id) row.dataset.msgId = String(msg.id);
 
     const timeStr = formatTimeAgo(msg.created_at_ms || msg.created_at);
-    const msgFontSize = Math.max(12, Math.min(20, Number(msg.font_size || msg.fontSize) || 14));
+    const msgFontSize = Math.max(12, Math.min(20, Number(msg.font_size || msg.fontSize) || 13.5));
 
-    let bodyContentHtml = '';
+    let inlineTextHtml = '';
+    let mediaBelowHtml = '';
     if (msg.msg_type === 'image' && msg.media_url) {
-      bodyContentHtml = `<img src="${escapeHtml(msg.media_url)}" class="msg-media-img" alt="صورة" onclick="window.open(this.src,'_blank')" />`;
+      mediaBelowHtml = `<img src="${escapeHtml(msg.media_url)}" class="msg-media-img" alt="صورة" onclick="window.open(this.src,'_blank')" />`;
     } else if (msg.msg_type === 'audio' && msg.media_url) {
-      bodyContentHtml = `<audio controls src="${escapeHtml(msg.media_url)}" class="msg-audio-player"></audio>`;
+      mediaBelowHtml = `<audio controls src="${escapeHtml(msg.media_url)}" class="msg-audio-player"></audio>`;
     } else if (msg.msg_type === 'sticker') {
-      bodyContentHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
+      inlineTextHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
     } else {
       const prefix = isAdminNotice ? '<span class="admin-notice-prefix">إشعار الإدارة</span>' : '';
       const rawTxtColor = String(msg.text_color || '').trim();
@@ -977,20 +1032,22 @@
       const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:'${escapeHtml(msg.font_family)}',sans-serif;` : '';
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
       const fi = msg.font_style === 'Italic' || hasMention ? 'font-style:italic;' : '';
-      bodyContentHtml = `<div class="msg-text-line${hasMention ? ' mention-italic' : ''}" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${renderMessageTextWithMentions(msg.content)}</div>`;
+      inlineTextHtml = `<span class="msg-text-inline${hasMention ? ' mention-italic' : ''}" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${renderMessageTextWithMentions(msg.content)}</span>`;
     }
 
     const isMe = state.user && msg.sender_key === state.user.key;
-    const canDelete = isMe || state.user?.role === 'site_owner' || state.isRoomManager || hasPerm('clear_room');
-    const canMute = !isMe && (state.user?.role === 'site_owner' || state.isRoomManager || hasPerm('mute'));
+    const isOwner = state.user?.role === 'site_owner';
+    const canDelete = isMe || isOwner || state.isRoomManager || hasPerm('clear_room');
+    const canMute = !isMe && (isOwner || state.isRoomManager || hasPerm('mute'));
 
     row.innerHTML = `
       <div class="msg-avatar-trigger" style="cursor:pointer" title="عرض البطاقة">${formatAvatarHTML(msg, '')}</div>
       <div class="msg-body-col">
         <div class="msg-head-line">
-          <div class="msg-sender-meta">
+          <div class="msg-inline-main">
             ${roleBadgeHTML(msg.sender_role, true)}
             <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(msg)}</span>
+            ${inlineTextHtml}
           </div>
           <div class="msg-time-actions">
             <span class="msg-time">${escapeHtml(timeStr)}</span>
@@ -1001,13 +1058,14 @@
                 <button type="button" data-msg-act="mention"><i class="fa-solid fa-at"></i> نداء / منشن</button>
                 ${!isMe ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
                 <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
+                ${isOwner && msg.msg_type === 'text' ? '<button type="button" data-msg-act="pin"><i class="fa-solid fa-thumbtack"></i> تثبيت في الغرفة</button>' : ''}
                 ${canMute ? '<button type="button" data-msg-act="mute"><i class="fa-solid fa-volume-xmark"></i> كتم العضو</button>' : ''}
                 ${canDelete && msg.id ? '<button type="button" class="danger" data-msg-act="delete"><i class="fa-solid fa-trash"></i> حذف الرسالة</button>' : ''}
               </div>
             </div>
           </div>
         </div>
-        ${bodyContentHtml}
+        ${mediaBelowHtml}
       </div>
     `;
 
@@ -1025,7 +1083,6 @@
       neonColor: msg.neon_color
     };
     const openTarget = () => openQuickUserModal(targetObj);
-    // Split click handlers: Avatar = Profile Card, Name = Smart @Mention
     row.querySelector('.msg-avatar-trigger').addEventListener('click', openTarget);
     row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(msg.sender_name));
     row.querySelector('.msg-dismiss-btn')?.addEventListener('click', (e) => {
@@ -1050,7 +1107,7 @@
       if (willOpen) dotsMenu.classList.remove('hidden');
     });
     dotsMenu.querySelectorAll('button[data-msg-act]').forEach((actBtn) => {
-      actBtn.addEventListener('click', (e) => {
+      actBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         dotsMenu.classList.add('hidden');
         const act = actBtn.dataset.msgAct;
@@ -1060,6 +1117,16 @@
           openSlideSheetDrawer('pm', targetObj);
         } else if (act === 'profile') {
           openTarget();
+        } else if (act === 'pin' && state.currentRoom) {
+          try {
+            await api('/api/owner/action', {
+              method: 'POST',
+              body: { action: 'pin_message', roomId: state.currentRoom.id, message: `${msg.sender_name}: ${msg.content}` }
+            });
+            showToast('تم تثبيت الرسالة في أعلى الغرفة.');
+          } catch (err) {
+            showToast(err.message, true);
+          }
         } else if (act === 'mute') {
           state.socket?.emit('admin_mute', { targetKey: msg.sender_key, minutes: 15 });
         } else if (act === 'delete' && msg.id) {
@@ -1101,22 +1168,23 @@
 
   function appendRoomNotice(payload) {
     const feed = $('chatFeed');
-    const isJoinObj = payload && typeof payload === 'object' && payload.kind === 'join' && payload.user;
+    const isJoinObj = payload && typeof payload === 'object' && (payload.kind === 'join' || payload.kind === 'royal_join') && payload.user;
     if (isJoinObj) {
       const u = payload.user;
+      const isRoyal = payload.kind === 'royal_join';
       const row = document.createElement('div');
-      row.className = 'cody-msg-row cody-join-row';
+      row.className = `cody-msg-row cody-join-row${isRoyal ? ' owner-royal-msg-row' : ''}`;
       row.innerHTML = `
         <div class="msg-avatar-trigger" style="cursor:pointer" title="بطاقة العضو">${formatAvatarHTML(u, '')}</div>
         <div class="msg-body-col">
           <div class="msg-head-line">
-            <div class="msg-sender-meta">
+            <div class="msg-inline-main">
               ${roleBadgeHTML(u.role, true)}
               <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u)}</span>
+              <span class="${isRoyal ? 'join-royal-bar' : 'join-maroon-bar'}"><i class="fa-solid ${isRoyal ? 'fa-crown' : 'fa-check'}"></i> ${isRoyal ? 'تشريف ملكي: دخل المالك الغرفة' : 'انضم إلى الغرفة الآن'}</span>
             </div>
             <span class="msg-time">${formatTimeAgo(Date.now())}</span>
           </div>
-          <div class="join-maroon-bar"><i class="fa-solid fa-check"></i> انضم إلى الغرفة الآن</div>
         </div>
       `;
       row.querySelector('.msg-avatar-trigger').addEventListener('click', () => openQuickUserModal(u));
@@ -1136,7 +1204,8 @@
   function renderRoomUsers() {
     const list = $('roomUsersList');
     const count = state.roomUsers.length;
-    $('roomOnlineCounter').textContent = String(count);
+    const boosted = Math.max(count, Number(state.currentRoom?.onlineCount || 0));
+    $('roomOnlineCounter').textContent = String(boosted);
     $('sideOnlineCount').textContent = String(count);
 
     list.innerHTML = state.roomUsers.map((u) => `
@@ -1275,7 +1344,10 @@
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم 15 دقيقة</span></button>' : ''}
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quUnmuteBtn"><i class="fa-solid fa-volume-high"></i><span>فك الكتم</span></button>' : ''}
       ${canMod ? '<button type="button" class="mod-menu-btn" id="quKickBtn"><i class="fa-solid fa-door-open"></i><span>طرد من الغرفة</span></button>' : ''}
-      ${canMod && targetUserId ? `<button type="button" class="mod-menu-btn" id="quGhostBtn"><i class="fa-solid fa-ghost"></i><span>${u.isGhosted ? 'إلغاء وضع الشبح' : 'وضع الشبح (تجميد)'}</span></button>` : ''}
+      ${isOwner ? `<button type="button" class="mod-menu-btn" id="quShadowMuteBtn"><i class="fa-solid fa-user-ninja"></i><span>${u.isShadowMuted ? 'إلغاء الكتم الصامت' : 'كتم صامت (مخفي)'}</span></button>` : ''}
+      ${isOwner ? `<button type="button" class="mod-menu-btn" id="quFreezeUserBtn"><i class="fa-solid fa-snowflake"></i><span>${u.isFrozen ? 'فك التجميد' : 'تجميد تام'}</span></button>` : ''}
+      ${isOwner ? '<button type="button" class="mod-menu-btn" id="quMoveRoomBtn"><i class="fa-solid fa-right-left"></i><span>سحب ونقل لغرفة</span></button>' : ''}
+      ${canMod && targetUserId ? `<button type="button" class="mod-menu-btn" id="quGhostBtn"><i class="fa-solid fa-ghost"></i><span>${u.isGhosted ? 'إلغاء وضع الشبح' : 'وضع الشبح'}</span></button>` : ''}
       ${canBan ? '<button type="button" class="mod-menu-btn danger" id="quXBanBtn"><i class="fa-solid fa-shield-virus"></i><span>إكس باند (حظر الجهاز)</span></button>' : ''}
       ${canBan ? '<button type="button" class="mod-menu-btn danger" id="quBanBtn"><i class="fa-solid fa-ban"></i><span>حظر نهائي</span></button>' : ''}
       ${isOwner && targetUserId ? '<button type="button" class="mod-menu-btn" id="quCoinsBtn"><i class="fa-solid fa-coins"></i><span>منح +500 عملة</span></button>' : ''}
@@ -1307,6 +1379,7 @@
     const isReg = u.key && String(u.key).startsWith('user:');
     const targetUserId = isReg ? Number(String(u.key).replace('user:', '')) : null;
     const isOwner = state.user?.role === 'site_owner';
+    const isTargetOwner = u.role === 'site_owner' || u.isSupremeOwner;
     const canMod = !isMe && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick'));
     const canBan = !isMe && (isOwner || hasPerm('ban'));
     const canGift = !isMe && !state.user?.isGuest;
@@ -1315,7 +1388,6 @@
     const avgRating = u.ratingCount > 0 ? (Number(u.ratingSum || 0) / Number(u.ratingCount)).toFixed(1) : '0.0';
     const bgEffectClass = u.profileBgEffect && u.profileBgEffect !== 'none' ? `bg-effect-${u.profileBgEffect}` : '';
 
-    // Load fresh social state if available
     try {
       const socialRes = await api('/api/social/state');
       state.social = { ...state.social, ...socialRes };
@@ -1328,13 +1400,13 @@
     const profileLink = `${window.location.origin}/?profile=${encodeURIComponent(u.key)}`;
 
     $('quickUserBody').innerHTML = `
-      <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}">
-        <div class="profile-bg-effect-layer"></div>
+      <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwner ? ' owner-black-gold-theme' : ''}">
+        <div class="${isTargetOwner ? 'owner-falling-stars-layer' : 'profile-bg-effect-layer'}"></div>
         <div class="profile-cover-hero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}')` : ''}">
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
           <div class="profile-cover-top-actions">
             <div style="display:flex;gap:6px;align-items:center;">
-              ${(canMod || canBan || isOwner) && !u.isSupremeOwner && u.role !== 'site_owner' ? `
+              ${(canMod || canBan || isOwner) && !isTargetOwner ? `
                 <div class="mod-menu-wrap" style="position:relative;">
                   <button type="button" class="hero-icon-btn" id="quModMenuToggleBtn" title="قائمة الإدارة">
                     <i class="fa-solid fa-bars"></i>
@@ -1363,7 +1435,7 @@
             ${roleBadgeHTML(u.role, true)}
             ${formatNameHTML(u)}
           </div>
-          <div class="profile-role-subtitle">${escapeHtml(getRankObj(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
+          <div class="profile-role-subtitle">${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
           ${u.bio ? `<p class="profile-bio-line">${escapeHtml(u.bio)}</p>` : ''}
           <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
             ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
@@ -1579,6 +1651,41 @@
       closeModal('quickUserModal');
     });
 
+    $('quShadowMuteBtn')?.addEventListener('click', async () => {
+      const next = !u.isShadowMuted;
+      try {
+        await api('/api/owner/action', { method: 'POST', body: { action: 'shadow_mute', targetKey: u.key, enabled: next } });
+        showToast(next ? 'تم تطبيق الكتم الصامت على العضو.' : 'تم إلغاء الكتم الصامت.');
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    $('quFreezeUserBtn')?.addEventListener('click', async () => {
+      const next = !u.isFrozen;
+      try {
+        await api('/api/owner/action', { method: 'POST', body: { action: 'freeze_user', targetKey: u.key, enabled: next } });
+        showToast(next ? 'تم تجميد العضو (قراءة فقط).' : 'تم فك تجميد العضو.');
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    $('quMoveRoomBtn')?.addEventListener('click', async () => {
+      const roomChoices = state.rooms.map((r) => `${r.id}: ${r.name}`).join('\n');
+      const toRoomId = prompt(`أدخل معرف الغرفة لسحب "${u.name}" إليها:\n${roomChoices}`, state.currentRoom?.id || 'general');
+      if (!toRoomId) return;
+      try {
+        await api('/api/owner/action', { method: 'POST', body: { action: 'move_user', targetKey: u.key, toRoomId: toRoomId.trim() } });
+        showToast('تم سحب ونقل العضو للغرفة المحددة.');
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
     $('quXBanBtn')?.addEventListener('click', () => {
       const reason = prompt('سبب إكس باند (حظر الجهاز نهائياً):', 'مخالفة جسيمة');
       if (reason === null) return;
@@ -1780,6 +1887,30 @@
     if ($('custInteractionRankNum')) $('custInteractionRankNum').textContent = interactionRank > 0 ? `#${interactionRank}` : '—';
     if ($('custRichRankNum')) $('custRichRankNum').textContent = richRank > 0 ? `#${richRank}` : '—';
     if ($('custProfileLinkInput')) $('custProfileLinkInput').value = `${window.location.origin}/?profile=${encodeURIComponent(u.key)}`;
+
+    const refBox = $('custReferralBox');
+    if (refBox) {
+      if (u.userId) {
+        const refLink = `${window.location.origin}/?ref=${u.userId}`;
+        const bonus = Number(state.settings?.referral_bonus) || 200;
+        refBox.classList.remove('hidden');
+        refBox.innerHTML = `
+          <strong><i class="fa-solid fa-share-nodes"></i> رابط الدعوة والمكافآت (عدد دعواتك: ${Number(u.invitesCount || 0)} • +${bonus} عملة لكل مدعو)</strong>
+          <div class="profile-link-box">
+            <input type="text" id="custReferralLinkInput" readonly value="${escapeHtml(refLink)}" />
+            <button type="button" id="custCopyReferralBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-copy"></i> نسخ رابط الدعوة</button>
+          </div>
+        `;
+        $('custCopyReferralBtn')?.addEventListener('click', () => {
+          navigator.clipboard?.writeText(refLink).then(
+            () => showToast('تم نسخ رابط الدعوة الخاص بك!'),
+            () => showToast('انسخ رابط الدعوة من الحقل.')
+          );
+        });
+      } else {
+        refBox.classList.add('hidden');
+      }
+    }
 
     // Friends tab
     const friends = state.social.friends || [];
@@ -2014,12 +2145,18 @@
       }
     }
 
+    const isOwner = u.role === 'site_owner';
     const card = document.querySelector('#customizeModal .profile-luxury-card');
     if (card) {
-      card.className = 'profile-luxury-card';
+      card.className = 'modal-card modal-card-md profile-luxury-card';
+      if (isOwner) card.classList.add('owner-black-gold-theme');
       if (u.profileBgEffect && u.profileBgEffect !== 'none') {
         card.classList.add(`bg-effect-${u.profileBgEffect}`);
       }
+    }
+    const bgLayer = $('custBgEffectLayer');
+    if (bgLayer) {
+      bgLayer.className = isOwner ? 'owner-falling-stars-layer' : 'profile-bg-effect-layer';
     }
 
     $('custPreviewNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(previewObj)}`;
@@ -2615,7 +2752,13 @@
     $('adminModalBody').innerHTML = '<div class="muted">جاري تحميل بيانات الإدارة...</div>';
     openModal('adminModal');
     try {
-      state.adminOverview = await api('/api/admin/overview');
+      const promises = [api('/api/admin/overview')];
+      if (state.user?.role === 'site_owner') {
+        promises.push(api('/api/owner/suite').catch(() => null));
+      }
+      const [ov, suite] = await Promise.all(promises);
+      state.adminOverview = ov;
+      if (suite) state.ownerSuite = suite;
       state.ranks = state.adminOverview.ranks || state.ranks;
       renderAdminTab(tab);
     } catch (err) {
@@ -3309,6 +3452,346 @@
           openAdminPanel('bans');
         });
       });
+      return;
+    }
+
+    if (tab === 'owner_suite') {
+      if (!isOwner) {
+        body.innerHTML = '<div class="form-error">هذا القسم حصري لصاحب الموقع فقط.</div>';
+        return;
+      }
+      const suite = state.ownerSuite || {};
+      const sub = state.activeOwnerSubTab || 'surveillance';
+      const prot = suite.protections || {};
+      const roomOpts = (ov.rooms || state.rooms || [])
+        .map((r) => `<option value="${escapeHtml(r.id)}" ${state.currentRoom?.id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}${r.is_frozen ? ' ❄️' : ''}</option>`)
+        .join('');
+      const targetOpts = [
+        ...(suite.users || []).filter((u) => !u.isSupremeOwner).map((u) => ({
+          key: u.key,
+          label: `${u.displayName} (@${u.username})${u.isShadowMuted ? ' [صامت]' : ''}${u.isFrozen ? ' [مجمد]' : ''}`
+        })),
+        ...(suite.liveSockets || []).filter((s) => s.isGuest).map((s) => ({
+          key: s.key,
+          label: `زائر: ${s.name}${s.isShadowMuted ? ' [صامت]' : ''}${s.isFrozen ? ' [مجمد]' : ''}`
+        }))
+      ].map((t) => `<option value="${escapeHtml(t.key)}">${escapeHtml(t.label)}</option>`).join('');
+
+      body.innerHTML = `
+        <div class="owner-subtabs-bar">
+          <button type="button" class="owner-subtab-btn ${sub === 'surveillance' ? 'active' : ''}" data-owner-sub="surveillance"><i class="fa-solid fa-eye"></i> المراقبة والسجلات</button>
+          <button type="button" class="owner-subtab-btn ${sub === 'moderation' ? 'active' : ''}" data-owner-sub="moderation"><i class="fa-solid fa-shield-halved"></i> التحكم والحماية</button>
+          <button type="button" class="owner-subtab-btn ${sub === 'engagement' ? 'active' : ''}" data-owner-sub="engagement"><i class="fa-solid fa-bolt"></i> التنشيط والألعاب</button>
+        </div>
+
+        <div id="ownerSub_surveillance" class="${sub === 'surveillance' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-user-secret"></i> رادار المتخفين والشبح والكتم الصامت (${(suite.hiddenOnline || []).length})</h4>
+            ${(suite.hiddenOnline || []).length ? (suite.hiddenOnline || []).map((h) => `
+              <div class="admin-list-card">
+                <div>
+                  <strong>${escapeHtml(h.name)}</strong>
+                  <div class="muted">${escapeHtml(h.roomName || h.roomId)} • ${h.isStealth ? 'تخفي ' : ''}${h.isGhosted ? 'شبح ' : ''}${h.isShadowMuted ? 'كتم صامت' : ''}</div>
+                </div>
+                <span class="muted">${escapeHtml(h.ipAddress || '')}</span>
+              </div>
+            `).join('') : '<div class="muted">لا يوجد متخفون حالياً.</div>'}
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-network-wired"></i> فحص المتصلين والـ IP والأجهزة (${(suite.liveSockets || []).length})</h4>
+            ${(suite.liveSockets || []).map((s) => `
+              <div class="admin-list-card">
+                <div style="min-width:0;flex:1;">
+                  <strong>${escapeHtml(s.name)} (${escapeHtml(s.role)})</strong>
+                  <div class="muted">${escapeHtml(s.roomName || s.roomId)} • IP: ${escapeHtml(s.ipAddress || '—')} • جهاز: ${escapeHtml((s.deviceId || '').slice(0, 14))}</div>
+                </div>
+                ${s.role !== 'site_owner' ? `<button type="button" class="btn-danger btn-xs owner-ban-ip-btn" data-ip="${escapeHtml(s.ipAddress || '')}" data-dev="${escapeHtml(s.deviceId || '')}" data-tk="${escapeHtml(s.key)}"><i class="fa-solid fa-ban"></i> حظر IP/جهاز</button>` : ''}
+              </div>
+            `).join('') || '<div class="muted">لا يوجد متصلون.</div>'}
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-users-viewfinder"></i> كاشف الحسابات المتعددة (Multi-Account) (${(suite.multiAccounts || []).length})</h4>
+            ${(suite.multiAccounts || []).length ? (suite.multiAccounts || []).map((m) => `
+              <div class="admin-list-card">
+                <div>
+                  <strong>${escapeHtml(m.type)}: ${escapeHtml(m.fingerprint)}</strong>
+                  <div class="muted">${(m.accounts || []).map((a) => escapeHtml(a.displayName)).join(' ، ')}</div>
+                </div>
+              </div>
+            `).join('') : '<div class="muted">لا توجد حسابات متعددة متطابقة حالياً.</div>'}
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-clock-rotate-left"></i> سجل تغيير الأسماء للأعضاء</h4>
+            ${(suite.users || []).filter((u) => (u.nameHistory || []).length).map((u) => `
+              <div class="admin-list-card">
+                <div>
+                  <strong>${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})</strong>
+                  <div class="muted">الأسماء السابقة: ${(u.nameHistory || []).map((h) => escapeHtml(h.name)).join(' ← ')}</div>
+                </div>
+              </div>
+            `).join('') || '<div class="muted">لا توجد تغييرات أسماء مسجلة.</div>'}
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-link"></i> رادار روابط الرسائل الخاصة (${(suite.pmLinkAlerts || []).length})</h4>
+            ${(suite.pmLinkAlerts || []).slice(0, 20).map((al) => `
+              <div class="admin-list-card">
+                <div>
+                  <strong>من ${escapeHtml(al.fromName)} ← إلى ${escapeHtml(al.toName)}</strong>
+                  <div class="muted">${escapeHtml(al.content)}</div>
+                </div>
+              </div>
+            `).join('') || '<div class="muted">لا توجد روابط مشبوهة في الخاص.</div>'}
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-clipboard-list"></i> سجل الرقابة الإدارية (Audit Log)</h4>
+            ${(suite.adminLogs || []).slice(0, 30).map((lg) => `
+              <div class="admin-list-card">
+                <div>
+                  <strong>${escapeHtml(lg.action)} — بواسطة ${escapeHtml(lg.actor_name)}</strong>
+                  <div class="muted">${escapeHtml(lg.target_name || lg.target_key || '')} ${lg.details ? `• ${escapeHtml(lg.details)}` : ''}</div>
+                </div>
+              </div>
+            `).join('') || '<div class="muted">لا توجد سجلات رقابة بعد.</div>'}
+          </div>
+        </div>
+
+        <div id="ownerSub_moderation" class="${sub === 'moderation' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-gavel"></i> ردع وتحكم فوري بالأعضاء</h4>
+            <select id="ownerModTargetSel">${targetOpts || '<option value="">لا يوجد أعضاء</option>'}</select>
+            <div class="inline-row" style="flex-wrap:wrap;">
+              <button type="button" id="ownerShadowMuteOnBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-user-ninja"></i> كتم صامت</button>
+              <button type="button" id="ownerShadowMuteOffBtn" class="btn-secondary btn-xs">فك الكتم الصامت</button>
+              <button type="button" id="ownerFreezeUserOnBtn" class="btn-danger btn-xs"><i class="fa-solid fa-snowflake"></i> تجميد تام</button>
+              <button type="button" id="ownerFreezeUserOffBtn" class="btn-secondary btn-xs">فك التجميد</button>
+            </div>
+            <div class="inline-row" style="flex-wrap:wrap;">
+              <select id="ownerMoveDestRoomSel" style="flex:1">${roomOpts}</select>
+              <button type="button" id="ownerMoveUserBtn" class="btn-primary btn-xs"><i class="fa-solid fa-right-left"></i> سحب ونقل للغرفة</button>
+            </div>
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-door-closed"></i> تحكم فوري بالغرف والمايكات</h4>
+            <select id="ownerRoomCtrlSel">${roomOpts}</select>
+            <div class="inline-row" style="flex-wrap:wrap;">
+              <button type="button" id="ownerFreezeRoomOnBtn" class="btn-danger btn-xs"><i class="fa-solid fa-snowflake"></i> تجميد الغرفة (قراءة فقط)</button>
+              <button type="button" id="ownerFreezeRoomOffBtn" class="btn-secondary btn-xs">فك تجميد الغرفة</button>
+              <button type="button" id="ownerMuteAllMicsBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-microphone-slash"></i> كتم كل المايكات</button>
+              <button type="button" id="ownerClearRoomBtn" class="btn-danger btn-xs"><i class="fa-solid fa-broom"></i> تنظيف الغرفة</button>
+            </div>
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-shield"></i> جدار الحماية والكلمات الممنوعة</h4>
+            <label class="switch-label"><input type="checkbox" id="ownerLockGuestImgToggle" ${prot.lock_guest_images ? 'checked' : ''} /><span>منع الزوار من إرسال الصور والملفات</span></label>
+            <label class="switch-label"><input type="checkbox" id="ownerBlockVpnToggle" ${prot.block_vpn ? 'checked' : ''} /><span>حظر دخول شبكات VPN / Proxy (يُستثنى المالك)</span></label>
+            <label class="muted">الكلمات الممنوعة (افصل بفاصلة , أو سطر جديد):</label>
+            <textarea id="ownerBannedWordsInput" rows="3">${escapeHtml((prot.banned_words || []).join('، '))}</textarea>
+            <button type="button" id="ownerSaveProtBtn" class="btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الحماية</button>
+          </div>
+        </div>
+
+        <div id="ownerSub_engagement" class="${sub === 'engagement' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-bullhorn"></i> إعلان إداري عاجل (كل الغرف)</h4>
+            <input type="text" id="ownerBroadcastTitle" value="📢 إعلان إداري عاجل" placeholder="عنوان الإعلان" />
+            <textarea id="ownerBroadcastMsg" rows="2" placeholder="اكتب نص الإعلان العاجل ليظهر للجميع..."></textarea>
+            <button type="button" id="ownerBroadcastBtn" class="btn-primary btn-sm"><i class="fa-solid fa-rocket"></i> بث عاجل للجميع</button>
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-masks-theater"></i> الإرسال باسم النظام أو عضو آخر</h4>
+            <div class="form-grid-2">
+              <select id="ownerSendAsRoom">${roomOpts}</select>
+              <select id="ownerSendAsMode">
+                <option value="system">🛡️ باسم النظام الرسمي</option>
+                <option value="user">🎭 انتحال/نيابة عن عضو</option>
+              </select>
+            </div>
+            <select id="ownerSendAsTarget">${targetOpts || '<option value="">اختر عضواً</option>'}</select>
+            <input type="text" id="ownerSendAsText" placeholder="اكتب نص الرسالة..." />
+            <button type="button" id="ownerSendAsBtn" class="btn-secondary btn-sm"><i class="fa-solid fa-paper-plane"></i> إرسال الرسالة</button>
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-thumbtack"></i> رسالة ملكية مثبتة أعلى الغرفة</h4>
+            <select id="ownerPinRoomSel">${roomOpts}</select>
+            <input type="text" id="ownerPinText" placeholder="نص الرسالة المثبتة (اتركه فارغاً لإزالة التثبيت)" />
+            <button type="button" id="ownerPinBtn" class="btn-primary btn-xs"><i class="fa-solid fa-thumbtack"></i> حفظ التثبيت الملكي</button>
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-coins"></i> المطر الذهبي وبوت المسابقات</h4>
+            <div class="form-grid-2">
+              <select id="ownerRainRoomSel"><option value="all">🌟 جميع الغرف</option>${roomOpts}</select>
+              <input type="number" id="ownerRainAmount" value="100" min="10" max="10000" placeholder="عملات لكل عضو" />
+            </div>
+            <button type="button" id="ownerRainBtn" class="btn-primary btn-sm"><i class="fa-solid fa-cloud-showers-heavy"></i> إطلاق مطر العملات الذهبية</button>
+            <hr style="border:none;border-top:1px solid #cbd5e1;" />
+            <div class="form-grid-2">
+              <select id="ownerQuizRoomSel">${roomOpts}</select>
+              <input type="number" id="ownerQuizReward" value="100" min="10" max="2000" placeholder="جائزة السؤال" />
+            </div>
+            <div class="inline-row">
+              <button type="button" id="ownerQuizStartBtn" class="btn-primary btn-xs"><i class="fa-solid fa-play"></i> تشغيل بوت المسابقات</button>
+              <button type="button" id="ownerQuizStopBtn" class="btn-danger btn-xs"><i class="fa-solid fa-stop"></i> إيقاف البوت</button>
+            </div>
+          </div>
+
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-box-open"></i> صندوق الحظ اليومي، عداد التواجد، ومكافآت الدعوة</h4>
+            <label class="switch-label"><input type="checkbox" id="ownerLuckyEnabled" ${prot.lucky_box_enabled !== 0 ? 'checked' : ''} /><span>تفعيل صندوق الحظ اليومي</span></label>
+            <div class="form-grid-2">
+              <div><label class="muted">أقل جائزة</label><input type="number" id="ownerLuckyMin" value="${Number(prot.lucky_box_min) || 50}" min="10" /></div>
+              <div><label class="muted">أكبر جائزة</label><input type="number" id="ownerLuckyMax" value="${Number(prot.lucky_box_max) || 500}" min="10" /></div>
+              <div><label class="muted">تعزيز وهمي لعداد المتواجدين (+)</label><input type="number" id="ownerOnlineBoost" value="${Number(prot.online_boost) || 0}" min="0" max="5000" /></div>
+              <div><label class="muted">مكافأة رابط الدعوة</label><input type="number" id="ownerRefBonus" value="${Number(prot.referral_bonus) || 200}" min="0" max="10000" /></div>
+            </div>
+            <button type="button" id="ownerSaveBoostsBtn" class="btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات التنشيط</button>
+          </div>
+        </div>
+      `;
+
+      body.querySelectorAll('.owner-subtab-btn').forEach((b) => {
+        b.addEventListener('click', () => {
+          state.activeOwnerSubTab = b.dataset.ownerSub;
+          renderAdminTab('owner_suite');
+        });
+      });
+
+      const runOwnerAct = async (payload, okMsg) => {
+        try {
+          await api('/api/owner/action', { method: 'POST', body: payload });
+          showToast(okMsg);
+          openAdminPanel('owner_suite');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      };
+
+      body.querySelectorAll('.owner-ban-ip-btn').forEach((b) => {
+        b.addEventListener('click', () => {
+          if (!confirm('حظر هذا الجهاز وعنوان IP نهائياً؟')) return;
+          runOwnerAct({ action: 'ban_ip', ipAddress: b.dataset.ip, deviceId: b.dataset.dev, targetKey: b.dataset.tk }, 'تم حظر IP والجهاز بنجاح.');
+        });
+      });
+
+      $('ownerShadowMuteOnBtn')?.addEventListener('click', () => runOwnerAct({ action: 'shadow_mute', targetKey: $('ownerModTargetSel').value, enabled: true }, 'تم تطبيق الكتم الصامت.'));
+      $('ownerShadowMuteOffBtn')?.addEventListener('click', () => runOwnerAct({ action: 'shadow_mute', targetKey: $('ownerModTargetSel').value, enabled: false }, 'تم إلغاء الكتم الصامت.'));
+      $('ownerFreezeUserOnBtn')?.addEventListener('click', () => runOwnerAct({ action: 'freeze_user', targetKey: $('ownerModTargetSel').value, enabled: true }, 'تم تجميد العضو تاماً.'));
+      $('ownerFreezeUserOffBtn')?.addEventListener('click', () => runOwnerAct({ action: 'freeze_user', targetKey: $('ownerModTargetSel').value, enabled: false }, 'تم فك تجميد العضو.'));
+      $('ownerMoveUserBtn')?.addEventListener('click', () => runOwnerAct({ action: 'move_user', targetKey: $('ownerModTargetSel').value, toRoomId: $('ownerMoveDestRoomSel').value }, 'تم نقل العضو للغرفة المحددة.'));
+
+      $('ownerFreezeRoomOnBtn')?.addEventListener('click', () => runOwnerAct({ action: 'freeze_room', roomId: $('ownerRoomCtrlSel').value, enabled: true }, 'تم تجميد الغرفة.'));
+      $('ownerFreezeRoomOffBtn')?.addEventListener('click', () => runOwnerAct({ action: 'freeze_room', roomId: $('ownerRoomCtrlSel').value, enabled: false }, 'تم فك تجميد الغرفة.'));
+      $('ownerMuteAllMicsBtn')?.addEventListener('click', () => runOwnerAct({ action: 'mute_all_mics', roomId: $('ownerRoomCtrlSel').value }, 'تم كتم جميع المايكات بالملكية.'));
+      $('ownerClearRoomBtn')?.addEventListener('click', () => {
+        if (confirm('تنظيف جميع رسائل هذه الغرفة؟')) runOwnerAct({ action: 'clear_room', roomId: $('ownerRoomCtrlSel').value }, 'تم تنظيف الغرفة.');
+      });
+
+      $('ownerSaveProtBtn')?.addEventListener('click', () => {
+        const words = String($('ownerBannedWordsInput').value || '')
+          .split(/[\n,،]+/)
+          .map((w) => w.trim())
+          .filter(Boolean);
+        runOwnerAct({
+          action: 'update_protections',
+          protections: {
+            lock_guest_images: $('ownerLockGuestImgToggle').checked ? 1 : 0,
+            block_vpn: $('ownerBlockVpnToggle').checked ? 1 : 0,
+            banned_words: words
+          }
+        }, 'تم حفظ إعدادات الحماية!');
+      });
+
+      $('ownerBroadcastBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'global_broadcast',
+        title: $('ownerBroadcastTitle').value,
+        content: $('ownerBroadcastMsg').value
+      }, 'تم إرسال الإعلان العاجل لكل الغرف!'));
+
+      $('ownerSendAsBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'send_as',
+        roomId: $('ownerSendAsRoom').value,
+        asMode: $('ownerSendAsMode').value,
+        targetUserKey: $('ownerSendAsTarget').value,
+        content: $('ownerSendAsText').value
+      }, 'تم إرسال الرسالة!'));
+
+      $('ownerPinBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'pin_message',
+        roomId: $('ownerPinRoomSel').value,
+        message: $('ownerPinText').value
+      }, 'تم تحديث التثبيت الملكي.'));
+
+      $('ownerRainBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'golden_rain',
+        roomId: $('ownerRainRoomSel').value,
+        amountPerUser: Number($('ownerRainAmount').value) || 100
+      }, 'تم إطلاق المطر الذهبي!'));
+
+      $('ownerQuizStartBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'quiz_bot',
+        roomId: $('ownerQuizRoomSel').value,
+        enabled: true,
+        rewardCoins: Number($('ownerQuizReward').value) || 100
+      }, 'تم تشغيل بوت المسابقات!'));
+
+      $('ownerQuizStopBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'quiz_bot',
+        roomId: $('ownerQuizRoomSel').value,
+        enabled: false
+      }, 'تم إيقاف بوت المسابقات.'));
+
+      $('ownerSaveBoostsBtn')?.addEventListener('click', () => runOwnerAct({
+        action: 'update_protections',
+        protections: {
+          lucky_box_enabled: $('ownerLuckyEnabled').checked ? 1 : 0,
+          lucky_box_min: Number($('ownerLuckyMin').value) || 50,
+          lucky_box_max: Number($('ownerLuckyMax').value) || 500,
+          online_boost: Number($('ownerOnlineBoost').value) || 0,
+          referral_bonus: Number($('ownerRefBonus').value) || 200
+        }
+      }, 'تم حفظ إعدادات التنشيط والمكافآت!'));
+    }
+  }
+
+  function triggerGoldRainAnimation() {
+    const overlay = document.createElement('div');
+    overlay.className = 'gold-rain-overlay';
+    for (let i = 0; i < 28; i += 1) {
+      const coin = document.createElement('div');
+      coin.className = 'gold-coin-drop';
+      coin.textContent = i % 4 === 0 ? '👑' : '🪙';
+      coin.style.left = `${Math.random() * 96}%`;
+      coin.style.animationDelay = `${(Math.random() * 0.9).toFixed(2)}s`;
+      overlay.appendChild(coin);
+    }
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 3800);
+  }
+
+  async function claimDailyLuckyBox() {
+    if (!state.user || state.user.isGuest) {
+      return showToast('صندوق الحظ اليومي متاح للأعضاء المسجلين فقط.', true);
+    }
+    try {
+      const res = await api('/api/lucky-box/claim', { method: 'POST' });
+      if (res?.user) {
+        state.user = res.user;
+        renderUserIdentity();
+      }
+      playNotificationChime('gift');
+      triggerGoldRainAnimation();
+      showToast(`🎁 مبروك! فتحت صندوق الحظ اليومي وحصلت على +${res.prize} عملة ذهبية!`);
+    } catch (err) {
+      showToast(err.message, true);
     }
   }
 
@@ -3383,6 +3866,7 @@
     socket.on('room_joined', (data) => {
       state.currentRoom = data.room;
       state.isRoomManager = Boolean(data.isRoomManager);
+      state.roomKingKey = data.roomKingKey || null;
       state.messages = data.messages || [];
       state.mics = data.mics || [];
       state.roomUsers = data.users || [];
@@ -3394,10 +3878,13 @@
       renderUserIdentity();
     });
 
-    socket.on('room_users', ({ roomId, users }) => {
+    socket.on('room_users', ({ roomId, users, roomKingKey }) => {
       if (state.currentRoom?.id === roomId) {
+        const kingChanged = roomKingKey !== undefined && roomKingKey !== state.roomKingKey;
+        if (roomKingKey !== undefined) state.roomKingKey = roomKingKey;
         state.roomUsers = users || [];
         renderRoomUsers();
+        if (kingChanged) renderAllMessages();
       }
     });
 
@@ -3619,6 +4106,42 @@
       logoutUser();
     });
 
+    socket.on('royal_entrance', ({ name }) => {
+      playNotificationChime('gift');
+      showToast(`👑 تشريف ملكي: دخل المالك "${name}" إلى الغرفة!`);
+    });
+
+    socket.on('global_urgent_broadcast', ({ title, content, byName }) => {
+      playNotificationChime('mention');
+      const bar = $('urgentBroadcastBar');
+      if (bar) {
+        bar.classList.remove('hidden');
+        bar.innerHTML = `
+          <div style="min-width:0;flex:1;"><i class="fa-solid fa-bullhorn"></i> <strong>${escapeHtml(title || 'إعلان عاجل')}:</strong> ${escapeHtml(content || '')} <span style="opacity:0.85;">(${escapeHtml(byName || 'الإدارة')})</span></div>
+          <button type="button" id="closeUrgentBroadcastBtn" class="yt-mini-btn"><i class="fa-solid fa-xmark"></i></button>
+        `;
+        $('closeUrgentBroadcastBtn')?.addEventListener('click', () => bar.classList.add('hidden'));
+      }
+      showToast(`📢 ${title}: ${content}`);
+    });
+
+    socket.on('golden_rain_event', ({ amount, byName }) => {
+      playNotificationChime('gift');
+      triggerGoldRainAnimation();
+      showToast(`🪙 أمطر المالك "${byName}" الغرفة بـ +${amount} عملة ذهبية للجميع!`);
+    });
+
+    socket.on('user_frozen_state', ({ isFrozen }) => {
+      if (state.user) state.user.isFrozen = Boolean(isFrozen);
+      renderUserIdentity();
+      showToast(isFrozen ? '❄️ تم تجميد حسابك مؤقتاً (قراءة فقط).' : '🔥 تم فك التجميد عن حسابك.', Boolean(isFrozen));
+    });
+
+    socket.on('owner_pm_link_alert', (al) => {
+      playNotificationChime('mention');
+      showToast(`🔗 رادار الخاص: أرسل ${al.fromName} رابطاً إلى ${al.toName}`);
+    });
+
     socket.on('error_toast', ({ message }) => {
       if (message) showToast(message, true);
     });
@@ -3734,10 +4257,12 @@
     $('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
+        const invitedBy = localStorage.getItem(REF_KEY) || '';
         const res = await api('/api/register', {
           method: 'POST',
-          body: { username: $('regUsername').value, email: $('regEmail').value, password: $('regPassword').value }
+          body: { username: $('regUsername').value, email: $('regEmail').value, password: $('regPassword').value, invitedBy }
         });
+        localStorage.removeItem(REF_KEY);
         enterApp(res.user, res.token);
       } catch (err) {
         $('authError').textContent = err.message;
@@ -3775,6 +4300,16 @@
     $('dropGiftsTabBtn').addEventListener('click', () => {
       $('profileDropdown').classList.add('hidden');
       openCustomizeModal('gifts');
+    });
+
+    $('dropLuckyBoxBtn')?.addEventListener('click', () => {
+      $('profileDropdown').classList.add('hidden');
+      claimDailyLuckyBox();
+    });
+
+    $('dropOwnerSuiteBtn')?.addEventListener('click', () => {
+      $('profileDropdown').classList.add('hidden');
+      openAdminPanel('owner_suite');
     });
 
     $('dropStealthBtn').addEventListener('click', async () => {
@@ -3859,6 +4394,8 @@
         else if (action === 'leaderboards') openLeaderboardsModal('rich');
         else if (action === 'customize') openCustomizeModal('more');
         else if (action === 'report') openSocialModal('report');
+        else if (action === 'lucky_box') claimDailyLuckyBox();
+        else if (action === 'owner_suite') openAdminPanel('owner_suite');
         else if (action === 'stealth') $('dropStealthBtn').click();
         else if (action === 'admin') openAdminPanel('stats');
         else if (action === 'logout') logoutUser();
@@ -4302,6 +4839,8 @@
   }
 
   async function bootstrap() {
+    const refParam = new URLSearchParams(window.location.search).get('ref');
+    if (refParam) localStorage.setItem(REF_KEY, String(refParam).trim());
     bindEvents();
     try {
       const pub = await api('/api/settings/public');

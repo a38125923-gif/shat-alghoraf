@@ -71,10 +71,34 @@
       <!-- TOP DARK CHARCOAL COMPACT HEADER (50px - #18181b) -->
       <header id="topBar" class="cody-topbar">
         <div class="topbar-right">
-          <button type="button" id="menuDrawerBtn" class="top-icon-btn menu-icon-btn" title="القائمة">
-            <span class="ti-ico"><i class="fa-solid fa-bars"></i></span>
-            <span class="ti-lbl">القائمة</span>
-          </button>
+          <div class="profile-trigger-wrap">
+            <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي ولوحة التحكم">
+              <span id="topAvatarWrap" class="avatar-wrap frame-gold_royal">
+                <img id="topAvatarImg" src="" alt="صورتي" class="hidden" />
+                <span id="topAvatarLetter" class="avatar-letter">ع</span>
+              </span>
+              <span class="online-dot"></span>
+            </button>
+
+            <div id="profileDropdown" class="profile-dropdown hidden">
+              <div class="dropdown-header">
+                <div id="dropUserName" class="drop-name">-</div>
+                <div id="dropUserRole" class="drop-role">-</div>
+                <div id="dropUserCoins" class="drop-coins"><i class="fa-solid fa-coins"></i> 0 عملة</div>
+              </div>
+              <button type="button" id="dropProfileBtn" class="drop-item"><i class="fa-solid fa-id-card"></i> ملفي الشخصي (6 تبويبات)</button>
+              <button type="button" id="dropCustomizeBtn" class="drop-item"><i class="fa-solid fa-wand-magic-sparkles"></i> تخصيص الألوان والإضافات</button>
+              <button type="button" id="dropGiftsTabBtn" class="drop-item"><i class="fa-solid fa-gift"></i> هداياي ومحفظتي</button>
+              <button type="button" id="dropLuckyBoxBtn" class="drop-item"><i class="fa-solid fa-box-open" style="color:#d97706"></i> صندوق الحظ اليومي</button>
+              <button type="button" id="dropStealthBtn" class="drop-item hidden"><i class="fa-solid fa-user-secret"></i> وضع التخفي (إخفاء التواجد)</button>
+              <button type="button" id="dropOwnerSuiteBtn" class="drop-item hidden"><i class="fa-solid fa-crown" style="color:#d97706"></i> جناح المالك الحصري</button>
+              <button type="button" id="dropAdminBtn" class="drop-item hidden"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
+              <button type="button" id="dropLogoutBtn" class="drop-item danger"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
+            </div>
+          </div>
+          <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">
+            <i class="fa-solid fa-user-secret"></i>
+          </span>
           <button type="button" id="goldRichBtn" class="top-icon-btn gold-tint" title="الأثرياء">
             <span class="ti-ico"><i class="fa-solid fa-crown"></i></span>
             <span class="ti-lbl">الأثرياء</span>
@@ -107,34 +131,13 @@
         <div class="topbar-spacer"></div>
 
         <div class="topbar-left">
-          <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">
-            <i class="fa-solid fa-user-secret"></i>
-          </span>
-          <div class="profile-trigger-wrap">
-            <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي ولوحة التحكم">
-              <span id="topAvatarWrap" class="avatar-wrap frame-gold_royal">
-                <img id="topAvatarImg" src="" alt="صورتي" class="hidden" />
-                <span id="topAvatarLetter" class="avatar-letter">ع</span>
-              </span>
-              <span class="online-dot"></span>
-            </button>
-
-            <div id="profileDropdown" class="profile-dropdown hidden">
-              <div class="dropdown-header">
-                <div id="dropUserName" class="drop-name">-</div>
-                <div id="dropUserRole" class="drop-role">-</div>
-                <div id="dropUserCoins" class="drop-coins"><i class="fa-solid fa-coins"></i> 0 عملة</div>
-              </div>
-              <button type="button" id="dropProfileBtn" class="drop-item"><i class="fa-solid fa-id-card"></i> ملفي الشخصي (6 تبويبات)</button>
-              <button type="button" id="dropCustomizeBtn" class="drop-item"><i class="fa-solid fa-wand-magic-sparkles"></i> تخصيص الألوان والإضافات</button>
-              <button type="button" id="dropGiftsTabBtn" class="drop-item"><i class="fa-solid fa-gift"></i> هداياي ومحفظتي</button>
-              <button type="button" id="dropStealthBtn" class="drop-item hidden"><i class="fa-solid fa-user-secret"></i> وضع التخفي (إخفاء التواجد)</button>
-              <button type="button" id="dropAdminBtn" class="drop-item hidden"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
-              <button type="button" id="dropLogoutBtn" class="drop-item danger"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
-            </div>
-          </div>
+          <button type="button" id="menuDrawerBtn" class="top-icon-btn menu-icon-btn" title="القائمة">
+            <span class="ti-ico"><i class="fa-solid fa-bars"></i></span>
+            <span class="ti-lbl">القائمة</span>
+          </button>
         </div>
       </header>
+      <div id="urgentBroadcastBar" class="urgent-broadcast-bar hidden"></div>
 
       <!-- MICS 1..5 (#1a237e) + BLUE DIVIDER BUTTONS + YOUTUBE BAR -->
       <section class="mics-and-room-strip">
@@ -218,6 +221,7 @@
       <!-- MAIN BODY (PURE WHITE FEED #ffffff + SLIDE-OVER DRAWERS) -->
       <div class="chat-workspace-body">
         <main id="chatStage" class="chat-stage">
+          <div id="pinnedRoyalBanner" class="pinned-royal-banner hidden"></div>
           <div id="chatFeed" class="chat-feed"></div>
           <div id="typingIndicator" class="typing-indicator hidden"></div>
         </main>
@@ -251,6 +255,7 @@
         <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
+      <div id="frozenUserBanner" class="frozen-user-banner hidden"></div>
       <!-- BOTTOM INPUT BAR -->
       <section id="bottomBar" class="cody-input-bar">
         <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">
@@ -377,7 +382,9 @@
           <button type="button" class="drawer-item" data-drawer="profile"><i class="fa-solid fa-id-card"></i> ملفي الشخصي</button>
           <button type="button" class="drawer-item" data-drawer="customize"><i class="fa-solid fa-palette"></i> تخصيص الملف والإضافات</button>
           <button type="button" class="drawer-item" data-drawer="report"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
+          <button type="button" class="drawer-item" data-drawer="lucky_box"><i class="fa-solid fa-box-open" style="color:#d97706"></i> صندوق الحظ اليومي</button>
           <button type="button" class="drawer-item hidden" id="drawerStealthBtn" data-drawer="stealth"><i class="fa-solid fa-user-secret"></i> وضع التخفي</button>
+          <button type="button" class="drawer-item hidden" id="drawerOwnerSuiteBtn" data-drawer="owner_suite"><i class="fa-solid fa-crown" style="color:#d97706"></i> جناح المالك الحصري</button>
           <button type="button" class="drawer-item hidden" id="drawerAdminBtn" data-drawer="admin"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
           <button type="button" class="drawer-item danger" data-drawer="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
         </nav>
@@ -418,7 +425,7 @@
               <button type="button" id="custSwitchToMoreBtn" class="cover-action-btn" title="الإعدادات والمظهر">
                 <i class="fa-solid fa-pen-to-square"></i> تعديل
               </button>
-              <button type="button" class="cover-action-btn" data-close-modal="customizeModal" title="إغلاق">
+              <button type="button" class="cover-action-btn cover-close-x-btn" data-close-modal="customizeModal" title="إغلاق">
                 <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
@@ -475,6 +482,7 @@
               <input type="text" id="custProfileLinkInput" readonly />
               <button type="button" id="custCopyLinkBtn" class="btn-primary btn-xs"><i class="fa-solid fa-copy"></i> نسخ الرابط</button>
             </div>
+            <div id="custReferralBox" class="referral-invite-box hidden"></div>
 
             <div class="form-grid-2">
               <div>
@@ -816,6 +824,7 @@
           <button type="button" class="adm-tab" data-adm-tab="cms"><i class="fa-solid fa-paintbrush"></i> المظهر و CSS</button>
           <button type="button" class="adm-tab" data-adm-tab="emojis"><i class="fa-regular fa-face-smile"></i> الإيموجيات</button>
           <button type="button" class="adm-tab" data-adm-tab="bans"><i class="fa-solid fa-ban"></i> الحظر والبلاغات</button>
+          <button type="button" class="adm-tab hidden" id="admOwnerSuiteTabBtn" data-adm-tab="owner_suite"><i class="fa-solid fa-crown"></i> جناح المالك</button>
         </div>
         <div id="adminModalBody" class="modal-body"></div>
       </div>

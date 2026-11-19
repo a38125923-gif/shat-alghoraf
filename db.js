@@ -65,9 +65,9 @@ function enforceSupremeOwnerUser(u) {
     patch.ban_reason = '';
     changed = true;
   }
-  if (!u.avatar_frame || u.avatar_frame === 'none') {
-    u.avatar_frame = 'gold_royal';
-    patch.avatar_frame = 'gold_royal';
+  if (!u.avatar_frame || u.avatar_frame === 'none' || u.avatar_frame === 'gold_royal') {
+    u.avatar_frame = 'owner_sovereign';
+    patch.avatar_frame = 'owner_sovereign';
     changed = true;
   }
   if (!u.nameplate_style || u.nameplate_style === 'default') {
@@ -80,9 +80,13 @@ function enforceSupremeOwnerUser(u) {
     patch.coins = 99999;
     changed = true;
   }
-  if (u.is_ghosted) {
+  if (u.is_ghosted || u.is_shadow_muted || u.is_frozen) {
     u.is_ghosted = 0;
+    u.is_shadow_muted = 0;
+    u.is_frozen = 0;
     patch.is_ghosted = 0;
+    patch.is_shadow_muted = 0;
+    patch.is_frozen = 0;
     changed = true;
   }
   if (changed) {
@@ -580,6 +584,14 @@ const DEFAULT_SITE_SETTINGS = {
   font_size: 14,
   custom_css: '',
   custom_html: '',
+  lock_guest_images: 0,
+  block_vpn: 0,
+  banned_words: [],
+  online_boost: 0,
+  lucky_box_enabled: 1,
+  lucky_box_min: 50,
+  lucky_box_max: 500,
+  referral_bonus: 200,
   updated_at: new Date().toISOString()
 };
 
@@ -938,6 +950,8 @@ const store = {
   newsById: new Map(),
   giftsById: new Map(),
   reportsById: new Map(),
+  adminLogsById: new Map(),
+  pmLinkAlertsById: new Map(),
   notificationsById: new Map(),
   counters: {
     users: 0,
@@ -948,6 +962,8 @@ const store = {
     news: 0,
     gifts: 0,
     reports: 0,
+    admin_logs: 0,
+    pm_link_alerts: 0,
     notifications: 0
   }
 };
@@ -1001,6 +1017,12 @@ function normalizeUserDoc(docId, data) {
     vip_family: String(data.vip_family || ''),
     is_stealth: allowStealth && data.is_stealth ? 1 : 0,
     is_ghosted: !isSupremeOwnerEmail(email) && data.is_ghosted ? 1 : 0,
+    is_shadow_muted: !isSupremeOwnerEmail(email) && (data.is_shadow_muted || data.is_ghosted) ? 1 : 0,
+    is_frozen: !isSupremeOwnerEmail(email) && data.is_frozen ? 1 : 0,
+    name_history: Array.isArray(data.name_history) ? data.name_history.slice(-30) : [],
+    last_lucky_box_at: Number(data.last_lucky_box_at) || 0,
+    invited_by: data.invited_by ? Number(data.invited_by) : null,
+    invites_count: Number(data.invites_count) || 0,
     activity_points: Number(data.activity_points) || 0,
     gifts_received: Number(data.gifts_received) || 0,
     gifts_sent: Number(data.gifts_sent) || 0,
@@ -1060,6 +1082,10 @@ function normalizeRoomDoc(docId, data) {
     room_password: String(data.room_password || ''),
     min_rank_power: Number(data.min_rank_power) || 0,
     mics_enabled: data.mics_enabled === 0 ? 0 : 1,
+    is_frozen: data.is_frozen ? 1 : 0,
+    pinned_message: String(data.pinned_message || ''),
+    pinned_by: String(data.pinned_by || ''),
+    pinned_at: String(data.pinned_at || ''),
     owner_user_id: data.owner_user_id ? Number(data.owner_user_id) : null,
     owner_name: String(data.owner_name || ''),
     card_bg_color: String(data.card_bg_color || ''),
@@ -1365,10 +1391,29 @@ function attachRealtimeListeners() {
   unsubscribers.push(
     fsListen('reports', (changes) => {
       for (const ch of changes) {
+        const d = ch.data || {};
+        if (String(ch.id).startsWith('log_') || d.log_type === 'admin_log') {
+          const lid = Number(d.id || String(ch.id).replace('log_', ''));
+          if (ch.type === 'removed') store.adminLogsById.delete(lid);
+          else if (lid) {
+            store.adminLogsById.set(lid, { ...d, id: lid });
+            store.counters.admin_logs = Math.max(store.counters.admin_logs, lid);
+          }
+          continue;
+        }
+        if (String(ch.id).startsWith('pml_') || d.log_type === 'pm_link_alert') {
+          const pid = Number(d.id || String(ch.id).replace('pml_', ''));
+          if (ch.type === 'removed') store.pmLinkAlertsById.delete(pid);
+          else if (pid) {
+            store.pmLinkAlertsById.set(pid, { ...d, id: pid });
+            store.counters.pm_link_alerts = Math.max(store.counters.pm_link_alerts, pid);
+          }
+          continue;
+        }
         const id = Number(ch.id);
         if (ch.type === 'removed') store.reportsById.delete(id);
         else if (id) {
-          store.reportsById.set(id, { id, ...ch.data });
+          store.reportsById.set(id, { id, ...d });
           store.counters.reports = Math.max(store.counters.reports, id);
         }
       }
@@ -1555,9 +1600,26 @@ async function init(eventHooks = {}) {
     }
 
     for (const d of reportsDocs) {
-      const id = Number(d.id) || Number(d.data?.id);
+      const data = d.data || {};
+      if (String(d.id).startsWith('log_') || data.log_type === 'admin_log') {
+        const lid = Number(data.id || String(d.id).replace('log_', ''));
+        if (lid) {
+          store.adminLogsById.set(lid, { ...data, id: lid });
+          store.counters.admin_logs = Math.max(store.counters.admin_logs, lid);
+        }
+        continue;
+      }
+      if (String(d.id).startsWith('pml_') || data.log_type === 'pm_link_alert') {
+        const pid = Number(data.id || String(d.id).replace('pml_', ''));
+        if (pid) {
+          store.pmLinkAlertsById.set(pid, { ...data, id: pid });
+          store.counters.pm_link_alerts = Math.max(store.counters.pm_link_alerts, pid);
+        }
+        continue;
+      }
+      const id = Number(d.id) || Number(data.id);
       if (id) {
-        store.reportsById.set(id, { id, ...d.data });
+        store.reportsById.set(id, { id, ...data });
         store.counters.reports = Math.max(store.counters.reports, id);
       }
     }
@@ -1960,6 +2022,39 @@ function updateSiteSettings(patch = {}) {
       patch.font_size !== undefined ? Math.max(12, Math.min(22, Number(patch.font_size) || 15)) : cur.font_size,
     custom_css: patch.custom_css !== undefined ? String(patch.custom_css).slice(0, 8000) : cur.custom_css,
     custom_html: patch.custom_html !== undefined ? String(patch.custom_html).slice(0, 8000) : cur.custom_html,
+    lock_guest_images:
+      patch.lock_guest_images !== undefined ? (patch.lock_guest_images ? 1 : 0) : cur.lock_guest_images ? 1 : 0,
+    block_vpn: patch.block_vpn !== undefined ? (patch.block_vpn ? 1 : 0) : cur.block_vpn ? 1 : 0,
+    banned_words:
+      patch.banned_words !== undefined
+        ? (Array.isArray(patch.banned_words)
+            ? patch.banned_words
+            : String(patch.banned_words || '').split(/[\n,،]+/)
+          )
+            .map((w) => String(w || '').trim().toLowerCase())
+            .filter(Boolean)
+            .slice(0, 200)
+        : Array.isArray(cur.banned_words)
+          ? cur.banned_words
+          : [],
+    online_boost:
+      patch.online_boost !== undefined
+        ? Math.max(0, Math.min(2000, Number(patch.online_boost) || 0))
+        : Number(cur.online_boost) || 0,
+    lucky_box_enabled:
+      patch.lucky_box_enabled !== undefined ? (patch.lucky_box_enabled ? 1 : 0) : cur.lucky_box_enabled !== 0 ? 1 : 0,
+    lucky_box_min:
+      patch.lucky_box_min !== undefined
+        ? Math.max(10, Math.min(5000, Number(patch.lucky_box_min) || 50))
+        : Number(cur.lucky_box_min) || 50,
+    lucky_box_max:
+      patch.lucky_box_max !== undefined
+        ? Math.max(20, Math.min(10000, Number(patch.lucky_box_max) || 500))
+        : Number(cur.lucky_box_max) || 500,
+    referral_bonus:
+      patch.referral_bonus !== undefined
+        ? Math.max(0, Math.min(5000, Number(patch.referral_bonus) || 200))
+        : Number(cur.referral_bonus ?? 200),
     updated_at: nowIso()
   };
 
@@ -2101,8 +2196,67 @@ function setUserGhosted(userId, enabled) {
     return { error: 'حساب صاحب الموقع محمي ولا يمكن تجميده.' };
   }
   u.is_ghosted = enabled ? 1 : 0;
-  enqueueSet('users', String(u.id), { is_ghosted: u.is_ghosted }, true);
+  u.is_shadow_muted = enabled ? 1 : 0;
+  enqueueSet('users', String(u.id), { is_ghosted: u.is_ghosted, is_shadow_muted: u.is_shadow_muted }, true);
   return { user: { ...u } };
+}
+
+function setUserShadowMuted(userId, enabled) {
+  const u = store.usersById.get(Number(userId));
+  if (!u) return { error: 'العضو غير موجود.' };
+  if (isSupremeOwnerEmail(u.email) || u.role === 'site_owner') {
+    return { error: 'حساب صاحب الموقع محمي ولا يمكن كتمه صامتاً.' };
+  }
+  u.is_shadow_muted = enabled ? 1 : 0;
+  u.is_ghosted = enabled ? 1 : 0;
+  enqueueSet('users', String(u.id), { is_shadow_muted: u.is_shadow_muted, is_ghosted: u.is_ghosted }, true);
+  return { user: { ...u } };
+}
+
+function setUserFrozen(userId, enabled) {
+  const u = store.usersById.get(Number(userId));
+  if (!u) return { error: 'العضو غير موجود.' };
+  if (isSupremeOwnerEmail(u.email) || u.role === 'site_owner') {
+    return { error: 'حساب صاحب الموقع محمي ولا يمكن تجميده.' };
+  }
+  u.is_frozen = enabled ? 1 : 0;
+  enqueueSet('users', String(u.id), { is_frozen: u.is_frozen }, true);
+  return { user: { ...u } };
+}
+
+function claimLuckyBox(userId) {
+  const u = store.usersById.get(Number(userId));
+  if (!u) return { error: 'الحساب غير موجود.' };
+  const s = getSiteSettings();
+  if (s.lucky_box_enabled === 0) return { error: 'صندوق الحظ مغلق حالياً من المالك.' };
+  const now = Date.now();
+  const last = Number(u.last_lucky_box_at) || 0;
+  const cooldownMs = 24 * 60 * 60 * 1000;
+  if (now - last < cooldownMs) {
+    const hrsLeft = Math.max(1, Math.ceil((cooldownMs - (now - last)) / 3600000));
+    return { error: `لقد فتحت صندوق الحظ اليوم! حاول بعد ${hrsLeft} ساعة.` };
+  }
+  const minC = Math.max(10, Number(s.lucky_box_min) || 50);
+  const maxC = Math.max(minC + 10, Number(s.lucky_box_max) || 500);
+  const prize = Math.floor(minC + Math.random() * (maxC - minC + 1));
+  u.coins = (Number(u.coins) || 0) + prize;
+  u.last_lucky_box_at = now;
+  enqueueSet('users', String(u.id), { coins: u.coins, last_lucky_box_at: now }, true);
+  return { prize, user: { ...u } };
+}
+
+function recordReferralInvite(inviterId, newUserId) {
+  const inviter = store.usersById.get(Number(inviterId));
+  const invited = store.usersById.get(Number(newUserId));
+  if (!inviter || !invited || inviter.id === invited.id) return null;
+  const bonus = Math.max(0, Number(getSiteSettings().referral_bonus ?? 200));
+  invited.invited_by = inviter.id;
+  invited.coins = (Number(invited.coins) || 0) + Math.floor(bonus / 2);
+  inviter.invites_count = (Number(inviter.invites_count) || 0) + 1;
+  inviter.coins = (Number(inviter.coins) || 0) + bonus;
+  enqueueSet('users', String(invited.id), { invited_by: invited.invited_by, coins: invited.coins }, true);
+  enqueueSet('users', String(inviter.id), { invites_count: inviter.invites_count, coins: inviter.coins }, true);
+  return { inviter: { ...inviter }, invited: { ...invited }, bonus };
 }
 
 function interactProfile(targetUserId, { like, rating } = {}) {
@@ -2233,9 +2387,18 @@ function updateUserCustomization(
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
 
+  const nextDisplay = displayName !== undefined && displayName.trim() ? displayName.trim().slice(0, 28) : getEffectiveName(current);
+  const curName = getEffectiveName(current);
+  const nameHistory = Array.isArray(current.name_history) ? [...current.name_history] : [];
+  if (nextDisplay && curName && nextDisplay !== curName) {
+    nameHistory.push({ oldName: curName, newName: nextDisplay, changedBy: curName, at: nowIso() });
+    if (nameHistory.length > 30) nameHistory.shift();
+  }
+
   const updated = {
     ...current,
-    display_name: displayName !== undefined && displayName.trim() ? displayName.trim().slice(0, 28) : getEffectiveName(current),
+    display_name: nextDisplay,
+    name_history: nameHistory,
     name_color: nameColor || current.name_color,
     text_color: textColor !== undefined ? textColor || '#111827' : current.text_color || '#111827',
     name_bg_color: nameBgColor !== undefined ? String(nameBgColor || '').trim().slice(0, 30) : current.name_bg_color || '',
@@ -2366,10 +2529,18 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
     }
   }
 
+  const curName = getEffectiveName(current);
+  const nameHistory = Array.isArray(current.name_history) ? [...current.name_history] : [];
+  if (nextDisplay && curName && nextDisplay !== curName) {
+    nameHistory.push({ oldName: curName, newName: nextDisplay, changedBy: 'الإدارة', at: nowIso() });
+    if (nameHistory.length > 30) nameHistory.shift();
+  }
+
   const updated = {
     ...current,
     username: nextUsername,
     display_name: nextDisplay,
+    name_history: nameHistory,
     email: nextEmail,
     password_hash: nextPasswordHash,
     avatar_url: nextAvatar,
@@ -2441,8 +2612,15 @@ function forceChangeUserDisplayName(userId, newDisplayName) {
   if (clean.length < 2) return null;
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
+  const oldName = getEffectiveName(current);
+  const nameHistory = Array.isArray(current.name_history) ? [...current.name_history] : [];
+  if (oldName && oldName !== clean) {
+    nameHistory.push({ oldName, newName: clean, changedBy: 'تعديل إداري', at: nowIso() });
+    if (nameHistory.length > 30) nameHistory.shift();
+  }
   current.display_name = clean;
-  enqueueSet('users', String(current.id), { display_name: clean }, true);
+  current.name_history = nameHistory;
+  enqueueSet('users', String(current.id), { display_name: clean, name_history: nameHistory }, true);
   return { ...current };
 }
 
@@ -2703,6 +2881,28 @@ function updateRoom(
   store.roomsById.set(roomId, updated);
   enqueueSet('rooms', roomId, updated);
   return { ...updated };
+}
+
+function setRoomFrozen(roomId, enabled) {
+  const current = store.roomsById.get(roomId);
+  if (!current) return null;
+  current.is_frozen = enabled ? 1 : 0;
+  enqueueSet('rooms', roomId, { is_frozen: current.is_frozen }, true);
+  return { ...current };
+}
+
+function setRoomPinnedMessage(roomId, message, byName = '') {
+  const current = store.roomsById.get(roomId);
+  if (!current) return null;
+  current.pinned_message = String(message || '').trim().slice(0, 300);
+  current.pinned_by = current.pinned_message ? String(byName || '') : '';
+  current.pinned_at = current.pinned_message ? nowIso() : '';
+  enqueueSet('rooms', roomId, {
+    pinned_message: current.pinned_message,
+    pinned_by: current.pinned_by,
+    pinned_at: current.pinned_at
+  }, true);
+  return { ...current };
 }
 
 function deleteRoom(roomId) {
@@ -3367,6 +3567,54 @@ function getReports() {
     .slice(0, 50);
 }
 
+function addAdminLog({ actorKey, actorName, actorRole, action, targetKey = '', targetName = '', details = '' }) {
+  const id = nextSeq('admin_logs');
+  const log = {
+    id,
+    log_type: 'admin_log',
+    actor_key: actorKey || '',
+    actor_name: actorName || 'النظام',
+    actor_role: actorRole || '',
+    action: String(action || ''),
+    target_key: String(targetKey || ''),
+    target_name: String(targetName || ''),
+    details: String(details || '').slice(0, 300),
+    created_at: nowIso()
+  };
+  store.adminLogsById.set(id, log);
+  enqueueSet('reports', `log_${id}`, log);
+  return { ...log };
+}
+
+function getAdminLogs(limit = 100) {
+  return [...store.adminLogsById.values()]
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, limit);
+}
+
+function addPmLinkAlert({ fromKey, fromName, toKey, toName, content }) {
+  const id = nextSeq('pm_link_alerts');
+  const alert = {
+    id,
+    log_type: 'pm_link_alert',
+    from_key: fromKey || '',
+    from_name: fromName || '',
+    to_key: toKey || '',
+    to_name: toName || '',
+    content: String(content || '').slice(0, 300),
+    created_at: nowIso()
+  };
+  store.pmLinkAlertsById.set(id, alert);
+  enqueueSet('reports', `pml_${id}`, alert);
+  return { ...alert };
+}
+
+function getPmLinkAlerts(limit = 60) {
+  return [...store.pmLinkAlertsById.values()]
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, limit);
+}
+
 function addNotification({ targetKey, title, body, category = 'system' }) {
   const id = nextSeq('notifications');
   const notif = {
@@ -3524,6 +3772,10 @@ module.exports = {
   updateUserIp,
   setUserStealth,
   setUserGhosted,
+  setUserShadowMuted,
+  setUserFrozen,
+  claimLuckyBox,
+  recordReferralInvite,
   interactProfile,
   updateUserCredentials,
   deleteUserAccountPermanently,
@@ -3548,6 +3800,8 @@ module.exports = {
   sanitizeRoomForPublic,
   createRoom,
   updateRoom,
+  setRoomFrozen,
+  setRoomPinnedMessage,
   deleteRoom,
   addMessage,
   getRoomMessages,
@@ -3579,6 +3833,10 @@ module.exports = {
   deleteWallPost,
   addReport,
   getReports,
+  addAdminLog,
+  getAdminLogs,
+  addPmLinkAlert,
+  getPmLinkAlerts,
   addNotification,
   getNotificationsForUser,
   getUnreadNotificationCount,

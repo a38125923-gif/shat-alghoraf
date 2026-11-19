@@ -23,6 +23,7 @@ for (const sub of UPLOAD_SUBDIRS) {
 }
 
 const SHOP_FRAMES = [
+  { id: 'owner_sovereign', label: 'التاج السيادي للمالك 👑', price: 0, tier: 'owner', ownerOnly: true, preview: '#fbbf24' },
   { id: 'none', label: 'بدون إطار', price: 0, tier: 'free', preview: '#64748b' },
   { id: 'kings_crown', label: 'تاج الملوك KINGS', price: 0, tier: 'vip', preview: '#fbbf24' },
   { id: 'gold_royal', label: 'الإطار الذهبي الملكي', price: 0, tier: 'vip', preview: '#f59e0b' },
@@ -214,6 +215,10 @@ function mapUserRow(u) {
     vipFamily: u.vip_family || '',
     isStealth: stealth,
     isGhosted: Boolean(u.is_ghosted),
+    isShadowMuted: Boolean(u.is_shadow_muted),
+    isFrozen: Boolean(u.is_frozen),
+    lastLuckyBoxAt: Number(u.last_lucky_box_at) || 0,
+    invitesCount: Number(u.invites_count) || 0,
     activityPoints: Number(u.activity_points) || 0,
     giftsReceived: Number(u.gifts_received) || 0,
     giftsSent: Number(u.gifts_sent) || 0
@@ -347,6 +352,72 @@ const onlineSockets = new Map(); // socketId -> user session entry
 const roomMics = new Map(); // roomId -> [slot1..slot5]
 const pendingGrace = new Map(); // key -> { timeout, lastRoomId }
 const roomActivitySpam = new Map(); // key -> { count, resetAt }
+const guestShadowMutedKeys = new Set();
+const guestFrozenKeys = new Set();
+const roomQuizBots = new Map();
+
+const QUIZ_BANK = [
+  { q: 'ما هي أكبر قارة في العالم من حيث المساحة؟', a: ['آسيا', 'اسيا', 'asia'] },
+  { q: 'كم عدد أركان الإسلام؟', a: ['5', '٥', 'خمسة', 'خمس'] },
+  { q: 'ما هي عاصمة المملكة العربية السعودية؟', a: ['الرياض', 'رياض'] },
+  { q: 'ما هو أطول نهر في العالم؟', a: ['النيل', 'نهر النيل', 'الامازون', 'الأمازون'] },
+  { q: 'كم عدد سور القرآن الكريم؟', a: ['114', '١١٤', 'مائة وأربعة عشر'] },
+  { q: 'ما هي عاصمة مصر؟', a: ['القاهرة', 'القاهره'] },
+  { q: 'ما هو الكوكب الملقب بالكوكب الأحمر؟', a: ['المريخ', 'مريخ'] },
+  { q: 'كم عدد أيام السنة الكبيسة؟', a: ['366', '٣٦٦'] },
+  { q: 'ما هي لغة البرازيل الرسمية؟', a: ['البرتغالية', 'البرتغاليه', 'برتغالية'] },
+  { q: 'ما هو العنصر الكيميائي الذي رمزه Au؟', a: ['الذهب', 'ذهب'] },
+  { q: 'ما هي عاصمة الإمارات العربية المتحدة؟', a: ['أبوظبي', 'ابوظبي', 'أبو ظبي', 'ابو ظبي'] },
+  { q: 'كم عدد قلوب الأخطبوط؟', a: ['3', '٣', 'ثلاثة', 'ثلاث'] },
+  { q: 'ما هو أسرع حيوان بري في العالم؟', a: ['الفهد', 'فهد', 'الشيتا'] },
+  { q: 'في أي دولة يقع برج إيفل؟', a: ['فرنسا'] },
+  { q: 'ما هو أقرب كوكب إلى الشمس؟', a: ['عطارد'] },
+  { q: 'كم عدد حروف اللغة العربية؟', a: ['28', '٢٨', 'ثمانية وعشرون'] },
+  { q: 'ما هي عاصمة الأردن؟', a: ['عمان'] },
+  { q: 'ما هو أكبر محيط على وجه الأرض؟', a: ['الهادي', 'المحيط الهادي', 'الهادئ'] },
+  { q: 'ما اسم صوت الأسد؟', a: ['زئير', 'الزئير'] },
+  { q: 'كم ساعة في اليوم الواحد؟', a: ['24', '٢٤', 'أربع وعشرون'] }
+];
+
+function isVpnOrProxyRequest(reqOrSocket) {
+  const headers = reqOrSocket.headers || reqOrSocket.handshake?.headers || {};
+  const via = String(headers['via'] || '').trim();
+  const proxyConn = String(headers['proxy-connection'] || '').trim();
+  const xVpn = String(headers['x-vpn'] || headers['x-tor'] || headers['x-proxy-id'] || '').trim();
+  const cfCountry = String(headers['cf-ipcountry'] || '').trim().toUpperCase();
+  const xff = String(headers['x-forwarded-for'] || '').trim();
+  const hops = xff ? xff.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  if (xVpn || proxyConn || cfCountry === 'T1') return true;
+  if (via && /proxy|squid|tor|vpn/i.test(via)) return true;
+  if (hops.length >= 4) return true;
+  return false;
+}
+
+function normalizeArabicText(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[\u064B-\u065F]/g, '');
+}
+
+function containsBannedWord(text) {
+  const words = db.getSiteSettings().banned_words || [];
+  if (!words.length || !text) return null;
+  const normalized = normalizeArabicText(text);
+  for (const w of words) {
+    const cleanW = normalizeArabicText(w);
+    if (cleanW && normalized.includes(cleanW)) return w;
+  }
+  return null;
+}
+
+function containsUrl(text) {
+  const s = String(text || '');
+  return /(?:https?:\/\/|www\.|t\.me\/|wa\.me\/|\b[a-z0-9-]{2,}\.(?:com|net|org|io|me|tv|gg|ly|tk|xyz|app|sa|ae|eg)\b)/i.test(s);
+}
 
 function ensureRoomMicSlots(roomId) {
   if (!roomMics.has(roomId)) {
@@ -374,6 +445,20 @@ function getPublicMicSlots(roomId) {
 
 function isStealthEntry(entry) {
   return Boolean(entry && entry.isStealth && (entry.role === 'site_owner' || db.isSupremeOwnerEmail(entry.email)));
+}
+
+function computeRoomKingKey(roomId) {
+  let topKey = null;
+  let topPoints = 0;
+  for (const entry of onlineSockets.values()) {
+    if (entry.roomId !== roomId || isStealthEntry(entry) || entry.isGuest) continue;
+    const pts = Number(entry.activityPoints) || 0;
+    if (pts > topPoints) {
+      topPoints = pts;
+      topKey = entry.key;
+    }
+  }
+  return topKey;
 }
 
 function getRoomUsersList(roomId) {
@@ -413,6 +498,8 @@ function getRoomUsersList(roomId) {
         ratingAvg: Number(entry.ratingAvg) || 5.0,
         ratingCount: Number(entry.ratingCount) || 0,
         isGhosted: Boolean(entry.isGhosted),
+        isShadowMuted: Boolean(entry.isShadowMuted || guestShadowMutedKeys.has(entry.key)),
+        isFrozen: Boolean(entry.isFrozen || guestFrozenKeys.has(entry.key)),
         coins: Number(entry.coins) || 0,
         vipFamily: entry.vipFamily || '',
         activityPoints: Number(entry.activityPoints) || 0,
@@ -422,7 +509,10 @@ function getRoomUsersList(roomId) {
     }
   }
   return [...byKey.values()].sort(
-    (a, b) => db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) || a.name.localeCompare(b.name, 'ar')
+    (a, b) =>
+      (b.role === 'site_owner' ? 1 : 0) - (a.role === 'site_owner' ? 1 : 0) ||
+      db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) ||
+      a.name.localeCompare(b.name, 'ar')
   );
 }
 
@@ -457,6 +547,8 @@ function buildGlobalOnlineUsers() {
       ratingAvg: Number(entry.ratingAvg) || 5.0,
       ratingCount: Number(entry.ratingCount) || 0,
       isGhosted: Boolean(entry.isGhosted),
+      isShadowMuted: Boolean(entry.isShadowMuted || guestShadowMutedKeys.has(entry.key)),
+      isFrozen: Boolean(entry.isFrozen || guestFrozenKeys.has(entry.key)),
       vipFamily: entry.vipFamily || '',
       activityPoints: Number(entry.activityPoints) || 0,
       roomId: entry.roomId || null,
@@ -464,7 +556,10 @@ function buildGlobalOnlineUsers() {
     });
   }
   return [...byKey.values()].sort(
-    (a, b) => db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) || a.name.localeCompare(b.name, 'ar')
+    (a, b) =>
+      (b.role === 'site_owner' ? 1 : 0) - (a.role === 'site_owner' ? 1 : 0) ||
+      db.getRankSortWeight(b.role) - db.getRankSortWeight(a.role) ||
+      a.name.localeCompare(b.name, 'ar')
   );
 }
 
@@ -516,6 +611,7 @@ function buildPersistentMembersList() {
 }
 
 function buildRoomsPayload() {
+  const boost = Math.max(0, Number(db.getSiteSettings().online_boost) || 0);
   return db.getAllRooms().map((r) => {
     const pub = db.sanitizeRoomForPublic(r);
     const activeKeys = new Set();
@@ -524,7 +620,8 @@ function buildRoomsPayload() {
     }
     return {
       ...pub,
-      onlineCount: activeKeys.size
+      realOnlineCount: activeKeys.size,
+      onlineCount: activeKeys.size + boost
     };
   });
 }
@@ -533,7 +630,8 @@ function broadcastRoomUsers(io, roomId) {
   if (!roomId) return;
   io.to(`room:${roomId}`).emit('room_users', {
     roomId,
-    users: getRoomUsersList(roomId)
+    users: getRoomUsersList(roomId),
+    roomKingKey: computeRoomKingKey(roomId)
   });
 }
 
@@ -581,6 +679,10 @@ function syncUserAcrossSockets(io, userId) {
         ratingAvg: mapped.ratingAvg,
         ratingCount: mapped.ratingCount,
         isGhosted: mapped.isGhosted,
+        isShadowMuted: mapped.isShadowMuted,
+        isFrozen: mapped.isFrozen,
+        lastLuckyBoxAt: mapped.lastLuckyBoxAt,
+        invitesCount: mapped.invitesCount,
         coins: mapped.coins,
         vipFamily: mapped.vipFamily,
         isStealth: mapped.isStealth,
@@ -639,7 +741,7 @@ function extractYouTubeId(rawInput) {
 // ==========================================
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body || {};
+    const { username, email, password, invitedBy } = req.body || {};
     const cleanUser = String(username || '').trim();
     const cleanEmail = String(email || '').trim().toLowerCase();
     const cleanPass = String(password || '');
@@ -657,6 +759,9 @@ app.post('/api/register', async (req, res) => {
     const ip = getClientIp(req);
     const deviceId = String(req.headers['x-device-id'] || req.body?.deviceId || '').trim().slice(0, 128);
     if (!db.isSupremeOwnerEmail(cleanEmail)) {
+      if (Number(db.getSiteSettings().block_vpn) === 1 && isVpnOrProxyRequest(req)) {
+        return res.status(403).json({ error: 'التسجيل عبر VPN أو Proxy محظور حالياً.' });
+      }
       const ipBan = db.isTargetBanned({ email: cleanEmail, ipAddress: ip, deviceId });
       if (ipBan) {
         return res.status(403).json({ error: `تم حظر هذا الحساب أو الجهاز: ${ipBan.reason}` });
@@ -672,6 +777,20 @@ app.post('/api/register', async (req, res) => {
       deviceId
     });
     if (result.error) return res.status(409).json({ error: result.error });
+
+    if (invitedBy) {
+      const refRes = db.recordReferralInvite(invitedBy, result.user.id);
+      if (refRes) {
+        const notif = db.addNotification({
+          targetKey: `user:${refRes.inviter.id}`,
+          title: '🤝 مكافأة دعوة صديق!',
+          body: `انضم "${cleanUser}" عبر رابط دعوتك وحصلت على +${refRes.bonus} عملة!`,
+          category: 'system'
+        });
+        emitNotificationToUser(io, `user:${refRes.inviter.id}`, notif);
+        syncUserAcrossSockets(io, refRes.inviter.id);
+      }
+    }
 
     const finalUser = db.findUserById(result.user.id);
     const mapped = mapUserRow(finalUser);
@@ -813,7 +932,12 @@ app.post('/api/upload/cover', requireRegistered, uploadCover.single('file'), (re
   return res.json({ url });
 });
 
-app.post('/api/upload/image', requireAuth, uploadImage.single('file'), (req, res) => {
+app.post('/api/upload/image', requireAuth, (req, res, next) => {
+  if (req.authUser.isGuest && Number(db.getSiteSettings().lock_guest_images) === 1) {
+    return res.status(403).json({ error: 'إرسال الصور للزوار مقفل حالياً من قبل المالك.' });
+  }
+  return next();
+}, uploadImage.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
   return res.json({ url: `/uploads/images/${req.file.filename}` });
 });
@@ -1078,8 +1202,11 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
 
   let patch = null;
   if (type === 'frame') {
-    const exists = SHOP_FRAMES.some((f) => f.id === itemId);
-    if (!exists) return res.status(400).json({ error: 'الإطار غير موجود.' });
+    const found = SHOP_FRAMES.find((f) => f.id === itemId);
+    if (!found) return res.status(400).json({ error: 'الإطار غير موجود.' });
+    if (found.ownerOnly && req.authUser.role !== 'site_owner') {
+      return res.status(403).json({ error: 'هذا الإطار حصري لصاحب الموقع فقط.' });
+    }
     patch = { avatarFrame: itemId };
   } else if (type === 'nameplate') {
     const exists = SHOP_NAMEPLATES.some((n) => n.id === itemId);
@@ -1840,9 +1967,454 @@ app.delete('/api/admin/ban/:key', requirePanelAccess, async (req, res) => {
   if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'ban')) {
     return res.status(403).json({ error: 'لا تملك صلاحية فك الحظر.' });
   }
-  db.unbanTarget(decodeURIComponent(req.params.key));
+  const targetKey = decodeURIComponent(req.params.key);
+  db.unbanTarget(targetKey);
+  db.addAdminLog({
+    actorKey: req.authUser.key,
+    actorName: req.authUser.name,
+    actorRole: req.authUser.role,
+    action: 'فك حظر',
+    targetKey,
+    targetName: targetKey
+  });
   await db.flushWrites();
   return res.json({ ok: true });
+});
+
+// ==========================================
+// DAILY LUCKY BOX & ULTIMATE OWNER SUITE
+// ==========================================
+app.post('/api/lucky-box/claim', requireRegistered, async (req, res) => {
+  const result = db.claimLuckyBox(req.authUser.userId);
+  if (result.error) return res.status(400).json({ error: result.error });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ ok: true, prize: result.prize, user: mapUserRow(result.user) });
+});
+
+function startRoomQuizRound(roomId, rewardCoins = 100) {
+  const bot = roomQuizBots.get(roomId);
+  if (!bot || !bot.active) return;
+  const qObj = QUIZ_BANK[bot.qIndex % QUIZ_BANK.length];
+  bot.qIndex += 1;
+  bot.currentQ = qObj;
+  const msg = db.addMessage({
+    roomId,
+    senderKey: 'system:quizbot',
+    senderName: '🤖 بوت المسابقات',
+    senderRole: 'site_owner',
+    nameColor: '#fbbf24',
+    textColor: '#1e1b4b',
+    nameBgColor: '#1e1b4b',
+    isAdminNotice: true,
+    msgType: 'text',
+    content: `🎯 سؤال المسابقة (الجائزة: +${bot.rewardCoins} عملة): ${qObj.q}`
+  });
+  io.to(`room:${roomId}`).emit('new_message', msg);
+}
+
+function checkQuizBotAnswer(entry, content) {
+  const bot = roomQuizBots.get(entry.roomId);
+  if (!bot || !bot.active || !bot.currentQ) return;
+  const norm = normalizeArabicText(content);
+  const matched = bot.currentQ.a.some((ans) => norm.includes(normalizeArabicText(ans)));
+  if (!matched) return;
+
+  const reward = bot.rewardCoins || 100;
+  bot.currentQ = null;
+  if (entry.userId) {
+    db.adjustUserCoins(entry.userId, reward);
+    syncUserAcrossSockets(io, entry.userId);
+  }
+  const winMsg = db.addMessage({
+    roomId: entry.roomId,
+    senderKey: 'system:quizbot',
+    senderName: '🤖 بوت المسابقات',
+    senderRole: 'site_owner',
+    nameColor: '#fbbf24',
+    textColor: '#166534',
+    nameBgColor: '#14532d',
+    isAdminNotice: true,
+    msgType: 'text',
+    content: `🏆 أحسنت يا "${entry.name}"! إجابة صحيحة وحصلت على +${reward} عملة ذهبية!`
+  });
+  io.to(`room:${entry.roomId}`).emit('new_message', winMsg);
+  if (bot.timer) clearTimeout(bot.timer);
+  bot.timer = setTimeout(() => startRoomQuizRound(entry.roomId, reward), 4500);
+}
+
+app.get('/api/owner/suite', requireOwner, (_req, res) => {
+  const liveSockets = [];
+  const hiddenOnline = [];
+  for (const e of onlineSockets.values()) {
+    const rm = e.roomId ? db.getRoomById(e.roomId) : null;
+    const item = {
+      socketId: e.socketId,
+      key: e.key,
+      userId: e.userId,
+      isGuest: e.isGuest,
+      name: e.name,
+      role: e.role,
+      roomId: e.roomId || '',
+      roomName: rm ? rm.name : '',
+      ipAddress: e.ipAddress || '',
+      deviceId: e.deviceId || '',
+      isStealth: isStealthEntry(e),
+      isFrozen: Boolean(e.isFrozen || guestFrozenKeys.has(e.key)),
+      isShadowMuted: Boolean(e.isShadowMuted || guestShadowMutedKeys.has(e.key)),
+      isGhosted: Boolean(e.isGhosted)
+    };
+    liveSockets.push(item);
+    if (item.isStealth || item.isGhosted || item.isShadowMuted) hiddenOnline.push(item);
+  }
+
+  // Multi-account detector by IP or Device ID
+  const byIp = new Map();
+  const byDev = new Map();
+  const users = db.getAllRegisteredUsers().map((u) => {
+    const mapped = {
+      id: u.id,
+      key: `user:${u.id}`,
+      username: u.username,
+      displayName: db.getEffectiveName(u),
+      email: u.email,
+      role: u.role,
+      coins: Number(u.coins) || 0,
+      lastIp: u.last_ip || '',
+      lastDeviceId: u.last_device_id || '',
+      nameHistory: Array.isArray(u.name_history) ? u.name_history : [],
+      isShadowMuted: Boolean(u.is_shadow_muted),
+      isFrozen: Boolean(u.is_frozen),
+      isGhosted: Boolean(u.is_ghosted),
+      invitesCount: Number(u.invites_count) || 0,
+      isSupremeOwner: db.isSupremeOwnerEmail(u.email)
+    };
+    if (mapped.lastIp && !['127.0.0.1', '::1', 'localhost'].includes(mapped.lastIp)) {
+      const arr = byIp.get(mapped.lastIp) || [];
+      arr.push(mapped);
+      byIp.set(mapped.lastIp, arr);
+    }
+    if (mapped.lastDeviceId) {
+      const arr = byDev.get(mapped.lastDeviceId) || [];
+      arr.push(mapped);
+      byDev.set(mapped.lastDeviceId, arr);
+    }
+    return mapped;
+  });
+
+  const multiAccounts = [];
+  for (const [ip, grp] of byIp.entries()) {
+    if (grp.length >= 2) multiAccounts.push({ type: 'IP', fingerprint: ip, accounts: grp });
+  }
+  for (const [dev, grp] of byDev.entries()) {
+    if (grp.length >= 2) multiAccounts.push({ type: 'Device', fingerprint: dev, accounts: grp });
+  }
+
+  const settings = db.getSiteSettings();
+  const activeQuizRooms = [];
+  for (const [rid, bot] of roomQuizBots.entries()) {
+    if (bot.active) activeQuizRooms.push(rid);
+  }
+
+  return res.json({
+    hiddenOnline,
+    liveSockets,
+    multiAccounts,
+    users,
+    adminLogs: db.getAdminLogs(100),
+    pmLinkAlerts: db.getPmLinkAlerts(60),
+    activeQuizRooms,
+    protections: {
+      lock_guest_images: Number(settings.lock_guest_images) || 0,
+      block_vpn: Number(settings.block_vpn) || 0,
+      banned_words: Array.isArray(settings.banned_words) ? settings.banned_words : [],
+      online_boost: Number(settings.online_boost) || 0,
+      lucky_box_enabled: settings.lucky_box_enabled === 0 ? 0 : 1,
+      lucky_box_min: Number(settings.lucky_box_min) || 50,
+      lucky_box_max: Number(settings.lucky_box_max) || 500,
+      referral_bonus: Number(settings.referral_bonus) || 200
+    }
+  });
+});
+
+app.post('/api/owner/action', requireOwner, async (req, res) => {
+  const { action, targetKey, roomId, toRoomId, enabled, message, content, title, asMode, targetUserKey, amountPerUser, rewardCoins, ipAddress, deviceId, reason, protections } = req.body || {};
+  const actor = req.authUser;
+
+  if (action === 'shadow_mute') {
+    if (!targetKey || db.isProtectedSupremeOwnerKey(targetKey)) {
+      return res.status(403).json({ error: 'لا يمكن تطبيق الكتم الصامت على هذا الحساب.' });
+    }
+    if (String(targetKey).startsWith('user:')) {
+      const uid = Number(String(targetKey).replace('user:', ''));
+      const r = db.setUserShadowMuted(uid, Boolean(enabled));
+      if (r?.error) return res.status(400).json({ error: r.error });
+      syncUserAcrossSockets(io, uid);
+    } else {
+      if (enabled) guestShadowMutedKeys.add(targetKey);
+      else guestShadowMutedKeys.delete(targetKey);
+      for (const e of onlineSockets.values()) {
+        if (e.key === targetKey) e.isShadowMuted = Boolean(enabled);
+      }
+    }
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'كتم صامت' : 'إلغاء كتم صامت', targetKey, targetName: targetKey });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  if (action === 'freeze_user') {
+    if (!targetKey || db.isProtectedSupremeOwnerKey(targetKey)) {
+      return res.status(403).json({ error: 'لا يمكن تجميد هذا الحساب.' });
+    }
+    if (String(targetKey).startsWith('user:')) {
+      const uid = Number(String(targetKey).replace('user:', ''));
+      const r = db.setUserFrozen(uid, Boolean(enabled));
+      if (r?.error) return res.status(400).json({ error: r.error });
+      syncUserAcrossSockets(io, uid);
+    } else {
+      if (enabled) guestFrozenKeys.add(targetKey);
+      else guestFrozenKeys.delete(targetKey);
+    }
+    for (const [sid, e] of onlineSockets.entries()) {
+      if (e.key === targetKey) {
+        e.isFrozen = Boolean(enabled);
+        io.to(sid).emit('user_frozen_state', { isFrozen: Boolean(enabled) });
+      }
+    }
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'تجميد عضو' : 'فك تجميد عضو', targetKey, targetName: targetKey });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  if (action === 'move_user') {
+    const destRoom = db.getRoomById(toRoomId);
+    if (!targetKey || !destRoom) return res.status(400).json({ error: 'الهدف أو الغرفة غير صالحة.' });
+    let moved = 0;
+    for (const [sid, e] of onlineSockets.entries()) {
+      if (e.key === targetKey) {
+        const s = io.sockets.sockets.get(sid);
+        if (s) {
+          moveSocketToRoom(s, toRoomId, false);
+          io.to(sid).emit('error_toast', { message: `تم سحبك ونقلك إلى غرفة "${destRoom.name}" بواسطة المالك.` });
+          moved += 1;
+        }
+      }
+    }
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'سحب ونقل عضو', targetKey, details: `إلى ${destRoom.name} (${moved})` });
+    await db.flushWrites();
+    return res.json({ ok: true, moved });
+  }
+
+  if (action === 'freeze_room') {
+    const updated = db.setRoomFrozen(roomId, Boolean(enabled));
+    if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+    io.to(`room:${roomId}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
+    io.to(`room:${roomId}`).emit('room_notice', {
+      roomId,
+      text: enabled ? `❄️ تم تجميد الغرفة (للقراءة فقط) بواسطة ${actor.name}.` : `🔥 تم فك تجميد الغرفة بواسطة ${actor.name}.`
+    });
+    broadcastRoomsList(io);
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'تجميد غرفة' : 'فك تجميد غرفة', targetKey: roomId, targetName: updated.name });
+    await db.flushWrites();
+    return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+  }
+
+  if (action === 'clear_room') {
+    if (!roomId || !db.getRoomById(roomId)) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+    db.clearRoomMessages(roomId);
+    io.to(`room:${roomId}`).emit('room_cleared', { roomId, byName: actor.name });
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تنظيف غرفة', targetKey: roomId });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  if (action === 'mute_all_mics') {
+    if (!roomId) return res.status(400).json({ error: 'الغرفة مطلوبة.' });
+    const slots = ensureRoomMicSlots(roomId);
+    for (const sl of slots) {
+      if (sl.holderKey && sl.holderRole !== 'site_owner') {
+        sl.isAdminMuted = true;
+        sl.isSpeaking = false;
+        if (sl.holderSocketId) io.to(sl.holderSocketId).emit('mic_force_mute', { muted: true });
+      }
+    }
+    io.to(`room:${roomId}`).emit('mic_state', { roomId, slots: getPublicMicSlots(roomId) });
+    io.to(`room:${roomId}`).emit('room_notice', { roomId, text: `🔇 تم كتم جميع المايكات في الغرفة بأمر المالك.` });
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'كتم كل المايكات', targetKey: roomId });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  if (action === 'pin_message') {
+    const updated = db.setRoomPinnedMessage(roomId, message || '', actor.name);
+    if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+    io.to(`room:${roomId}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: message ? 'تثبيت رسالة ملكية' : 'إزالة الرسالة المثبتة', targetKey: roomId, details: String(message || '').slice(0, 80) });
+    await db.flushWrites();
+    return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+  }
+
+  if (action === 'send_as') {
+    const rm = db.getRoomById(roomId);
+    const clean = String(content || '').trim().slice(0, 1000);
+    if (!rm || !clean) return res.status(400).json({ error: 'اختر الغرفة واكتب الرسالة.' });
+    let senderObj = {
+      senderKey: 'system:official',
+      senderName: '🛡️ النظام الرسمي',
+      senderRole: 'site_owner',
+      nameColor: '#fbbf24',
+      textColor: '#7f1d1d',
+      nameBgColor: '#18181b',
+      neonColor: '#f59e0b',
+      avatarUrl: '',
+      avatarFrame: 'owner_sovereign',
+      isAdminNotice: true
+    };
+    if (asMode === 'user' && targetUserKey) {
+      const uid = Number(String(targetUserKey).replace('user:', ''));
+      const u = db.findUserById(uid);
+      if (u) {
+        senderObj = {
+          senderKey: `user:${u.id}`,
+          senderName: db.getEffectiveName(u),
+          senderRole: u.role,
+          nameColor: u.name_color,
+          textColor: u.text_color,
+          nameBgColor: u.name_bg_color,
+          neonColor: u.neon_color,
+          avatarUrl: u.avatar_url,
+          avatarFrame: u.avatar_frame,
+          isAdminNotice: false
+        };
+      }
+    }
+    const msg = db.addMessage({ roomId, ...senderObj, msgType: 'text', content: clean });
+    io.to(`room:${roomId}`).emit('new_message', msg);
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: asMode === 'user' ? 'إرسال نيابة عن عضو' : 'إرسال باسم النظام', targetKey: roomId, details: clean.slice(0, 80) });
+    await db.flushWrites();
+    return res.json({ ok: true, msg });
+  }
+
+  if (action === 'global_broadcast') {
+    const clean = String(content || '').trim().slice(0, 500);
+    if (!clean) return res.status(400).json({ error: 'أدخل نص الإعلان العام.' });
+    const cleanTitle = String(title || '📢 إعلان إداري عاجل').trim().slice(0, 80);
+    io.emit('global_urgent_broadcast', { title: cleanTitle, content: clean, byName: actor.name, ts: Date.now() });
+    for (const r of db.getAllRooms()) {
+      const msg = db.addMessage({
+        roomId: r.id,
+        senderKey: actor.key,
+        senderName: actor.name,
+        senderRole: 'site_owner',
+        nameColor: '#fbbf24',
+        textColor: '#7f1d1d',
+        nameBgColor: '#18181b',
+        avatarUrl: actor.avatarUrl,
+        avatarFrame: actor.avatarFrame,
+        isAdminNotice: true,
+        msgType: 'text',
+        content: `📢 ${cleanTitle}: ${clean}`
+      });
+      io.to(`room:${r.id}`).emit('new_message', msg);
+    }
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'إعلان عام لكل الغرف', details: clean.slice(0, 80) });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  if (action === 'golden_rain') {
+    const amt = Math.max(10, Math.min(10000, Number(amountPerUser) || 100));
+    const targetRoomId = roomId || 'general';
+    const recipientIds = new Set();
+    for (const e of onlineSockets.values()) {
+      if (e.userId && (targetRoomId === 'all' || e.roomId === targetRoomId) && !isStealthEntry(e)) {
+        recipientIds.add(e.userId);
+      }
+    }
+    for (const uid of recipientIds) {
+      db.adjustUserCoins(uid, amt);
+      syncUserAcrossSockets(io, uid);
+    }
+    const emitTarget = targetRoomId === 'all' ? io : io.to(`room:${targetRoomId}`);
+    emitTarget.emit('golden_rain_event', { amount: amt, byName: actor.name, count: recipientIds.size });
+    const roomsToAnnounce = targetRoomId === 'all' ? db.getAllRooms().map((r) => r.id) : [targetRoomId];
+    for (const rid of roomsToAnnounce) {
+      if (!db.getRoomById(rid)) continue;
+      const msg = db.addMessage({
+        roomId: rid,
+        senderKey: actor.key,
+        senderName: actor.name,
+        senderRole: 'site_owner',
+        nameColor: '#fbbf24',
+        textColor: '#92400e',
+        nameBgColor: '#18181b',
+        avatarUrl: actor.avatarUrl,
+        avatarFrame: actor.avatarFrame,
+        isAdminNotice: true,
+        msgType: 'text',
+        content: `🪙✨ أمطر المالك "${actor.name}" الغرفة بـ +${amt} عملة ذهبية لكل عضو (${recipientIds.size} مستفيد)!`
+      });
+      io.to(`room:${rid}`).emit('new_message', msg);
+    }
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'مطر ذهبي للعملات', targetKey: targetRoomId, details: `+${amt} × ${recipientIds.size}` });
+    await db.flushWrites();
+    return res.json({ ok: true, count: recipientIds.size });
+  }
+
+  if (action === 'quiz_bot') {
+    const targetRoomId = roomId || 'general';
+    if (!db.getRoomById(targetRoomId)) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+    const prev = roomQuizBots.get(targetRoomId);
+    if (prev?.timer) clearTimeout(prev.timer);
+    if (!enabled) {
+      roomQuizBots.delete(targetRoomId);
+      io.to(`room:${targetRoomId}`).emit('room_notice', { roomId: targetRoomId, text: '🛑 تم إيقاف بوت المسابقات في هذه الغرفة.' });
+      return res.json({ ok: true, active: false });
+    }
+    const reward = Math.max(10, Math.min(2000, Number(rewardCoins) || 100));
+    roomQuizBots.set(targetRoomId, { active: true, qIndex: Math.floor(Math.random() * QUIZ_BANK.length), currentQ: null, timer: null, rewardCoins: reward });
+    startRoomQuizRound(targetRoomId, reward);
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تشغيل بوت المسابقات', targetKey: targetRoomId, details: `الجائزة ${reward}` });
+    await db.flushWrites();
+    return res.json({ ok: true, active: true });
+  }
+
+  if (action === 'ban_ip') {
+    const bKey = targetKey || `ip:${ipAddress || deviceId}`;
+    if (!ipAddress && !deviceId && !targetKey) return res.status(400).json({ error: 'أدخل IP أو معرف الجهاز.' });
+    if (db.isProtectedSupremeOwnerKey(bKey)) return res.status(403).json({ error: 'محمي.' });
+    db.banTarget({
+      targetKey: bKey,
+      targetName: ipAddress || deviceId || bKey,
+      ipAddress: ipAddress || '',
+      deviceId: deviceId || '',
+      banType: 'xban',
+      reason: reason || 'حظر IP / جهاز من المالك',
+      bannedBy: actor.name
+    });
+    for (const [sid, e] of onlineSockets.entries()) {
+      if ((ipAddress && e.ipAddress === ipAddress) || (deviceId && e.deviceId === deviceId) || (targetKey && e.key === targetKey)) {
+        if (e.role !== 'site_owner') {
+          io.to(sid).emit('kicked', { reason: reason || 'تم حظر جهازك وعنوانك من قبل المالك.' });
+          io.sockets.sockets.get(sid)?.disconnect(true);
+        }
+      }
+    }
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'حظر IP/جهاز', targetKey: bKey, details: reason || '' });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  if (action === 'update_protections') {
+    const updated = db.updateSiteSettings(protections || {});
+    io.emit('site_settings_updated', updated);
+    broadcastRoomsList(io);
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات الحماية والمميزات' });
+    await db.flushWrites();
+    return res.json({ ok: true, settings: updated });
+  }
+
+  return res.status(400).json({ error: 'إجراء غير معروف.' });
 });
 
 // ==========================================
@@ -1909,7 +2481,8 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
     isRoomManager: isManager,
     messages,
     mics: getPublicMicSlots(targetRoomId),
-    users: getRoomUsersList(targetRoomId)
+    users: getRoomUsersList(targetRoomId),
+    roomKingKey: computeRoomKingKey(targetRoomId)
   });
 
   broadcastRoomUsers(io, targetRoomId);
@@ -1926,10 +2499,19 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
 
   if (!isSilentReconnect && !rejoiningSameRoom && oldRoomId !== targetRoomId && !isStealthEntry(entry)) {
     const rank = db.getRankByKey(entry.role);
+    const isOwnerJoin = entry.role === 'site_owner';
+    if (isOwnerJoin) {
+      io.to(`room:${targetRoomId}`).emit('royal_entrance', {
+        roomId: targetRoomId,
+        name: entry.name,
+        avatarUrl: entry.avatarUrl || '',
+        rankLabel: rank.label
+      });
+    }
     io.to(`room:${targetRoomId}`).emit('room_notice', {
       roomId: targetRoomId,
-      kind: 'join',
-      text: `✓ هذا المستخدم انضم للغرفة`,
+      kind: isOwnerJoin ? 'royal_join' : 'join',
+      text: isOwnerJoin ? `👑 تشريف ملكي: دخل المالك "${entry.name}" الغرفة!` : `✓ هذا المستخدم انضم للغرفة`,
       user: {
         key: entry.key,
         name: entry.name,
@@ -1960,6 +2542,9 @@ io.use((socket, next) => {
     const ip = getClientIp(socket);
     const deviceId = String(socket.handshake.auth?.deviceId || '').trim().slice(0, 128);
     if (payload.isGuest) {
+      if (Number(db.getSiteSettings().block_vpn) === 1 && isVpnOrProxyRequest(socket)) {
+        return next(new Error('BANNED:تم حظر الدخول عبر VPN أو Proxy.'));
+      }
       const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId });
       if (ban) return next(new Error(`BANNED:${ban.reason}`));
       socket.authSession = {
@@ -1997,6 +2582,8 @@ io.use((socket, next) => {
         ratingAvg: 5.0,
         ratingCount: 0,
         isGhosted: false,
+        isShadowMuted: guestShadowMutedKeys.has(payload.key),
+        isFrozen: guestFrozenKeys.has(payload.key),
         coins: 0,
         vipFamily: '',
         isStealth: false,
@@ -2016,6 +2603,9 @@ io.use((socket, next) => {
     if (db.isSupremeOwnerEmail(row.email)) {
       db.ensureSupremeOwnerAccount(row.id);
     } else {
+      if (Number(db.getSiteSettings().block_vpn) === 1 && row.role !== 'site_owner' && isVpnOrProxyRequest(socket)) {
+        return next(new Error('BANNED:تم حظر الدخول عبر VPN أو Proxy.'));
+      }
       const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip, deviceId });
       if (ban) return next(new Error(`BANNED:${ban.reason}`));
     }
@@ -2070,6 +2660,11 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ roomId, password }, cb) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry) return;
+    if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+      const errMsg = 'حسابك مجمد مؤقتاً من قبل المالك ولا يمكنك التنقل بين الغرف.';
+      if (typeof cb === 'function') cb({ error: errMsg });
+      return;
+    }
     const room = db.getRoomById(roomId);
     if (!room) {
       if (typeof cb === 'function') cb({ error: 'الغرفة غير موجودة.' });
@@ -2102,6 +2697,17 @@ io.on('connection', (socket) => {
       const entry = onlineSockets.get(socket.id);
       if (!entry || !entry.roomId) {
         if (typeof cb === 'function') cb({ error: 'لست داخل غرفة.' });
+        return;
+      }
+
+      if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+        if (typeof cb === 'function') cb({ error: 'أنت مجمد حالياً بأمر المالك ولا يمكنك الإرسال.' });
+        return;
+      }
+
+      const currentRm = db.getRoomById(entry.roomId);
+      if (currentRm && Number(currentRm.is_frozen) === 1 && !db.isRoomManager(entry.roomId, entry.userId, entry.role)) {
+        if (typeof cb === 'function') cb({ error: 'الغرفة مجمدة مؤقتاً للقراءة فقط.' });
         return;
       }
 
@@ -2138,9 +2744,20 @@ io.on('connection', (socket) => {
       const isAdminNotice =
         Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
 
+      if (msgType === 'image' && entry.isGuest && Number(db.getSiteSettings().lock_guest_images) === 1) {
+        if (typeof cb === 'function') cb({ error: 'تم إقفال إرسال الصور للزوار من قبل المالك.' });
+        return;
+      }
       if (msgType === 'text' && !content) {
         if (typeof cb === 'function') cb({ error: 'الرسالة فارغة.' });
         return;
+      }
+      if (msgType === 'text' && entry.role !== 'site_owner') {
+        const matchedBan = containsBannedWord(content);
+        if (matchedBan) {
+          if (typeof cb === 'function') cb({ error: 'تحتوي رسالتك على كلمة محظورة في الموقع.' });
+          return;
+        }
       }
       if ((msgType === 'image' || msgType === 'audio') && !mediaUrl) {
         if (typeof cb === 'function') cb({ error: 'الملف غير موجود.' });
@@ -2151,7 +2768,9 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const isGhostOnly = Boolean(entry.isGhosted) && entry.role !== 'site_owner';
+      const isGhostOnly =
+        entry.role !== 'site_owner' &&
+        (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
       const msg = db.addMessage({
         roomId: entry.roomId,
         senderKey: entry.key,
@@ -2178,7 +2797,7 @@ io.on('connection', (socket) => {
       });
 
       if (isGhostOnly) {
-        // Ghosted/shadow-frozen users see their own messages locally without reaching anyone else
+        // Ghosted/shadow-muted users see their own messages locally without reaching anyone else
         socket.emit('new_message', msg);
         if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg });
         return;
@@ -2197,6 +2816,7 @@ io.on('connection', (socket) => {
 
       io.to(`room:${entry.roomId}`).emit('new_message', msg);
       broadcastRoomsList(io);
+      if (msgType === 'text') checkQuizBotAnswer(entry, content);
 
       // Smart Mention & Recipient-Only Ping Alert
       if (msgType === 'text' && content.includes('@')) {
@@ -2274,9 +2894,17 @@ io.on('connection', (socket) => {
   socket.on('mic_take', ({ slot } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || !entry.roomId) return;
+    if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'حسابك مجمد حالياً ولا يمكنك صعود المايك.' });
+      return;
+    }
     const rm = db.getRoomById(entry.roomId);
     if (!rm || rm.mics_enabled === 0) {
       if (typeof cb === 'function') cb({ error: 'المايكات معطلة في هذه الغرفة.' });
+      return;
+    }
+    if (Number(rm.is_frozen) === 1 && !db.isRoomManager(entry.roomId, entry.userId, entry.role)) {
+      if (typeof cb === 'function') cb({ error: 'الغرفة مجمدة مؤقتاً.' });
       return;
     }
     const slotNum = Number(slot);
@@ -2481,6 +3109,31 @@ io.on('connection', (socket) => {
     const entry = onlineSockets.get(socket.id);
     const clean = String(content || '').trim().slice(0, 800);
     if (!entry || !toKey || !clean) return;
+    if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'أنت مجمد حالياً ولا يمكنك إرسال رسائل خاصة.' });
+      return;
+    }
+    if (entry.role !== 'site_owner' && containsBannedWord(clean)) {
+      if (typeof cb === 'function') cb({ error: 'تحتوي الرسالة على كلمة محظورة.' });
+      return;
+    }
+
+    // PM Link Radar -> alerts Owner in real-time and persists alert
+    if (entry.role !== 'site_owner' && containsUrl(clean)) {
+      const linkAlert = db.addPmLinkAlert({
+        fromKey: entry.key,
+        fromName: entry.name,
+        toKey,
+        toName: toName || 'عضو',
+        content: clean
+      });
+      for (const [sid, o] of onlineSockets.entries()) {
+        if (o.role === 'site_owner' || db.isSupremeOwnerEmail(o.email)) {
+          io.to(sid).emit('owner_pm_link_alert', linkAlert);
+        }
+      }
+    }
+
     const pm = db.addPrivateMessage({
       fromKey: entry.key,
       fromName: entry.name,
@@ -2533,6 +3186,7 @@ io.on('connection', (socket) => {
         roomId: entry.roomId,
         text: `🔊 قام "${entry.name}" بفك الكتم عن العضو.`
       });
+      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'فك كتم', targetKey, details: entry.roomId });
     } else {
       const mins = Math.max(1, Math.min(1440, Number(minutes) || 10));
       db.setMute(targetKey, entry.roomId, mins * 60 * 1000, entry.name);
@@ -2541,11 +3195,12 @@ io.on('connection', (socket) => {
         roomId: entry.roomId,
         text: `🔇 قام "${entry.name}" بكتم عضو لمدة ${mins} دقيقة.`
       });
+      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'كتم عضو', targetKey, details: `${mins} دقيقة (${entry.roomId})` });
     }
     await db.flushWrites();
   });
 
-  socket.on('admin_kick', ({ targetKey } = {}) => {
+  socket.on('admin_kick', async ({ targetKey } = {}) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || !entry.roomId) return;
     const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
@@ -2557,11 +3212,13 @@ io.on('connection', (socket) => {
           socket.emit('error_toast', { message: 'لا يمكنك طرد رتبة أعلى منك أو مساوية لك.' });
           return;
         }
+        db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'طرد من الغرفة', targetKey, targetName: o.name, details: entry.roomId });
         io.to(sid).emit('kicked', { reason: `تم طردك من الغرفة بواسطة ${entry.name}` });
         const s = io.sockets.sockets.get(sid);
         if (s) s.disconnect(true);
       }
     }
+    await db.flushWrites();
   });
 
   socket.on('admin_ban', async ({ targetKey, reason = 'حظر إداري', banType = 'ban' } = {}) => {
@@ -2597,6 +3254,7 @@ io.on('connection', (socket) => {
       reason,
       bannedBy: entry.name
     });
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: banType === 'xban' ? 'إكس باند X-Ban' : 'حظر نهائي', targetKey, targetName, details: reason });
     for (const [sid, o] of onlineSockets.entries()) {
       if (o.key === targetKey) {
         io.to(sid).emit('kicked', { reason: `تم حظرك: ${reason}` });
@@ -2626,6 +3284,7 @@ io.on('connection', (socket) => {
       socket.emit('error_toast', { message: resGhost.error });
       return;
     }
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: enabled ? 'تفعيل شبح' : 'إلغاء شبح', targetKey, targetName: db.getEffectiveName(targetRow) });
     syncUserAcrossSockets(io, uid);
     await db.flushWrites();
     if (typeof cb === 'function') cb({ ok: true, isGhosted: Boolean(enabled) });
@@ -2643,6 +3302,7 @@ io.on('connection', (socket) => {
       if (typeof cb === 'function') cb({ error: resDel.error });
       return;
     }
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'حذف حساب نهائي', targetKey: `user:${uid}` });
     for (const [sid, o] of onlineSockets.entries()) {
       if (o.userId === uid) {
         io.to(sid).emit('kicked', { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.' });
@@ -2687,6 +3347,7 @@ io.on('connection', (socket) => {
     if (!updated) return;
     syncUserAcrossSockets(io, userId);
     const rank = db.getRankByKey(newRole);
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تعديل رتبة', targetKey: `user:${userId}`, targetName: db.getEffectiveName(updated), details: rank.label });
     if (entry.roomId) {
       io.to(`room:${entry.roomId}`).emit('room_notice', {
         roomId: entry.roomId,
@@ -2704,6 +3365,7 @@ io.on('connection', (socket) => {
     if (!target) return;
     if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) return;
     db.forceChangeUserDisplayName(userId, newDisplayName);
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم عضو', targetKey: `user:${userId}`, targetName: newDisplayName });
     syncUserAcrossSockets(io, userId);
     await db.flushWrites();
   });
@@ -2715,6 +3377,7 @@ io.on('connection', (socket) => {
     if (!delta) return;
     const updated = db.adjustUserCoins(userId, delta);
     if (!updated) return;
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'منح عملات', targetKey: `user:${userId}`, targetName: db.getEffectiveName(updated), details: `+${delta}` });
     syncUserAcrossSockets(io, userId);
     await db.flushWrites();
   });
@@ -2725,6 +3388,7 @@ io.on('connection', (socket) => {
     const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'clear_room');
     if (!isMgr) return;
     db.clearRoomMessages(entry.roomId);
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح رسائل الغرفة', targetKey: entry.roomId });
     io.to(`room:${entry.roomId}`).emit('room_cleared', { roomId: entry.roomId, byName: entry.name });
     await db.flushWrites();
   });
