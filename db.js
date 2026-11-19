@@ -573,11 +573,11 @@ const DEFAULT_SITE_SETTINGS = {
   site_logo: '',
   welcome_message: '',
   maintenance_mode: 0,
-  top_bar_color: '#1a45e5',
-  bottom_bar_color: '#1a45e5',
-  button_color: '#f59e0b',
+  top_bar_color: '#18181b',
+  bottom_bar_color: '#18181b',
+  button_color: '#18181b',
   font_family: 'Cairo',
-  font_size: 15,
+  font_size: 14,
   custom_css: '',
   custom_html: '',
   updated_at: new Date().toISOString()
@@ -979,6 +979,7 @@ function normalizeUserDoc(docId, data) {
     neon_color: String(data.neon_color || ''),
     font_family: String(data.font_family || 'Normal'),
     font_style: String(data.font_style || 'Normal'),
+    font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
     avatar_url: String(data.avatar_url || ''),
     cover_url: String(data.cover_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
@@ -1026,6 +1027,7 @@ function normalizeMessageDoc(docId, data) {
     neon_color: String(data.neon_color || ''),
     font_family: String(data.font_family || 'Normal'),
     font_style: String(data.font_style || 'Normal'),
+    font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
     avatar_url: String(data.avatar_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
@@ -2210,6 +2212,7 @@ function updateUserCustomization(
     neonColor,
     fontFamily,
     fontStyle,
+    fontSize,
     avatarUrl,
     coverUrl,
     avatarFrame,
@@ -2239,6 +2242,7 @@ function updateUserCustomization(
     neon_color: neonColor !== undefined ? String(neonColor || '').trim().slice(0, 30) : current.neon_color || '',
     font_family: fontFamily !== undefined ? String(fontFamily || 'Normal').trim().slice(0, 40) : current.font_family || 'Normal',
     font_style: fontStyle !== undefined ? String(fontStyle || 'Normal').trim().slice(0, 30) : current.font_style || 'Normal',
+    font_size: fontSize !== undefined ? Math.max(12, Math.min(20, Number(fontSize) || 14)) : current.font_size || 14,
     avatar_url: avatarUrl !== undefined ? avatarUrl : current.avatar_url,
     cover_url: coverUrl !== undefined ? coverUrl : current.cover_url || '',
     avatar_frame: avatarFrame !== undefined ? avatarFrame || 'none' : current.avatar_frame || 'none',
@@ -2740,6 +2744,7 @@ function addMessage({
   neonColor,
   fontFamily,
   fontStyle,
+  fontSize,
   avatarUrl,
   avatarFrame,
   nameplateStyle,
@@ -2773,6 +2778,7 @@ function addMessage({
     neon_color: neonColor || '',
     font_family: fontFamily || 'Normal',
     font_style: fontStyle || 'Normal',
+    font_size: Math.max(12, Math.min(20, Number(fontSize) || 14)),
     avatar_url: avatarUrl || '',
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
@@ -3233,7 +3239,23 @@ function getFriendsForUser(userKey) {
     .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
 }
 
-function addWallPost({ authorKey, authorName, authorRole, avatarUrl, avatarFrame, nameplateStyle, content, imageUrl }) {
+function addWallPost({
+  authorKey,
+  authorName,
+  authorRole,
+  avatarUrl,
+  avatarFrame,
+  nameplateStyle,
+  nameColor,
+  nameBgColor,
+  neonColor,
+  content,
+  imageUrl,
+  inviteRoomId,
+  inviteRoomName,
+  inviteCountryFlag,
+  inviteOnlineCount
+}) {
   const id = nextSeq('wall_posts');
   const post = {
     id,
@@ -3244,8 +3266,17 @@ function addWallPost({ authorKey, authorName, authorRole, avatarUrl, avatarFrame
     avatar_url: avatarUrl || '',
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
+    name_color: nameColor || '#0f172a',
+    name_bg_color: nameBgColor || '',
+    neon_color: neonColor || '',
     content,
     image_url: imageUrl || '',
+    invite_room_id: inviteRoomId || '',
+    invite_room_name: inviteRoomName || '',
+    invite_country_flag: inviteCountryFlag || '',
+    invite_online_count: Number(inviteOnlineCount) || 0,
+    reactions: { like: 0, heart: 0, laugh: 0 },
+    comments: [],
     likes_count: 0,
     created_at: nowIso()
   };
@@ -3257,15 +3288,61 @@ function addWallPost({ authorKey, authorName, authorRole, avatarUrl, avatarFrame
 function getWallPosts() {
   return [...store.wallPostsById.values()]
     .sort((a, b) => Number(b.id) - Number(a.id))
-    .slice(0, 40);
+    .slice(0, 40)
+    .map((p) => ({
+      ...p,
+      reactions: p.reactions || { like: Number(p.likes_count) || 0, heart: 0, laugh: 0 },
+      comments: Array.isArray(p.comments) ? p.comments : []
+    }));
 }
 
 function likeWallPost(postId) {
+  return reactWallPost(postId, 'heart');
+}
+
+function reactWallPost(postId, reactionType = 'like') {
   const post = store.wallPostsById.get(Number(postId));
   if (!post) return null;
-  post.likes_count = (Number(post.likes_count) || 0) + 1;
-  enqueueSet('wall_posts', String(post.id), { likes_count: post.likes_count }, true);
-  return { ...post };
+  const kind = ['like', 'heart', 'laugh'].includes(reactionType) ? reactionType : 'like';
+  const curReactions = {
+    like: Number(post.reactions?.like) || 0,
+    heart: Number(post.reactions?.heart) || 0,
+    laugh: Number(post.reactions?.laugh) || 0
+  };
+  curReactions[kind] += 1;
+  post.reactions = curReactions;
+  post.likes_count = curReactions.like + curReactions.heart + curReactions.laugh;
+  enqueueSet('wall_posts', String(post.id), { reactions: curReactions, likes_count: post.likes_count }, true);
+  return { ...post, reactions: { ...curReactions }, comments: Array.isArray(post.comments) ? post.comments : [] };
+}
+
+function addWallComment(postId, { authorKey, authorName, authorRole, avatarUrl, content }) {
+  const post = store.wallPostsById.get(Number(postId));
+  if (!post) return null;
+  const clean = String(content || '').trim().slice(0, 300);
+  if (!clean) return null;
+  const comments = Array.isArray(post.comments) ? [...post.comments] : [];
+  comments.push({
+    id: `wc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    author_key: authorKey,
+    author_name: authorName,
+    author_role: authorRole || 'member',
+    avatar_url: avatarUrl || '',
+    content: clean,
+    created_at: nowIso()
+  });
+  if (comments.length > 50) comments.shift();
+  post.comments = comments;
+  enqueueSet('wall_posts', String(post.id), { comments }, true);
+  return { ...post, reactions: post.reactions || { like: Number(post.likes_count) || 0, heart: 0, laugh: 0 }, comments };
+}
+
+function deleteWallPost(postId) {
+  const nid = Number(postId);
+  if (!store.wallPostsById.has(nid)) return false;
+  store.wallPostsById.delete(nid);
+  enqueueDelete('wall_posts', String(nid));
+  return true;
 }
 
 function addReport({ reporterKey, reporterName, targetName, reason, roomId }) {
@@ -3497,6 +3574,9 @@ module.exports = {
   addWallPost,
   getWallPosts,
   likeWallPost,
+  reactWallPost,
+  addWallComment,
+  deleteWallPost,
   addReport,
   getReports,
   addNotification,

@@ -191,6 +191,7 @@ function mapUserRow(u) {
     neonColor: u.neon_color || '',
     fontFamily: u.font_family || 'Normal',
     fontStyle: u.font_style || 'Normal',
+    fontSize: Math.max(12, Math.min(20, Number(u.font_size) || 14)),
     avatarUrl: u.avatar_url || '',
     coverUrl: u.cover_url || '',
     avatarFrame: u.avatar_frame || 'none',
@@ -241,6 +242,7 @@ function resolveAuthFromRequest(req) {
       neonColor: '',
       fontFamily: 'Normal',
       fontStyle: 'Normal',
+      fontSize: 14,
       avatarUrl: '',
       avatarFrame: 'none',
       nameplateStyle: 'default',
@@ -989,6 +991,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     neonColor,
     fontFamily,
     fontStyle,
+    fontSize,
     avatarUrl,
     coverUrl,
     avatarFrame,
@@ -1027,6 +1030,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     neonColor,
     fontFamily,
     fontStyle,
+    fontSize,
     avatarUrl,
     coverUrl,
     avatarFrame,
@@ -1327,7 +1331,20 @@ app.post('/api/friends/respond', requireRegistered, async (req, res) => {
 app.post('/api/wall', requireRegistered, async (req, res) => {
   const content = String(req.body?.content || '').trim().slice(0, 600);
   const imageUrl = String(req.body?.imageUrl || '').trim();
-  if (!content && !imageUrl) return res.status(400).json({ error: 'أدخل نص المنشور أو صورة.' });
+  const inviteRoomId = String(req.body?.inviteRoomId || '').trim().slice(0, 64);
+  const inviteCountryFlag = String(req.body?.countryFlag || '🌍').trim().slice(0, 12);
+  let inviteRoomName = '';
+  let inviteOnlineCount = 0;
+  if (inviteRoomId) {
+    const rm = db.getRoomById(inviteRoomId);
+    if (rm) {
+      inviteRoomName = rm.name;
+      inviteOnlineCount = getRoomUsersList(inviteRoomId).length;
+    }
+  }
+  if (!content && !imageUrl && !inviteRoomName) {
+    return res.status(400).json({ error: 'أدخل نص المنشور أو صورة أو دعوة غرفة.' });
+  }
   const post = db.addWallPost({
     authorKey: req.authUser.key,
     authorName: req.authUser.name,
@@ -1335,8 +1352,15 @@ app.post('/api/wall', requireRegistered, async (req, res) => {
     avatarUrl: req.authUser.avatarUrl,
     avatarFrame: req.authUser.avatarFrame,
     nameplateStyle: req.authUser.nameplateStyle,
+    nameColor: req.authUser.nameColor,
+    nameBgColor: req.authUser.nameBgColor,
+    neonColor: req.authUser.neonColor,
     content,
-    imageUrl
+    imageUrl,
+    inviteRoomId: inviteRoomName ? inviteRoomId : '',
+    inviteRoomName,
+    inviteCountryFlag: inviteRoomName ? inviteCountryFlag : '',
+    inviteOnlineCount
   });
   db.incrementActivityPoints({ userId: req.authUser.userId, roomId: null, userDelta: 3, roomDelta: 0 });
   syncUserAcrossSockets(io, req.authUser.userId);
@@ -1351,6 +1375,55 @@ app.post('/api/wall/:id/like', requireAuth, async (req, res) => {
   io.emit('wall_updated', { post });
   await db.flushWrites();
   return res.json({ post });
+});
+
+app.post('/api/wall/:id/react', requireAuth, async (req, res) => {
+  const type = String(req.body?.type || 'like');
+  const post = db.reactWallPost(req.params.id, type);
+  if (!post) return res.status(404).json({ error: 'المنشور غير موجود.' });
+  io.emit('wall_updated', { post });
+  await db.flushWrites();
+  return res.json({ post });
+});
+
+app.post('/api/wall/:id/comment', requireAuth, async (req, res) => {
+  const content = String(req.body?.content || '').trim().slice(0, 300);
+  if (!content) return res.status(400).json({ error: 'اكتب تعليقك أولاً.' });
+  const post = db.addWallComment(req.params.id, {
+    authorKey: req.authUser.key,
+    authorName: req.authUser.name,
+    authorRole: req.authUser.role,
+    avatarUrl: req.authUser.avatarUrl,
+    content
+  });
+  if (!post) return res.status(404).json({ error: 'المنشور غير موجود.' });
+  if (post.author_key && post.author_key !== req.authUser.key) {
+    const notif = db.addNotification({
+      targetKey: post.author_key,
+      title: `💬 تعليق جديد من ${req.authUser.name}`,
+      body: content.slice(0, 100),
+      category: 'wall'
+    });
+    emitNotificationToUser(io, post.author_key, notif);
+  }
+  io.emit('wall_updated', { post });
+  await db.flushWrites();
+  return res.json({ post });
+});
+
+app.delete('/api/wall/:id', requireAuth, async (req, res) => {
+  const posts = db.getWallPosts();
+  const target = posts.find((p) => String(p.id) === String(req.params.id));
+  if (!target) return res.status(404).json({ error: 'المنشور غير موجود.' });
+  const canDelete =
+    target.author_key === req.authUser.key ||
+    req.authUser.role === 'site_owner' ||
+    canDo(req.authUser.role, 'access_panel');
+  if (!canDelete) return res.status(403).json({ error: 'لا تملك صلاحية حذف هذا المنشور.' });
+  db.deleteWallPost(req.params.id);
+  io.emit('wall_deleted', { id: Number(req.params.id) });
+  await db.flushWrites();
+  return res.json({ ok: true });
 });
 
 app.post('/api/reports', requireAuth, async (req, res) => {
@@ -1905,6 +1978,7 @@ io.use((socket, next) => {
         neonColor: '',
         fontFamily: 'Normal',
         fontStyle: 'Normal',
+        fontSize: 14,
         avatarUrl: '',
         coverUrl: '',
         avatarFrame: 'none',
@@ -2089,6 +2163,7 @@ io.on('connection', (socket) => {
         neonColor: entry.neonColor,
         fontFamily: entry.fontFamily,
         fontStyle: entry.fontStyle,
+        fontSize: entry.fontSize || 14,
         avatarUrl: entry.avatarUrl,
         avatarFrame: entry.avatarFrame,
         nameplateStyle: entry.nameplateStyle,
@@ -2123,19 +2198,22 @@ io.on('connection', (socket) => {
       io.to(`room:${entry.roomId}`).emit('new_message', msg);
       broadcastRoomsList(io);
 
-      // Check @mentions for notifications & audio alerts
+      // Smart Mention & Recipient-Only Ping Alert
       if (msgType === 'text' && content.includes('@')) {
+        const lowerContent = content.toLowerCase();
         const mentionedKeys = new Set();
         for (const other of onlineSockets.values()) {
           if (other.key === entry.key || isStealthEntry(other)) continue;
-          if (content.includes(`@${other.name}`) || content.includes(`@${other.username}`)) {
+          const n1 = String(other.name || '').trim().toLowerCase();
+          const n2 = String(other.username || '').trim().toLowerCase();
+          if ((n1 && lowerContent.includes(`@${n1}`)) || (n2 && lowerContent.includes(`@${n2}`))) {
             mentionedKeys.add(other.key);
           }
         }
         for (const tKey of mentionedKeys) {
           const notif = db.addNotification({
             targetKey: tKey,
-            title: `🔔 إشارة من ${entry.name}`,
+            title: `🔔 نداء من ${entry.name}`,
             body: content.slice(0, 120),
             category: 'mention'
           });
@@ -2143,8 +2221,12 @@ io.on('connection', (socket) => {
           for (const [sid, o] of onlineSockets.entries()) {
             if (o.key === tKey) {
               io.to(sid).emit('mention_alert', {
+                fromKey: entry.key,
                 fromName: entry.name,
+                fromAvatar: entry.avatarUrl || '',
+                fromRole: entry.role || 'member',
                 roomId: entry.roomId,
+                msgId: msg.id,
                 content: content.slice(0, 120)
               });
             }

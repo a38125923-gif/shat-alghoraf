@@ -20,15 +20,22 @@
     ],
     hearts: [
       '❤️', '🩷', '🧡', '💛', '💚', '💙', '🩵', '💜', '🤎', '🖤', '🩶', '🤍',
-      '❤️‍🔥', '❤️‍🩹', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '🫶'
+      '❤️‍🔥', '❤️‍🩹', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '🫶',
+      '🌹', '🥀', '🌺', '🌸', '💐', '🌷', '🌻', '🌼'
     ],
-    symbols: [
-      '👑', '💎', '⭐', '🌟', '✨', '🔥', '💯', '🏆', '🥇', '🎖️', '🛡️', '⚜️',
-      '🕊️', '🦅', '🦁', '🐉', '🌹', '🥀', '🌺', '🌸', '☕', '🍵', '🎵', '🎶'
-    ],
-    party: [
-      '🎉', '🎊', '🎈', '🎁', '🎀', '🥂', '🍾', '🎂', '🍰', '🕯️', '🎆', '🎇',
-      '🪩', '🎭', '🎤', '🎧', '👑', '💫', '🚀', '✈️', '🕌', '🌙', '☀️', '🌊'
+    arabic_stickers: [
+      '🕌 السلام عليكم',
+      '🌹 أهلاً وسهلاً',
+      '✨ منورين المكان',
+      '☀️ صباح الخير',
+      '🌙 مساء النور',
+      '👑 تسلم يا غالي',
+      '🔥 كفو والله',
+      '💯 صح لسانك',
+      '❤️ الله يسعدك',
+      '🤝 حياك الله',
+      '🎉 ألف مبروك',
+      '☕ تفضلوا قهوة'
     ]
   };
 
@@ -149,7 +156,9 @@
     isRecordingAudio: false,
     typingTimeout: null,
     micsCollapsed: false,
-    deepLinkHandled: false
+    deepLinkHandled: false,
+    activeSlideDrawer: null,
+    activeSlidePmTarget: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -186,16 +195,20 @@
         osc.frequency.setValueAtTime(523.25, now);
         osc.frequency.setValueAtTime(659.25, now + 0.09);
         osc.frequency.setValueAtTime(783.99, now + 0.18);
+      } else if (kind === 'mention') {
+        osc.frequency.setValueAtTime(783.99, now);
+        osc.frequency.setValueAtTime(1046.5, now + 0.09);
       } else {
         osc.frequency.setValueAtTime(660, now);
         osc.frequency.setValueAtTime(880, now + 0.08);
       }
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      gain.gain.setValueAtTime(kind === 'mention' ? 0.09 : 0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.36);
+      osc.stop(now + 0.37);
+      setTimeout(() => ctx.close().catch(() => {}), 500);
     } catch {
       // ignore audio context block
     }
@@ -358,11 +371,12 @@
     const shine = userObj.name_shine || userObj.nameShine || 'none';
     const wings = Boolean(userObj.vip_wings || userObj.vipWings);
     const nameplate = userObj.nameplate_style || userObj.nameplateStyle || 'default';
-    const nameColor = userObj.name_color || userObj.nameColor || '#ffffff';
+    const nameColor = userObj.name_color || userObj.nameColor || '#111827';
     const nameBg = userObj.name_bg_color || userObj.nameBgColor || '';
     const neon = userObj.neon_color || userObj.neonColor || '';
     const ff = userObj.font_family || userObj.fontFamily || 'Normal';
     const fs = userObj.font_style || userObj.fontStyle || 'Normal';
+    const fontSize = Math.max(12, Math.min(20, Number(userObj.font_size || userObj.fontSize) || 13));
 
     const classes = ['sender-name-btn'];
     if (nameplate && nameplate !== 'default') classes.push(`nameplate-${nameplate}`);
@@ -370,21 +384,25 @@
 
     const styles = [];
     if (shine === 'none') styles.push(`color:${escapeHtml(nameColor)}`);
-    if (nameBg) styles.push(`background-color:${escapeHtml(nameBg)}`);
+    if (nameBg) {
+      styles.push(`background-color:${escapeHtml(nameBg)}`);
+      styles.push('padding:1px 7px');
+      styles.push('border-radius:4px');
+    }
     if (neon) styles.push(`text-shadow:0 0 8px ${escapeHtml(neon)}, 0 0 14px ${escapeHtml(neon)}`);
     if (ff && ff !== 'Normal') styles.push(`font-family:'${escapeHtml(ff)}', sans-serif`);
     if (fs === 'Bold') styles.push('font-weight:900');
     if (fs === 'Italic') styles.push('font-style:italic');
+    styles.push(`font-size:${fontSize}px`);
 
     const leftWing = wings ? '<span class="vip-wing">🪽</span>' : role === 'site_owner' ? '<span class="vip-wing">👑</span>' : '';
     const rightWing = wings ? '<span class="vip-wing">🪽</span>' : '';
 
-    // Ensure readable text contrast on clean light white message rows when default #ffffff is saved
     const lowerColor = String(nameColor || '').trim().toLowerCase();
     const hasCustomSurface = Boolean(nameBg) || (nameplate && nameplate !== 'default');
     const resolvedStyles = [...styles];
     if (shine === 'none' && !hasCustomSurface && (!nameColor || lowerColor === '#ffffff' || lowerColor === '#fff')) {
-      resolvedStyles[0] = 'color:#0f172a';
+      resolvedStyles[0] = 'color:#111827';
     }
 
     return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span>${name}</span>${rightWing}</span>`;
@@ -401,6 +419,48 @@
     return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}</span>`;
   }
 
+  function formatTimeAgo(dateInput) {
+    if (!dateInput) return 'الآن';
+    const ms = typeof dateInput === 'number' ? dateInput : new Date(dateInput).getTime();
+    if (!ms || Number.isNaN(ms)) return 'الآن';
+    const diffSec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (diffSec < 45) return 'الآن';
+    const mins = Math.floor(diffSec / 60);
+    if (mins === 1) return 'منذ دقيقة';
+    if (mins === 2) return 'منذ دقيقتين';
+    if (mins < 11) return `منذ ${mins} دقائق`;
+    if (mins < 60) return `منذ ${mins} دقيقة`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs === 1) return 'منذ ساعة';
+    if (hrs === 2) return 'منذ ساعتين';
+    if (hrs < 11) return `منذ ${hrs} ساعات`;
+    if (hrs < 24) return `منذ ${hrs} ساعة`;
+    return new Date(ms).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+  }
+
+  function insertMention(name) {
+    const clean = String(name || '').trim();
+    const input = $('messageInput');
+    if (!clean || !input) return;
+    const prefix = input.value && !input.value.endsWith(' ') ? ' ' : '';
+    input.value = `${input.value}${prefix}@${clean} `;
+    input.focus();
+  }
+
+  function findKnownUserByMention(mentionText) {
+    const target = String(mentionText || '').trim().toLowerCase();
+    if (!target) return null;
+    const pools = [state.roomUsers, state.onlineUsers, state.persistentMembers];
+    for (const pool of pools) {
+      for (const u of pool || []) {
+        const n1 = String(u.name || u.displayName || '').trim().toLowerCase();
+        const n2 = String(u.username || '').trim().toLowerCase();
+        if ((n1 && n1 === target) || (n2 && n2 === target)) return u;
+      }
+    }
+    return null;
+  }
+
   function renderContentWithEmojis(rawText) {
     let html = escapeHtml(rawText);
     for (const e of state.emojis) {
@@ -411,6 +471,41 @@
         `<img src="${escapeHtml(e.image_url)}" class="inline-custom-emoji" alt="${escapeHtml(e.code)}" title="${escapeHtml(e.code)}" />`
       );
     }
+    return html;
+  }
+
+  function renderMessageTextWithMentions(rawText) {
+    let html = renderContentWithEmojis(rawText);
+    const knownNames = [];
+    const seen = new Set();
+    for (const pool of [state.roomUsers, state.onlineUsers, state.persistentMembers]) {
+      for (const u of pool || []) {
+        for (const nm of [u.name, u.username]) {
+          const clean = String(nm || '').trim();
+          if (clean && !seen.has(clean.toLowerCase())) {
+            seen.add(clean.toLowerCase());
+            knownNames.push({ name: clean, user: u });
+          }
+        }
+      }
+    }
+    knownNames.sort((a, b) => b.name.length - a.name.length);
+    for (const item of knownNames) {
+      const esc = escapeHtml(item.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const bg = item.user.nameBgColor || item.user.name_bg_color || '#18181b';
+      const fg = item.user.nameBgColor || item.user.name_bg_color
+        ? (item.user.nameColor || item.user.name_color || '#ffffff')
+        : '#ffffff';
+      html = html.replace(
+        new RegExp(`@${esc}`, 'gi'),
+        `<span class="mention-inline-badge" data-mention-name="${escapeHtml(item.name)}" style="background:${escapeHtml(bg)};color:${escapeHtml(fg)};">@${escapeHtml(item.name)}</span>`
+      );
+    }
+    // Highlight any unmatched @token cleanly as well
+    html = html.replace(
+      /(^|\s)@([^\s<>"'&]{2,30})/g,
+      '$1<span class="mention-inline-badge" data-mention-name="$2" style="background:#18181b;color:#facc15;">@$2</span>'
+    );
     return html;
   }
 
@@ -426,9 +521,10 @@
       $('authSiteLogo').classList.remove('hidden');
     }
     const root = document.documentElement.style;
-    if (s.top_bar_color) root.setProperty('--top-bar-bg', s.top_bar_color);
-    if (s.bottom_bar_color) root.setProperty('--bottom-bar-bg', s.bottom_bar_color);
-    if (s.button_color) root.setProperty('--accent-btn', s.button_color);
+    const normBarColor = (c) => (!c || c === '#1a45e5' || c === '#0b2239' ? '#18181b' : c);
+    root.setProperty('--top-bar-bg', normBarColor(s.top_bar_color));
+    root.setProperty('--bottom-bar-bg', normBarColor(s.bottom_bar_color));
+    root.setProperty('--accent-btn', normBarColor(s.button_color));
     if (s.font_family) root.setProperty('--chat-font', `'${s.font_family}', 'Cairo', sans-serif`);
     if (s.font_size) root.setProperty('--chat-font-size', `${s.font_size}px`);
     if ($('dynamicCmsCss')) $('dynamicCmsCss').textContent = s.custom_css || '';
@@ -638,7 +734,8 @@
     }
     state.radioPlaying = false;
     $('footerRadioBtn')?.classList.remove('playing');
-    if ($('footerRadioBtn')) $('footerRadioBtn').innerHTML = '<i class="fa-solid fa-play"></i>';
+    const rIco = $('footerRadioBtn')?.querySelector('.fn-ico');
+    if (rIco) rIco.innerHTML = '<i class="fa-solid fa-radio"></i>';
   }
 
   function startRadioStream(stationId = state.selectedRadioId) {
@@ -649,8 +746,9 @@
     state.selectedRadioId = station.id;
     state.radioPlaying = true;
     $('footerRadioBtn')?.classList.add('playing');
-    if ($('footerRadioBtn')) $('footerRadioBtn').innerHTML = '<i class="fa-solid fa-pause"></i>';
-    if ($('footerRadioStationName')) $('footerRadioStationName').textContent = station.name.slice(0, 14);
+    const rIco = $('footerRadioBtn')?.querySelector('.fn-ico');
+    if (rIco) rIco.innerHTML = '<i class="fa-solid fa-pause"></i>';
+    if ($('footerRadioStationName')) $('footerRadioStationName').textContent = station.name.slice(0, 10);
 
     try {
       const audio = new Audio(station.streamUrl);
@@ -840,28 +938,35 @@
   }
 
   // ==========================================
-  // CHAT FEED RENDERING (CODYCHAT FLAT ROWS)
+  // CHAT FEED RENDERING (MOBILE-FIRST CHARCOAL & WHITE)
   // ==========================================
   function createMessageRowElement(msg) {
     const row = document.createElement('div');
     const isAdminNotice = Boolean(msg.is_admin_notice);
     const isGift = Boolean(msg.is_gift);
-    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}`;
+    const rawContent = String(msg.content || '');
+    const hasMention = msg.msg_type === 'text' && rawContent.includes('@');
+    const myName = String(state.user?.name || '').trim().toLowerCase();
+    const myUser = String(state.user?.username || '').trim().toLowerCase();
+    const mentionsMe =
+      hasMention &&
+      ((myName && rawContent.toLowerCase().includes(`@${myName}`)) ||
+        (myUser && rawContent.toLowerCase().includes(`@${myUser}`)));
+
+    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}`;
     if (msg.client_msg_id) row.dataset.clientMsgId = msg.client_msg_id;
     if (msg.id) row.dataset.msgId = String(msg.id);
 
-    const timeStr = msg.created_at
-      ? new Date(msg.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
-      : '';
+    const timeStr = formatTimeAgo(msg.created_at_ms || msg.created_at);
+    const msgFontSize = Math.max(12, Math.min(20, Number(msg.font_size || msg.fontSize) || 14));
 
-    let inlineContentHtml = '';
-    let blockMediaHtml = '';
+    let bodyContentHtml = '';
     if (msg.msg_type === 'image' && msg.media_url) {
-      blockMediaHtml = `<img src="${escapeHtml(msg.media_url)}" class="msg-media-img" alt="صورة" onclick="window.open(this.src,'_blank')" />`;
+      bodyContentHtml = `<img src="${escapeHtml(msg.media_url)}" class="msg-media-img" alt="صورة" onclick="window.open(this.src,'_blank')" />`;
     } else if (msg.msg_type === 'audio' && msg.media_url) {
-      blockMediaHtml = `<audio controls src="${escapeHtml(msg.media_url)}" class="msg-audio-player"></audio>`;
+      bodyContentHtml = `<audio controls src="${escapeHtml(msg.media_url)}" class="msg-audio-player"></audio>`;
     } else if (msg.msg_type === 'sticker') {
-      inlineContentHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
+      bodyContentHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
     } else {
       const prefix = isAdminNotice ? '<span class="admin-notice-prefix">إشعار الإدارة</span>' : '';
       const rawTxtColor = String(msg.text_color || '').trim();
@@ -871,8 +976,8 @@
         : (!rawTxtColor || lowerTxt === '#ffffff' || lowerTxt === '#fff' ? '#111827' : escapeHtml(rawTxtColor));
       const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:'${escapeHtml(msg.font_family)}',sans-serif;` : '';
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
-      const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
-      inlineContentHtml = `<span class="msg-content-inline" style="color:${readableColor};${ff}${fw}${fi}">${prefix}${renderContentWithEmojis(msg.content)}</span>`;
+      const fi = msg.font_style === 'Italic' || hasMention ? 'font-style:italic;' : '';
+      bodyContentHtml = `<div class="msg-text-line${hasMention ? ' mention-italic' : ''}" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${renderMessageTextWithMentions(msg.content)}</div>`;
     }
 
     const isMe = state.user && msg.sender_key === state.user.key;
@@ -880,26 +985,29 @@
     const canMute = !isMe && (state.user?.role === 'site_owner' || state.isRoomManager || hasPerm('mute'));
 
     row.innerHTML = `
-      <div class="msg-avatar-trigger" style="cursor:pointer">${formatAvatarHTML(msg, '')}</div>
+      <div class="msg-avatar-trigger" style="cursor:pointer" title="عرض البطاقة">${formatAvatarHTML(msg, '')}</div>
       <div class="msg-body-col">
-        <div class="msg-inline-line">
-          ${roleBadgeHTML(msg.sender_role, true)}
-          <span class="msg-name-trigger" style="cursor:pointer">${formatNameHTML(msg)}</span>
-          <span class="msg-colon">:</span>
-          ${inlineContentHtml}
-          <span class="msg-time">${escapeHtml(timeStr)}</span>
+        <div class="msg-head-line">
+          <div class="msg-sender-meta">
+            ${roleBadgeHTML(msg.sender_role, true)}
+            <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(msg)}</span>
+          </div>
+          <div class="msg-time-actions">
+            <span class="msg-time">${escapeHtml(timeStr)}</span>
+            ${hasMention ? '<button type="button" class="msg-dismiss-btn" title="تجاهل الإشارة">&times;</button>' : ''}
+            <div class="msg-actions-wrap">
+              <button type="button" class="msg-dots-btn" title="خيارات الرسالة"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+              <div class="msg-dots-menu hidden">
+                <button type="button" data-msg-act="mention"><i class="fa-solid fa-at"></i> نداء / منشن</button>
+                ${!isMe ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
+                <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
+                ${canMute ? '<button type="button" data-msg-act="mute"><i class="fa-solid fa-volume-xmark"></i> كتم العضو</button>' : ''}
+                ${canDelete && msg.id ? '<button type="button" class="danger" data-msg-act="delete"><i class="fa-solid fa-trash"></i> حذف الرسالة</button>' : ''}
+              </div>
+            </div>
+          </div>
         </div>
-        ${blockMediaHtml}
-      </div>
-      <div class="msg-actions-wrap">
-        <button type="button" class="msg-dots-btn" title="خيارات الرسالة"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-        <div class="msg-dots-menu hidden">
-          <button type="button" data-msg-act="mention"><i class="fa-solid fa-at"></i> منشن</button>
-          ${!isMe ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
-          <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
-          ${canMute ? '<button type="button" data-msg-act="mute"><i class="fa-solid fa-volume-xmark"></i> كتم العضو</button>' : ''}
-          ${canDelete && msg.id ? '<button type="button" class="danger" data-msg-act="delete"><i class="fa-solid fa-trash"></i> حذف الرسالة</button>' : ''}
-        </div>
+        ${bodyContentHtml}
       </div>
     `;
 
@@ -917,8 +1025,21 @@
       neonColor: msg.neon_color
     };
     const openTarget = () => openQuickUserModal(targetObj);
+    // Split click handlers: Avatar = Profile Card, Name = Smart @Mention
     row.querySelector('.msg-avatar-trigger').addEventListener('click', openTarget);
-    row.querySelector('.msg-name-trigger').addEventListener('click', openTarget);
+    row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(msg.sender_name));
+    row.querySelector('.msg-dismiss-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      row.remove();
+    });
+    row.querySelectorAll('.mention-inline-badge').forEach((badge) => {
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const found = findKnownUserByMention(badge.dataset.mentionName);
+        if (found) openQuickUserModal(found);
+        else insertMention(badge.dataset.mentionName);
+      });
+    });
 
     const dotsBtn = row.querySelector('.msg-dots-btn');
     const dotsMenu = row.querySelector('.msg-dots-menu');
@@ -934,10 +1055,9 @@
         dotsMenu.classList.add('hidden');
         const act = actBtn.dataset.msgAct;
         if (act === 'mention') {
-          $('messageInput').value += `@${msg.sender_name} `;
-          $('messageInput').focus();
+          insertMention(msg.sender_name);
         } else if (act === 'pm') {
-          openSocialModal('pm', targetObj);
+          openSlideSheetDrawer('pm', targetObj);
         } else if (act === 'profile') {
           openTarget();
         } else if (act === 'mute') {
@@ -987,19 +1107,20 @@
       const row = document.createElement('div');
       row.className = 'cody-msg-row cody-join-row';
       row.innerHTML = `
-        <div class="msg-avatar-trigger" style="cursor:pointer">${formatAvatarHTML(u, '')}</div>
+        <div class="msg-avatar-trigger" style="cursor:pointer" title="بطاقة العضو">${formatAvatarHTML(u, '')}</div>
         <div class="msg-body-col">
-          <div class="msg-inline-line">
-            ${roleBadgeHTML(u.role, true)}
-            <span class="msg-name-trigger" style="cursor:pointer">${formatNameHTML(u)}</span>
-            <div class="join-maroon-bar"><i class="fa-solid fa-check"></i> هذا المستخدم انضم للغرفة</div>
+          <div class="msg-head-line">
+            <div class="msg-sender-meta">
+              ${roleBadgeHTML(u.role, true)}
+              <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u)}</span>
+            </div>
+            <span class="msg-time">${formatTimeAgo(Date.now())}</span>
           </div>
+          <div class="join-maroon-bar"><i class="fa-solid fa-check"></i> انضم إلى الغرفة الآن</div>
         </div>
-        <button type="button" class="msg-dots-btn" title="خيارات"><i class="fa-solid fa-ellipsis-vertical"></i></button>
       `;
       row.querySelector('.msg-avatar-trigger').addEventListener('click', () => openQuickUserModal(u));
-      row.querySelector('.msg-name-trigger').addEventListener('click', () => openQuickUserModal(u));
-      row.querySelector('.msg-dots-btn').addEventListener('click', () => openQuickUserModal(u));
+      row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(u.name));
       feed.appendChild(row);
       feed.scrollTop = feed.scrollHeight;
       return;
@@ -1019,19 +1140,34 @@
     $('sideOnlineCount').textContent = String(count);
 
     list.innerHTML = state.roomUsers.map((u) => `
-      <button type="button" class="user-row-card" data-user-key="${escapeHtml(u.key)}">
-        ${formatAvatarHTML(u, 'sm')}
+      <div class="user-row-card" data-user-key="${escapeHtml(u.key)}">
+        <div class="user-row-avatar-btn" style="cursor:pointer" title="بطاقة العضو">${formatAvatarHTML(u, 'sm')}</div>
         <div class="user-row-info">
-          <div class="user-row-name">${formatNameHTML(u)}</div>
+          <div class="user-row-name user-row-name-btn" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u)}</div>
           <div>${roleBadgeHTML(u.role)} <span class="muted">🔥${u.activityPoints || 0}</span></div>
         </div>
-      </button>
+        <div class="user-row-actions">
+          <button type="button" class="user-mini-ping-btn" title="إشارة @">@</button>
+        </div>
+      </div>
     `).join('');
 
-    list.querySelectorAll('.user-row-card').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const u = state.roomUsers.find((x) => x.key === btn.dataset.userKey);
-        if (u) openQuickUserModal(u);
+    list.querySelectorAll('.user-row-card').forEach((card) => {
+      const u = state.roomUsers.find((x) => x.key === card.dataset.userKey);
+      if (!u) return;
+      card.querySelector('.user-row-avatar-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openQuickUserModal(u);
+      });
+      card.querySelector('.user-row-name-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        $('usersSidePanel')?.classList.remove('open');
+        insertMention(u.name);
+      });
+      card.querySelector('.user-mini-ping-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        $('usersSidePanel')?.classList.remove('open');
+        insertMention(u.name);
       });
     });
   }
@@ -1060,6 +1196,7 @@
       neon_color: u.neonColor,
       font_family: u.fontFamily,
       font_style: u.fontStyle,
+      font_size: u.fontSize || 14,
       avatar_url: u.avatarUrl,
       avatar_frame: u.avatarFrame,
       nameplate_style: u.nameplateStyle,
@@ -1068,7 +1205,8 @@
       is_admin_notice: isAdminNotice,
       msg_type: 'text',
       content: text,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      created_at_ms: Date.now()
     };
 
     appendOrReconcileMessage(optimistic);
@@ -1541,11 +1679,11 @@
   // ==========================================
   function switchNameStyleTab(tab) {
     state.activeNameStyleTab = tab;
-    $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.styleTab === tab);
+    $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.namestyleTab === tab);
     });
     ['color', 'neon', 'bg'].forEach((t) => {
-      $(`styleSubPane_${t}`)?.classList.toggle('hidden', t !== tab);
+      $(`nameStylePane_${t}`)?.classList.toggle('hidden', t !== tab);
     });
     renderNameColorSwatches();
   }
@@ -1606,6 +1744,11 @@
     $('custNeonColor').dataset.cleared = u.neonColor ? '0' : '1';
     $('custFontFamily').value = u.fontFamily || 'Cairo';
     $('custFontStyle').value = u.fontStyle || 'Normal';
+    if ($('custFontSize')) {
+      const fsz = Math.max(12, Math.min(20, Number(u.fontSize) || 14));
+      $('custFontSize').value = String(fsz);
+      if ($('custFontSizeVal')) $('custFontSizeVal').textContent = String(fsz);
+    }
     $('custVipWingsToggle').checked = Boolean(u.vipWings);
 
     if ($('custAllowCallsToggle')) $('custAllowCallsToggle').checked = u.allowCalls !== false;
@@ -1842,8 +1985,12 @@
       neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
       fontFamily: $('custFontFamily').value,
       fontStyle: $('custFontStyle').value,
+      fontSize: $('custFontSize') ? Number($('custFontSize').value) : (u.fontSize || 14),
       vipWings: $('custVipWingsToggle').checked
     };
+    if ($('custFontSizeVal') && $('custFontSize')) {
+      $('custFontSizeVal').textContent = $('custFontSize').value;
+    }
     const wrap = $('custPreviewAvatarWrap');
     if (wrap) wrap.className = `avatar-wrap xl frame-${u.avatarFrame || 'none'}`;
     if (u.avatarUrl) {
@@ -2079,86 +2226,14 @@
     }
 
     if (mode === 'pm') {
-      $('socialModalTitle').textContent = pmTarget ? `✉️ محادثة مع ${pmTarget.name}` : '✉️ الرسائل الخاصة';
-      const pms = state.social.privateMessages || [];
-      if (pmTarget) {
-        state.socket.emit('mark_pm_read', { partnerKey: pmTarget.key });
-        const thread = pms
-          .filter((m) => (m.from_key === pmTarget.key && m.to_key === state.user.key) || (m.to_key === pmTarget.key && m.from_key === state.user.key))
-          .reverse();
-        $('socialModalBody').innerHTML = `
-          <div style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;">
-            ${thread.map((m) => `
-              <div class="admin-list-card" style="background:${m.from_key === state.user.key ? '#dbeafe' : '#f1f5f9'}">
-                <div><strong>${escapeHtml(m.from_name)}:</strong> ${escapeHtml(m.content)}</div>
-              </div>
-            `).join('') || '<div class="muted">ابدأ المحادثة الخاصة الآن...</div>'}
-          </div>
-          <div class="inline-row">
-            <input type="text" id="pmComposeInput" style="flex:1" placeholder="اكتب رسالتك الخاصة..." />
-            <button type="button" id="pmComposeSendBtn" class="btn-primary btn-sm">إرسال</button>
-          </div>
-        `;
-        $('pmComposeSendBtn').addEventListener('click', () => {
-          const val = $('pmComposeInput').value.trim();
-          if (!val) return;
-          state.socket.emit('send_pm', { toKey: pmTarget.key, toName: pmTarget.name, content: val }, () => {
-            openSocialModal('pm', pmTarget);
-          });
-        });
-      } else {
-        const partners = new Map();
-        for (const m of pms) {
-          const pKey = m.from_key === state.user.key ? m.to_key : m.from_key;
-          const pName = m.from_key === state.user.key ? m.to_name : m.from_name;
-          if (!partners.has(pKey)) partners.set(pKey, { key: pKey, name: pName, last: m.content });
-        }
-        $('socialModalBody').innerHTML = [...partners.values()].length
-          ? [...partners.values()].map((p) => `
-              <div class="admin-list-card">
-                <div><strong>${escapeHtml(p.name)}</strong><div class="muted">${escapeHtml(p.last)}</div></div>
-                <button type="button" class="btn-primary btn-xs open-pm-thread-btn" data-pk="${escapeHtml(p.key)}" data-pn="${escapeHtml(p.name)}">فتح</button>
-              </div>
-            `).join('')
-          : '<div class="muted">لا توجد رسائل خاصة بعد. اضغط على اسم أي عضو لمراسلته.</div>';
-        $('socialModalBody').querySelectorAll('.open-pm-thread-btn').forEach((b) => {
-          b.addEventListener('click', () => openSocialModal('pm', { key: b.dataset.pk, name: b.dataset.pn }));
-        });
-      }
+      openSlideSheetDrawer('pm', pmTarget);
+      closeModal('socialModal');
       return;
     }
 
     if (mode === 'wall') {
-      $('socialModalTitle').textContent = '🧱 جدار المنشورات';
-      const posts = state.social.wallPosts || [];
-      $('socialModalBody').innerHTML = `
-        ${!state.user?.isGuest ? `
-          <div class="news-composer">
-            <textarea id="wallPostInput" rows="2" placeholder="شارك منشوراً على الجدار..."></textarea>
-            <button type="button" id="wallPostSubmitBtn" class="btn-primary btn-sm">نشر على الجدار</button>
-          </div>` : ''}
-        <div class="news-feed-list">
-          ${posts.map((p) => `
-            <div class="news-card">
-              <div><strong>${escapeHtml(p.author_name)}</strong> ${roleBadgeHTML(p.author_role)}</div>
-              <p style="margin-top:6px;">${escapeHtml(p.content)}</p>
-              <button type="button" class="btn-secondary btn-xs like-wall-btn" data-pid="${p.id}" style="margin-top:6px;">❤️ إعجاب (${p.likes_count || 0})</button>
-            </div>
-          `).join('') || '<div class="muted">لا توجد منشورات بعد.</div>'}
-        </div>
-      `;
-      $('wallPostSubmitBtn')?.addEventListener('click', async () => {
-        const content = $('wallPostInput').value.trim();
-        if (!content) return;
-        await api('/api/wall', { method: 'POST', body: { content } });
-        openSocialModal('wall');
-      });
-      $('socialModalBody').querySelectorAll('.like-wall-btn').forEach((b) => {
-        b.addEventListener('click', async () => {
-          await api(`/api/wall/${b.dataset.pid}/like`, { method: 'POST' });
-          openSocialModal('wall');
-        });
-      });
+      openSlideSheetDrawer('wall');
+      closeModal('socialModal');
       return;
     }
 
@@ -2189,6 +2264,323 @@
   }
 
   // ==========================================
+  // SLIDE-OVER DRAWER: WALL (REACTIONS, COMMENTS, GOLD INVITES), ROOMS & PM
+  // ==========================================
+  function closeSlideSheetDrawer() {
+    $('slideSheetDrawer')?.classList.remove('open');
+    state.activeSlideDrawer = null;
+  }
+
+  async function openSlideSheetDrawer(mode, targetArg = null) {
+    state.activeSlideDrawer = mode;
+    state.activeSlidePmTarget = mode === 'pm' ? targetArg : null;
+    $('usersSidePanel')?.classList.remove('open');
+    const drawer = $('slideSheetDrawer');
+    const titleEl = $('slideSheetTitle');
+    const bodyEl = $('slideSheetBody');
+    if (!drawer || !bodyEl) return;
+
+    drawer.classList.add('open');
+
+    if (mode === 'rooms') {
+      titleEl.innerHTML = '<i class="fa-solid fa-door-open"></i> قائمة الغرف';
+      bodyEl.innerHTML = state.rooms.map((r) => `
+        <div class="admin-list-card" style="background:#ffffff;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${escapeHtml(r.image_url || '/assets/rooms/default.svg')}" style="width:42px;height:42px;border-radius:8px;object-fit:cover;" alt="" />
+            <div>
+              <strong>${escapeHtml(r.icon)} ${escapeHtml(r.name)} ${r.hasPassword ? '🔒' : ''}</strong>
+              <div class="muted">${escapeHtml(r.description || '')}</div>
+              <div class="muted">👥 ${r.onlineCount || 0} متواجد • 🔥 ${r.activity_points || 0} تفاعل</div>
+            </div>
+          </div>
+          <button type="button" class="btn-primary btn-xs join-rm-drawer-btn" data-room-id="${escapeHtml(r.id)}">
+            ${state.currentRoom?.id === r.id ? 'الحالية ✓' : 'دخول'}
+          </button>
+        </div>
+      `).join('') || '<div class="muted">لا توجد غرف متاحة.</div>';
+
+      bodyEl.querySelectorAll('.join-rm-drawer-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          closeSlideSheetDrawer();
+          joinRoomWithPrompt(btn.dataset.roomId);
+        });
+      });
+      return;
+    }
+
+    bodyEl.innerHTML = '<div class="muted">جاري التحميل...</div>';
+    try {
+      const res = await api('/api/social/state');
+      state.social = { ...state.social, ...res };
+      updateFriendAndPmBadges();
+    } catch {
+      // ignore
+    }
+
+    if (mode === 'pm') {
+      const pms = state.social.privateMessages || [];
+      if (targetArg) {
+        titleEl.innerHTML = `<i class="fa-solid fa-envelope"></i> محادثة مع ${escapeHtml(targetArg.name)}`;
+        state.socket?.emit('mark_pm_read', { partnerKey: targetArg.key });
+        const thread = pms
+          .filter((m) => (m.from_key === targetArg.key && m.to_key === state.user.key) || (m.to_key === targetArg.key && m.from_key === state.user.key))
+          .reverse();
+        bodyEl.innerHTML = `
+          <button type="button" id="backToPmListBtn" class="btn-secondary btn-xs" style="align-self:flex-start;"><i class="fa-solid fa-arrow-right"></i> جميع المحادثات</button>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;">
+            ${thread.map((m) => `
+              <div class="admin-list-card" style="background:${m.from_key === state.user.key ? '#18181b' : '#ffffff'};color:${m.from_key === state.user.key ? '#ffffff' : '#111827'}">
+                <div><strong>${escapeHtml(m.from_name)}:</strong> ${escapeHtml(m.content)}</div>
+              </div>
+            `).join('') || '<div class="muted">ابدأ المحادثة الخاصة الآن...</div>'}
+          </div>
+          <div class="wall-comment-composer">
+            <input type="text" id="pmComposeInput" placeholder="اكتب رسالتك الخاصة..." />
+            <button type="button" id="pmComposeSendBtn" class="btn-primary btn-xs">إرسال</button>
+          </div>
+        `;
+        $('backToPmListBtn')?.addEventListener('click', () => openSlideSheetDrawer('pm', null));
+        const submitPm = () => {
+          const val = $('pmComposeInput')?.value.trim();
+          if (!val) return;
+          state.socket.emit('send_pm', { toKey: targetArg.key, toName: targetArg.name, content: val }, () => {
+            openSlideSheetDrawer('pm', targetArg);
+          });
+        };
+        $('pmComposeSendBtn')?.addEventListener('click', submitPm);
+        $('pmComposeInput')?.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); submitPm(); }
+        });
+      } else {
+        titleEl.innerHTML = '<i class="fa-solid fa-envelope"></i> الرسائل الخاصة';
+        const partners = new Map();
+        for (const m of pms) {
+          const pKey = m.from_key === state.user.key ? m.to_key : m.from_key;
+          const pName = m.from_key === state.user.key ? m.to_name : m.from_name;
+          if (!partners.has(pKey)) partners.set(pKey, { key: pKey, name: pName, last: m.content });
+        }
+        bodyEl.innerHTML = [...partners.values()].length
+          ? [...partners.values()].map((p) => `
+              <div class="admin-list-card" style="background:#ffffff;">
+                <div><strong>${escapeHtml(p.name)}</strong><div class="muted">${escapeHtml(p.last)}</div></div>
+                <button type="button" class="btn-primary btn-xs open-pm-thread-btn" data-pk="${escapeHtml(p.key)}" data-pn="${escapeHtml(p.name)}">فتح</button>
+              </div>
+            `).join('')
+          : '<div class="muted">لا توجد رسائل خاصة بعد. اضغط على صورة أي عضو لمراسلته.</div>';
+        bodyEl.querySelectorAll('.open-pm-thread-btn').forEach((b) => {
+          b.addEventListener('click', () => openSlideSheetDrawer('pm', { key: b.dataset.pk, name: b.dataset.pn }));
+        });
+      }
+      return;
+    }
+
+    if (mode === 'wall') {
+      titleEl.innerHTML = '<i class="fa-solid fa-signs-post"></i> الحائط والمنشورات';
+      renderWallFeedInto(bodyEl);
+    }
+  }
+
+  function renderWallFeedInto(container) {
+    if (!container) return;
+    const posts = state.social.wallPosts || [];
+    const curRoom = state.currentRoom;
+    container.innerHTML = `
+      ${!state.user?.isGuest ? `
+        <div class="news-composer" style="background:#ffffff;">
+          <textarea id="wallPostInput" rows="2" placeholder="شارك منشوراً على الحائط..."></textarea>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">
+            <label class="switch-label" style="font-size:11.5px;">
+              <input type="checkbox" id="wallAttachInviteChk" />
+              <span>إرفاق دعوة غرفة (${escapeHtml(curRoom?.name || 'العامة')})</span>
+            </label>
+            <select id="wallInviteFlagSelect" style="padding:3px 6px;font-size:12px;">
+              <option value="🌍">🌍 عام</option>
+              <option value="🇸🇦">🇸🇦 السعودية</option>
+              <option value="🇪🇬">🇪🇬 مصر</option>
+              <option value="🇦🇪">🇦🇪 الإمارات</option>
+              <option value="🇮🇶">🇮🇶 العراق</option>
+              <option value="🇯🇴">🇯🇴 الأردن</option>
+              <option value="🇰🇼">🇰🇼 الكويت</option>
+              <option value="🇲🇦">🇲🇦 المغرب</option>
+              <option value="🇱🇧">🇱🇧 لبنان</option>
+            </select>
+          </div>
+          <button type="button" id="wallPostSubmitBtn" class="btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> نشر على الحائط</button>
+        </div>` : ''}
+      <div class="news-feed-list">
+        ${posts.map((p) => {
+          const rx = p.reactions || { like: p.likes_count || 0, heart: 0, laugh: 0 };
+          const cmts = Array.isArray(p.comments) ? p.comments : [];
+          const canDel = (state.user && p.author_key === state.user.key) || state.user?.role === 'site_owner' || hasPerm('access_panel');
+          const authorObj = {
+            key: p.author_key,
+            name: p.author_name,
+            role: p.author_role,
+            avatarUrl: p.avatar_url,
+            avatarFrame: p.avatar_frame,
+            nameplateStyle: p.nameplate_style,
+            nameColor: p.name_color,
+            nameBgColor: p.name_bg_color,
+            neonColor: p.neon_color
+          };
+          return `
+            <div class="wall-post-card" data-wall-post-id="${p.id}">
+              <div class="wall-post-header">
+                <div class="wall-post-author">
+                  <span class="wall-author-avatar" style="cursor:pointer">${formatAvatarHTML(authorObj, '')}</span>
+                  <div>
+                    <div>${roleBadgeHTML(p.author_role, true)} ${formatNameHTML(authorObj)}</div>
+                    <div class="wall-post-time">${escapeHtml(formatTimeAgo(p.created_at))}</div>
+                  </div>
+                </div>
+                <div class="wall-post-menu-wrap">
+                  <button type="button" class="msg-dots-btn wall-dots-btn"><i class="fa-solid fa-ellipsis"></i></button>
+                  <div class="msg-dots-menu hidden">
+                    <button type="button" data-wall-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
+                    <button type="button" data-wall-act="report"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ</button>
+                    ${canDel ? '<button type="button" class="danger" data-wall-act="delete"><i class="fa-solid fa-trash"></i> حذف المنشور</button>' : ''}
+                  </div>
+                </div>
+              </div>
+              ${p.content ? `<div class="wall-post-content">${escapeHtml(p.content)}</div>` : ''}
+              ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" class="news-card-img" alt="" />` : ''}
+              ${p.invite_room_id ? `
+                <div class="wall-room-invite-card">
+                  <div class="wall-invite-meta">
+                    <div class="wall-invite-title"><span>${escapeHtml(p.invite_country_flag || '🌍')}</span> <span>${escapeHtml(p.invite_room_name || 'دعوة غرفة')}</span></div>
+                    <div class="wall-invite-sub">👥 ${Number(p.invite_online_count) || 0} متواجد الآن</div>
+                  </div>
+                  <button type="button" class="wall-invite-join-btn" data-join-room-id="${escapeHtml(p.invite_room_id)}">دخول</button>
+                </div>` : ''}
+              <div class="wall-reactions-bar">
+                <button type="button" class="wall-react-pill like wall-react-btn" data-pid="${p.id}" data-rtype="like">👍 إعجاب <strong>${rx.like || 0}</strong></button>
+                <button type="button" class="wall-react-pill heart wall-react-btn" data-pid="${p.id}" data-rtype="heart">❤️ قلب <strong>${rx.heart || 0}</strong></button>
+                <button type="button" class="wall-react-pill laugh wall-react-btn" data-pid="${p.id}" data-rtype="laugh">😂 ضحك <strong>${rx.laugh || 0}</strong></button>
+                <span class="wall-react-pill">💬 تعليقات <strong>${cmts.length}</strong></span>
+              </div>
+              ${cmts.length ? `
+                <div class="wall-comments-list">
+                  ${cmts.slice(-5).map((c) => `
+                    <div class="wall-comment-item"><strong>${escapeHtml(c.author_name)}:</strong> ${escapeHtml(c.content)}</div>
+                  `).join('')}
+                </div>` : ''}
+              <div class="wall-comment-composer">
+                <input type="text" class="wall-comment-input" data-pid="${p.id}" placeholder="اكتب تعليقك..." maxlength="300" />
+                <button type="button" class="btn-primary btn-xs wall-comment-send-btn" data-pid="${p.id}">إرسال</button>
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="muted">لا توجد منشورات بعد.</div>'}
+      </div>
+    `;
+
+    container.querySelector('#wallPostSubmitBtn')?.addEventListener('click', async () => {
+      const content = container.querySelector('#wallPostInput')?.value.trim() || '';
+      const attachInvite = Boolean(container.querySelector('#wallAttachInviteChk')?.checked);
+      const countryFlag = container.querySelector('#wallInviteFlagSelect')?.value || '🌍';
+      if (!content && !attachInvite) return;
+      try {
+        await api('/api/wall', {
+          method: 'POST',
+          body: {
+            content: content || (attachInvite ? `دعوة للانضمام إلى ${state.currentRoom?.name || 'الغرفة'}` : ''),
+            inviteRoomId: attachInvite ? (state.currentRoom?.id || 'general') : '',
+            countryFlag
+          }
+        });
+        openSlideSheetDrawer('wall');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    container.querySelectorAll('.wall-react-btn').forEach((b) => {
+      b.addEventListener('click', async () => {
+        try {
+          const res = await api(`/api/wall/${b.dataset.pid}/react`, { method: 'POST', body: { type: b.dataset.rtype } });
+          if (res?.post) {
+            state.social.wallPosts = (state.social.wallPosts || []).map((x) => (x.id === res.post.id ? res.post : x));
+            renderWallFeedInto(container);
+          }
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+
+    container.querySelectorAll('.wall-comment-send-btn').forEach((btn) => {
+      const sendCmt = async () => {
+        const pid = btn.dataset.pid;
+        const inp = container.querySelector(`.wall-comment-input[data-pid="${CSS.escape(pid)}"]`);
+        const content = inp?.value.trim();
+        if (!content) return;
+        try {
+          const res = await api(`/api/wall/${pid}/comment`, { method: 'POST', body: { content } });
+          if (res?.post) {
+            state.social.wallPosts = (state.social.wallPosts || []).map((x) => (x.id === res.post.id ? res.post : x));
+            renderWallFeedInto(container);
+          }
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      };
+      btn.addEventListener('click', sendCmt);
+      const pid = btn.dataset.pid;
+      const inp = container.querySelector(`.wall-comment-input[data-pid="${CSS.escape(pid)}"]`);
+      inp?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          sendCmt();
+        }
+      });
+    });
+
+    container.querySelectorAll('.wall-invite-join-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        closeSlideSheetDrawer();
+        joinRoomWithPrompt(btn.dataset.joinRoomId);
+      });
+    });
+
+    container.querySelectorAll('.wall-post-card').forEach((card) => {
+      const pid = Number(card.dataset.wallPostId);
+      const p = posts.find((x) => Number(x.id) === pid);
+      if (!p) return;
+      card.querySelector('.wall-author-avatar')?.addEventListener('click', () => {
+        openQuickUserModal({
+          key: p.author_key,
+          name: p.author_name,
+          role: p.author_role,
+          avatarUrl: p.avatar_url,
+          avatarFrame: p.avatar_frame
+        });
+      });
+      const dotsBtn = card.querySelector('.wall-dots-btn');
+      const dotsMenu = card.querySelector('.msg-dots-menu');
+      dotsBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dotsMenu.classList.toggle('hidden');
+      });
+      dotsMenu?.querySelectorAll('button[data-wall-act]').forEach((actBtn) => {
+        actBtn.addEventListener('click', async () => {
+          dotsMenu.classList.add('hidden');
+          const act = actBtn.dataset.wallAct;
+          if (act === 'profile') {
+            openQuickUserModal({ key: p.author_key, name: p.author_name, role: p.author_role, avatarUrl: p.avatar_url });
+          } else if (act === 'report') {
+            openSocialModal('report');
+          } else if (act === 'delete') {
+            await api(`/api/wall/${p.id}`, { method: 'DELETE' });
+            state.social.wallPosts = (state.social.wallPosts || []).filter((x) => x.id !== p.id);
+            renderWallFeedInto(container);
+          }
+        });
+      });
+    });
+  }
+
+  // ==========================================
   // ROOMS SWITCHER
   // ==========================================
   function joinRoomWithPrompt(roomId) {
@@ -2204,29 +2596,7 @@
   }
 
   function openRoomsModal() {
-    $('roomsModalBody').innerHTML = state.rooms.map((r) => `
-      <div class="admin-list-card">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <img src="${escapeHtml(r.image_url || '/assets/rooms/default.svg')}" style="width:42px;height:42px;border-radius:10px;" alt="" />
-          <div>
-            <strong>${escapeHtml(r.icon)} ${escapeHtml(r.name)} ${r.hasPassword ? '🔒' : ''}</strong>
-            <div class="muted">${escapeHtml(r.description || '')}</div>
-            <div class="muted">👥 ${r.onlineCount || 0} متواجد • 🔥 ${r.activity_points || 0} تفاعل</div>
-          </div>
-        </div>
-        <button type="button" class="btn-primary btn-sm join-rm-modal-btn" data-room-id="${escapeHtml(r.id)}">
-          ${state.currentRoom?.id === r.id ? 'الحالية ✓' : 'دخول'}
-        </button>
-      </div>
-    `).join('');
-
-    $('roomsModalBody').querySelectorAll('.join-rm-modal-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        closeModal('roomsModal');
-        joinRoomWithPrompt(btn.dataset.roomId);
-      });
-    });
-    openModal('roomsModal');
+    openSlideSheetDrawer('rooms');
   }
 
   // ==========================================
@@ -3177,8 +3547,27 @@
     });
 
     socket.on('mention_alert', ({ fromName, content }) => {
-      playNotificationChime('notif');
-      showToast(`🔔 ذكرك ${fromName}: ${content}`);
+      playNotificationChime('mention');
+      showToast(`🔔 نداء من ${fromName}: ${content}`);
+    });
+
+    socket.on('wall_updated', ({ post }) => {
+      if (!post) return;
+      const list = state.social.wallPosts || [];
+      const idx = list.findIndex((x) => Number(x.id) === Number(post.id));
+      if (idx >= 0) list[idx] = post;
+      else list.unshift(post);
+      state.social.wallPosts = list;
+      if (state.activeSlideDrawer === 'wall' && $('slideSheetDrawer')?.classList.contains('open')) {
+        renderWallFeedInto($('slideSheetBody'));
+      }
+    });
+
+    socket.on('wall_deleted', ({ id }) => {
+      state.social.wallPosts = (state.social.wallPosts || []).filter((x) => Number(x.id) !== Number(id));
+      if (state.activeSlideDrawer === 'wall' && $('slideSheetDrawer')?.classList.contains('open')) {
+        renderWallFeedInto($('slideSheetBody'));
+      }
     });
 
     socket.on('new_pm', (pm) => {
@@ -3187,6 +3576,9 @@
       if (pm.from_key !== state.user?.key) {
         playNotificationChime('notif');
         showToast(`✉️ رسالة خاصة من ${pm.from_name}`);
+      }
+      if (state.activeSlideDrawer === 'pm' && $('slideSheetDrawer')?.classList.contains('open')) {
+        openSlideSheetDrawer('pm', state.activeSlidePmTarget);
       }
     });
 
@@ -3258,6 +3650,20 @@
     const grid = $('emojiPopoverGrid');
     if (!grid) return;
     const tab = state.activeEmojiTab || 'faces';
+
+    if (tab === 'arabic_stickers') {
+      grid.innerHTML = (EMOJI_CATEGORIES.arabic_stickers || []).map((st) => `
+        <button type="button" class="sticker-arabic-chip" data-ins="${escapeHtml(st)}">${escapeHtml(st)}</button>
+      `).join('');
+      grid.querySelectorAll('.sticker-arabic-chip').forEach((b) => {
+        b.addEventListener('click', () => {
+          $('messageInput').value += `${b.dataset.ins} `;
+          $('messageInput').focus();
+          $('emojiPopover').classList.add('hidden');
+        });
+      });
+      return;
+    }
 
     if (tab === 'animated') {
       grid.innerHTML = ANIMATED_STICKERS.map((st) => `
@@ -3395,14 +3801,27 @@
     $('topReportBtn')?.addEventListener('click', () => openSocialModal('report'));
     $('topNotifBtn')?.addEventListener('click', () => openSocialModal('notifications'));
     $('topFriendsBtn')?.addEventListener('click', () => openSocialModal('friends'));
-    $('topPmBtn')?.addEventListener('click', () => openSocialModal('pm'));
+    $('topPmBtn')?.addEventListener('click', () => openSlideSheetDrawer('pm'));
     $('goldRichBtn')?.addEventListener('click', () => openLeaderboardsModal('rich'));
     $('goldVipsBtn')?.addEventListener('click', () => openLeaderboardsModal('activeMembers'));
 
-    // Sidebar & Main Drawer
-    $('toggleUsersDrawerBtn')?.addEventListener('click', () => $('usersSidePanel').classList.toggle('open'));
-    $('closeUsersSideBtn')?.addEventListener('click', () => $('usersSidePanel').classList.remove('open'));
+    // Sidebar & Slide-Over Drawers
+    $('toggleUsersDrawerBtn')?.addEventListener('click', () => {
+      closeSlideSheetDrawer();
+      $('usersSidePanel')?.classList.toggle('open');
+    });
+    $('closeUsersSideBtn')?.addEventListener('click', () => $('usersSidePanel')?.classList.remove('open'));
+    $('closeSlideSheetBtn')?.addEventListener('click', closeSlideSheetDrawer);
+    $('footerFriendsBtn')?.addEventListener('click', () => openSocialModal('friends'));
+    $('footerWallBtn')?.addEventListener('click', () => openSlideSheetDrawer('wall'));
+    $('plusWallBtn')?.addEventListener('click', () => {
+      $('plusDropdown')?.classList.add('hidden');
+      openSlideSheetDrawer('wall');
+    });
+    $('quickImageUploadBtn')?.addEventListener('click', () => $('chatImageFileInput')?.click());
+    $('quickTextStyleBtn')?.addEventListener('click', () => openCustomizeModal('more'));
     $('menuDrawerBtn')?.addEventListener('click', () => {
+      closeSlideSheetDrawer();
       $('drawerBackdrop').classList.remove('hidden');
       $('mainDrawer').classList.remove('hidden');
     });
@@ -3672,10 +4091,10 @@
       b.addEventListener('click', () => switchCustomizeTab(b.dataset.custTab));
     });
     $('custSwitchToMoreBtn')?.addEventListener('click', () => switchCustomizeTab('more'));
-    $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-btn').forEach((b) => {
-      b.addEventListener('click', () => switchNameStyleTab(b.dataset.styleTab));
+    $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
+      b.addEventListener('click', () => switchNameStyleTab(b.dataset.namestyleTab));
     });
-    ['custDisplayName', 'custBioInput', 'custNameColor', 'custFontFamily', 'custFontStyle', 'custVipWingsToggle'].forEach((id) => {
+    ['custDisplayName', 'custBioInput', 'custNameColor', 'custFontFamily', 'custFontStyle', 'custFontSize', 'custVipWingsToggle'].forEach((id) => {
       $(id)?.addEventListener('input', updateCustomizePreview);
       $(id)?.addEventListener('change', updateCustomizePreview);
     });
@@ -3814,6 +4233,7 @@
             neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
             fontFamily: $('custFontFamily').value,
             fontStyle: $('custFontStyle').value,
+            fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
             vipWings: $('custVipWingsToggle').checked,
             profileMusic
           }

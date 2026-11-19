@@ -68,9 +68,48 @@
 
     <!-- MAIN CHAT WORKSPACE -->
     <div id="appView" class="app-view hidden">
-      <!-- TOP DARK NAVY COMPACT HEADER (48px - #0b2239) -->
+      <!-- TOP DARK CHARCOAL COMPACT HEADER (50px - #18181b) -->
       <header id="topBar" class="cody-topbar">
         <div class="topbar-right">
+          <button type="button" id="menuDrawerBtn" class="top-icon-btn menu-icon-btn" title="القائمة">
+            <span class="ti-ico"><i class="fa-solid fa-bars"></i></span>
+            <span class="ti-lbl">القائمة</span>
+          </button>
+          <button type="button" id="goldRichBtn" class="top-icon-btn gold-tint" title="الأثرياء">
+            <span class="ti-ico"><i class="fa-solid fa-crown"></i></span>
+            <span class="ti-lbl">الأثرياء</span>
+          </button>
+          <button type="button" id="goldVipsBtn" class="top-icon-btn diamond-tint" title="الكبار والتفاعل">
+            <span class="ti-ico"><i class="fa-solid fa-gem"></i></span>
+            <span class="ti-lbl">الكبار</span>
+          </button>
+          <button type="button" id="topPmBtn" class="top-icon-btn" title="الرسائل الخاصة">
+            <span class="ti-ico"><i class="fa-solid fa-envelope"></i></span>
+            <span id="pmBadge" class="badge-count hidden">0</span>
+            <span class="ti-lbl">رسالة</span>
+          </button>
+          <button type="button" id="topFriendsBtn" class="top-icon-btn" title="طلبات الصداقة">
+            <span class="ti-ico"><i class="fa-solid fa-user-group"></i></span>
+            <span id="friendBadge" class="badge-count hidden">0</span>
+            <span class="ti-lbl">طلب</span>
+          </button>
+          <button type="button" id="topNotifBtn" class="top-icon-btn" title="الإشعارات">
+            <span class="ti-ico"><i class="fa-solid fa-bell"></i></span>
+            <span id="notifBadge" class="badge-count hidden">0</span>
+            <span class="ti-lbl">اشعار</span>
+          </button>
+          <button type="button" id="topReportBtn" class="top-icon-btn" title="إبلاغ الإدارة">
+            <span class="ti-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <span class="ti-lbl">إبلاغ</span>
+          </button>
+        </div>
+
+        <div class="topbar-spacer"></div>
+
+        <div class="topbar-left">
+          <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">
+            <i class="fa-solid fa-user-secret"></i>
+          </span>
           <div class="profile-trigger-wrap">
             <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي ولوحة التحكم">
               <span id="topAvatarWrap" class="avatar-wrap frame-gold_royal">
@@ -79,9 +118,6 @@
               </span>
               <span class="online-dot"></span>
             </button>
-            <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">
-              <i class="fa-solid fa-user-secret"></i>
-            </span>
 
             <div id="profileDropdown" class="profile-dropdown hidden">
               <div class="dropdown-header">
@@ -97,42 +133,6 @@
               <button type="button" id="dropLogoutBtn" class="drop-item danger"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
             </div>
           </div>
-
-          <div class="quick-top-actions">
-            <button type="button" id="topNotifBtn" class="top-icon-btn" title="الإشعارات">
-              <span class="ti-ico"><i class="fa-solid fa-bell"></i></span>
-              <span id="notifBadge" class="badge-count hidden">0</span>
-              <span class="ti-lbl">اشعار</span>
-            </button>
-            <button type="button" id="topFriendsBtn" class="top-icon-btn" title="طلبات الصداقة">
-              <span class="ti-ico"><i class="fa-solid fa-user-group"></i></span>
-              <span id="friendBadge" class="badge-count hidden">0</span>
-              <span class="ti-lbl">طلب</span>
-            </button>
-            <button type="button" id="topPmBtn" class="top-icon-btn" title="الرسائل الخاصة">
-              <span class="ti-ico"><i class="fa-solid fa-envelope"></i></span>
-              <span id="pmBadge" class="badge-count hidden">0</span>
-              <span class="ti-lbl">رسالة</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="topbar-spacer"></div>
-
-        <div class="topbar-left">
-          <div class="gold-circles-group">
-            <button type="button" id="goldRichBtn" class="gold-circle-btn crown-btn" title="الأثرياء">
-              <span class="gc-ico"><i class="fa-solid fa-crown"></i></span>
-              <span class="gc-lbl">الاثرياء</span>
-            </button>
-            <button type="button" id="goldVipsBtn" class="gold-circle-btn diamond-btn" title="الكبار والتفاعل">
-              <span class="gc-ico"><i class="fa-solid fa-gem"></i></span>
-              <span class="gc-lbl">الكبار</span>
-            </button>
-          </div>
-          <button type="button" id="menuDrawerBtn" class="menu-burger-btn" title="القائمة">
-            <i class="fa-solid fa-bars"></i>
-          </button>
         </div>
       </header>
 
@@ -215,13 +215,14 @@
         </div>
       </section>
 
-      <!-- MAIN BODY (LIGHT FEED #f8f9fa + SIDEBAR) -->
+      <!-- MAIN BODY (PURE WHITE FEED #ffffff + SLIDE-OVER DRAWERS) -->
       <div class="chat-workspace-body">
         <main id="chatStage" class="chat-stage">
           <div id="chatFeed" class="chat-feed"></div>
           <div id="typingIndicator" class="typing-indicator hidden"></div>
         </main>
 
+        <!-- SLIDE-OVER ONLINE USERS DRAWER -->
         <aside id="usersSidePanel" class="users-side-panel">
           <div class="users-panel-head">
             <span><i class="fa-solid fa-users"></i> المتواجدون (<span id="sideOnlineCount">0</span>)</span>
@@ -229,9 +230,18 @@
           </div>
           <div id="roomUsersList" class="users-list"></div>
         </aside>
+
+        <!-- SLIDE-OVER WALL / ROOMS / PM DRAWER -->
+        <aside id="slideSheetDrawer" class="slide-sheet-drawer">
+          <div class="slide-sheet-head">
+            <span id="slideSheetTitle"><i class="fa-solid fa-layer-group"></i> القائمة</span>
+            <button type="button" id="closeSlideSheetBtn" class="close-side-btn"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div id="slideSheetBody" class="slide-sheet-body"></div>
+        </aside>
       </div>
 
-      <!-- TOPIC BANNER (#d8f3dc) ABOVE INPUT BAR -->
+      <!-- TOPIC BANNER ABOVE INPUT BAR -->
       <div id="topicBannerBar" class="topic-banner-bar">
         <div class="topic-banner-content">
           <span class="topic-warn-ico"><i class="fa-solid fa-bullhorn"></i></span>
@@ -241,7 +251,7 @@
         <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <!-- WHITE INPUT BAR -->
+      <!-- BOTTOM INPUT BAR -->
       <section id="bottomBar" class="cody-input-bar">
         <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">
           <i class="fa-solid fa-paper-plane"></i>
@@ -254,18 +264,24 @@
           <input
             type="text"
             id="messageInput"
-            placeholder="اكتب رسالتك هنا..."
+            placeholder="اكتب هنا..."
             maxlength="1000"
             autocomplete="off"
           />
+          <button type="button" id="quickTextStyleBtn" class="inside-emoji-btn" title="لون وحجم الخط">
+            <i class="fa-solid fa-palette"></i>
+          </button>
           <button type="button" id="emojiPickerBtn" class="inside-emoji-btn" title="إيموجي وملصقات">
             <i class="fa-regular fa-face-smile"></i>
           </button>
         </div>
 
         <div class="input-left-tools">
-          <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="تسجيل رسالة صوتية">
+          <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="المايك الصوتي (تسجيل)">
             <i class="fa-solid fa-microphone"></i>
+          </button>
+          <button type="button" id="quickImageUploadBtn" class="input-tool-btn" title="رفع صورة أو GIF">
+            <i class="fa-regular fa-image"></i>
           </button>
           <div class="plus-menu-wrap">
             <button type="button" id="plusMenuBtn" class="input-tool-btn" title="إضافات وخيارات">
@@ -273,6 +289,7 @@
             </button>
             <div id="plusDropdown" class="plus-dropdown hidden">
               <button type="button" id="plusUploadImageBtn" class="drop-item"><i class="fa-solid fa-image"></i> إرسال صورة / GIF</button>
+              <button type="button" id="plusWallBtn" class="drop-item"><i class="fa-solid fa-signs-post"></i> الحائط والمنشورات</button>
               <button type="button" id="plusYoutubeBtn" class="drop-item"><i class="fa-brands fa-youtube"></i> مشغل يوتيوب الغرفة</button>
               <button type="button" id="plusReportBtn" class="drop-item"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
               <button type="button" id="plusAdminNoticeBtn" class="drop-item hidden"><i class="fa-solid fa-bullhorn"></i> إرسال كإشعار إدارة</button>
@@ -285,36 +302,40 @@
         <input type="file" id="chatImageFileInput" accept="image/*,image/gif" class="hidden" />
       </section>
 
-      <!-- FIXED DARK NAVY FOOTER BAR (#0b2239) -->
+      <!-- FIXED DARK CHARCOAL FOOTER BAR (#18181b) -->
       <footer id="codyFooterBar" class="cody-footerbar">
-        <div class="footer-right-group">
-          <button type="button" id="footerOptionsBtn" class="footer-nav-btn" title="الخيارات">
-            <span class="fn-ico"><i class="fa-solid fa-sliders"></i></span>
-            <span class="fn-lbl">الخيارات</span>
+        <button type="button" id="footerOptionsBtn" class="footer-nav-btn" title="الخيارات">
+          <span class="fn-ico"><i class="fa-solid fa-sliders"></i></span>
+          <span class="fn-lbl">الخيارات</span>
+        </button>
+        <button type="button" id="footerFriendsBtn" class="footer-nav-btn" title="الأصدقاء">
+          <span class="fn-ico"><i class="fa-solid fa-user-group"></i></span>
+          <span class="fn-lbl">الأصدقاء</span>
+        </button>
+        <button type="button" id="toggleUsersDrawerBtn" class="footer-nav-btn" title="المتواجدين">
+          <span class="fn-ico"><i class="fa-solid fa-users"></i> <span id="roomOnlineCounter" class="footer-count-pill">0</span></span>
+          <span class="fn-lbl">المتواجدين</span>
+        </button>
+        <button type="button" id="switchRoomsBtn" class="footer-nav-btn" title="الغرف">
+          <span class="fn-ico"><i class="fa-solid fa-door-open"></i></span>
+          <span class="fn-lbl">الغرف</span>
+        </button>
+        <button type="button" id="footerWallBtn" class="footer-nav-btn" title="الحائط">
+          <span class="fn-ico"><i class="fa-solid fa-signs-post"></i></span>
+          <span class="fn-lbl">الحائط</span>
+        </button>
+        <button type="button" id="footerRefreshBtn" class="footer-nav-btn" title="تحديث">
+          <span class="fn-ico"><i class="fa-solid fa-arrows-rotate"></i></span>
+          <span class="fn-lbl">تحديث</span>
+        </button>
+        <div class="radio-ctrl-wrap">
+          <button type="button" id="footerRadioBtn" class="footer-nav-btn radio-nav-btn" title="تشغيل/إيقاف الراديو">
+            <span class="fn-ico"><i class="fa-solid fa-radio"></i></span>
+            <span id="footerRadioStationName" class="fn-lbl">الراديو</span>
           </button>
-          <button type="button" id="toggleUsersDrawerBtn" class="footer-nav-btn" title="المتواجدون في الغرفة">
-            <span class="fn-ico"><i class="fa-solid fa-users"></i> <span id="roomOnlineCounter" class="footer-count-pill">0</span></span>
-            <span class="fn-lbl">متواجدين</span>
+          <button type="button" id="footerRadioSwitchBtn" class="radio-switch-mini" title="تغيير محطة الراديو">
+            <i class="fa-solid fa-chevron-up"></i>
           </button>
-          <button type="button" id="switchRoomsBtn" class="footer-nav-btn" title="الغرف">
-            <span class="fn-ico"><i class="fa-solid fa-door-open"></i></span>
-            <span class="fn-lbl">الغرف</span>
-          </button>
-        </div>
-
-        <div class="footer-left-group">
-          <button type="button" id="footerRefreshBtn" class="footer-nav-btn" title="تحديث">
-            <span class="fn-ico"><i class="fa-solid fa-arrows-rotate"></i></span>
-            <span class="fn-lbl">تحديث</span>
-          </button>
-          <div class="radio-ctrl-wrap">
-            <button type="button" id="footerRadioSwitchBtn" class="radio-station-pill" title="اختيار محطة الراديو">
-              <i class="fa-solid fa-radio"></i> <span id="footerRadioStationName">الراديو</span>
-            </button>
-            <button type="button" id="footerRadioBtn" class="footer-radio-btn" title="تشغيل/إيقاف الراديو">
-              <i class="fa-solid fa-play"></i>
-            </button>
-          </div>
         </div>
       </footer>
 
@@ -327,15 +348,14 @@
         <div id="radioStationsList" class="radio-stations-list"></div>
       </div>
 
-      <!-- CATEGORIZED EMOJI, ANIMATED STICKERS & CUSTOM POPOVER -->
+      <!-- CATEGORIZED EMOJI, ARABIC STICKERS & ANIMATED POPOVER -->
       <div id="emojiPopover" class="emoji-popover hidden">
         <div class="emoji-pop-tabs">
-          <button type="button" class="ep-tab active" data-ep-tab="faces" title="وجوه"><i class="fa-regular fa-face-laugh"></i></button>
-          <button type="button" class="ep-tab" data-ep-tab="hearts" title="قلوب"><i class="fa-solid fa-heart"></i></button>
-          <button type="button" class="ep-tab" data-ep-tab="symbols" title="رموز"><i class="fa-solid fa-crown"></i></button>
-          <button type="button" class="ep-tab" data-ep-tab="party" title="احتفالات"><i class="fa-solid fa-champagne-glasses"></i></button>
+          <button type="button" class="ep-tab active" data-ep-tab="faces" title="وجوه تعبيرية"><i class="fa-regular fa-face-laugh"></i> وجوه</button>
+          <button type="button" class="ep-tab" data-ep-tab="hearts" title="قلوب وورود"><i class="fa-solid fa-heart"></i> قلوب وورود</button>
+          <button type="button" class="ep-tab" data-ep-tab="arabic_stickers" title="ملصقات ترحيب وتفاعل"><i class="fa-solid fa-hand-sparkles"></i> ملصقات عربية</button>
           <button type="button" class="ep-tab" data-ep-tab="animated" title="متحركة"><i class="fa-solid fa-wand-sparkles"></i> متحركة</button>
-          <button type="button" class="ep-tab" data-ep-tab="custom" title="ملصقات"><i class="fa-solid fa-icons"></i></button>
+          <button type="button" class="ep-tab" data-ep-tab="custom" title="مخصصة"><i class="fa-solid fa-icons"></i> مخصصة</button>
         </div>
         <div id="emojiPopoverGrid" class="emoji-pop-grid"></div>
       </div>
@@ -583,6 +603,12 @@
                   </select>
                 </div>
                 <div>
+                  <label>حجم خط الاسم والرسالة (<span id="custFontSizeVal">14</span>px)</label>
+                  <input type="range" id="custFontSize" min="12" max="20" step="1" value="14" style="width:100%;padding:4px 0;" />
+                </div>
+              </div>
+              <div class="form-grid-2" style="margin-top:6px;">
+                <div>
                   <label>موسيقى البروفايل</label>
                   <div class="inline-row">
                     <select id="custMusicPreset" style="flex:1">
@@ -594,8 +620,11 @@
                     <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i></button>
                   </div>
                 </div>
+                <div>
+                  <label>رابط MP3 خارجي (اختياري)</label>
+                  <input type="text" id="custMusicCustomUrl" placeholder="https://..." style="width:100%;" />
+                </div>
               </div>
-              <input type="text" id="custMusicCustomUrl" placeholder="أو رابط MP3 مباشر لموسيقى البروفايل (اختياري)" style="margin-top:6px;width:100%;" />
             </div>
 
             <!-- ADD-ONS (FRAMES + SHINES + NAMEPLATES + ANIMATED PROFILE BACKGROUNDS) -->
