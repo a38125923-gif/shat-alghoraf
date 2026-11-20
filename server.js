@@ -23,19 +23,22 @@ for (const sub of UPLOAD_SUBDIRS) {
 }
 
 const SHOP_FRAMES = [
-  { id: 'owner_sovereign', label: 'التاج السيادي للمالك 👑', price: 0, tier: 'owner', ownerOnly: true, preview: '#fbbf24' },
+  { id: 'owner_sovereign', label: 'سيد المجرة والزمن — إطار الكسوف الملكي 🌌', price: 0, tier: 'owner', ownerOnly: true, preview: '#fbbf24' },
   { id: 'none', label: 'بدون إطار', price: 0, tier: 'free', preview: '#64748b' },
-  { id: 'kings_crown', label: 'تاج الملوك الذهبي 👑', price: 0, tier: 'vip', preview: '#fbbf24' },
-  { id: 'gold_royal', label: 'الإطار الذهبي الملكي', price: 0, tier: 'vip', preview: '#f59e0b' },
-  { id: 'fire_gold', label: 'إطار اللهب الناري 🔥', price: 0, tier: 'vip', preview: '#f97316' },
-  { id: 'lightning_bolt', label: 'إطار البرق الكهربائي ⚡', price: 0, tier: 'vip', preview: '#38bdf8' },
-  { id: 'hearts_roses', label: 'إطار القلوب والورود 🌹', price: 0, tier: 'vip', preview: '#f43f5e' },
-  { id: 'neon_rainbow', label: 'إطار نيون RGB المضيء', price: 0, tier: 'vip', preview: '#ec4899' },
-  { id: 'rgb_cyber_neon', label: 'إطار RGB الدوّار المتوهج', price: 0, tier: 'vip', preview: '#22d3ee' },
-  { id: 'diamond_ring', label: 'الإطار الماسي المتوهج 💎', price: 0, tier: 'vip', preview: '#38bdf8' },
-  { id: 'emerald_crown', label: 'إطار الزمرد الملكي', price: 0, tier: 'vip', preview: '#10b981' },
-  { id: 'royal_wings', label: 'إطار الأجنحة الملكية', price: 0, tier: 'vip', preview: '#eab308' },
-  { id: 'plasma_violet', label: 'إطار البلازما البنفسجي', price: 0, tier: 'vip', preview: '#a855f7' }
+  { id: 'kings_crown', label: 'إطار الملك الذهبي KINGS', price: 50, tier: 'ruby', preview: '#fbbf24' },
+  { id: 'fire_gold', label: 'إطار اللهب الناري المتحرك', price: 40, tier: 'ruby', preview: '#f97316' },
+  { id: 'neon_rainbow', label: 'إطار النيون المتغير RGB', price: 35, tier: 'ruby', preview: '#ec4899' },
+  { id: 'lightning_bolt', label: 'إطار البرق الأزرق', price: 45, tier: 'ruby', preview: '#38bdf8' },
+  { id: 'royal_wings', label: 'إطار الأجنحة الذهبية', price: 55, tier: 'ruby', preview: '#eab308' },
+  { id: 'hearts_roses', label: 'إطار القلوب المتطايرة', price: 35, tier: 'ruby', preview: '#f43f5e' },
+  { id: 'royal_flowers', label: 'إطار الزهور الملكية', price: 40, tier: 'ruby', preview: '#f472b6' },
+  { id: 'diamond_ring', label: 'إطار الألماس اللامع', price: 60, tier: 'ruby', preview: '#38bdf8' },
+  { id: 'fire_dragon', label: 'إطار التنين الناري', price: 75, tier: 'ruby', preview: '#ef4444' },
+  { id: 'celestial_halo', label: 'إطار الهالة السماوية', price: 80, tier: 'ruby', preview: '#a855f7' },
+  { id: 'gold_royal', label: 'الإطار الذهبي الملكي', price: 25, tier: 'ruby', preview: '#f59e0b' },
+  { id: 'rgb_cyber_neon', label: 'إطار RGB الدوّار المتوهج', price: 30, tier: 'ruby', preview: '#22d3ee' },
+  { id: 'emerald_crown', label: 'إطار الزمرد الملكي', price: 30, tier: 'ruby', preview: '#10b981' },
+  { id: 'plasma_violet', label: 'إطار البلازما البنفسجي', price: 30, tier: 'ruby', preview: '#a855f7' }
 ];
 
 const SHOP_NAMEPLATES = [
@@ -274,6 +277,7 @@ function mapUserRow(u) {
     avatarUrl: u.avatar_url || '',
     coverUrl: u.cover_url || '',
     avatarFrame: u.avatar_frame || 'none',
+    ownedFrames: Array.isArray(u.owned_frames) ? [...u.owned_frames] : [],
     nameplateStyle: u.nameplate_style || 'default',
     nameShine: u.name_shine || 'none',
     nameAnim: normalizeNameAnim(u.name_anim),
@@ -292,6 +296,7 @@ function mapUserRow(u) {
     ratingCount,
     ratingAvg,
     coins: Number(u.coins) || 0,
+    ruby: Number(u.coins) || 0,
     vipFamily: u.vip_family || '',
     isStealth: stealth,
     isGhosted: Boolean(u.is_ghosted),
@@ -1407,6 +1412,9 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     (vipWings === true && !req.authUser.vipWings) ||
     (profileMusic !== undefined && profileMusic !== '' && profileMusic !== req.authUser.profileMusic);
 
+  if (avatarFrame === 'owner_sovereign' && req.authUser.role !== 'site_owner' && !db.isSupremeOwnerEmail(req.authUser.email)) {
+    return res.status(403).json({ error: 'هوية سيد المجرة والزمن وإطار الكسوف الملكي حصرية للمالك فقط.' });
+  }
   if (wantsAddonEquip && !canUseAddons) {
     return res.status(403).json({ error: 'استخدام الإضافات (الإطارات واللمعة والموسيقى) غير مفعّل لرتبتك الحالية.' });
   }
@@ -1459,25 +1467,60 @@ app.get('/api/shop/items', (_req, res) => {
   });
 });
 
+app.post('/api/shop/buy', requireRegistered, async (req, res) => {
+  const { type = 'frame', itemId } = req.body || {};
+  if (type !== 'frame') {
+    return res.status(400).json({ error: 'الشراء بالروبي متاح لإطارات الصور حالياً.' });
+  }
+  const found = SHOP_FRAMES.find((f) => f.id === itemId);
+  if (!found) return res.status(400).json({ error: 'الإطار غير موجود.' });
+  if (found.ownerOnly && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'هذا الإطار حصري لصاحب الموقع فقط.' });
+  }
+  const result = db.purchaseFrameWithRuby(req.authUser.userId, found.id, found.price || 0);
+  if (result?.error) return res.status(400).json({ error: result.error });
+  syncUserAcrossSockets(io, req.authUser.userId);
+  io.emit('persistent_members', buildPersistentMembersList());
+  await db.flushWrites();
+  return res.json({ user: mapUserRow(result.user), purchased: !result.alreadyOwned, frame: found });
+});
+
 app.post('/api/shop/equip', requireRegistered, async (req, res) => {
   const { type, itemId } = req.body || {};
   const canUseAddons = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'use_addons');
   const isClearing =
     itemId === 'none' || itemId === 'default' || itemId === '' || itemId === false || itemId === 0;
 
-  if (!isClearing && type !== 'name_anim' && type !== 'name_anim_speed' && !canUseAddons) {
-    return res.status(403).json({ error: 'رتبتك لا تملك صلاحية استخدام الإضافات حالياً.' });
-  }
-
-  let patch = null;
   if (type === 'frame') {
     const found = SHOP_FRAMES.find((f) => f.id === itemId);
     if (!found) return res.status(400).json({ error: 'الإطار غير موجود.' });
     if (found.ownerOnly && req.authUser.role !== 'site_owner') {
       return res.status(403).json({ error: 'هذا الإطار حصري لصاحب الموقع فقط.' });
     }
-    patch = { avatarFrame: itemId };
-  } else if (type === 'nameplate') {
+    const curUser = db.findUserById(req.authUser.userId);
+    const ownedFrames = Array.isArray(curUser?.owned_frames) ? curUser.owned_frames : [];
+    const isFreeOrOwned =
+      req.authUser.role === 'site_owner' ||
+      found.id === 'none' ||
+      Number(found.price || 0) <= 0 ||
+      ownedFrames.includes(found.id) ||
+      curUser?.avatar_frame === found.id;
+    if (!isFreeOrOwned) {
+      return res.status(400).json({ error: 'يجب شراء الإطار بالروبي أولاً لتفعيله.' });
+    }
+    const updated = db.updateUserCustomization(req.authUser.userId, { avatarFrame: found.id });
+    syncUserAcrossSockets(io, req.authUser.userId);
+    io.emit('persistent_members', buildPersistentMembersList());
+    await db.flushWrites();
+    return res.json({ user: mapUserRow(updated) });
+  }
+
+  if (!isClearing && type !== 'name_anim' && type !== 'name_anim_speed' && !canUseAddons) {
+    return res.status(403).json({ error: 'رتبتك لا تملك صلاحية استخدام الإضافات حالياً.' });
+  }
+
+  let patch = null;
+  if (type === 'nameplate') {
     const exists = SHOP_NAMEPLATES.some((n) => n.id === itemId);
     if (!exists) return res.status(400).json({ error: 'القالب غير موجود.' });
     patch = { nameplateStyle: itemId };
@@ -1869,6 +1912,7 @@ app.get('/api/leaderboards', (_req, res) => {
     nameShine: u.name_shine || 'none',
     vipWings: Boolean(u.vip_wings),
     coins: Number(u.coins) || 0,
+    ruby: Number(u.coins) || 0,
     activityPoints: Number(u.activity_points) || 0,
     quizPoints: Number(u.quiz_points) || 0,
     adminActionsCount: adminActionCounts.get(`user:${u.id}`) || 0,
@@ -2642,8 +2686,34 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
 });
 
 app.post('/api/owner/action', requireOwner, async (req, res) => {
-  const { action, targetKey, roomId, toRoomId, enabled, message, content, title, asMode, targetUserKey, amountPerUser, rewardCoins, ipAddress, deviceId, reason, protections } = req.body || {};
+  const { action, targetKey, targetUserId, rubyDelta, activityDelta, roomId, toRoomId, enabled, message, content, title, asMode, targetUserKey, amountPerUser, rewardCoins, ipAddress, deviceId, reason, protections } = req.body || {};
   const actor = req.authUser;
+
+  if (action === 'manage_ruby') {
+    const rawId = targetUserId || (String(targetKey || '').startsWith('user:') ? String(targetKey).replace('user:', '') : '');
+    const uid = Number(rawId);
+    if (!uid) return res.status(400).json({ error: 'يرجى تحديد عضو مسجل.' });
+    const rDelta = Number(rubyDelta) || 0;
+    const aDelta = Number(activityDelta) || 0;
+    if (rDelta === 0 && aDelta === 0) {
+      return res.status(400).json({ error: 'يرجى إدخال كمية روبي أو نقاط تفاعل.' });
+    }
+    const updated = db.adjustUserRubyAndActivity(uid, { rubyDelta: rDelta, activityDelta: aDelta });
+    if (!updated) return res.status(404).json({ error: 'العضو غير موجود.' });
+    syncUserAcrossSockets(io, uid);
+    io.emit('persistent_members', buildPersistentMembersList());
+    db.addAdminLog({
+      actorKey: actor.key,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: rDelta >= 0 ? 'إضافة روبي/نقاط' : 'خصم روبي/نقاط',
+      targetKey: `user:${uid}`,
+      targetName: db.getEffectiveName(updated),
+      details: `روبي: ${rDelta >= 0 ? `+${rDelta}` : rDelta} • تفاعل: ${aDelta >= 0 ? `+${aDelta}` : aDelta}`
+    });
+    await db.flushWrites();
+    return res.json({ ok: true, user: mapUserRow(updated) });
+  }
 
   if (action === 'shadow_mute') {
     if (!targetKey || db.isProtectedSupremeOwnerKey(targetKey)) {
@@ -3319,15 +3389,27 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const delta = msgType === 'text' ? 2 : 3;
       db.incrementActivityPoints({
         userId: entry.userId,
         roomId: entry.roomId,
-        userDelta: delta,
-        roomDelta: delta
+        userDelta: 2,
+        roomDelta: 2
       });
       if (entry.userId) {
-        entry.activityPoints = (Number(entry.activityPoints) || 0) + delta;
+        entry.activityPoints = (Number(entry.activityPoints) || 0) + 2;
+        const updatedUser = db.adjustUserCoins(entry.userId, 1);
+        if (updatedUser) {
+          entry.coins = Number(updatedUser.coins) || 0;
+          const mappedUser = mapUserRow(updatedUser);
+          for (const [sid, o] of onlineSockets.entries()) {
+            if (o.userId === entry.userId) {
+              o.coins = entry.coins;
+              o.activityPoints = entry.activityPoints;
+              io.to(sid).emit('session_updated', { user: mappedUser });
+            }
+          }
+        }
+        db.flushWrites().catch(() => {});
       }
 
       io.to(`room:${entry.roomId}`).emit('new_message', msg);
@@ -4015,28 +4097,123 @@ io.on('connection', (socket) => {
     if (typeof cb === 'function') cb({ ok: true });
   });
 
-  socket.on('admin_force_name', async ({ userId, newDisplayName } = {}) => {
+  socket.on('admin_force_name', async ({ userId, targetKey, newDisplayName } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel'))) return;
-    const target = db.findUserById(userId);
-    if (!target) return;
-    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) return;
-    db.forceChangeUserDisplayName(userId, newDisplayName);
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم عضو', targetKey: `user:${userId}`, targetName: newDisplayName });
-    syncUserAcrossSockets(io, userId);
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel') && !canDo(entry.role, 'mute'))) {
+      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية تغيير الأسماء.' });
+      return;
+    }
+    const clean = String(newDisplayName || '').trim().slice(0, 28);
+    if (clean.length < 2) {
+      if (typeof cb === 'function') cb({ error: 'الاسم الجديد قصير جداً.' });
+      return;
+    }
+    const resolvedKey = targetKey || (userId ? `user:${userId}` : '');
+    if (resolvedKey && resolvedKey.startsWith('guest:')) {
+      const updatedGuest = db.updateGuestCustomization(resolvedKey, { displayName: clean });
+      for (const [sid, o] of onlineSockets.entries()) {
+        if (o.key === resolvedKey) {
+          o.name = clean;
+          o.displayName = clean;
+          io.to(sid).emit('session_updated', { user: db.findGuestByKey(resolvedKey) ? { ...o, name: clean, displayName: clean } : o });
+        }
+      }
+      if (entry.roomId) broadcastRoomUsers(io, entry.roomId);
+      broadcastGlobalOnlineUsers(io);
+      io.emit('persistent_members', buildPersistentMembersList());
+      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم زائر', targetKey: resolvedKey, targetName: clean });
+      await db.flushWrites();
+      if (typeof cb === 'function') cb({ ok: true, name: clean, guest: updatedGuest });
+      return;
+    }
+    const uid = Number(userId || String(resolvedKey || '').replace('user:', ''));
+    const target = db.findUserById(uid);
+    if (!target) {
+      if (typeof cb === 'function') cb({ error: 'العضو غير موجود.' });
+      return;
+    }
+    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
+      if (typeof cb === 'function') cb({ error: 'صاحب الموقع محمي.' });
+      return;
+    }
+    if (entry.role !== 'site_owner' && db.getRankPower(target.role) >= db.getRankPower(entry.role)) {
+      if (typeof cb === 'function') cb({ error: 'لا يمكنك تعديل اسم عضو برتبة مساوية أو أعلى منك.' });
+      return;
+    }
+    db.forceChangeUserDisplayName(uid, clean);
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم عضو', targetKey: `user:${uid}`, targetName: clean });
+    syncUserAcrossSockets(io, uid);
+    io.emit('persistent_members', buildPersistentMembersList());
     await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true, name: clean });
   });
 
-  socket.on('admin_give_coins', async ({ userId, amount } = {}) => {
+  socket.on('admin_clear_avatar', async ({ userId, targetKey } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
-    if (!entry || entry.role !== 'site_owner') return;
-    const delta = Number(amount) || 0;
-    if (!delta) return;
-    const updated = db.adjustUserCoins(userId, delta);
-    if (!updated) return;
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'منح عملات', targetKey: `user:${userId}`, targetName: db.getEffectiveName(updated), details: `+${delta}` });
-    syncUserAcrossSockets(io, userId);
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel') && !canDo(entry.role, 'mute'))) {
+      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية مسح الصور.' });
+      return;
+    }
+    const resolvedKey = targetKey || (userId ? `user:${userId}` : '');
+    if (resolvedKey && resolvedKey.startsWith('guest:')) {
+      db.updateGuestCustomization(resolvedKey, { avatarUrl: '' });
+      for (const [sid, o] of onlineSockets.entries()) {
+        if (o.key === resolvedKey) {
+          o.avatarUrl = '';
+          io.to(sid).emit('session_updated', { user: { ...o, avatarUrl: '' } });
+        }
+      }
+      if (entry.roomId) broadcastRoomUsers(io, entry.roomId);
+      broadcastGlobalOnlineUsers(io);
+      io.emit('persistent_members', buildPersistentMembersList());
+      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة زائر', targetKey: resolvedKey });
+      await db.flushWrites();
+      if (typeof cb === 'function') cb({ ok: true });
+      return;
+    }
+    const uid = Number(userId || String(resolvedKey || '').replace('user:', ''));
+    const target = db.findUserById(uid);
+    if (!target) {
+      if (typeof cb === 'function') cb({ error: 'العضو غير موجود.' });
+      return;
+    }
+    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
+      if (typeof cb === 'function') cb({ error: 'صاحب الموقع محمي.' });
+      return;
+    }
+    if (entry.role !== 'site_owner' && db.getRankPower(target.role) >= db.getRankPower(entry.role)) {
+      if (typeof cb === 'function') cb({ error: 'لا يمكنك مسح صورة عضو برتبة مساوية أو أعلى منك.' });
+      return;
+    }
+    db.adminClearUserAvatar(uid);
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة عضو', targetKey: `user:${uid}`, targetName: db.getEffectiveName(target) });
+    syncUserAcrossSockets(io, uid);
+    io.emit('persistent_members', buildPersistentMembersList());
     await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true });
+  });
+
+  socket.on('admin_give_coins', async ({ userId, amount } = {}, cb) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'هذا الإجراء متاح لصاحب الموقع فقط.' });
+      return;
+    }
+    const delta = Number(amount) || 0;
+    if (!delta) {
+      if (typeof cb === 'function') cb({ error: 'يرجى تحديد كمية صحيحة.' });
+      return;
+    }
+    const updated = db.adjustUserCoins(userId, delta);
+    if (!updated) {
+      if (typeof cb === 'function') cb({ error: 'العضو غير موجود.' });
+      return;
+    }
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: delta >= 0 ? 'منح روبي' : 'خصم روبي', targetKey: `user:${userId}`, targetName: db.getEffectiveName(updated), details: `${delta >= 0 ? `+${delta}` : delta} روبي` });
+    syncUserAcrossSockets(io, userId);
+    io.emit('persistent_members', buildPersistentMembersList());
+    await db.flushWrites();
+    if (typeof cb === 'function') cb({ ok: true, coins: updated.coins });
   });
 
   socket.on('admin_clear_room', async () => {
@@ -4158,6 +4335,54 @@ async function start() {
       io.emit('persistent_members', buildPersistentMembersList());
     }
   });
+
+  // Periodic 5-minute online presence reward: +2 activity points and +1 Ruby
+  const onlineRewardTimestamps = new Map();
+  setInterval(async () => {
+    try {
+      const now = Date.now();
+      const activeUserIds = new Set();
+      for (const entry of onlineSockets.values()) {
+        if (!entry.userId) continue;
+        const lastHb = Number(entry.lastHeartbeat) || now;
+        if (now - lastHb <= 3 * 60 * 1000) {
+          activeUserIds.add(entry.userId);
+        }
+      }
+      for (const uid of onlineRewardTimestamps.keys()) {
+        if (!activeUserIds.has(uid)) onlineRewardTimestamps.delete(uid);
+      }
+      let anyRewarded = false;
+      for (const uid of activeUserIds) {
+        const lastAt = onlineRewardTimestamps.get(uid);
+        if (!lastAt) {
+          onlineRewardTimestamps.set(uid, now);
+          continue;
+        }
+        if (now - lastAt >= 5 * 60 * 1000) {
+          onlineRewardTimestamps.set(uid, now);
+          const updated = db.adjustUserRubyAndActivity(uid, { rubyDelta: 1, activityDelta: 2 });
+          if (updated) {
+            anyRewarded = true;
+            const mapped = mapUserRow(updated);
+            for (const [sid, o] of onlineSockets.entries()) {
+              if (o.userId === uid) {
+                o.coins = Number(updated.coins) || 0;
+                o.activityPoints = Number(updated.activity_points) || 0;
+                io.to(sid).emit('session_updated', { user: mapped });
+              }
+            }
+          }
+        }
+      }
+      if (anyRewarded) {
+        io.emit('persistent_members', buildPersistentMembersList());
+        await db.flushWrites();
+      }
+    } catch (err) {
+      console.error('Online 5m reward tick error:', err.message);
+    }
+  }, 60 * 1000);
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Arabic CodyChat Server listening on http://0.0.0.0:${PORT}`);

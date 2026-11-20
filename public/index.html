@@ -86,7 +86,7 @@
               <div class="dropdown-header">
                 <div id="dropUserName" class="drop-name">-</div>
                 <div id="dropUserRole" class="drop-role">-</div>
-                <div id="dropUserCoins" class="drop-coins"><i class="fa-solid fa-coins"></i> 0 عملة</div>
+                <div id="dropUserCoins" class="drop-coins"><i class="fa-solid fa-gem"></i> 0 روبي</div>
               </div>
               <button type="button" id="dropProfileBtn" class="drop-item"><i class="fa-solid fa-id-card"></i> ملفي الشخصي (6 تبويبات)</button>
               <button type="button" id="dropCustomizeBtn" class="drop-item"><i class="fa-solid fa-wand-magic-sparkles"></i> تخصيص الألوان والإضافات</button>
@@ -487,7 +487,7 @@
             <div class="profile-social-counters profile-social-counters-start">
               <span class="social-pill"><i class="fa-solid fa-heart" style="color:#ef4444"></i> <span id="custLikesCountVal">0</span></span>
               <span class="social-pill"><i class="fa-solid fa-star" style="color:#f59e0b"></i> <span id="custRatingAvgVal">5.0</span></span>
-              <span class="social-pill"><i class="fa-solid fa-coins" style="color:#eab308"></i> <span id="custTopCoinsVal">0</span></span>
+              <span class="social-pill"><i class="fa-solid fa-gem" style="color:#e11d48"></i> <span id="custTopCoinsVal">0</span> روبي</span>
             </div>
           </div>
         </div>
@@ -565,7 +565,7 @@
           <!-- TAB 3: الهدايا -->
           <div id="custPane_gifts" class="cust-pane hidden">
             <div class="gifts-wallet-summary">
-              <div class="stat-mini"><span><i class="fa-solid fa-coins"></i> رصيدك</span><strong id="custCoinsBalance">0</strong></div>
+              <div class="stat-mini"><span><i class="fa-solid fa-gem" style="color:#e11d48;"></i> رصيد الروبي</span><strong id="custCoinsBalance">0</strong></div>
               <div class="stat-mini"><span><i class="fa-solid fa-box-open"></i> مستلمة</span><strong id="custGiftsReceivedCount">0</strong></div>
               <div class="stat-mini"><span><i class="fa-solid fa-paper-plane"></i> مرسلة</span><strong id="custGiftsSentCount">0</strong></div>
               <div class="stat-mini"><span><i class="fa-solid fa-fire"></i> التفاعل</span><strong id="custActivityPoints">0</strong></div>
@@ -804,7 +804,7 @@
       </div>
     </div>
 
-    <!-- 2. LUXURY MEMBER PROFILE CARD MODAL (6 TABS + MODERATION ☰ MENU) -->
+    <!-- 2. LUXURY MEMBER PROFILE CARD MODAL (WITH INLINE ADMIN TAB) -->
     <div id="quickUserModal" class="modal-backdrop hidden">
       <div class="modal-card modal-card-md profile-luxury-card">
         <div id="quickUserBody" class="profile-card-shell"></div>
@@ -820,7 +820,7 @@
         </div>
         <div class="modal-body">
           <div class="gift-balance-bar">
-            <span>رصيدك الحالي: <strong id="giftModalCoins">0</strong> <i class="fa-solid fa-coins"></i></span>
+            <span>رصيد الروبي: <strong id="giftModalCoins">0</strong> <i class="fa-solid fa-gem" style="color:#e11d48;"></i></span>
             <span class="muted">يستلم العضو مكافأة فورية + إعلان في الغرفة</span>
           </div>
           <div id="giftCatalogGrid" class="gift-catalog-grid"></div>

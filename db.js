@@ -75,7 +75,7 @@ function enforceSupremeOwnerUser(u) {
     patch.nameplate_style = 'crimson_royal';
     changed = true;
   }
-  if ((Number(u.coins) || 0) < 99999) {
+  if (u.coins === undefined || u.coins === null || Number.isNaN(Number(u.coins))) {
     u.coins = 99999;
     patch.coins = 99999;
     changed = true;
@@ -984,6 +984,11 @@ function normalizeUserDoc(docId, data) {
   const email = String(data.email || '').toLowerCase();
   const role = String(data.role || 'member');
   const allowStealth = role === 'site_owner' || isSupremeOwnerEmail(email);
+  const avatarFrame = String(data.avatar_frame || 'none');
+  const ownedFrames = Array.isArray(data.owned_frames) ? data.owned_frames.map((x) => String(x)) : [];
+  if (avatarFrame && avatarFrame !== 'none' && !ownedFrames.includes(avatarFrame)) {
+    ownedFrames.push(avatarFrame);
+  }
   return {
     id: numId,
     username: String(data.username || ''),
@@ -1000,7 +1005,8 @@ function normalizeUserDoc(docId, data) {
     font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
     avatar_url: String(data.avatar_url || ''),
     cover_url: String(data.cover_url || ''),
-    avatar_frame: String(data.avatar_frame || 'none'),
+    avatar_frame: avatarFrame,
+    owned_frames: ownedFrames,
     nameplate_style: String(data.nameplate_style || 'default'),
     name_shine: String(data.name_shine || 'none'),
     name_anim: String(data.name_anim || 'none'),
@@ -2178,6 +2184,7 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
     avatar_url: '',
     cover_url: '',
     avatar_frame: role === 'site_owner' ? 'kings_crown' : 'none',
+    owned_frames: role === 'site_owner' ? ['kings_crown', 'owner_sovereign'] : [],
     nameplate_style: role === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
     name_anim: 'none',
@@ -2492,7 +2499,12 @@ function updateUserCustomization(
     font_size: fontSize !== undefined ? Math.max(12, Math.min(20, Number(fontSize) || 14)) : current.font_size || 14,
     avatar_url: avatarUrl !== undefined ? avatarUrl : current.avatar_url,
     cover_url: coverUrl !== undefined ? coverUrl : current.cover_url || '',
-    avatar_frame: avatarFrame !== undefined ? avatarFrame || 'none' : current.avatar_frame || 'none',
+    avatar_frame:
+      avatarFrame !== undefined
+        ? (avatarFrame === 'owner_sovereign' && current.role !== 'site_owner' && !isSupremeOwnerEmail(current.email)
+            ? current.avatar_frame || 'none'
+            : avatarFrame || 'none')
+        : current.avatar_frame || 'none',
     nameplate_style: nameplateStyle !== undefined ? nameplateStyle || 'default' : current.nameplate_style || 'default',
     name_shine: nameShine !== undefined ? String(nameShine || 'none').trim().slice(0, 30) : current.name_shine || 'none',
     name_anim: nameAnim !== undefined ? String(nameAnim || 'none').trim().slice(0, 30) : current.name_anim || 'none',
@@ -2551,6 +2563,7 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     avatar_url: '',
     cover_url: '',
     avatar_frame: safeRole === 'site_owner' ? 'kings_crown' : 'none',
+    owned_frames: safeRole === 'site_owner' ? ['kings_crown', 'owner_sovereign'] : [],
     nameplate_style: safeRole === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
     name_anim: 'none',
@@ -2676,6 +2689,63 @@ function adjustUserCoins(userId, delta) {
   return { ...current };
 }
 
+function adjustUserRubyAndActivity(userId, { rubyDelta = 0, activityDelta = 0 } = {}) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return null;
+  const rDelta = Number(rubyDelta) || 0;
+  const aDelta = Number(activityDelta) || 0;
+  current.coins = Math.max(0, (Number(current.coins) || 0) + rDelta);
+  current.activity_points = Math.max(0, (Number(current.activity_points) || 0) + aDelta);
+  enqueueSet(
+    'users',
+    String(current.id),
+    { coins: current.coins, activity_points: current.activity_points },
+    true
+  );
+  return { ...current };
+}
+
+function purchaseFrameWithRuby(userId, frameId, price = 0) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return { error: 'الحساب غير موجود.' };
+  const owned = Array.isArray(current.owned_frames) ? [...current.owned_frames] : [];
+  const cost = Math.max(0, Number(price) || 0);
+  const alreadyOwned = owned.includes(frameId) || frameId === 'none' || current.role === 'site_owner';
+  if (!alreadyOwned && cost > 0) {
+    if ((Number(current.coins) || 0) < cost) {
+      return { error: `رصيد الروبي غير كافٍ (${Number(current.coins) || 0} / ${cost} روبي).` };
+    }
+    current.coins = (Number(current.coins) || 0) - cost;
+  }
+  if (frameId && frameId !== 'none' && !owned.includes(frameId)) {
+    owned.push(frameId);
+  }
+  current.owned_frames = owned;
+  current.avatar_frame = frameId || 'none';
+  enqueueSet(
+    'users',
+    String(current.id),
+    { coins: current.coins, owned_frames: owned, avatar_frame: current.avatar_frame },
+    true
+  );
+  return { user: { ...current }, alreadyOwned };
+}
+
+function adminClearUserAvatar(userId) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return null;
+  current.avatar_url = '';
+  enqueueSet('users', String(current.id), { avatar_url: '' }, true);
+  const senderKey = `user:${current.id}`;
+  for (const m of store.messagesById.values()) {
+    if (m.sender_key === senderKey && m.avatar_url) {
+      m.avatar_url = '';
+      enqueueSet('messages', String(m.doc_id || m.id), { avatar_url: '' }, true);
+    }
+  }
+  return { ...current };
+}
+
 function updateUserRole(userId, newRole) {
   if (!isValidRank(newRole)) return null;
   const current = store.usersById.get(Number(userId));
@@ -2710,6 +2780,13 @@ function forceChangeUserDisplayName(userId, newDisplayName) {
   current.display_name = clean;
   current.name_history = nameHistory;
   enqueueSet('users', String(current.id), { display_name: clean, name_history: nameHistory }, true);
+  const senderKey = `user:${current.id}`;
+  for (const m of store.messagesById.values()) {
+    if (m.sender_key === senderKey) {
+      m.sender_name = clean;
+      enqueueSet('messages', String(m.doc_id || m.id), { sender_name: clean }, true);
+    }
+  }
   return { ...current };
 }
 
@@ -3946,6 +4023,9 @@ module.exports = {
   adminUpdateUserAccount,
   spendUserCoins,
   adjustUserCoins,
+  adjustUserRubyAndActivity,
+  purchaseFrameWithRuby,
+  adminClearUserAvatar,
   updateUserRole,
   forceChangeUserDisplayName,
   getAllRegisteredUsers,

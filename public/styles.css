@@ -580,31 +580,51 @@ textarea:focus {
 }
 
 .frame-owner_sovereign {
-  border: 3px solid #fbbf24;
-  background: linear-gradient(135deg, #18181b, #09090b);
-  box-shadow: 0 0 0 2px #09090b, 0 0 18px rgba(251, 191, 36, 0.95), inset 0 0 8px rgba(251, 191, 36, 0.45);
-  animation: sovereignGlow 1.7s ease-in-out infinite alternate;
+  position: relative;
+  overflow: visible !important;
+  border: 2.5px solid #04060d !important;
+  background: #03040a !important;
+  box-shadow: 0 0 0 1.5px rgba(251, 191, 36, 0.72), 0 0 12px rgba(251, 191, 36, 0.55), 0 0 20px rgba(56, 189, 248, 0.45), inset 0 0 6px rgba(0, 0, 0, 0.95);
+}
+
+.frame-owner_sovereign img,
+.frame-owner_sovereign .avatar-letter {
+  position: relative;
+  z-index: 2;
+}
+
+.frame-owner_sovereign::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  z-index: 0;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    rgba(251, 191, 36, 0.96) 0deg,
+    rgba(254, 240, 138, 0.18) 45deg,
+    rgba(56, 189, 248, 0.95) 115deg,
+    rgba(37, 99, 235, 0.18) 175deg,
+    rgba(251, 191, 36, 0.95) 235deg,
+    rgba(56, 189, 248, 0.9) 305deg,
+    rgba(251, 191, 36, 0.96) 360deg
+  );
+  filter: blur(2.6px);
+  opacity: 0.92;
+  animation: eclipseCoronaRotate 7s linear infinite;
 }
 
 .frame-owner_sovereign::after {
-  content: '👑';
+  content: '';
   position: absolute;
-  top: -9px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  line-height: 1;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.85));
-  z-index: 3;
-}
-
-@keyframes sovereignGlow {
-  from {
-    box-shadow: 0 0 0 2px #18181b, 0 0 10px rgba(245, 158, 11, 0.75);
-  }
-  to {
-    box-shadow: 0 0 0 2px #fef08a, 0 0 22px rgba(251, 191, 36, 1);
-  }
+  inset: -2px;
+  border-radius: inherit;
+  z-index: 1;
+  pointer-events: none;
+  border: 1.5px solid rgba(253, 224, 71, 0.7);
+  box-shadow: 0 0 9px rgba(56, 189, 248, 0.58);
+  animation: eclipseFlarePulse 2.3s ease-in-out infinite alternate;
 }
 
 @keyframes pulseFrame {
@@ -1034,8 +1054,20 @@ textarea:focus {
 }
 
 .cody-msg-row.owner-royal-msg-row {
-  background: linear-gradient(90deg, #fffbeb 0%, #ffffff 78%);
-  border-right: 3px solid #d97706;
+  position: relative;
+  margin: 6px 8px;
+  width: calc(100% - 16px);
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  background: linear-gradient(135deg, rgba(4, 6, 15, 0.95) 0%, rgba(10, 17, 38, 0.92) 55%, rgba(6, 8, 16, 0.96) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #f8fafc;
+  border: 1px solid rgba(251, 191, 36, 0.56);
+  border-radius: 12px;
+  padding: 9px 11px;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.3), inset 0 1px 0 rgba(254, 240, 138, 0.22), 0 0 14px rgba(56, 189, 248, 0.14);
+  animation: ownerPortalEnter 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .admin-notice-prefix {
@@ -2867,7 +2899,7 @@ textarea:focus {
   animation: shineMove 5s ease infinite;
 }
 
-.profile-luxury-card > *:not(.profile-bg-effect-layer) {
+.profile-luxury-card > *:not(.profile-bg-effect-layer):not(.owner-cosmic-bg-layer):not(.owner-falling-stars-layer) {
   position: relative;
   z-index: 1;
 }
@@ -4385,3 +4417,660 @@ textarea:focus {
   50% { opacity: 0.62; filter: drop-shadow(0 0 2px currentColor); }
   55% { opacity: 1; filter: drop-shadow(0 0 11px currentColor); }
 }
+
+/* ========================================================
+   10 FEATURED ANIMATED FRAMES + STORE PREVIEW + INLINE ADMIN TAB
+======================================================== */
+.avatar-wrap.lg {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+.avatar-wrap.lg .frame-svg-ornament {
+  width: 21px;
+  height: 21px;
+  top: -8px;
+  right: -7px;
+}
+
+.frame-diamond_ring {
+  border: 3px solid #38bdf8;
+  background-image: linear-gradient(#0f172a, #0f172a), linear-gradient(135deg, #e0f2fe, #38bdf8, #818cf8, #e0f2fe);
+  background-size: 100% 100%, 240% 240%;
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 0 2px #e0f2fe, 0 0 16px rgba(56, 189, 248, 0.9);
+  animation: diamondSparkle 2.1s ease-in-out infinite;
+}
+
+.frame-royal_wings {
+  border: 3px solid #facc15;
+  box-shadow: 0 0 0 2px #78350f, 0 0 18px rgba(250, 204, 21, 0.92), inset 0 0 6px #fef08a;
+  animation: wingsAuraGlow 1.7s ease-in-out infinite alternate;
+}
+
+.frame-royal_flowers {
+  border: 3px solid transparent;
+  background-image: linear-gradient(#1f1624, #1f1624), linear-gradient(135deg, #f472b6, #fb7185, #fbcfe8, #c084fc, #f472b6);
+  background-size: 100% 100%, 260% 260%;
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 0 2px #fdf2f8, 0 0 15px rgba(244, 114, 182, 0.85);
+  animation: flowersBloomGlow 2.8s linear infinite;
+}
+
+.frame-fire_dragon {
+  border: 3px solid transparent;
+  background-image: linear-gradient(#1c0a09, #1c0a09), linear-gradient(135deg, #ef4444, #f97316, #fbbf24, #dc2626, #f97316);
+  background-size: 100% 100%, 260% 260%;
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 0 2px #7f1d1d, 0 0 18px rgba(239, 68, 68, 0.95), 0 0 26px rgba(249, 115, 22, 0.7);
+  animation: dragonFlamePulse 1.5s ease-in-out infinite alternate;
+}
+
+.frame-celestial_halo {
+  border: 3px solid transparent;
+  background-image: linear-gradient(#0b1026, #0b1026), linear-gradient(135deg, #a855f7, #38bdf8, #fde047, #6366f1, #a855f7);
+  background-size: 100% 100%, 280% 280%;
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 0 2px #e0e7ff, 0 0 18px rgba(168, 85, 247, 0.9), 0 0 28px rgba(56, 189, 248, 0.65);
+  animation: celestialOrbit 3.2s linear infinite;
+}
+
+@keyframes diamondSparkle {
+  0%, 100% { background-position: 0 0, 0% 50%; box-shadow: 0 0 0 2px #e0f2fe, 0 0 12px rgba(56, 189, 248, 0.8); }
+  50% { background-position: 0 0, 100% 50%; box-shadow: 0 0 0 2px #ffffff, 0 0 22px rgba(125, 211, 252, 1); }
+}
+
+@keyframes wingsAuraGlow {
+  from { box-shadow: 0 0 0 2px #78350f, 0 0 12px rgba(234, 179, 8, 0.78); }
+  to { box-shadow: 0 0 0 2px #fef08a, 0 0 22px rgba(250, 204, 21, 1); }
+}
+
+@keyframes flowersBloomGlow {
+  0% { background-position: 0 0, 0% 50%; box-shadow: 0 0 0 2px #fce7f3, 0 0 13px rgba(244, 114, 182, 0.8); }
+  50% { background-position: 0 0, 100% 50%; box-shadow: 0 0 0 2px #fff1f2, 0 0 20px rgba(251, 113, 133, 0.95); }
+  100% { background-position: 0 0, 0% 50%; box-shadow: 0 0 0 2px #fce7f3, 0 0 13px rgba(244, 114, 182, 0.8); }
+}
+
+@keyframes dragonFlamePulse {
+  0% { background-position: 0 0, 0% 50%; box-shadow: 0 0 0 2px #7f1d1d, 0 0 14px rgba(239, 68, 68, 0.85); transform: scale(1); }
+  100% { background-position: 0 0, 100% 50%; box-shadow: 0 0 0 2px #fed7aa, 0 0 24px rgba(249, 115, 22, 1); transform: scale(1.03); }
+}
+
+@keyframes celestialOrbit {
+  0% { background-position: 0 0, 0% 50%; box-shadow: 0 0 0 2px #e0e7ff, 0 0 15px rgba(168, 85, 247, 0.85); }
+  50% { background-position: 0 0, 100% 50%; box-shadow: 0 0 0 2px #fef08a, 0 0 24px rgba(56, 189, 248, 0.95); }
+  100% { background-position: 0 0, 0% 50%; box-shadow: 0 0 0 2px #e0e7ff, 0 0 15px rgba(168, 85, 247, 0.85); }
+}
+
+/* STORE LIVE AVATAR FRAME CARDS */
+.store-ruby-bar {
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+  border: 1.5px solid #fda4af;
+  color: #881337;
+  border-radius: 11px;
+  padding: 9px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.store-frame-card {
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 10px;
+  position: relative;
+}
+
+.store-avatar-stage {
+  padding: 8px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.store-price-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.store-owned-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* INLINE MEMBER ADMIN TAB (#quPane_admin) */
+.qu-tab.admin-tab-pill {
+  background: #fff1f2;
+  color: #9f1239;
+  border: 1px solid #fecdd3;
+}
+
+.qu-tab.admin-tab-pill.active {
+  background: #be123c;
+  color: #ffffff;
+  border-color: #9f1239;
+}
+
+.qu-inline-admin-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.qu-inline-admin-rank-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 7px;
+}
+
+.qu-inline-admin-rank-box select {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 8px;
+}
+
+.qu-inline-admin-rank-box button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.qu-admin-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qu-admin-grid-btn {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.qu-admin-grid-btn:hover {
+  background: #eef2ff;
+  border-color: #93c5fd;
+}
+
+.qu-admin-grid-btn.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.qu-admin-grid-btn.danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.qu-admin-grid-btn.ruby {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.qu-admin-grid-btn.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.qu-inline-action-box {
+  background: #f8fafc;
+  border: 1.5px solid #93c5fd;
+  border-radius: 10px;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qu-inline-action-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.ruby-manage-card {
+  background: linear-gradient(135deg, #fff1f2, #fffbeb);
+  border: 1.5px solid #fda4af;
+}
+
+/* ========================================================
+   EXCLUSIVE OWNER IDENTITY: "سيد المجرة والزمن" (GALAXY & TIME)
+======================================================== */
+@keyframes eclipseCoronaRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes eclipseFlarePulse {
+  from {
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.65), 0 0 10px rgba(56, 189, 248, 0.45);
+  }
+  to {
+    box-shadow: 0 0 12px rgba(254, 240, 138, 0.95), 0 0 18px rgba(56, 189, 248, 0.85);
+  }
+}
+
+@keyframes royalEclipseOrbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.royal-eclipse-orbits {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 6;
+  animation: royalEclipseOrbitSpin 5.5s linear infinite;
+}
+
+.avatar-wrap.profile-avatar-85 .royal-eclipse-orbits {
+  inset: -8px;
+}
+
+.avatar-wrap.sm .royal-eclipse-orbits,
+#topAvatarWrap .royal-eclipse-orbits {
+  inset: -4px;
+}
+
+.eclipse-crystal {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 15%, #fef08a 55%, #38bdf8 100%);
+  box-shadow: 0 0 6px #fef08a, 0 0 11px #38bdf8;
+}
+
+.avatar-wrap.profile-avatar-85 .eclipse-crystal {
+  width: 8px;
+  height: 8px;
+}
+
+.avatar-wrap.sm .eclipse-crystal,
+#topAvatarWrap .eclipse-crystal {
+  width: 5px;
+  height: 5px;
+}
+
+.eclipse-crystal.ec-1 {
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.eclipse-crystal.ec-2 {
+  bottom: 13%;
+  right: -1px;
+  background: radial-gradient(circle, #ffffff 15%, #7dd3fc 55%, #2563eb 100%);
+  box-shadow: 0 0 7px #7dd3fc, 0 0 12px #3b82f6;
+}
+
+.eclipse-crystal.ec-3 {
+  bottom: 13%;
+  left: -1px;
+  background: radial-gradient(circle, #ffffff 15%, #fde047 55%, #60a5fa 100%);
+  box-shadow: 0 0 7px #fde047, 0 0 12px #60a5fa;
+}
+
+/* ELEMENT 3: HOLOGRAPHIC OWNER NAME (GOLD <-> ROYAL BLUE) */
+@keyframes ownerHologramSweep {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 260% 50%; }
+}
+
+@keyframes ownerHologramGleam {
+  from { filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.55)); }
+  to { filter: drop-shadow(0 0 9px rgba(56, 189, 248, 0.85)); }
+}
+
+.sender-name-btn.owner-hologram-name {
+  background: linear-gradient(135deg, #040712 0%, #0b1530 55%, #050814 100%) !important;
+  border: 1px solid rgba(251, 191, 36, 0.55) !important;
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.42), 0 0 10px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(254, 240, 138, 0.25) !important;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.sender-name-btn.owner-hologram-name .owner-hologram-text,
+.owner-hologram-text {
+  background: linear-gradient(
+    100deg,
+    #fef08a 0%,
+    #fbbf24 18%,
+    #ffffff 30%,
+    #38bdf8 46%,
+    #2563eb 62%,
+    #93c5fd 76%,
+    #fbbf24 90%,
+    #fef08a 100%
+  ) !important;
+  background-size: 260% 100% !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  font-weight: 900 !important;
+  animation: ownerHologramSweep 3.4s linear infinite, ownerHologramGleam 2.2s ease-in-out infinite alternate !important;
+}
+
+.owner-galaxy-title-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #040714, #0f1b3d);
+  color: #fef08a;
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.28);
+  vertical-align: middle;
+}
+
+.owner-galaxy-corner-seal {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  background: rgba(4, 7, 18, 0.78);
+  color: #fef08a;
+  border: 1px solid rgba(251, 191, 36, 0.72);
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.35), 0 0 16px rgba(56, 189, 248, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+/* ELEMENT 1: LIVING COSMIC COVER & STARDUST VORTEX */
+@keyframes cosmicVortexSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cosmicStarsLiquid {
+  0% { background-position: 0 0, 20px 10px; opacity: 0.72; }
+  50% { background-position: 120px 90px, -80px 140px; opacity: 0.98; }
+  100% { background-position: 240px 180px, -160px 280px; opacity: 0.72; }
+}
+
+.owner-galaxy-theme .profile-cover-hero {
+  background: radial-gradient(circle at 50% 62%, #091026 0%, #03040b 65%, #010205 100%) !important;
+}
+
+.owner-galaxy-theme .profile-cover-hero .profile-cover-img {
+  position: relative;
+  z-index: 0;
+  opacity: 0.45;
+  mix-blend-mode: screen;
+}
+
+.owner-galaxy-theme .profile-cover-overlay {
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(2, 3, 10, 0.2) 0%, rgba(2, 3, 10, 0.88) 100%) !important;
+}
+
+.owner-cosmic-cover-vortex {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.owner-cosmic-cover-vortex::before {
+  content: '';
+  position: absolute;
+  top: -75%;
+  left: -45%;
+  width: 190%;
+  height: 250%;
+  background:
+    conic-gradient(
+      from 0deg at 50% 50%,
+      transparent 0deg,
+      rgba(251, 191, 36, 0.24) 35deg,
+      rgba(254, 240, 138, 0.08) 70deg,
+      transparent 110deg,
+      rgba(56, 189, 248, 0.22) 160deg,
+      rgba(251, 191, 36, 0.28) 215deg,
+      transparent 270deg,
+      rgba(37, 99, 235, 0.2) 320deg,
+      transparent 360deg
+    ),
+    radial-gradient(circle at 50% 50%, rgba(251, 191, 36, 0.24) 0%, rgba(56, 189, 248, 0.12) 28%, transparent 65%);
+  animation: cosmicVortexSpin 28s linear infinite;
+}
+
+.owner-cosmic-cover-vortex::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 18px 24px, #fef08a, transparent),
+    radial-gradient(1.5px 1.5px at 66px 52px, #fbbf24, transparent),
+    radial-gradient(2.2px 2.2px at 118px 34px, #93c5fd, transparent),
+    radial-gradient(1.8px 1.8px at 172px 86px, #fde68a, transparent),
+    radial-gradient(2px 2px at 210px 26px, #ffffff, transparent),
+    radial-gradient(1.6px 1.6px at 42px 98px, #38bdf8, transparent);
+  background-size: 240px 140px, 190px 120px;
+  animation: cosmicStarsLiquid 16s linear infinite;
+}
+
+.owner-cosmic-bg-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 18%, rgba(30, 58, 138, 0.24) 0%, rgba(4, 6, 14, 0.98) 65%);
+}
+
+.owner-cosmic-bg-layer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 22px 30px, #fbbf24, transparent),
+    radial-gradient(2px 2px at 90px 72px, #fef08a, transparent),
+    radial-gradient(1.5px 1.5px at 150px 44px, #7dd3fc, transparent),
+    radial-gradient(2px 2px at 212px 118px, #fde68a, transparent);
+  background-size: 240px 160px;
+  opacity: 0.5;
+  animation: goldStarFall 12s linear infinite;
+}
+
+.owner-cosmic-avatar-stage {
+  position: relative;
+}
+
+.owner-cosmic-avatar-stage .avatar-wrap {
+  position: relative;
+  z-index: 2;
+}
+
+.owner-avatar-cosmic-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 124px;
+  height: 124px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(2, 3, 10, 0.95) 42%, rgba(251, 191, 36, 0.26) 64%, rgba(56, 189, 248, 0.18) 80%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.owner-avatar-cosmic-halo::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(251, 191, 36, 0.45) 55deg,
+    transparent 120deg,
+    rgba(56, 189, 248, 0.4) 200deg,
+    rgba(254, 240, 138, 0.35) 280deg,
+    transparent 360deg
+  );
+  animation: cosmicVortexSpin 14s linear infinite;
+}
+
+/* ELEMENT 4: ROYAL PORTAL OWNER MESSAGES */
+@keyframes ownerPortalEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.975);
+    filter: brightness(1.18);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes portalGoldenDotsTwinkle {
+  0% { opacity: 0.52; }
+  100% { opacity: 1; }
+}
+
+.cody-msg-row.owner-portal-card .msg-avatar-trigger,
+.cody-msg-row.owner-portal-card .msg-body-col {
+  position: relative;
+  z-index: 2;
+}
+
+.owner-portal-edge-dots {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.owner-portal-edge-dots::before {
+  content: '';
+  position: absolute;
+  inset: 2px 6px;
+  background-image:
+    radial-gradient(circle, #fef08a 0 1.3px, rgba(251, 191, 36, 0.35) 1.6px, transparent 2.4px),
+    radial-gradient(circle, #fde047 0 1.3px, rgba(251, 191, 36, 0.35) 1.6px, transparent 2.4px);
+  background-size: 16px 5px, 16px 5px;
+  background-position: 0 0, 8px 100%;
+  background-repeat: repeat-x;
+  animation: portalGoldenDotsTwinkle 2.2s ease-in-out infinite alternate;
+}
+
+.owner-portal-edge-dots::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background:
+    radial-gradient(circle at 4px 4px, #ffffff 0 1.4px, #fbbf24 1.6px, transparent 3.4px),
+    radial-gradient(circle at calc(100% - 4px) 4px, #ffffff 0 1.4px, #fbbf24 1.6px, transparent 3.4px),
+    radial-gradient(circle at 4px calc(100% - 4px), #ffffff 0 1.4px, #fbbf24 1.6px, transparent 3.4px),
+    radial-gradient(circle at calc(100% - 4px) calc(100% - 4px), #ffffff 0 1.4px, #fbbf24 1.6px, transparent 3.4px);
+  animation: portalGoldenDotsTwinkle 1.6s ease-in-out infinite alternate-reverse;
+}
+
+.cody-msg-row.owner-royal-msg-row .msg-time {
+  color: rgba(253, 230, 138, 0.85);
+}
+
+.cody-msg-row.owner-royal-msg-row .msg-dots-btn {
+  color: #fde68a;
+}
+
+.cody-msg-row.owner-royal-msg-row .msg-dots-btn:hover {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fef08a;
+}
+
+.cody-msg-row.owner-royal-msg-row .msg-dismiss-btn {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fef08a;
+}
+
+.cody-msg-row.owner-royal-msg-row .join-royal-bar {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.2), rgba(56, 189, 248, 0.18));
+  color: #fef08a;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+

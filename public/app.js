@@ -108,10 +108,16 @@
   };
 
   const FRAME_ORNAMENT_SVGS = {
-    lightning_bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#38bdf8" stroke="#ffffff" stroke-width="1.2" d="M13 2L4.5 13.5H11L9.5 22 19.5 10.5H13z"/></svg>',
-    hearts_roses: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#f43f5e" stroke="#ffe4e6" stroke-width="1.1" d="M12 20.5s-7-4.4-9-8.8C1.5 8.4 3.7 4.8 7.3 4.8c2 0 3.7 1.1 4.7 2.7 1-1.6 2.7-2.7 4.7-2.7 3.6 0 5.8 3.6 4.3 6.9-2 4.4-9 8.8-9 8.8z"/></svg>',
+    kings_crown: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="1" d="M3 18h18l-1.5-9-4.5 4L12 5l-3 8-4.5-4L3 18z"/><circle cx="12" cy="4.3" r="1.4" fill="#ef4444"/></svg>',
     fire_gold: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fb923c" stroke="#fef08a" stroke-width="1" d="M12.5 2c1.5 3.5-.5 5.5 1.5 8 .8-1.4 1.5-2.3 1.7-3.6 2.8 2 4.3 4.8 4.3 7.8a8 8 0 1 1-16 0c0-3.8 2.6-7.6 8.5-12.2z"/></svg>',
-    royal_wings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="0.9" d="M2 8c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2L12 19l2.5-3.5c2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2C15.5 10.5 18 8 22 8c-4.5-.8-8 1-10 4.2C10 9 6.5 7.2 2 8z"/></svg>'
+    neon_rainbow: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#ec4899" stroke-width="2.2" stroke-dasharray="6 3"/><path fill="#22d3ee" d="M12 4l1.5 3.5L17 9l-3.5 1.5L12 14l-1.5-3.5L7 9l3.5-1.5z"/></svg>',
+    lightning_bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#38bdf8" stroke="#ffffff" stroke-width="1.2" d="M13 2L4.5 13.5H11L9.5 22 19.5 10.5H13z"/></svg>',
+    royal_wings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="0.9" d="M2 8c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2L12 19l2.5-3.5c2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2C15.5 10.5 18 8 22 8c-4.5-.8-8 1-10 4.2C10 9 6.5 7.2 2 8z"/></svg>',
+    hearts_roses: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#f43f5e" stroke="#ffe4e6" stroke-width="1.1" d="M12 20.5s-7-4.4-9-8.8C1.5 8.4 3.7 4.8 7.3 4.8c2 0 3.7 1.1 4.7 2.7 1-1.6 2.7-2.7 4.7-2.7 3.6 0 5.8 3.6 4.3 6.9-2 4.4-9 8.8-9 8.8z"/></svg>',
+    royal_flowers: '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="#f472b6" stroke="#fdf2f8" stroke-width="0.8"><circle cx="12" cy="6.5" r="3.2"/><circle cx="17.2" cy="10.2" r="3.2"/><circle cx="15.2" cy="16.2" r="3.2"/><circle cx="8.8" cy="16.2" r="3.2"/><circle cx="6.8" cy="10.2" r="3.2"/></g><circle cx="12" cy="11.8" r="2.6" fill="#fde047"/></svg>',
+    diamond_ring: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#38bdf8" stroke="#e0f2fe" stroke-width="1.1" d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5z"/><path fill="rgba(255,255,255,0.55)" d="M6.5 3.5 9 9l3-5.5zm5.5 0L9 9h6z"/></svg>',
+    fire_dragon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#ef4444" stroke="#fef08a" stroke-width="1" d="M12 2c2.5 2.5 5 5 5 8.5 0 1.4-.4 2.6-1 3.6 1.5-.8 2.5-2.3 2.7-4 1.6 1.7 2.3 3.9 2.3 6.1A9 9 0 1 1 5.6 9.8c.5 1.8 1.8 3 3.2 3.8C7.6 10.6 8.8 6 12 2z"/><path fill="#fbbf24" d="M12 10.5c1.8 2 2.5 3.5 2.5 5.2a2.5 2.5 0 0 1-5 0c0-1.7.7-3.2 2.5-5.2z"/></svg>',
+    celestial_halo: '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="8" rx="8" ry="3" fill="none" stroke="#fde047" stroke-width="2"/><path fill="#a855f7" stroke="#e0e7ff" stroke-width="0.9" d="M12 11l1.6 3.5L17 16l-3.4 1.5L12 21l-1.6-3.5L7 16l3.4-1.5z"/></svg>'
   };
 
   const DEFAULT_RADIO_STATIONS = [
@@ -451,11 +457,21 @@
       .sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
   }
 
+  function isExclusiveOwnerObj(userObj) {
+    if (!userObj) return false;
+    const uKey = String(userObj.sender_key || userObj.key || '');
+    if (uKey === 'system:quizbot' || uKey === 'system:official') return false;
+    const role = userObj.sender_role || userObj.role || '';
+    const email = String(userObj.email || '').toLowerCase();
+    return role === 'site_owner' || Boolean(userObj.isSupremeOwner) || email === 'a38125923@gmail.com';
+  }
+
   function formatNameHTML(userObj) {
     const uKey = userObj.sender_key || userObj.key || '';
     const name = escapeHtml(userObj.sender_name || userObj.name || 'عضو');
     const role = userObj.sender_role || userObj.role || 'member';
     const isQuizBot = uKey === 'system:quizbot' || uKey === 'system:official';
+    const isExclusiveOwner = isExclusiveOwnerObj(userObj);
     const shine = userObj.name_shine || userObj.nameShine || 'none';
     const nameAnim = userObj.name_anim || userObj.nameAnim || 'none';
     const nameAnimSpeed = userObj.name_anim_speed || userObj.nameAnimSpeed || 'normal';
@@ -469,58 +485,69 @@
     const fontSize = Math.max(11, Math.min(18, Number(userObj.font_size || userObj.fontSize) || 12));
 
     const classes = ['sender-name-btn'];
-    if (nameplate && nameplate !== 'default') classes.push(`nameplate-${nameplate}`);
-    if (shine && shine !== 'none') classes.push(`shine-${shine}`);
+    if (isExclusiveOwner) classes.push('owner-hologram-name');
+    if (!isExclusiveOwner && nameplate && nameplate !== 'default') classes.push(`nameplate-${nameplate}`);
+    if (!isExclusiveOwner && shine && shine !== 'none') classes.push(`shine-${shine}`);
     if (nameAnim && nameAnim !== 'none') {
       classes.push(`name-anim-${nameAnim}`);
       classes.push(`name-anim-speed-${nameAnimSpeed}`);
     }
 
     const styles = [];
-    if (shine === 'none') styles.push(`color:${escapeHtml(nameColor)}`);
+    if (!isExclusiveOwner && shine === 'none') styles.push(`color:${escapeHtml(nameColor)}`);
     if (nameBg) {
       styles.push(`background-color:${escapeHtml(nameBg)}`);
-    } else if (role === 'site_owner' && !isQuizBot && (!nameplate || nameplate === 'default')) {
-      styles.push('background-color:#18181b');
+    } else if (isExclusiveOwner) {
+      // Cosmic obsidian pill styled via .owner-hologram-name
     } else if (!nameplate || nameplate === 'default') {
       styles.push('background-color:#f4f4f5');
     }
-    if (neon) styles.push(`text-shadow:0 0 8px ${escapeHtml(neon)}, 0 0 14px ${escapeHtml(neon)}`);
+    if (neon && !isExclusiveOwner) styles.push(`text-shadow:0 0 8px ${escapeHtml(neon)}, 0 0 14px ${escapeHtml(neon)}`);
     if (ff && ff !== 'Normal') styles.push(`font-family:${resolveFontFamilyCss(ff)}`);
     if (fs === 'Bold') styles.push('font-weight:900');
     if (fs === 'Italic') styles.push('font-style:italic');
     styles.push(`font-size:${fontSize}px`);
 
-    const leftWing = wings ? '<span class="vip-wing">🪽</span>' : role === 'site_owner' && !isQuizBot ? '<span class="vip-wing">👑</span>' : '';
+    const leftWing = wings ? '<span class="vip-wing">🪽</span>' : isExclusiveOwner ? '<span class="vip-wing">👑</span>' : '';
     const rightWing = wings ? '<span class="vip-wing">🪽</span>' : '';
 
     const lowerColor = String(nameColor || '').trim().toLowerCase();
-    const hasCustomSurface = Boolean(nameBg) || (nameplate && nameplate !== 'default') || (role === 'site_owner' && !isQuizBot);
+    const hasCustomSurface = Boolean(nameBg) || (nameplate && nameplate !== 'default') || isExclusiveOwner;
     const resolvedStyles = [...styles];
-    if (role === 'site_owner' && !isQuizBot && shine === 'none' && !nameBg && (!nameColor || lowerColor === '#0f172a' || lowerColor === '#111827')) {
-      resolvedStyles[0] = 'color:#fbbf24';
-    } else if (shine === 'none' && !hasCustomSurface && (!nameColor || lowerColor === '#ffffff' || lowerColor === '#fff')) {
-      resolvedStyles[0] = 'color:#111827';
+    if (!isExclusiveOwner && shine === 'none' && !hasCustomSurface && (!nameColor || lowerColor === '#ffffff' || lowerColor === '#fff')) {
+      resolvedStyles.unshift('color:#111827');
     }
 
-    const verifiedHtml = role === 'site_owner' && !isQuizBot
-      ? '<i class="fa-solid fa-circle-check owner-verified-badge" title="حساب المالك الموثق"></i>'
+    const verifiedHtml = isExclusiveOwner
+      ? '<i class="fa-solid fa-circle-check owner-verified-badge" title="سيد المجرة والزمن — المالك الموثق"></i>'
       : '';
     const kingHtml = uKey && state.roomKingKey && uKey === state.roomKingKey && role !== 'site_owner'
       ? '<span class="room-king-badge" title="الأكثر تفاعلاً في الغرفة"><i class="fa-solid fa-crown"></i> ملك الغرفة</span>'
       : '';
 
-    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span class="name-anim-text">${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
+    const textClass = isExclusiveOwner ? 'name-anim-text owner-hologram-text' : 'name-anim-text';
+    return `<span class="${classes.join(' ')}" style="${resolvedStyles.join(';')}">${leftWing}<span class="${textClass}">${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
   }
 
-  function frameOrnamentHtml(frame) {
+  function frameOrnamentHtml(frame, isOwnerUser = false) {
+    if (frame === 'owner_sovereign' && isOwnerUser) {
+      return '<span class="royal-eclipse-orbits" aria-hidden="true"><span class="eclipse-crystal ec-1"></span><span class="eclipse-crystal ec-2"></span><span class="eclipse-crystal ec-3"></span></span>';
+    }
     const svg = FRAME_ORNAMENT_SVGS[frame];
     return svg ? `<span class="frame-svg-ornament" aria-hidden="true">${svg}</span>` : '';
   }
 
-  function syncFrameOrnament(wrapEl, frame) {
+  function syncFrameOrnament(wrapEl, frame, isOwnerUser = false) {
     if (!wrapEl) return;
-    wrapEl.querySelectorAll('.frame-svg-ornament').forEach((n) => n.remove());
+    wrapEl.querySelectorAll('.frame-svg-ornament, .royal-eclipse-orbits').forEach((n) => n.remove());
+    if (frame === 'owner_sovereign' && isOwnerUser) {
+      const orbits = document.createElement('span');
+      orbits.className = 'royal-eclipse-orbits';
+      orbits.setAttribute('aria-hidden', 'true');
+      orbits.innerHTML = '<span class="eclipse-crystal ec-1"></span><span class="eclipse-crystal ec-2"></span><span class="eclipse-crystal ec-3"></span>';
+      wrapEl.appendChild(orbits);
+      return;
+    }
     const svg = FRAME_ORNAMENT_SVGS[frame];
     if (svg) {
       const sp = document.createElement('span');
@@ -534,12 +561,18 @@
   function formatAvatarHTML(userObj, sizeClass = '') {
     const name = String(userObj.sender_name || userObj.name || 'ع').trim();
     const avatarUrl = userObj.avatar_url || userObj.avatarUrl || '';
-    const frame = userObj.avatar_frame || userObj.avatarFrame || 'none';
+    const isOwnerUser = isExclusiveOwnerObj(userObj);
+    let frame = userObj.avatar_frame || userObj.avatarFrame || 'none';
+    if (isOwnerUser && (!frame || frame === 'none' || frame === 'gold_royal')) {
+      frame = 'owner_sovereign';
+    } else if (!isOwnerUser && frame === 'owner_sovereign') {
+      frame = 'none';
+    }
     const letter = escapeHtml(name.slice(0, 1) || 'ع');
     const inner = avatarUrl
       ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(name)}" />`
       : `<span class="avatar-letter">${letter}</span>`;
-    return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}${frameOrnamentHtml(frame)}</span>`;
+    return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}${frameOrnamentHtml(frame, isOwnerUser)}</span>`;
   }
 
   function formatTimeAgo(dateInput) {
@@ -721,9 +754,16 @@
   function renderUserIdentity() {
     const u = state.user;
     if (!u) return;
+    const isOwner = isExclusiveOwnerObj(u);
+    let effectiveFrame = u.avatarFrame || 'none';
+    if (isOwner && (!effectiveFrame || effectiveFrame === 'none' || effectiveFrame === 'gold_royal')) {
+      effectiveFrame = 'owner_sovereign';
+    } else if (!isOwner && effectiveFrame === 'owner_sovereign') {
+      effectiveFrame = 'none';
+    }
     const wrap = $('topAvatarWrap');
-    wrap.className = `avatar-wrap frame-${u.avatarFrame || 'none'}`;
-    syncFrameOrnament(wrap, u.avatarFrame || 'none');
+    wrap.className = `avatar-wrap frame-${effectiveFrame}`;
+    syncFrameOrnament(wrap, effectiveFrame, isOwner);
     if (u.avatarUrl) {
       $('topAvatarImg').src = u.avatarUrl;
       $('topAvatarImg').classList.remove('hidden');
@@ -734,7 +774,6 @@
       $('topAvatarLetter').textContent = (u.name || 'ع').slice(0, 1);
     }
 
-    const isOwner = u.role === 'site_owner';
     const isStealth = isOwner && Boolean(u.isStealth);
     $('topStealthBadge')?.classList.toggle('hidden', !isStealth);
     $('dropStealthBtn')?.classList.toggle('hidden', !isOwner);
@@ -742,9 +781,11 @@
     $('drawerOwnerSuiteBtn')?.classList.toggle('hidden', !isOwner);
     $('admOwnerSuiteTabBtn')?.classList.toggle('hidden', !isOwner);
 
-    $('dropUserName').textContent = u.name;
-    $('dropUserRole').innerHTML = `${roleBadgeHTML(u.role)}`;
-    $('dropUserCoins').innerHTML = `<i class="fa-solid fa-coins"></i> ${u.coins || 0} عملة • <i class="fa-solid fa-fire"></i> ${u.activityPoints || 0} تفاعل`;
+    $('dropUserName').innerHTML = isOwner ? formatNameHTML(u) : escapeHtml(u.name || '');
+    $('dropUserRole').innerHTML = isOwner
+      ? `${roleBadgeHTML(u.role)} <span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span>`
+      : `${roleBadgeHTML(u.role)}`;
+    $('dropUserCoins').innerHTML = `<i class="fa-solid fa-gem" style="color:#f43f5e;"></i> ${u.coins || 0} روبي • <i class="fa-solid fa-fire" style="color:#fb923c;"></i> ${u.activityPoints || 0} تفاعل`;
 
     if ($('dropStealthBtn')) {
       $('dropStealthBtn').innerHTML = isStealth
@@ -1238,16 +1279,20 @@
       const prefix = isAdminNotice ? '<span class="admin-notice-prefix">إشعار الإدارة</span>' : '';
       const rawTxtColor = String(msg.text_color || '').trim();
       const lowerTxt = rawTxtColor.toLowerCase();
+      const isDarkTxt = !rawTxtColor || ['#111827', '#0f172a', '#1e293b', '#18181b', '#27272a', '#334155', '#000', '#000000'].includes(lowerTxt);
       const readableColor = isAdminNotice
         ? '#7f1d1d'
-        : (!rawTxtColor || lowerTxt === '#ffffff' || lowerTxt === '#fff' ? '#111827' : escapeHtml(rawTxtColor));
+        : (isOwnerSender
+            ? (isDarkTxt ? '#f8fafc' : escapeHtml(rawTxtColor))
+            : (!rawTxtColor || lowerTxt === '#ffffff' || lowerTxt === '#fff' ? '#111827' : escapeHtml(rawTxtColor)));
       const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:${resolveFontFamilyCss(msg.font_family)};` : '';
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
       const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
       inlineTextHtml = `<span class="msg-text-inline" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
 
-    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${isOwnerSender && !isAdminNotice ? ' owner-royal-msg-row' : ''}`;
+    const isOwnerPortal = isOwnerSender && !isAdminNotice;
+    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${isOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : ''}`;
     if (msg.client_msg_id) row.dataset.clientMsgId = msg.client_msg_id;
     if (msg.id) row.dataset.msgId = String(msg.id);
 
@@ -1278,6 +1323,7 @@
     const canRank = canActOnTarget && String(msg.sender_key || '').startsWith('user:') && (isOwner || hasPerm('set_rank'));
 
     row.innerHTML = `
+      ${isOwnerPortal ? '<span class="owner-portal-edge-dots" aria-hidden="true"></span>' : ''}
       <div class="msg-avatar-trigger" style="cursor:pointer" title="عرض البطاقة">${formatAvatarHTML(msg, '')}</div>
       <div class="msg-body-col">
         <div class="msg-head-line">
@@ -1430,17 +1476,18 @@
     const isJoinObj = payload && typeof payload === 'object' && (payload.kind === 'join' || payload.kind === 'royal_join') && payload.user;
     if (isJoinObj) {
       const u = payload.user;
-      const isRoyal = payload.kind === 'royal_join';
+      const isRoyal = payload.kind === 'royal_join' || isExclusiveOwnerObj(u);
       const row = document.createElement('div');
-      row.className = `cody-msg-row cody-join-row${isRoyal ? ' owner-royal-msg-row' : ''}`;
+      row.className = `cody-msg-row cody-join-row${isRoyal ? ' owner-royal-msg-row owner-portal-card' : ''}`;
       row.innerHTML = `
+        ${isRoyal ? '<span class="owner-portal-edge-dots" aria-hidden="true"></span>' : ''}
         <div class="msg-avatar-trigger" style="cursor:pointer" title="بطاقة العضو">${formatAvatarHTML(u, '')}</div>
         <div class="msg-body-col">
           <div class="msg-head-line">
             <div class="msg-inline-main">
               ${roleBadgeHTML(u.role, true)}
               <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u)}</span>
-              <span class="${isRoyal ? 'join-royal-bar' : 'join-maroon-bar'}"><i class="fa-solid ${isRoyal ? 'fa-crown' : 'fa-check'}"></i> ${isRoyal ? 'تشريف ملكي: دخل المالك الغرفة' : 'انضم إلى الغرفة الآن'}</span>
+              <span class="${isRoyal ? 'join-royal-bar' : 'join-maroon-bar'}"><i class="fa-solid ${isRoyal ? 'fa-meteor' : 'fa-check'}"></i> ${isRoyal ? 'تشريف أسطوري: دخل سيد المجرة والزمن' : 'انضم إلى الغرفة الآن'}</span>
             </div>
             <span class="msg-time">${formatTimeAgo(Date.now())}</span>
           </div>
@@ -1631,45 +1678,8 @@
     };
   }
 
-  function renderModMenuItemsHTML(u, targetUserId, isOwner, canMod, canBan) {
-    const targetIsProtected = Boolean(
-      u.isSupremeOwner ||
-      u.role === 'site_owner' ||
-      String(u.email || '').toLowerCase() === 'a38125923@gmail.com'
-    );
-    if (targetIsProtected) {
-      return '<div class="muted" style="padding:8px;font-size:12px;">حساب المالك الأعلى محمي بالكامل.</div>';
-    }
-    if (!canManageTargetUser(u)) {
-      return '<div class="muted" style="padding:8px;font-size:12px;">الحصانة المتدرجة: لا يمكنك التحكم بعضو أعلى منك أو مساوٍ لك في الرتبة.</div>';
-    }
-    const canClearRoom = isOwner || state.isRoomManager || hasPerm('clear_room');
-    const canKick = isOwner || state.isRoomManager || hasPerm('kick');
-    const canRank = Boolean(targetUserId) && (isOwner || hasPerm('set_rank'));
-    return `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:800;font-size:13px;">
-        <span><i class="fa-solid fa-shield-halved" style="color:#b71c4a;"></i> خيارات الإدارة</span>
-        <button type="button" id="quModMenuCloseBtn" class="btn-secondary btn-xs" style="padding:2px 8px;min-height:24px;">✕</button>
-      </div>
-      ${canMod ? '<button type="button" class="mod-menu-btn" id="quWarnBtn"><i class="fa-solid fa-triangle-exclamation"></i><span>توجيه تحذير</span></button>' : ''}
-      ${canMod ? '<button type="button" class="mod-menu-btn" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم مؤقت (15د)</span></button>' : ''}
-      ${canMod ? '<button type="button" class="mod-menu-btn" id="quUnmuteBtn"><i class="fa-solid fa-volume-high"></i><span>فك الكتم</span></button>' : ''}
-      ${canKick ? '<button type="button" class="mod-menu-btn" id="quKickBtn"><i class="fa-solid fa-door-open"></i><span>طرد من الغرفة</span></button>' : ''}
-      ${canClearRoom ? '<button type="button" class="mod-menu-btn danger" id="quClearRoomBtn"><i class="fa-solid fa-broom"></i><span>مسح رسائل الغرفة</span></button>' : ''}
-      ${canRank ? '<button type="button" class="mod-menu-btn" id="quSetRankBtn"><i class="fa-solid fa-award"></i><span>رفع / تنزيل الرتبة</span></button>' : ''}
-      ${isOwner ? `<button type="button" class="mod-menu-btn" id="quShadowMuteBtn"><i class="fa-solid fa-user-ninja"></i><span>${u.isShadowMuted ? 'إلغاء الكتم الصامت' : 'كتم صامت (مخفي)'}</span></button>` : ''}
-      ${isOwner ? `<button type="button" class="mod-menu-btn" id="quFreezeUserBtn"><i class="fa-solid fa-snowflake"></i><span>${u.isFrozen ? 'فك التجميد' : 'تجميد تام'}</span></button>` : ''}
-      ${isOwner ? '<button type="button" class="mod-menu-btn" id="quMoveRoomBtn"><i class="fa-solid fa-right-left"></i><span>سحب ونقل لغرفة</span></button>' : ''}
-      ${canMod && targetUserId ? `<button type="button" class="mod-menu-btn" id="quGhostBtn"><i class="fa-solid fa-ghost"></i><span>${u.isGhosted ? 'إلغاء وضع الشبح' : 'وضع الشبح'}</span></button>` : ''}
-      ${canBan ? '<button type="button" class="mod-menu-btn danger" id="quXBanBtn"><i class="fa-solid fa-shield-virus"></i><span>إكس باند (حظر الجهاز)</span></button>' : ''}
-      ${canBan ? '<button type="button" class="mod-menu-btn danger" id="quBanBtn"><i class="fa-solid fa-ban"></i><span>حظر نهائي</span></button>' : ''}
-      ${isOwner && targetUserId ? '<button type="button" class="mod-menu-btn" id="quCoinsBtn"><i class="fa-solid fa-coins"></i><span>منح +500 عملة</span></button>' : ''}
-      ${isOwner && targetUserId ? '<button type="button" class="mod-menu-btn danger" id="quDeleteAccountBtn"><i class="fa-solid fa-user-slash"></i><span>حذف حساب العضو نهائياً</span></button>' : ''}
-    `;
-  }
-
   // ==========================================
-  // LUXURY MEMBER PROFILE CARD + 6 TABS + MODERATION
+  // LUXURY MEMBER PROFILE CARD + INLINE ADMIN TAB
   // ==========================================
   async function openQuickUserModal(rawUser) {
     const liveMatch =
@@ -1694,10 +1704,17 @@
     const isReg = u.key && String(u.key).startsWith('user:');
     const targetUserId = isReg ? Number(String(u.key).replace('user:', '')) : null;
     const isOwner = state.user?.role === 'site_owner';
-    const isTargetOwner = u.role === 'site_owner' || u.isSupremeOwner;
-    const allowedByImmunity = !isMe && canManageTargetUser(u);
-    const canMod = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('clear_room') || hasPerm('set_rank'));
+    const isTargetOwner =
+      u.role === 'site_owner' ||
+      u.isSupremeOwner ||
+      String(u.email || '').toLowerCase() === 'a38125923@gmail.com';
+    const allowedByImmunity = !isMe && !isTargetOwner && canManageTargetUser(u);
+    const canMod = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('clear_room') || hasPerm('set_rank') || hasPerm('access_panel'));
     const canBan = allowedByImmunity && (isOwner || hasPerm('ban'));
+    const canKick = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('kick'));
+    const canClearRoom = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('clear_room'));
+    const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || hasPerm('set_rank'));
+    const showAdminTab = Boolean(allowedByImmunity && (canMod || canBan || canKick || canClearRoom || canRank || isOwner));
     const canGift = !isMe && !state.user?.isGuest;
     const hasMusic = Boolean(u.profileMusic && String(u.profileMusic).trim());
     const { richRank, interactionRank } = computeUserRanks(u.key);
@@ -1715,41 +1732,46 @@
     const friendsList = (state.social.friends || []).filter((f) => f.status === 'accepted');
     const profileLink = `${window.location.origin}/?profile=${encodeURIComponent(u.key)}`;
 
+    const assignableRanks = canRank ? getAssignableRanksForActor() : [];
+    const currentRoleObj = getRank(u.role);
+    const rankSelectOptionsHtml = canRank
+      ? [
+          ...(assignableRanks.some((r) => r.key === u.role) ? [] : [currentRoleObj]),
+          ...assignableRanks
+        ].map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === u.role ? 'selected' : ''}>${escapeHtml(r.icon || '⭐')} ${escapeHtml(r.label)}</option>`).join('')
+      : '';
+
     $('quickUserBody').innerHTML = `
-      <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwner ? ' owner-black-gold-theme' : ''}">
-        <div class="${isTargetOwner ? 'owner-falling-stars-layer' : 'profile-bg-effect-layer'}"></div>
+      <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwner ? ' owner-black-gold-theme owner-galaxy-theme' : ''}">
+        <div class="${isTargetOwner ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer'}"></div>
         <div class="profile-cover-hero" id="quCoverHero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}')` : ''}">
+          ${isTargetOwner ? '<div class="owner-cosmic-cover-vortex" aria-hidden="true"></div>' : ''}
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
           <div class="profile-cover-overlay"></div>
+          ${isTargetOwner ? '<span class="owner-galaxy-corner-seal"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span>' : ''}
           <div class="profile-cover-top-actions cover-actions-left">
             <button type="button" class="hero-circle-glass-btn" id="quHeroCloseBtn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة صورة الغلاف"><i class="fa-solid fa-eye"></i></button>
-            ${(canMod || canBan || isOwner) && !isTargetOwner ? `
-              <div class="mod-menu-wrap" style="position:relative;">
-                <button type="button" class="hero-circle-glass-btn" id="quModMenuToggleBtn" title="خيارات الإدارة">
-                  <i class="fa-solid fa-bars"></i>
-                </button>
-              </div>
-            ` : ''}
             ${hasMusic ? `<button type="button" class="hero-circle-glass-btn" id="quMusicToggleBtn" title="موسيقى البروفايل"><i class="fa-solid fa-music"></i></button>` : ''}
           </div>
           <div class="profile-cover-stats-bar">
             <button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-heart" style="color:#fb7185;"></i> <span id="quLikesCount">${Number(u.likesCount || 0)}</span></button>
             <div class="hero-stat-pill" title="التقييم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <span id="quRatingAvg">${avgRating}</span></div>
-            <div class="hero-stat-pill" title="العملات"><i class="fa-solid fa-coins" style="color:#facc15;"></i> <span>${Number(u.coins || 0)}</span></div>
+            <div class="hero-stat-pill" title="الروبي"><i class="fa-solid fa-gem" style="color:#f43f5e;"></i> <span id="quHeroCoinsVal">${Number(u.coins || 0)} روبي</span></div>
           </div>
         </div>
 
         <div class="profile-identity-header-row">
-          <div class="profile-avatar-85-stage">
+          <div class="profile-avatar-85-stage${isTargetOwner ? ' owner-cosmic-avatar-stage' : ''}">
+            ${isTargetOwner ? '<span class="owner-avatar-cosmic-halo" aria-hidden="true"></span>' : ''}
             ${formatAvatarHTML(u, 'profile-avatar-85')}
           </div>
           <div class="profile-identity-meta-col">
-            <div class="profile-name-row-center">
+            <div class="profile-name-row-center" id="quHeaderNameRow">
               ${roleBadgeHTML(u.role, true)}
               ${formatNameHTML(u)}
             </div>
-            <div class="profile-role-subtitle">${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
+            <div class="profile-role-subtitle" id="quHeaderRoleSub">${isTargetOwner ? '<span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span> ' : ''}${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
             ${u.bio ? `<p class="profile-bio-line">${escapeHtml(u.bio)}</p>` : ''}
             <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
               ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
@@ -1770,6 +1792,7 @@
           <button type="button" class="qu-tab" data-qu-tab="gifts"><i class="fa-solid fa-gift"></i><span>الهدايا</span></button>
           <button type="button" class="qu-tab" data-qu-tab="relations"><i class="fa-solid fa-heart-pulse"></i><span>العلاقات</span></button>
           <button type="button" class="qu-tab" data-qu-tab="posts"><i class="fa-solid fa-newspaper"></i><span>المنشورات</span></button>
+          ${showAdminTab ? '<button type="button" class="qu-tab admin-tab-pill" data-qu-tab="admin"><i class="fa-solid fa-shield-halved"></i><span>الإدارة</span></button>' : ''}
           <button type="button" class="qu-tab" data-qu-tab="more"><i class="fa-solid fa-ellipsis"></i><span>المزيد</span></button>
         </div>
 
@@ -1781,7 +1804,7 @@
                 <strong>${interactionRank > 0 ? `#${interactionRank}` : '—'}</strong>
               </div>
               <div class="rank-duo-card">
-                <span class="muted"><i class="fa-solid fa-sack-dollar" style="color:#ca8a04;"></i> ترتيب الأثرياء</span>
+                <span class="muted"><i class="fa-solid fa-gem" style="color:#e11d48;"></i> ترتيب الأثرياء</span>
                 <strong>${richRank > 0 ? `#${richRank}` : '—'}</strong>
               </div>
             </div>
@@ -1830,23 +1853,46 @@
             `).join('') : '<div class="muted" style="text-align:center;padding:12px;">لا توجد منشورات لهذا العضو.</div>'}
           </div>
 
+          ${showAdminTab ? `
+            <div id="quPane_admin" class="qu-pane hidden">
+              <div class="qu-inline-admin-wrap">
+                ${canRank ? `
+                  <div class="qu-inline-admin-rank-box">
+                    <select id="quInlineRankSelect">${rankSelectOptionsHtml}</select>
+                    <button type="button" id="quInlineRankSaveBtn" class="btn-primary btn-xs"><i class="fa-solid fa-check"></i> حفظ الرتبة</button>
+                  </div>
+                ` : ''}
+
+                <div class="qu-admin-actions-grid">
+                  ${canMod ? '<button type="button" class="qu-admin-grid-btn warning" id="quWarnBtn"><i class="fa-solid fa-triangle-exclamation"></i><span>تحذير</span></button>' : ''}
+                  ${canMod ? '<button type="button" class="qu-admin-grid-btn warning" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم مؤقت</span></button>' : ''}
+                  ${canMod ? '<button type="button" class="qu-admin-grid-btn info" id="quUnmuteBtn"><i class="fa-solid fa-volume-high"></i><span>فك الكتم</span></button>' : ''}
+                  ${canKick ? '<button type="button" class="qu-admin-grid-btn danger" id="quKickBtn"><i class="fa-solid fa-door-open"></i><span>طرد</span></button>' : ''}
+                  ${canBan ? '<button type="button" class="qu-admin-grid-btn danger" id="quBanBtn"><i class="fa-solid fa-ban"></i><span>حظر</span></button>' : ''}
+                  ${canBan ? '<button type="button" class="qu-admin-grid-btn danger" id="quXBanBtn"><i class="fa-solid fa-shield-virus"></i><span>إكس باند</span></button>' : ''}
+                  ${isOwner ? `<button type="button" class="qu-admin-grid-btn info" id="quFreezeUserBtn"><i class="fa-solid fa-snowflake"></i><span>${u.isFrozen ? 'فك التجميد' : 'تجميد'}</span></button>` : ''}
+                  ${isOwner ? '<button type="button" class="qu-admin-grid-btn info" id="quMoveRoomBtn"><i class="fa-solid fa-right-left"></i><span>سحب للغرفة</span></button>' : ''}
+                  ${canMod ? '<button type="button" class="qu-admin-grid-btn" id="quRenameUserBtn"><i class="fa-solid fa-pen"></i><span>تغيير الاسم</span></button>' : ''}
+                  ${canMod ? '<button type="button" class="qu-admin-grid-btn warning" id="quClearAvatarBtn"><i class="fa-solid fa-user-xmark"></i><span>مسح الصورة</span></button>' : ''}
+                  ${isOwner && targetUserId ? '<button type="button" class="qu-admin-grid-btn ruby" id="quCoinsBtn"><i class="fa-solid fa-gem"></i><span>منح روبي</span></button>' : ''}
+                  ${isOwner ? `<button type="button" class="qu-admin-grid-btn" id="quShadowMuteBtn"><i class="fa-solid fa-user-ninja"></i><span>${u.isShadowMuted ? 'فك كتم صامت' : 'كتم صامت'}</span></button>` : ''}
+                  ${canMod && targetUserId ? `<button type="button" class="qu-admin-grid-btn" id="quGhostBtn"><i class="fa-solid fa-ghost"></i><span>${u.isGhosted ? 'إلغاء شبح' : 'وضع الشبح'}</span></button>` : ''}
+                  ${canClearRoom ? '<button type="button" class="qu-admin-grid-btn danger" id="quClearRoomBtn"><i class="fa-solid fa-broom"></i><span>مسح الغرفة</span></button>' : ''}
+                  ${isOwner && targetUserId ? '<button type="button" class="qu-admin-grid-btn danger" id="quDeleteAccountBtn"><i class="fa-solid fa-user-slash"></i><span>حذف الحساب</span></button>' : ''}
+                </div>
+
+                <div id="quAdminInlineActionBox" class="qu-inline-action-box hidden"></div>
+              </div>
+            </div>
+          ` : ''}
+
           <div id="quPane_more" class="qu-pane hidden">
             <div class="info-kv-list">
               <div class="info-kv-row"><span><i class="fa-solid fa-phone"></i> استقبال المكالمات</span><strong>${u.allowCalls !== false ? 'مسموح' : 'مغلق'}</strong></div>
               <div class="info-kv-row"><span><i class="fa-solid fa-message"></i> الرسائل الخاصة</span><strong>${u.allowPm !== false ? 'مفتوحة' : 'مغلقة'}</strong></div>
             </div>
-            ${(canMod || canBan) ? `
-              <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
-                <button type="button" class="btn-secondary btn-xs" id="quOpenModDrawerInsideBtn"><i class="fa-solid fa-gavel"></i> خيارات الإشراف والإدارة</button>
-              </div>
-            ` : ''}
           </div>
         </div>
-        ${(canMod || canBan || isOwner) && !isTargetOwner ? `
-          <div id="quModMenuDropdown" class="mod-menu-dropdown hidden">
-            ${renderModMenuItemsHTML(u, targetUserId, isOwner, canMod, canBan)}
-          </div>
-        ` : ''}
       </div>
     `;
 
@@ -1855,24 +1901,16 @@
       $('quCoverHero')?.classList.toggle('cover-preview-clean');
       $('quCoverPreviewToggleBtn')?.classList.toggle('active');
     });
-    $('quModMenuToggleBtn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      $('quModMenuDropdown')?.classList.toggle('hidden');
-    });
-    $('quModMenuCloseBtn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      $('quModMenuDropdown')?.classList.add('hidden');
-    });
-    $('quOpenModDrawerInsideBtn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      $('quModMenuDropdown')?.classList.remove('hidden');
-    });
+
+    const allQuPanes = showAdminTab
+      ? ['info', 'friends', 'gifts', 'relations', 'posts', 'admin', 'more']
+      : ['info', 'friends', 'gifts', 'relations', 'posts', 'more'];
 
     $('quTabsBar')?.querySelectorAll('.qu-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         const t = btn.dataset.quTab;
         $('quTabsBar').querySelectorAll('.qu-tab').forEach((b) => b.classList.toggle('active', b === btn));
-        ['info', 'friends', 'gifts', 'relations', 'posts', 'more'].forEach((pane) => {
+        allQuPanes.forEach((pane) => {
           $(`quPane_${pane}`)?.classList.toggle('hidden', pane !== t);
         });
       });
@@ -1957,56 +1995,114 @@
     $('quGiftBtn')?.addEventListener('click', openGiftAction);
     $('quSendGiftInsideTabBtn')?.addEventListener('click', openGiftAction);
 
-    $('quWarnBtn')?.addEventListener('click', () => {
-      const reason = prompt(`سبب تحذير "${u.name}":`, 'مخالفة قوانين الغرفة');
-      if (reason === null) return;
-      state.socket.emit('admin_warn', { targetKey: u.key, reason: reason || 'مخالفة قوانين الغرفة' }, (res) => {
-        if (res?.error) showToast(res.error, true);
-        else showToast(`تم إرسال تحذير إداري إلى ${u.name}.`);
+    // Inline Admin Tab Actions (inside #quPane_admin without popups)
+    const inlineBox = $('quAdminInlineActionBox');
+    const closeInlineBox = () => {
+      if (inlineBox) {
+        inlineBox.innerHTML = '';
+        inlineBox.classList.add('hidden');
+      }
+    };
+    const showInlinePrompt = ({ title, htmlBody, confirmText = 'تنفيذ', danger = false, onConfirm }) => {
+      if (!inlineBox) return;
+      inlineBox.classList.remove('hidden');
+      inlineBox.innerHTML = `
+        <div class="qu-inline-action-box-head">
+          <span>${title}</span>
+          <button type="button" id="quInlineBoxCloseBtn" class="btn-secondary btn-xs" style="min-height:24px;padding:2px 7px;">✕</button>
+        </div>
+        ${htmlBody}
+        <div class="inline-row" style="justify-content:flex-end;">
+          <button type="button" id="quInlineBoxCancelBtn" class="btn-secondary btn-xs">إلغاء</button>
+          <button type="button" id="quInlineBoxConfirmBtn" class="${danger ? 'btn-danger' : 'btn-primary'} btn-xs">${escapeHtml(confirmText)}</button>
+        </div>
+      `;
+      $('quInlineBoxCloseBtn')?.addEventListener('click', closeInlineBox);
+      $('quInlineBoxCancelBtn')?.addEventListener('click', closeInlineBox);
+      $('quInlineBoxConfirmBtn')?.addEventListener('click', () => onConfirm(inlineBox, closeInlineBox));
+    };
+
+    $('quInlineRankSaveBtn')?.addEventListener('click', () => {
+      if (!targetUserId) return;
+      const newRole = $('quInlineRankSelect')?.value;
+      if (!newRole) return;
+      state.socket.emit('admin_set_role', { userId: targetUserId, newRole }, (res) => {
+        if (res?.error) return showToast(res.error, true);
+        u.role = newRole;
+        const rk = getRank(newRole);
+        if ($('quHeaderNameRow')) $('quHeaderNameRow').innerHTML = `${roleBadgeHTML(newRole, true)} ${formatNameHTML(u)}`;
+        if ($('quHeaderRoleSub')) {
+          $('quHeaderRoleSub').innerHTML = `${escapeHtml(rk.label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}`;
+        }
+        showToast(`تم حفظ رتبة "${u.name}" إلى ${rk.label}`);
       });
-      closeModal('quickUserModal');
+    });
+
+    $('quWarnBtn')?.addEventListener('click', () => {
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> توجيه تحذير إلى ${escapeHtml(u.name)}`,
+        htmlBody: `<input type="text" id="quInlineWarnInput" value="مخالفة قوانين الغرفة" placeholder="اكتب سبب التحذير..." />`,
+        confirmText: 'إرسال التحذير',
+        onConfirm: (_box, done) => {
+          const reason = ($('quInlineWarnInput')?.value || '').trim() || 'مخالفة قوانين الغرفة';
+          state.socket.emit('admin_warn', { targetKey: u.key, reason }, (res) => {
+            if (res?.error) showToast(res.error, true);
+            else showToast(`تم إرسال التحذير إلى ${u.name}.`);
+            done();
+          });
+        }
+      });
     });
 
     $('quMuteBtn')?.addEventListener('click', () => {
       state.socket.emit('admin_mute', { targetKey: u.key, minutes: 15 });
-      closeModal('quickUserModal');
+      showToast(`تم كتم ${u.name} لمدة 15 دقيقة.`);
     });
 
     $('quUnmuteBtn')?.addEventListener('click', () => {
       state.socket.emit('admin_mute', { targetKey: u.key, unmute: true });
-      closeModal('quickUserModal');
+      showToast(`تم فك الكتم عن ${u.name}.`);
     });
 
     $('quKickBtn')?.addEventListener('click', () => {
       state.socket.emit('admin_kick', { targetKey: u.key });
+      showToast(`تم طرد ${u.name} من الغرفة.`);
       closeModal('quickUserModal');
     });
 
     $('quClearRoomBtn')?.addEventListener('click', () => {
-      if (confirm('مسح جميع رسائل الغرفة الحالية؟')) {
-        state.socket.emit('admin_clear_room');
-        closeModal('quickUserModal');
-      }
+      showInlinePrompt({
+        title: '<i class="fa-solid fa-broom" style="color:#dc2626;"></i> مسح جميع رسائل الغرفة؟',
+        htmlBody: '<div class="muted" style="font-size:11.5px;">سيتم حذف سجل الرسائل في هذه الغرفة للجميع.</div>',
+        confirmText: 'تأكيد المسح',
+        danger: true,
+        onConfirm: (_box, done) => {
+          state.socket.emit('admin_clear_room');
+          showToast('تم مسح رسائل الغرفة.');
+          done();
+        }
+      });
     });
 
-    $('quSetRankBtn')?.addEventListener('click', () => {
-      closeModal('quickUserModal');
-      openQuickRankPickerModal(u);
-    });
-
-    $('quGhostBtn')?.addEventListener('click', async () => {
+    $('quGhostBtn')?.addEventListener('click', () => {
       const next = !u.isGhosted;
-      state.socket.emit('admin_ghost', { targetKey: u.key, enabled: next });
-      showToast(next ? 'تم تفعيل وضع الشبح على العضو.' : 'تم إلغاء وضع الشبح.');
-      closeModal('quickUserModal');
+      state.socket.emit('admin_ghost', { targetKey: u.key, enabled: next }, (res) => {
+        if (res?.error) return showToast(res.error, true);
+        u.isGhosted = next;
+        const lbl = $('quGhostBtn')?.querySelector('span');
+        if (lbl) lbl.textContent = next ? 'إلغاء شبح' : 'وضع الشبح';
+        showToast(next ? 'تم تفعيل وضع الشبح.' : 'تم إلغاء وضع الشبح.');
+      });
     });
 
     $('quShadowMuteBtn')?.addEventListener('click', async () => {
       const next = !u.isShadowMuted;
       try {
         await api('/api/owner/action', { method: 'POST', body: { action: 'shadow_mute', targetKey: u.key, enabled: next } });
+        u.isShadowMuted = next;
+        const lbl = $('quShadowMuteBtn')?.querySelector('span');
+        if (lbl) lbl.textContent = next ? 'فك كتم صامت' : 'كتم صامت';
         showToast(next ? 'تم تطبيق الكتم الصامت على العضو.' : 'تم إلغاء الكتم الصامت.');
-        closeModal('quickUserModal');
       } catch (err) {
         showToast(err.message, true);
       }
@@ -2016,54 +2112,142 @@
       const next = !u.isFrozen;
       try {
         await api('/api/owner/action', { method: 'POST', body: { action: 'freeze_user', targetKey: u.key, enabled: next } });
+        u.isFrozen = next;
+        const lbl = $('quFreezeUserBtn')?.querySelector('span');
+        if (lbl) lbl.textContent = next ? 'فك التجميد' : 'تجميد';
         showToast(next ? 'تم تجميد العضو (قراءة فقط).' : 'تم فك تجميد العضو.');
-        closeModal('quickUserModal');
       } catch (err) {
         showToast(err.message, true);
       }
     });
 
-    $('quMoveRoomBtn')?.addEventListener('click', async () => {
-      const roomChoices = state.rooms.map((r) => `${r.id}: ${r.name}`).join('\n');
-      const toRoomId = prompt(`أدخل معرف الغرفة لسحب "${u.name}" إليها:\n${roomChoices}`, state.currentRoom?.id || 'general');
-      if (!toRoomId) return;
-      try {
-        await api('/api/owner/action', { method: 'POST', body: { action: 'move_user', targetKey: u.key, toRoomId: toRoomId.trim() } });
-        showToast('تم سحب ونقل العضو للغرفة المحددة.');
-        closeModal('quickUserModal');
-      } catch (err) {
-        showToast(err.message, true);
-      }
+    $('quMoveRoomBtn')?.addEventListener('click', () => {
+      const opts = (state.rooms || []).map((r) => `<option value="${escapeHtml(r.id)}" ${state.currentRoom?.id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('');
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-right-left" style="color:#1d4ed8;"></i> سحب "${escapeHtml(u.name)}" إلى غرفة:`,
+        htmlBody: `<select id="quInlineMoveRoomSel">${opts}</select>`,
+        confirmText: 'سحب للغرفة',
+        onConfirm: async (_box, done) => {
+          const toRoomId = $('quInlineMoveRoomSel')?.value;
+          if (!toRoomId) return;
+          try {
+            await api('/api/owner/action', { method: 'POST', body: { action: 'move_user', targetKey: u.key, toRoomId } });
+            showToast('تم سحب ونقل العضو للغرفة المحددة.');
+            done();
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        }
+      });
     });
 
-    $('quXBanBtn')?.addEventListener('click', () => {
-      const reason = prompt('سبب إكس باند (حظر الجهاز نهائياً):', 'مخالفة جسيمة');
-      if (reason === null) return;
-      state.socket.emit('admin_ban', { targetKey: u.key, reason: reason || 'إكس باند من الإدارة', banType: 'xban' });
-      closeModal('quickUserModal');
+    $('quRenameUserBtn')?.addEventListener('click', () => {
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-pen"></i> تغيير اسم "${escapeHtml(u.name)}"`,
+        htmlBody: `<input type="text" id="quInlineRenameInput" value="${escapeHtml(u.name || '')}" maxlength="28" placeholder="الاسم الجديد..." />`,
+        confirmText: 'حفظ الاسم',
+        onConfirm: (_box, done) => {
+          const newDisplayName = ($('quInlineRenameInput')?.value || '').trim();
+          if (newDisplayName.length < 2) return showToast('أدخل اسماً من حرفين على الأقل.', true);
+          state.socket.emit('admin_force_name', { userId: targetUserId, targetKey: u.key, newDisplayName }, (res) => {
+            if (res?.error) return showToast(res.error, true);
+            u.name = newDisplayName;
+            u.displayName = newDisplayName;
+            if ($('quHeaderNameRow')) $('quHeaderNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(u)}`;
+            showToast(`تم تغيير الاسم إلى "${newDisplayName}".`);
+            done();
+          });
+        }
+      });
     });
 
-    $('quBanBtn')?.addEventListener('click', () => {
-      const reason = prompt('سبب الحظر النهائي:', 'مخالفة القوانين');
-      if (reason === null) return;
-      state.socket.emit('admin_ban', { targetKey: u.key, reason: reason || 'حظر من الإدارة', banType: 'ban' });
-      closeModal('quickUserModal');
+    $('quClearAvatarBtn')?.addEventListener('click', () => {
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-user-xmark" style="color:#d97706;"></i> مسح الصورة الرمزية لـ "${escapeHtml(u.name)}"؟`,
+        htmlBody: '<div class="muted" style="font-size:11.5px;">سيتم إزالة الصورة الشخصية والعودة للحرف الافتراضي.</div>',
+        confirmText: 'مسح الصورة',
+        danger: true,
+        onConfirm: (_box, done) => {
+          state.socket.emit('admin_clear_avatar', { userId: targetUserId, targetKey: u.key }, (res) => {
+            if (res?.error) return showToast(res.error, true);
+            u.avatarUrl = '';
+            const stage = $('quickUserBody')?.querySelector('.profile-avatar-85-stage');
+            if (stage) stage.innerHTML = formatAvatarHTML(u, 'profile-avatar-85');
+            showToast('تم مسح صورة العضو بنجاح.');
+            done();
+          });
+        }
+      });
     });
 
     $('quCoinsBtn')?.addEventListener('click', () => {
-      state.socket.emit('admin_give_coins', { userId: targetUserId, amount: 500 });
-      showToast('تم منح 500 عملة للعضو.');
-      closeModal('quickUserModal');
+      if (!targetUserId) return;
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-gem" style="color:#be123c;"></i> منح عملات / روبي لـ "${escapeHtml(u.name)}"`,
+        htmlBody: `<input type="number" id="quInlineRubyAmount" value="100" min="-100000" max="100000" placeholder="الكمية (+ لإضافة أو - للخصم)" />`,
+        confirmText: 'تطبيق الرصيد',
+        onConfirm: (_box, done) => {
+          const amount = Number($('quInlineRubyAmount')?.value) || 0;
+          if (!amount) return showToast('أدخل كمية صحيحة.', true);
+          state.socket.emit('admin_give_coins', { userId: targetUserId, amount }, (res) => {
+            if (res?.error) return showToast(res.error, true);
+            u.coins = res?.coins ?? (Number(u.coins || 0) + amount);
+            if ($('quHeroCoinsVal')) $('quHeroCoinsVal').textContent = `${u.coins} روبي`;
+            showToast(`تم تحديث رصيد ${u.name} (${amount >= 0 ? `+${amount}` : amount} روبي).`);
+            done();
+          });
+        }
+      });
+    });
+
+    $('quXBanBtn')?.addEventListener('click', () => {
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-shield-virus" style="color:#dc2626;"></i> إكس باند (حظر الجهاز) لـ "${escapeHtml(u.name)}"`,
+        htmlBody: `<input type="text" id="quInlineXBanReason" value="مخالفة جسيمة" placeholder="سبب الإكس باند..." />`,
+        confirmText: 'تأكيد إكس باند',
+        danger: true,
+        onConfirm: (_box, done) => {
+          const reason = ($('quInlineXBanReason')?.value || '').trim() || 'إكس باند من الإدارة';
+          state.socket.emit('admin_ban', { targetKey: u.key, reason, banType: 'xban' });
+          showToast('تم تنفيذ إكس باند وحظر الجهاز نهائياً.');
+          done();
+          closeModal('quickUserModal');
+        }
+      });
+    });
+
+    $('quBanBtn')?.addEventListener('click', () => {
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-ban" style="color:#dc2626;"></i> حظر نهائي لـ "${escapeHtml(u.name)}"`,
+        htmlBody: `<input type="text" id="quInlineBanReason" value="مخالفة القوانين" placeholder="سبب الحظر..." />`,
+        confirmText: 'تأكيد الحظر',
+        danger: true,
+        onConfirm: (_box, done) => {
+          const reason = ($('quInlineBanReason')?.value || '').trim() || 'حظر من الإدارة';
+          state.socket.emit('admin_ban', { targetKey: u.key, reason, banType: 'ban' });
+          showToast('تم حظر العضو نهائياً.');
+          done();
+          closeModal('quickUserModal');
+        }
+      });
     });
 
     $('quDeleteAccountBtn')?.addEventListener('click', () => {
       if (!targetUserId) return;
-      if (!confirm(`هل أنت متأكد من حذف حساب "${u.name}" نهائياً من قاعدة البيانات؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
-      state.socket.emit('admin_delete_account', { userId: targetUserId }, (res) => {
-        if (res?.error) showToast(res.error, true);
-        else {
-          showToast('تم حذف حساب العضو نهائياً.');
-          closeModal('quickUserModal');
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-user-slash" style="color:#dc2626;"></i> حذف حساب "${escapeHtml(u.name)}" نهائياً؟`,
+        htmlBody: '<div class="muted" style="font-size:11.5px;">سيتم مسح الحساب بالكامل من قاعدة البيانات ولا يمكن التراجع.</div>',
+        confirmText: 'نعم، احذف الحساب',
+        danger: true,
+        onConfirm: (_box, done) => {
+          state.socket.emit('admin_delete_account', { userId: targetUserId }, (res) => {
+            if (res?.error) showToast(res.error, true);
+            else {
+              showToast('تم حذف حساب العضو نهائياً.');
+              done();
+              closeModal('quickUserModal');
+            }
+          });
         }
       });
     });
@@ -2419,18 +2603,31 @@
       });
     });
 
-    $('custFramesGrid').innerHTML = (state.shopItems.frames || []).filter((f) => f.id !== 'none').map((f) => `
-      <div class="addon-card ${u.avatarFrame === f.id ? 'active' : ''}">
-        <span class="avatar-wrap sm frame-${f.id}">ع${frameOrnamentHtml(f.id)}</span>
-        <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
-        <div class="addon-card-actions">
-          <button type="button" class="btn-primary btn-xs equip-frame-btn" data-frame-id="${f.id}" ${!canAddons ? 'disabled' : ''}>
-            ${u.avatarFrame === f.id ? 'مفعل' : 'تفعيل'}
-          </button>
-          ${u.avatarFrame === f.id ? '<button type="button" class="btn-danger btn-xs remove-frame-btn">إزالة</button>' : ''}
-        </div>
-      </div>
-    `).join('');
+    const ownedFramesList = Array.isArray(u.ownedFrames) ? u.ownedFrames : [];
+    const isOwnerSelf = u.role === 'site_owner';
+    $('custFramesGrid').innerHTML = (state.shopItems.frames || [])
+      .filter((f) => f.id !== 'none' && (!f.ownerOnly || isOwnerSelf))
+      .map((f) => {
+        const price = Number(f.price || 0);
+        const owned = isOwnerSelf || price <= 0 || ownedFramesList.includes(f.id) || u.avatarFrame === f.id;
+        return `
+          <div class="addon-card store-frame-card ${u.avatarFrame === f.id ? 'active' : ''}">
+            <div class="store-avatar-stage">${formatAvatarHTML({ ...u, avatarFrame: f.id }, 'lg')}</div>
+            <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
+            ${owned
+              ? '<span class="store-owned-badge"><i class="fa-solid fa-check"></i> مملوك</span>'
+              : `<span class="store-price-pill"><i class="fa-solid fa-gem"></i> ${price} روبي</span>`}
+            <div class="addon-card-actions">
+              ${u.avatarFrame === f.id
+                ? '<button type="button" class="btn-danger btn-xs remove-frame-btn">إزالة</button>'
+                : owned
+                  ? `<button type="button" class="btn-primary btn-xs equip-frame-btn" data-frame-id="${escapeHtml(f.id)}">تفعيل</button>`
+                  : `<button type="button" class="btn-primary btn-xs buy-frame-btn" style="background:#be123c;" data-frame-id="${escapeHtml(f.id)}" data-price="${price}">شراء بالروبي</button>`}
+            </div>
+          </div>
+        `;
+      })
+      .join('');
 
     $('custFramesGrid').querySelectorAll('.equip-frame-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -2441,6 +2638,23 @@
           updateCustomizePreview();
           renderUserIdentity();
           showToast('تم تفعيل الإطار بنجاح!');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+
+    $('custFramesGrid').querySelectorAll('.buy-frame-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const res = await api('/api/shop/buy', { method: 'POST', body: { type: 'frame', itemId: btn.dataset.frameId } });
+          if (res?.user) state.user = res.user;
+          if ($('custTopCoinsVal')) $('custTopCoinsVal').textContent = String(state.user?.coins || 0);
+          if ($('custCoinsBalance')) $('custCoinsBalance').textContent = String(state.user?.coins || 0);
+          renderCustomizeAddonsGrids(canAddons);
+          updateCustomizePreview();
+          renderUserIdentity();
+          showToast('تم شراء وتفعيل الإطار بالروبي بنجاح!');
         } catch (err) {
           showToast(err.message, true);
         }
@@ -2521,10 +2735,28 @@
     if ($('custFontSizeVal') && $('custFontSize')) {
       $('custFontSizeVal').textContent = $('custFontSize').value;
     }
+    const isOwner = isExclusiveOwnerObj(u);
+    let effectiveFrame = u.avatarFrame || 'none';
+    if (isOwner && (!effectiveFrame || effectiveFrame === 'none' || effectiveFrame === 'gold_royal')) {
+      effectiveFrame = 'owner_sovereign';
+    } else if (!isOwner && effectiveFrame === 'owner_sovereign') {
+      effectiveFrame = 'none';
+    }
     const wrap = $('custPreviewAvatarWrap');
     if (wrap) {
-      wrap.className = `avatar-wrap profile-avatar-85 frame-${u.avatarFrame || 'none'}`;
-      syncFrameOrnament(wrap, u.avatarFrame || 'none');
+      wrap.className = `avatar-wrap profile-avatar-85 frame-${effectiveFrame}`;
+      syncFrameOrnament(wrap, effectiveFrame, isOwner);
+    }
+    const custAvatarStage = wrap?.closest('.profile-avatar-85-stage');
+    if (custAvatarStage) {
+      custAvatarStage.classList.toggle('owner-cosmic-avatar-stage', isOwner);
+      custAvatarStage.querySelectorAll('.owner-avatar-cosmic-halo').forEach((n) => n.remove());
+      if (isOwner) {
+        const halo = document.createElement('span');
+        halo.className = 'owner-avatar-cosmic-halo';
+        halo.setAttribute('aria-hidden', 'true');
+        custAvatarStage.insertBefore(halo, custAvatarStage.firstChild);
+      }
     }
     if (u.avatarUrl) {
       $('custPreviewAvatarImg').src = u.avatarUrl;
@@ -2548,28 +2780,41 @@
         $('custCoverImg').classList.add('hidden');
         $('custCoverHero').style.backgroundImage = '';
       }
+      const coverHero = $('custCoverHero');
+      coverHero.querySelectorAll('.owner-cosmic-cover-vortex, .owner-galaxy-corner-seal').forEach((n) => n.remove());
+      if (isOwner) {
+        const vortex = document.createElement('div');
+        vortex.className = 'owner-cosmic-cover-vortex';
+        vortex.setAttribute('aria-hidden', 'true');
+        coverHero.insertBefore(vortex, coverHero.firstChild);
+        const seal = document.createElement('span');
+        seal.className = 'owner-galaxy-corner-seal';
+        seal.innerHTML = '<i class="fa-solid fa-meteor"></i> سيد المجرة والزمن';
+        coverHero.appendChild(seal);
+      }
     }
     if ($('custDeleteCoverBtn')) {
       $('custDeleteCoverBtn').classList.toggle('hidden', !u.coverUrl);
     }
 
-    const isOwner = u.role === 'site_owner';
     const card = document.querySelector('#customizeModal .profile-luxury-card');
     if (card) {
       card.className = 'modal-card modal-card-md profile-luxury-card';
-      if (isOwner) card.classList.add('owner-black-gold-theme');
+      if (isOwner) card.classList.add('owner-black-gold-theme', 'owner-galaxy-theme');
       if (u.profileBgEffect && u.profileBgEffect !== 'none') {
         card.classList.add(`bg-effect-${u.profileBgEffect}`);
       }
     }
     const bgLayer = $('custBgEffectLayer');
     if (bgLayer) {
-      bgLayer.className = isOwner ? 'owner-falling-stars-layer' : 'profile-bg-effect-layer';
+      bgLayer.className = isOwner ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer';
     }
 
     $('custPreviewNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(previewObj)}`;
     if ($('custPreviewRoleLine')) {
-      $('custPreviewRoleLine').textContent = getRank(u.role).label;
+      $('custPreviewRoleLine').innerHTML = isOwner
+        ? `<span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span> ${escapeHtml(getRank(u.role).label)}`
+        : escapeHtml(getRank(u.role).label);
     }
     $('custPreviewBio').textContent = $('custBioInput').value || u.bio || '';
 
@@ -2781,7 +3026,7 @@
               </div>
               <div style="text-align:left;font-weight:800;">
                 <div>🏆 ${u.quizPoints || 0} نقطة مسابقة</div>
-                <div class="muted">💰 ${u.coins || 0} عملة</div>
+                <div class="muted">💎 ${u.coins || 0} روبي</div>
               </div>
             </div>
           `).join('')
@@ -2801,8 +3046,8 @@
           </div>
         </div>
         <div style="text-align:left;font-weight:800;">
-          <div>💰 ${u.coins}</div>
-          <div class="muted">🔥 ${u.activityPoints || 0} نقطة</div>
+          <div>💎 ${u.coins} روبي</div>
+          <div class="muted">🔥 ${u.activityPoints || 0} نقطة تفاعل</div>
         </div>
       </div>
     `).join('');
@@ -2837,21 +3082,37 @@
     }
     const isOwner = u.role === 'site_owner';
     const canAddons = isOwner || hasPerm('use_addons');
-    const lockHtml = !canAddons
-      ? '<div class="lock-notice" style="margin-bottom:10px;"><i class="fa-solid fa-lock"></i> تفعيل الإضافات غير مفعل لرتبتك الحالية، يمكن للإدارة تفعيله من منشئ الرتب.</div>'
+    const lockHtml = !canAddons && tab !== 'frames'
+      ? '<div class="lock-notice" style="margin-bottom:10px;"><i class="fa-solid fa-lock"></i> تفعيل بعض الإضافات غير مفعل لرتبتك، بينما شراء وتفعيل الإطارات بالروبي متاح للجميع.</div>'
       : '';
+    const ownedFramesList = Array.isArray(u.ownedFrames) ? u.ownedFrames : [];
 
     let itemsHtml = '';
     if (tab === 'frames') {
-      itemsHtml = `<div class="frames-addon-grid">${(state.shopItems.frames || []).map((f) => `
-        <div class="addon-card ${u.avatarFrame === f.id ? 'active' : ''}">
-          <span class="avatar-wrap sm frame-${f.id}">ع${frameOrnamentHtml(f.id)}</span>
-          <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
-          <button type="button" class="btn-primary btn-xs store-equip-btn" data-equip-type="frame" data-item-id="${escapeHtml(f.id)}" ${!canAddons && f.id !== 'none' ? 'disabled' : ''}>
-            ${u.avatarFrame === f.id ? 'مفعل' : (f.id === 'none' ? 'إزالة' : 'تفعيل')}
-          </button>
-        </div>
-      `).join('')}</div>`;
+      const visibleFrames = (state.shopItems.frames || []).filter((f) => !f.ownerOnly || isOwner);
+      itemsHtml = `<div class="frames-addon-grid">${visibleFrames.map((f) => {
+        const price = Number(f.price || 0);
+        const isCurrent = u.avatarFrame === f.id;
+        const owned = isOwner || f.id === 'none' || price <= 0 || ownedFramesList.includes(f.id) || isCurrent;
+        return `
+          <div class="addon-card store-frame-card ${isCurrent ? 'active' : ''}">
+            <div class="store-avatar-stage">
+              ${formatAvatarHTML({ ...u, avatarFrame: f.id }, 'lg')}
+            </div>
+            <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
+            ${f.id === 'none'
+              ? '<span class="muted" style="font-size:11px;">افتراضي مجاني</span>'
+              : owned
+                ? '<span class="store-owned-badge"><i class="fa-solid fa-check"></i> مملوك</span>'
+                : `<span class="store-price-pill"><i class="fa-solid fa-gem"></i> ${price} روبي</span>`}
+            ${isCurrent
+              ? '<button type="button" class="btn-secondary btn-xs" disabled style="width:100%;">مفعل حالياً</button>'
+              : owned
+                ? `<button type="button" class="btn-primary btn-xs store-equip-btn" style="width:100%;" data-equip-type="frame" data-item-id="${escapeHtml(f.id)}">${f.id === 'none' ? 'إزالة الإطار' : 'تفعيل'}</button>`
+                : `<button type="button" class="btn-primary btn-xs store-buy-frame-btn" style="width:100%;background:#be123c;" data-item-id="${escapeHtml(f.id)}" data-price="${price}"><i class="fa-solid fa-gem"></i> شراء بالروبي (${price})</button>`}
+          </div>
+        `;
+      }).join('')}</div>`;
     } else if (tab === 'shines') {
       itemsHtml = `<div class="shine-grid">${(state.shopItems.shines || []).map((s) => `
         <div class="addon-card ${u.nameShine === s.id ? 'active' : ''}">
@@ -2909,8 +3170,11 @@
     }
 
     body.innerHTML = `
-      <div class="gift-balance-bar" style="margin-bottom:10px;">
-        <span>رصيدك الحالي: <strong>${u.coins || 0}</strong> <i class="fa-solid fa-coins"></i></span>
+      <div class="store-ruby-bar">
+        <div>
+          <span><i class="fa-solid fa-gem" style="color:#e11d48;"></i> رصيدك الحالي: <strong>${u.coins || 0}</strong> روبي</span>
+          <div class="muted" style="font-size:11px;">تربح +2 نقطة تفاعل و +1 روبي مع كل رسالة وكل 5 دقائق تواجد!</div>
+        </div>
         <button type="button" id="storeOpenCustBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-palette"></i> ألوان وخط الاسم</button>
       </div>
       ${lockHtml}
@@ -2920,6 +3184,23 @@
     $('storeOpenCustBtn')?.addEventListener('click', () => {
       closeModal('storeModal');
       openCustomizeModal('options');
+    });
+
+    body.querySelectorAll('.store-buy-frame-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const res = await api('/api/shop/buy', {
+            method: 'POST',
+            body: { type: 'frame', itemId: btn.dataset.itemId }
+          });
+          if (res?.user) state.user = res.user;
+          renderUserIdentity();
+          renderStoreTab(tab);
+          showToast('تم شراء وتفعيل الإطار بالروبي بنجاح!');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
     });
 
     body.querySelectorAll('.store-equip-btn').forEach((btn) => {
@@ -4231,6 +4512,11 @@
       const roomOpts = (ov.rooms || state.rooms || [])
         .map((r) => `<option value="${escapeHtml(r.id)}" ${state.currentRoom?.id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}${r.is_frozen ? ' ❄️' : ''}</option>`)
         .join('');
+      const rubyTargetOpts = (suite.users || []).map((u) => {
+        const curCoins = Number(u.coins) || 0;
+        const curAct = Number(u.activityPoints || u.activity_points || 0);
+        return `<option value="${escapeHtml(u.key)}">${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})${u.isSupremeOwner ? ' [المالك]' : ''} — 💎 ${curCoins} روبي • 🔥 ${curAct} تفاعل</option>`;
+      }).join('');
       const targetOpts = [
         ...(suite.users || []).filter((u) => !u.isSupremeOwner).map((u) => ({
           key: u.key,
@@ -4243,6 +4529,25 @@
       ].map((t) => `<option value="${escapeHtml(t.key)}">${escapeHtml(t.label)}</option>`).join('');
 
       body.innerHTML = `
+        <div class="owner-suite-section ruby-manage-card" style="margin-bottom:10px;">
+          <h4><i class="fa-solid fa-gem" style="color:#e11d48;"></i> إدارة الروبي ونقاط التفاعل (إضافة / خصم فوري)</h4>
+          <select id="ownerRubyTargetSel">${rubyTargetOpts || '<option value="">لا يوجد أعضاء</option>'}</select>
+          <div class="form-grid-2">
+            <div>
+              <label class="muted">كمية الروبي (💎):</label>
+              <input type="number" id="ownerRubyAmountInput" value="50" min="0" max="1000000" placeholder="مثال: 50" />
+            </div>
+            <div>
+              <label class="muted">نقاط التفاعل (🔥 اختياري):</label>
+              <input type="number" id="ownerActivityAmountInput" value="0" min="0" max="1000000" placeholder="مثال: 10" />
+            </div>
+          </div>
+          <div class="inline-row" style="flex-wrap:wrap;">
+            <button type="button" id="ownerRubyAddBtn" class="btn-primary btn-xs" style="background:#059669;"><i class="fa-solid fa-plus"></i> إضافة روبي ونقاط</button>
+            <button type="button" id="ownerRubySubBtn" class="btn-danger btn-xs"><i class="fa-solid fa-minus"></i> خصم روبي ونقاط</button>
+          </div>
+        </div>
+
         <div class="owner-subtabs-bar">
           <button type="button" class="owner-subtab-btn ${sub === 'surveillance' ? 'active' : ''}" data-owner-sub="surveillance"><i class="fa-solid fa-eye"></i> المراقبة والسجلات</button>
           <button type="button" class="owner-subtab-btn ${sub === 'moderation' ? 'active' : ''}" data-owner-sub="moderation"><i class="fa-solid fa-shield-halved"></i> التحكم والحماية</button>
@@ -4440,6 +4745,20 @@
           showToast(err.message, true);
         }
       };
+
+      $('ownerRubyAddBtn')?.addEventListener('click', () => {
+        const targetKey = $('ownerRubyTargetSel')?.value;
+        const rubyDelta = Math.abs(Number($('ownerRubyAmountInput')?.value) || 0);
+        const activityDelta = Math.abs(Number($('ownerActivityAmountInput')?.value) || 0);
+        runOwnerAct({ action: 'manage_ruby', targetKey, rubyDelta, activityDelta }, 'تمت إضافة الروبي والنقاط بنجاح!');
+      });
+
+      $('ownerRubySubBtn')?.addEventListener('click', () => {
+        const targetKey = $('ownerRubyTargetSel')?.value;
+        const rubyDelta = -Math.abs(Number($('ownerRubyAmountInput')?.value) || 0);
+        const activityDelta = -Math.abs(Number($('ownerActivityAmountInput')?.value) || 0);
+        runOwnerAct({ action: 'manage_ruby', targetKey, rubyDelta, activityDelta }, 'تم خصم الروبي والنقاط بنجاح!');
+      });
 
       body.querySelectorAll('.owner-ban-ip-btn').forEach((b) => {
         b.addEventListener('click', () => {
@@ -5740,9 +6059,6 @@
       if (!e.target.closest('.plus-menu-wrap')) $('plusDropdown').classList.add('hidden');
       if (!e.target.closest('#emojiPopover') && !e.target.closest('#emojiPickerBtn')) $('emojiPopover').classList.add('hidden');
       if (!e.target.closest('#radioPopover') && !e.target.closest('#footerRadioSwitchBtn')) $('radioPopover')?.classList.add('hidden');
-      if (!e.target.closest('.mod-menu-wrap') && !e.target.closest('#quModMenuDropdown') && !e.target.closest('#quOpenModDrawerInsideBtn')) {
-        document.querySelectorAll('.mod-menu-dropdown').forEach((m) => m.classList.add('hidden'));
-      }
       if (!e.target.closest('.msg-actions-wrap') && !e.target.closest('.wall-post-menu-wrap')) {
         document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
       }
