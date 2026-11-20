@@ -202,6 +202,9 @@
             </div>
             <div id="roomBannerDesc" class="room-banner-desc">الغرفة الرئيسية للتعارف والدردشة</div>
           </div>
+          <button type="button" id="toggleNightAtmosBtn" class="mini-ctrl-btn" title="أجواء السهرة الليلية">
+            <i class="fa-solid fa-moon"></i>
+          </button>
           <button type="button" id="roomSettingsBtn" class="mini-ctrl-btn hidden" title="إعدادات الغرفة">
             <i class="fa-solid fa-gear"></i>
           </button>
@@ -244,6 +247,7 @@
       <!-- MAIN BODY (PURE WHITE FEED #ffffff + SLIDE-OVER DRAWERS) -->
       <div class="chat-workspace-body">
         <main id="chatStage" class="chat-stage">
+          <div id="nightStarsLayer" class="night-stars-backdrop hidden" aria-hidden="true"></div>
           <div id="pinnedRoyalBanner" class="pinned-royal-banner hidden"></div>
           <div id="chatFeed" class="chat-feed"></div>
           <div id="typingIndicator" class="typing-indicator hidden"></div>
@@ -427,6 +431,9 @@
         <div id="giftOverlaySubtitle" class="gift-overlay-sub"></div>
       </div>
     </div>
+
+    <!-- CINEMATIC VIP & OWNER ENTRANCE HOST (2s NON-BLOCKING) -->
+    <div id="cinematicEntranceHost" class="cinematic-entrance-host" aria-live="polite"></div>
 
     <!-- ==========================================
          MODALS

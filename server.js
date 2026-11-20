@@ -2680,7 +2680,13 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       lucky_box_enabled: settings.lucky_box_enabled === 0 ? 0 : 1,
       lucky_box_min: Number(settings.lucky_box_min) || 50,
       lucky_box_max: Number(settings.lucky_box_max) || 500,
-      referral_bonus: Number(settings.referral_bonus) || 200
+      referral_bonus: Number(settings.referral_bonus) || 200,
+      fx_owner_galaxy_identity: settings.fx_owner_galaxy_identity === 0 ? 0 : 1,
+      fx_glass_bubbles: settings.fx_glass_bubbles === 0 ? 0 : 1,
+      fx_mic_waves: settings.fx_mic_waves === 0 ? 0 : 1,
+      fx_cinematic_entrance: settings.fx_cinematic_entrance === 0 ? 0 : 1,
+      fx_typing_avatars: settings.fx_typing_avatars === 0 ? 0 : 1,
+      fx_night_atmosphere: settings.fx_night_atmosphere || 'always_on'
     }
   });
 });
@@ -3465,6 +3471,9 @@ io.on('connection', (socket) => {
       roomId: entry.roomId,
       userKey: entry.key,
       name: entry.name,
+      role: entry.role,
+      avatarUrl: entry.avatarUrl || '',
+      avatarFrame: entry.avatarFrame || 'none',
       isTyping: Boolean(isTyping)
     });
   });
@@ -3614,6 +3623,18 @@ io.on('connection', (socket) => {
     io.to(`room:${entry.roomId}`).emit('mic_state', {
       roomId: entry.roomId,
       slots: getPublicMicSlots(entry.roomId)
+    });
+  });
+
+  socket.on('mic_speaking_level', ({ slot, level } = {}) => {
+    const entry = onlineSockets.get(socket.id);
+    if (!entry || !entry.roomId) return;
+    const clamped = Math.max(0, Math.min(1, Number(level) || 0));
+    socket.to(`room:${entry.roomId}`).emit('mic_speaking_level', {
+      roomId: entry.roomId,
+      slot: Number(slot) || 0,
+      userKey: entry.key,
+      level: clamped
     });
   });
 

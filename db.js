@@ -593,6 +593,12 @@ const DEFAULT_SITE_SETTINGS = {
   lucky_box_max: 500,
   referral_bonus: 200,
   quiz_bot_enabled: 1,
+  fx_owner_galaxy_identity: 1,
+  fx_glass_bubbles: 1,
+  fx_mic_waves: 1,
+  fx_cinematic_entrance: 1,
+  fx_typing_avatars: 1,
+  fx_night_atmosphere: 'always_on',
   updated_at: new Date().toISOString()
 };
 
@@ -2132,6 +2138,32 @@ function updateSiteSettings(patch = {}) {
         : Number(cur.referral_bonus ?? 200),
     quiz_bot_enabled:
       patch.quiz_bot_enabled !== undefined ? (patch.quiz_bot_enabled ? 1 : 0) : cur.quiz_bot_enabled !== 0 ? 1 : 0,
+    fx_owner_galaxy_identity:
+      patch.fx_owner_galaxy_identity !== undefined
+        ? (patch.fx_owner_galaxy_identity ? 1 : 0)
+        : cur.fx_owner_galaxy_identity !== 0 ? 1 : 0,
+    fx_glass_bubbles:
+      patch.fx_glass_bubbles !== undefined
+        ? (patch.fx_glass_bubbles ? 1 : 0)
+        : cur.fx_glass_bubbles !== 0 ? 1 : 0,
+    fx_mic_waves:
+      patch.fx_mic_waves !== undefined
+        ? (patch.fx_mic_waves ? 1 : 0)
+        : cur.fx_mic_waves !== 0 ? 1 : 0,
+    fx_cinematic_entrance:
+      patch.fx_cinematic_entrance !== undefined
+        ? (patch.fx_cinematic_entrance ? 1 : 0)
+        : cur.fx_cinematic_entrance !== 0 ? 1 : 0,
+    fx_typing_avatars:
+      patch.fx_typing_avatars !== undefined
+        ? (patch.fx_typing_avatars ? 1 : 0)
+        : cur.fx_typing_avatars !== 0 ? 1 : 0,
+    fx_night_atmosphere:
+      patch.fx_night_atmosphere !== undefined && ['always_on', 'auto', 'off'].includes(String(patch.fx_night_atmosphere))
+        ? String(patch.fx_night_atmosphere)
+        : ['always_on', 'auto', 'off'].includes(String(cur.fx_night_atmosphere))
+          ? String(cur.fx_night_atmosphere)
+          : 'always_on',
     updated_at: nowIso()
   };
 

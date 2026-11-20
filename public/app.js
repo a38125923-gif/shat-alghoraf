@@ -214,7 +214,15 @@
     ownerSuite: null,
     deferredInstallPrompt: null,
     activeStoreTab: 'frames',
-    rankPickerTarget: null
+    rankPickerTarget: null,
+    typingUsers: new Map(),
+    typingPruneTimer: null,
+    micLevelBySlot: new Map(),
+    micAnalysers: new Map(),
+    micWaveRaf: null,
+    micLastEmitTs: 0,
+    userNightPref: localStorage.getItem('chat_night_atmos_pref') || 'follow',
+    cinematicTimer: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -466,12 +474,16 @@
     return role === 'site_owner' || Boolean(userObj.isSupremeOwner) || email === 'a38125923@gmail.com';
   }
 
+  function isOwnerGalaxyVisualEnabled() {
+    return Number(state.settings?.fx_owner_galaxy_identity ?? 1) !== 0;
+  }
+
   function formatNameHTML(userObj) {
     const uKey = userObj.sender_key || userObj.key || '';
     const name = escapeHtml(userObj.sender_name || userObj.name || 'عضو');
     const role = userObj.sender_role || userObj.role || 'member';
     const isQuizBot = uKey === 'system:quizbot' || uKey === 'system:official';
-    const isExclusiveOwner = isExclusiveOwnerObj(userObj);
+    const isExclusiveOwner = isExclusiveOwnerObj(userObj) && isOwnerGalaxyVisualEnabled();
     const shine = userObj.name_shine || userObj.nameShine || 'none';
     const nameAnim = userObj.name_anim || userObj.nameAnim || 'none';
     const nameAnimSpeed = userObj.name_anim_speed || userObj.nameAnimSpeed || 'normal';
@@ -561,18 +573,19 @@
   function formatAvatarHTML(userObj, sizeClass = '') {
     const name = String(userObj.sender_name || userObj.name || 'ع').trim();
     const avatarUrl = userObj.avatar_url || userObj.avatarUrl || '';
-    const isOwnerUser = isExclusiveOwnerObj(userObj);
+    const isActualOwner = isExclusiveOwnerObj(userObj);
+    const isOwnerGalaxy = isActualOwner && isOwnerGalaxyVisualEnabled();
     let frame = userObj.avatar_frame || userObj.avatarFrame || 'none';
-    if (isOwnerUser && (!frame || frame === 'none' || frame === 'gold_royal')) {
+    if (isOwnerGalaxy && (!frame || frame === 'none' || frame === 'gold_royal')) {
       frame = 'owner_sovereign';
-    } else if (!isOwnerUser && frame === 'owner_sovereign') {
-      frame = 'none';
+    } else if (!isOwnerGalaxy && frame === 'owner_sovereign') {
+      frame = isActualOwner ? 'gold_royal' : 'none';
     }
     const letter = escapeHtml(name.slice(0, 1) || 'ع');
     const inner = avatarUrl
       ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(name)}" />`
       : `<span class="avatar-letter">${letter}</span>`;
-    return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}${frameOrnamentHtml(frame, isOwnerUser)}</span>`;
+    return `<span class="avatar-wrap ${sizeClass} frame-${escapeHtml(frame)}">${inner}${frameOrnamentHtml(frame, isOwnerGalaxy)}</span>`;
   }
 
   function formatTimeAgo(dateInput) {
@@ -717,6 +730,111 @@
         $('customHtmlBanner').classList.add('hidden');
       }
     }
+    const glassOn = Number(s.fx_glass_bubbles ?? 1) !== 0;
+    const micWavesOn = Number(s.fx_mic_waves ?? 1) !== 0;
+    document.body.classList.toggle('fx-glass-bubbles-on', glassOn);
+    document.body.classList.toggle('fx-mic-waves-on', micWavesOn);
+    if (state.currentRoom) {
+      renderRoomBanner();
+      renderAllMessages();
+      renderMics();
+      renderUserIdentity();
+      renderRoomUsers();
+      renderTypingAvatarsBar();
+    }
+  }
+
+  function isNightAtmosphereActive() {
+    const globalMode = String(state.settings?.fx_night_atmosphere || 'always_on');
+    if (globalMode === 'off') return false;
+    if (state.userNightPref === 'on') return true;
+    if (state.userNightPref === 'off') return false;
+    if (globalMode === 'always_on') return true;
+    const hr = new Date().getHours();
+    return hr >= 18 || hr < 6;
+  }
+
+  function showCinematicEntrance(userObj) {
+    if (!userObj || Number(state.settings?.fx_cinematic_entrance ?? 1) === 0) return;
+    const host = $('cinematicEntranceHost');
+    if (!host) return;
+    const isOwnerTarget = isExclusiveOwnerObj(userObj);
+    const rk = getRank(userObj.role || 'member');
+    const isVipOrHigh = isOwnerTarget || Number(rk?.power || 0) >= 40 || String(rk?.key || '').toLowerCase().includes('vip');
+    if (!isVipOrHigh) return;
+
+    if (state.cinematicTimer) {
+      clearTimeout(state.cinematicTimer);
+      state.cinematicTimer = null;
+    }
+    host.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = `cinematic-entrance-card ${isOwnerTarget ? 'is-owner' : 'is-vip'}`;
+    const titleLabel = isOwnerTarget ? 'سيد المجرة والزمن • دخول أسطوري' : `${rk?.label || 'كبار الشخصيات'} • تشريف خاص`;
+    card.innerHTML = `
+      <span class="cinematic-gold-dust" aria-hidden="true"></span>
+      <div class="cinematic-avatar-box">${formatAvatarHTML(userObj, 'lg')}</div>
+      <div class="cinematic-meta">
+        <div class="cinematic-kicker"><i class="fa-solid ${isOwnerTarget ? 'fa-meteor' : 'fa-crown'}"></i> ${escapeHtml(titleLabel)}</div>
+        <div class="cinematic-name-line">${roleBadgeHTML(userObj.role, true)} ${formatNameHTML(userObj)}</div>
+      </div>
+    `;
+    host.appendChild(card);
+
+    state.cinematicTimer = setTimeout(() => {
+      card.classList.add('is-leaving');
+      setTimeout(() => {
+        if (card.parentNode === host) card.remove();
+      }, 320);
+    }, 1700);
+  }
+
+  function renderTypingAvatarsBar() {
+    const bar = $('typingIndicator');
+    if (!bar) return;
+    const now = Date.now();
+    for (const [k, v] of [...state.typingUsers.entries()]) {
+      if (!v || now > v.expiresAt) state.typingUsers.delete(k);
+    }
+    const active = Array.from(state.typingUsers.values());
+    if (!active.length) {
+      bar.innerHTML = '';
+      bar.classList.add('hidden');
+      return;
+    }
+
+    const useAvatars = Number(state.settings?.fx_typing_avatars ?? 1) !== 0;
+    if (!useAvatars) {
+      const names = active.slice(0, 2).map((x) => x.name).join('، ');
+      bar.textContent = `✍️ ${names}${active.length > 2 ? ` و${active.length - 2} آخرون` : ''} يكتب الآن...`;
+      bar.className = 'typing-indicator';
+      return;
+    }
+
+    const avatarsHtml = active.slice(0, 5).map((t) => {
+      const known =
+        state.roomUsers.find((u) => u.key === t.key) ||
+        state.persistentMembers.find((u) => u.key === t.key) ||
+        t;
+      const av = known.avatarUrl || t.avatarUrl || '';
+      const letter = escapeHtml(String(t.name || 'ع').slice(0, 1));
+      const inner = av
+        ? `<img src="${escapeHtml(av)}" alt="${escapeHtml(t.name)}" />`
+        : `<span>${letter}</span>`;
+      return `<span class="typing-avatar-chip" title="${escapeHtml(t.name)} يكتب الآن">${inner}</span>`;
+    }).join('');
+
+    const label = active.length === 1
+      ? `${escapeHtml(active[0].name)} يكتب...`
+      : `${active.length} أعضاء يكتبون...`;
+
+    bar.className = 'typing-indicator typing-avatars-bar';
+    bar.innerHTML = `
+      <div class="typing-avatars-stack">${avatarsHtml}</div>
+      <span class="typing-avatars-lbl">${label}</span>
+      <span class="typing-wave-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    `;
   }
 
   function updateNotificationBadge(count) {
@@ -755,15 +873,16 @@
     const u = state.user;
     if (!u) return;
     const isOwner = isExclusiveOwnerObj(u);
+    const isOwnerGalaxy = isOwner && isOwnerGalaxyVisualEnabled();
     let effectiveFrame = u.avatarFrame || 'none';
-    if (isOwner && (!effectiveFrame || effectiveFrame === 'none' || effectiveFrame === 'gold_royal')) {
+    if (isOwnerGalaxy && (!effectiveFrame || effectiveFrame === 'none' || effectiveFrame === 'gold_royal')) {
       effectiveFrame = 'owner_sovereign';
-    } else if (!isOwner && effectiveFrame === 'owner_sovereign') {
-      effectiveFrame = 'none';
+    } else if (!isOwnerGalaxy && effectiveFrame === 'owner_sovereign') {
+      effectiveFrame = isOwner ? 'gold_royal' : 'none';
     }
     const wrap = $('topAvatarWrap');
     wrap.className = `avatar-wrap frame-${effectiveFrame}`;
-    syncFrameOrnament(wrap, effectiveFrame, isOwner);
+    syncFrameOrnament(wrap, effectiveFrame, isOwnerGalaxy);
     if (u.avatarUrl) {
       $('topAvatarImg').src = u.avatarUrl;
       $('topAvatarImg').classList.remove('hidden');
@@ -781,8 +900,8 @@
     $('drawerOwnerSuiteBtn')?.classList.toggle('hidden', !isOwner);
     $('admOwnerSuiteTabBtn')?.classList.toggle('hidden', !isOwner);
 
-    $('dropUserName').innerHTML = isOwner ? formatNameHTML(u) : escapeHtml(u.name || '');
-    $('dropUserRole').innerHTML = isOwner
+    $('dropUserName').innerHTML = isOwnerGalaxy ? formatNameHTML(u) : escapeHtml(u.name || '');
+    $('dropUserRole').innerHTML = isOwnerGalaxy
       ? `${roleBadgeHTML(u.role)} <span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span>`
       : `${roleBadgeHTML(u.role)}`;
     $('dropUserCoins').innerHTML = `<i class="fa-solid fa-gem" style="color:#f43f5e;"></i> ${u.coins || 0} روبي • <i class="fa-solid fa-fire" style="color:#fb923c;"></i> ${u.activityPoints || 0} تفاعل`;
@@ -849,7 +968,8 @@
     if ($('roomOnlineCounter')) $('roomOnlineCounter').textContent = String(boosted);
 
     const stage = $('chatStage');
-    stage.className = `chat-stage theme-${r.bg_theme || 'warm_peach'}`;
+    const nightOn = isNightAtmosphereActive() && !r.wallpaper_url && !r.bg_custom;
+    stage.className = `chat-stage theme-${r.bg_theme || 'warm_peach'}${nightOn ? ' night-atmosphere-active' : ''}`;
     if (r.wallpaper_url) {
       stage.style.backgroundImage = `url("${r.wallpaper_url}")`;
     } else if (r.bg_custom) {
@@ -857,6 +977,14 @@
     } else {
       stage.style.backgroundImage = '';
       stage.style.background = '';
+    }
+    $('nightStarsLayer')?.classList.toggle('hidden', !nightOn);
+    const nightBtn = $('toggleNightAtmosBtn');
+    if (nightBtn) {
+      const globalOff = String(state.settings?.fx_night_atmosphere || 'always_on') === 'off';
+      nightBtn.classList.toggle('hidden', globalOff);
+      nightBtn.classList.toggle('active-night', nightOn);
+      nightBtn.title = nightOn ? 'إيقاف أجواء السهرة الليلية مؤقتاً' : 'تفعيل أجواء السهرة الليلية';
     }
 
     renderRoomYoutubeBar();
@@ -1099,6 +1227,96 @@
   // ==========================================
   // WEBRTC MICS 1..5 ENGINE
   // ==========================================
+  function cleanupMicAnalyser(key) {
+    const rec = state.micAnalysers.get(key);
+    if (!rec) return;
+    try {
+      rec.source?.disconnect();
+      if (rec.ctx && rec.ctx.state !== 'closed') rec.ctx.close().catch(() => {});
+    } catch {
+      // ignore
+    }
+    state.micAnalysers.delete(key);
+  }
+
+  function setupMicAnalyser(key, stream, isLocal = false) {
+    cleanupMicAnalyser(key);
+    if (!stream || Number(state.settings?.fx_mic_waves ?? 1) === 0) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      const ctx = new AudioCtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      analyser.smoothingTimeConstant = 0.65;
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      state.micAnalysers.set(key, { ctx, source, analyser, dataArray, isLocal, smoothed: 0 });
+      startMicWaveformLoop();
+    } catch {
+      // ignore AudioContext restriction
+    }
+  }
+
+  function startMicWaveformLoop() {
+    if (state.micWaveRaf) return;
+    const tick = () => {
+      const wavesEnabled = Number(state.settings?.fx_mic_waves ?? 1) !== 0;
+      const hasOccupied = (state.mics || []).some((m) => Boolean(m.holderKey));
+      if (!wavesEnabled || !hasOccupied) {
+        state.micWaveRaf = null;
+        return;
+      }
+
+      const now = Date.now();
+      for (const m of state.mics || []) {
+        const slot = Number(m.slot);
+        let level = 0;
+        const isMuted = Boolean(m.isSelfMuted || m.isAdminMuted);
+        if (m.holderKey && !isMuted) {
+          if (m.holderKey === state.user?.key) {
+            const locRec = state.micAnalysers.get('local');
+            if (locRec && !state.isSelfMicMuted) {
+              locRec.analyser.getByteFrequencyData(locRec.dataArray);
+              let sum = 0;
+              for (let i = 0; i < locRec.dataArray.length; i += 1) sum += locRec.dataArray[i];
+              const raw = Math.min(1, (sum / (locRec.dataArray.length * 110)));
+              locRec.smoothed = locRec.smoothed * 0.65 + raw * 0.35;
+              level = locRec.smoothed;
+              if (state.socket && now - state.micLastEmitTs >= 110) {
+                state.micLastEmitTs = now;
+                state.socket.emit('mic_speaking_level', { slot, level: Number(level.toFixed(2)) });
+              }
+            }
+          } else {
+            const remRec = m.holderSocketId ? state.micAnalysers.get(`remote:${m.holderSocketId}`) : null;
+            if (remRec) {
+              remRec.analyser.getByteFrequencyData(remRec.dataArray);
+              let sum = 0;
+              for (let i = 0; i < remRec.dataArray.length; i += 1) sum += remRec.dataArray[i];
+              const raw = Math.min(1, (sum / (remRec.dataArray.length * 110)));
+              remRec.smoothed = remRec.smoothed * 0.65 + raw * 0.35;
+              level = remRec.smoothed;
+            }
+            const sockLvl = state.micLevelBySlot.get(slot);
+            if (sockLvl && now - sockLvl.ts < 650) {
+              level = Math.max(level, sockLvl.level);
+            }
+          }
+        }
+        const btn = $('micSlotsContainer')?.querySelector(`.mic-slot-btn[data-mic-slot="${slot}"]`);
+        if (btn) {
+          btn.style.setProperty('--mic-level', level.toFixed(2));
+          btn.classList.toggle('is-speaking-live', level > 0.08);
+        }
+      }
+
+      state.micWaveRaf = requestAnimationFrame(tick);
+    };
+    state.micWaveRaf = requestAnimationFrame(tick);
+  }
+
   function closeAllMicPeers() {
     for (const pc of state.micPeers.values()) {
       try {
@@ -1108,10 +1326,14 @@
       }
     }
     state.micPeers.clear();
+    for (const key of [...state.micAnalysers.keys()]) {
+      if (key.startsWith('remote:')) cleanupMicAnalyser(key);
+    }
     $('webrtcAudioContainer').innerHTML = '';
   }
 
   function stopLocalMicStream() {
+    cleanupMicAnalyser('local');
     if (state.localStream) {
       for (const t of state.localStream.getTracks()) t.stop();
       state.localStream = null;
@@ -1130,6 +1352,7 @@
     }
     audio.srcObject = stream;
     audio.play().catch(() => {});
+    setupMicAnalyser(`remote:${remoteSocketId}`, stream, false);
   }
 
   function createPeerConnection(remoteSocketId) {
@@ -1158,6 +1381,7 @@
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         state.micPeers.delete(remoteSocketId);
+        cleanupMicAnalyser(`remote:${remoteSocketId}`);
         const el = document.getElementById(`webrtc_audio_${remoteSocketId}`);
         if (el) el.remove();
       }
@@ -1173,6 +1397,7 @@
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
       }
+      if (state.localStream) setupMicAnalyser('local', state.localStream, true);
     } catch {
       showToast('تم الصعود للمايك بدون إذن ميكروفون المتصفح (تحقق من الأذونات للبث الصوتي).');
     }
@@ -1184,6 +1409,7 @@
       }
       state.isSelfMicMuted = false;
       state.socket.emit('mic_webrtc_ready', { slot: slotNum });
+      startMicWaveformLoop();
     });
   }
 
@@ -1197,6 +1423,7 @@
     const container = $('micSlotsContainer');
     if (!container) return;
     const myKey = state.user?.key;
+    const wavesOn = Number(state.settings?.fx_mic_waves ?? 1) !== 0;
     let iHoldMic = false;
     let iAmMuted = false;
 
@@ -1214,6 +1441,9 @@
       const avatarContent = isOccupied && m.holderAvatar
         ? `<img src="${escapeHtml(m.holderAvatar)}" alt="${escapeHtml(m.holderName)}" />`
         : micIconHtml;
+      const waveRingsHtml = isOccupied && !isMuted && wavesOn
+        ? '<span class="mic-wave-ring r1" aria-hidden="true"></span><span class="mic-wave-ring r2" aria-hidden="true"></span>'
+        : '';
       const title = isOccupied
         ? `${m.holderName}${isMuted ? ' (مكتوم)' : ' (يتحدث)'}`
         : `صعود على المايك ${m.slot}`;
@@ -1227,12 +1457,17 @@
             data-mic-slot="${m.slot}"
             title="${escapeHtml(title)}"
           >
+            ${waveRingsHtml}
             ${avatarContent}
           </button>
           <span class="mic-slot-num-lbl">${escapeHtml(underLabel)}</span>
         </div>
       `;
     }).join('');
+
+    if (wavesOn && (state.mics || []).some((m) => m.holderKey && !m.isSelfMuted && !m.isAdminMuted)) {
+      startMicWaveformLoop();
+    }
 
     $('micSelfFloating')?.classList.toggle('hidden', !iHoldMic);
     $('leaveMicBtn')?.classList.toggle('hidden', !iHoldMic);
@@ -1280,19 +1515,42 @@
       const rawTxtColor = String(msg.text_color || '').trim();
       const lowerTxt = rawTxtColor.toLowerCase();
       const isDarkTxt = !rawTxtColor || ['#111827', '#0f172a', '#1e293b', '#18181b', '#27272a', '#334155', '#000', '#000000'].includes(lowerTxt);
+      const isAutoTxt = isDarkTxt || lowerTxt === '#ffffff' || lowerTxt === '#fff';
       const readableColor = isAdminNotice
         ? '#7f1d1d'
         : (isOwnerSender
             ? (isDarkTxt ? '#f8fafc' : escapeHtml(rawTxtColor))
-            : (!rawTxtColor || lowerTxt === '#ffffff' || lowerTxt === '#fff' ? '#111827' : escapeHtml(rawTxtColor)));
+            : (isAutoTxt ? '' : escapeHtml(rawTxtColor)));
       const ff = msg.font_family && msg.font_family !== 'Normal' ? `font-family:${resolveFontFamilyCss(msg.font_family)};` : '';
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
       const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
-      inlineTextHtml = `<span class="msg-text-inline" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
+      const colStyle = readableColor ? `color:${readableColor};` : '';
+      inlineTextHtml = `<span class="msg-text-inline${!readableColor ? ' msg-auto-color' : ''}" style="${colStyle}font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
 
-    const isOwnerPortal = isOwnerSender && !isAdminNotice;
-    row.className = `cody-msg-row${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${isOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : ''}`;
+    const useOwnerPortal = isOwnerSender && !isAdminNotice && isOwnerGalaxyVisualEnabled();
+    const useGlassBubbles = Number(state.settings?.fx_glass_bubbles ?? 1) !== 0;
+    const senderRank = getRank(msg.sender_role || 'member');
+    const rKeyLow = String(senderRank?.key || msg.sender_role || '').toLowerCase();
+    const rLblLow = String(senderRank?.label || '').toLowerCase();
+    const rPower = Number(senderRank?.power || 0);
+    let rankTierClass = 'rank-tier-member';
+    let rankGlowColor = 'rgba(148, 163, 184, 0.32)';
+    if (isOwnerSender) {
+      rankTierClass = 'rank-tier-owner';
+      rankGlowColor = 'rgba(251, 191, 36, 0.62)';
+    } else if (rKeyLow.includes('vip') || rLblLow.includes('vip') || (rPower >= 35 && rPower < 60)) {
+      rankTierClass = 'rank-tier-vip';
+      rankGlowColor = 'rgba(56, 189, 248, 0.56)';
+    } else if (rPower >= 60) {
+      rankTierClass = 'rank-tier-admin';
+      rankGlowColor = senderRank?.bg_color || '#60a5fa';
+    }
+
+    row.className = `cody-msg-row${useGlassBubbles ? ` glass-bubble-msg ${rankTierClass}` : ''}${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${useOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : (isOwnerSender && !isAdminNotice ? ' owner-gold-glass-fallback' : '')}`;
+    if (useGlassBubbles && !useOwnerPortal) {
+      row.style.setProperty('--msg-rank-glow', rankGlowColor);
+    }
     if (msg.client_msg_id) row.dataset.clientMsgId = msg.client_msg_id;
     if (msg.id) row.dataset.msgId = String(msg.id);
 
@@ -1323,7 +1581,7 @@
     const canRank = canActOnTarget && String(msg.sender_key || '').startsWith('user:') && (isOwner || hasPerm('set_rank'));
 
     row.innerHTML = `
-      ${isOwnerPortal ? '<span class="owner-portal-edge-dots" aria-hidden="true"></span>' : ''}
+      ${useOwnerPortal ? '<span class="owner-portal-edge-dots" aria-hidden="true"></span>' : ''}
       <div class="msg-avatar-trigger" style="cursor:pointer" title="عرض البطاقة">${formatAvatarHTML(msg, '')}</div>
       <div class="msg-body-col">
         <div class="msg-head-line">
@@ -1476,7 +1734,7 @@
     const isJoinObj = payload && typeof payload === 'object' && (payload.kind === 'join' || payload.kind === 'royal_join') && payload.user;
     if (isJoinObj) {
       const u = payload.user;
-      const isRoyal = payload.kind === 'royal_join' || isExclusiveOwnerObj(u);
+      const isRoyal = (payload.kind === 'royal_join' || isExclusiveOwnerObj(u)) && isOwnerGalaxyVisualEnabled();
       const row = document.createElement('div');
       row.className = `cody-msg-row cody-join-row${isRoyal ? ' owner-royal-msg-row owner-portal-card' : ''}`;
       row.innerHTML = `
@@ -1708,6 +1966,7 @@
       u.role === 'site_owner' ||
       u.isSupremeOwner ||
       String(u.email || '').toLowerCase() === 'a38125923@gmail.com';
+    const isTargetOwnerGalaxy = isTargetOwner && isOwnerGalaxyVisualEnabled();
     const allowedByImmunity = !isMe && !isTargetOwner && canManageTargetUser(u);
     const canMod = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('clear_room') || hasPerm('set_rank') || hasPerm('access_panel'));
     const canBan = allowedByImmunity && (isOwner || hasPerm('ban'));
@@ -1742,13 +2001,13 @@
       : '';
 
     $('quickUserBody').innerHTML = `
-      <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwner ? ' owner-black-gold-theme owner-galaxy-theme' : ''}">
-        <div class="${isTargetOwner ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer'}"></div>
+      <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwnerGalaxy ? ' owner-black-gold-theme owner-galaxy-theme' : ''}">
+        <div class="${isTargetOwnerGalaxy ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer'}"></div>
         <div class="profile-cover-hero" id="quCoverHero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}')` : ''}">
-          ${isTargetOwner ? '<div class="owner-cosmic-cover-vortex" aria-hidden="true"></div>' : ''}
+          ${isTargetOwnerGalaxy ? '<div class="owner-cosmic-cover-vortex" aria-hidden="true"></div>' : ''}
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
           <div class="profile-cover-overlay"></div>
-          ${isTargetOwner ? '<span class="owner-galaxy-corner-seal"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span>' : ''}
+          ${isTargetOwnerGalaxy ? '<span class="owner-galaxy-corner-seal"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span>' : ''}
           <div class="profile-cover-top-actions cover-actions-left">
             <button type="button" class="hero-circle-glass-btn" id="quHeroCloseBtn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة صورة الغلاف"><i class="fa-solid fa-eye"></i></button>
@@ -1762,8 +2021,8 @@
         </div>
 
         <div class="profile-identity-header-row">
-          <div class="profile-avatar-85-stage${isTargetOwner ? ' owner-cosmic-avatar-stage' : ''}">
-            ${isTargetOwner ? '<span class="owner-avatar-cosmic-halo" aria-hidden="true"></span>' : ''}
+          <div class="profile-avatar-85-stage${isTargetOwnerGalaxy ? ' owner-cosmic-avatar-stage' : ''}">
+            ${isTargetOwnerGalaxy ? '<span class="owner-avatar-cosmic-halo" aria-hidden="true"></span>' : ''}
             ${formatAvatarHTML(u, 'profile-avatar-85')}
           </div>
           <div class="profile-identity-meta-col">
@@ -1771,7 +2030,7 @@
               ${roleBadgeHTML(u.role, true)}
               ${formatNameHTML(u)}
             </div>
-            <div class="profile-role-subtitle" id="quHeaderRoleSub">${isTargetOwner ? '<span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span> ' : ''}${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
+            <div class="profile-role-subtitle" id="quHeaderRoleSub">${isTargetOwnerGalaxy ? '<span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span> ' : ''}${escapeHtml(getRank(u.role).label)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
             ${u.bio ? `<p class="profile-bio-line">${escapeHtml(u.bio)}</p>` : ''}
             <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
               ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
@@ -2736,22 +2995,23 @@
       $('custFontSizeVal').textContent = $('custFontSize').value;
     }
     const isOwner = isExclusiveOwnerObj(u);
+    const isOwnerGalaxy = isOwner && isOwnerGalaxyVisualEnabled();
     let effectiveFrame = u.avatarFrame || 'none';
-    if (isOwner && (!effectiveFrame || effectiveFrame === 'none' || effectiveFrame === 'gold_royal')) {
+    if (isOwnerGalaxy && (!effectiveFrame || effectiveFrame === 'none' || effectiveFrame === 'gold_royal')) {
       effectiveFrame = 'owner_sovereign';
-    } else if (!isOwner && effectiveFrame === 'owner_sovereign') {
-      effectiveFrame = 'none';
+    } else if (!isOwnerGalaxy && effectiveFrame === 'owner_sovereign') {
+      effectiveFrame = isOwner ? 'gold_royal' : 'none';
     }
     const wrap = $('custPreviewAvatarWrap');
     if (wrap) {
       wrap.className = `avatar-wrap profile-avatar-85 frame-${effectiveFrame}`;
-      syncFrameOrnament(wrap, effectiveFrame, isOwner);
+      syncFrameOrnament(wrap, effectiveFrame, isOwnerGalaxy);
     }
     const custAvatarStage = wrap?.closest('.profile-avatar-85-stage');
     if (custAvatarStage) {
-      custAvatarStage.classList.toggle('owner-cosmic-avatar-stage', isOwner);
+      custAvatarStage.classList.toggle('owner-cosmic-avatar-stage', isOwnerGalaxy);
       custAvatarStage.querySelectorAll('.owner-avatar-cosmic-halo').forEach((n) => n.remove());
-      if (isOwner) {
+      if (isOwnerGalaxy) {
         const halo = document.createElement('span');
         halo.className = 'owner-avatar-cosmic-halo';
         halo.setAttribute('aria-hidden', 'true');
@@ -2782,7 +3042,7 @@
       }
       const coverHero = $('custCoverHero');
       coverHero.querySelectorAll('.owner-cosmic-cover-vortex, .owner-galaxy-corner-seal').forEach((n) => n.remove());
-      if (isOwner) {
+      if (isOwnerGalaxy) {
         const vortex = document.createElement('div');
         vortex.className = 'owner-cosmic-cover-vortex';
         vortex.setAttribute('aria-hidden', 'true');
@@ -2800,19 +3060,19 @@
     const card = document.querySelector('#customizeModal .profile-luxury-card');
     if (card) {
       card.className = 'modal-card modal-card-md profile-luxury-card';
-      if (isOwner) card.classList.add('owner-black-gold-theme', 'owner-galaxy-theme');
+      if (isOwnerGalaxy) card.classList.add('owner-black-gold-theme', 'owner-galaxy-theme');
       if (u.profileBgEffect && u.profileBgEffect !== 'none') {
         card.classList.add(`bg-effect-${u.profileBgEffect}`);
       }
     }
     const bgLayer = $('custBgEffectLayer');
     if (bgLayer) {
-      bgLayer.className = isOwner ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer';
+      bgLayer.className = isOwnerGalaxy ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer';
     }
 
     $('custPreviewNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(previewObj)}`;
     if ($('custPreviewRoleLine')) {
-      $('custPreviewRoleLine').innerHTML = isOwner
+      $('custPreviewRoleLine').innerHTML = isOwnerGalaxy
         ? `<span class="owner-galaxy-title-pill"><i class="fa-solid fa-meteor"></i> سيد المجرة والزمن</span> ${escapeHtml(getRank(u.role).label)}`
         : escapeHtml(getRank(u.role).label);
     }
@@ -4509,6 +4769,12 @@
       const suite = state.ownerSuite || {};
       const sub = state.activeOwnerSubTab || 'surveillance';
       const prot = suite.protections || {};
+      const curFxGalaxy = Number(prot.fx_owner_galaxy_identity ?? state.settings?.fx_owner_galaxy_identity ?? 1) !== 0;
+      const curFxGlass = Number(prot.fx_glass_bubbles ?? state.settings?.fx_glass_bubbles ?? 1) !== 0;
+      const curFxMicWaves = Number(prot.fx_mic_waves ?? state.settings?.fx_mic_waves ?? 1) !== 0;
+      const curFxEntrance = Number(prot.fx_cinematic_entrance ?? state.settings?.fx_cinematic_entrance ?? 1) !== 0;
+      const curFxTyping = Number(prot.fx_typing_avatars ?? state.settings?.fx_typing_avatars ?? 1) !== 0;
+      const curFxNight = String(prot.fx_night_atmosphere ?? state.settings?.fx_night_atmosphere ?? 'always_on');
       const roomOpts = (ov.rooms || state.rooms || [])
         .map((r) => `<option value="${escapeHtml(r.id)}" ${state.currentRoom?.id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}${r.is_frozen ? ' ❄️' : ''}</option>`)
         .join('');
@@ -4552,6 +4818,7 @@
           <button type="button" class="owner-subtab-btn ${sub === 'surveillance' ? 'active' : ''}" data-owner-sub="surveillance"><i class="fa-solid fa-eye"></i> المراقبة والسجلات</button>
           <button type="button" class="owner-subtab-btn ${sub === 'moderation' ? 'active' : ''}" data-owner-sub="moderation"><i class="fa-solid fa-shield-halved"></i> التحكم والحماية</button>
           <button type="button" class="owner-subtab-btn ${sub === 'engagement' ? 'active' : ''}" data-owner-sub="engagement"><i class="fa-solid fa-bolt"></i> التنشيط والألعاب</button>
+          <button type="button" class="owner-subtab-btn ${sub === 'luxury_fx' ? 'active' : ''}" data-owner-sub="luxury_fx"><i class="fa-solid fa-wand-magic-sparkles"></i> الفخامة والمؤثرات</button>
         </div>
 
         <div id="ownerSub_surveillance" class="${sub === 'surveillance' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
@@ -4727,6 +4994,72 @@
             <button type="button" id="ownerSaveBoostsBtn" class="btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات التنشيط</button>
           </div>
         </div>
+
+        <div id="ownerSub_luxury_fx" class="${sub === 'luxury_fx' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="owner-suite-section luxury-fx-panel">
+            <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:#f59e0b;"></i> مركز تحكم المالك الكامل باللمسات الحصرية والهوية الأسطورية</h4>
+            <div class="muted" style="font-size:11.5px;">يمكنك تفعيل أو إيقاف أي لمسة تصميمية لجميع الغرف والأعضاء فورياً بضغطة زر.</div>
+
+            <div class="luxury-fx-grid">
+              <label class="luxury-fx-card">
+                <div class="luxury-fx-head">
+                  <input type="checkbox" id="ownerFxGalaxyToggle" ${curFxGalaxy ? 'checked' : ''} />
+                  <strong><i class="fa-solid fa-meteor" style="color:#fbbf24;"></i> هوية المالك «سيد المجرة والزمن»</strong>
+                </div>
+                <span class="muted">الغلاف الكوني، إطار الكسوف، الاسم الهولوغرامي، ورسائل البوابة الملكية.</span>
+              </label>
+
+              <label class="luxury-fx-card">
+                <div class="luxury-fx-head">
+                  <input type="checkbox" id="ownerFxGlassToggle" ${curFxGlass ? 'checked' : ''} />
+                  <strong><i class="fa-solid fa-layer-group" style="color:#38bdf8;"></i> فقاعات الدردشة الزجاجية المتكيفة</strong>
+                </div>
+                <span class="muted">تصميم زجاجي أنيق يعكس لون الرتبة كإضاءة محيطية ناعمة على الحواف.</span>
+              </label>
+
+              <label class="luxury-fx-card">
+                <div class="luxury-fx-head">
+                  <input type="checkbox" id="ownerFxMicWavesToggle" ${curFxMicWaves ? 'checked' : ''} />
+                  <strong><i class="fa-solid fa-wave-square" style="color:#22c55e;"></i> موجات الصوت الحية حول المايكات</strong>
+                </div>
+                <span class="muted">حلقات موجية تنبض حول صورة المتحدث على المايك حسب مستوى الصوت الحقيقي.</span>
+              </label>
+
+              <label class="luxury-fx-card">
+                <div class="luxury-fx-head">
+                  <input type="checkbox" id="ownerFxEntranceToggle" ${curFxEntrance ? 'checked' : ''} />
+                  <strong><i class="fa-solid fa-crown" style="color:#eab308;"></i> بطاقة الدخول السينمائية (2 ثانية)</strong>
+                </div>
+                <span class="muted">بطاقة تشريف أنيقة عابرة فوق المحادثة عند دخول المالك أو كبار الشخصيات.</span>
+              </label>
+
+              <label class="luxury-fx-card">
+                <div class="luxury-fx-head">
+                  <input type="checkbox" id="ownerFxTypingToggle" ${curFxTyping ? 'checked' : ''} />
+                  <strong><i class="fa-solid fa-comment-dots" style="color:#a855f7;"></i> مؤشر الكتابة التفاعلي بالصور</strong>
+                </div>
+                <span class="muted">عرض صور الأعضاء المتفاعلين النابضة فوق صندوق الكتابة بدلاً من النص التقليدي.</span>
+              </label>
+
+              <div class="luxury-fx-card">
+                <div class="luxury-fx-head">
+                  <i class="fa-solid fa-moon" style="color:#6366f1;"></i>
+                  <strong>إضاءة وأجواء السهرة الليلية</strong>
+                </div>
+                <select id="ownerFxNightSelect">
+                  <option value="always_on" ${curFxNight === 'always_on' ? 'selected' : ''}>🌙 مفعّلة دائماً للجميع (مع زر تبديل)</option>
+                  <option value="auto" ${curFxNight === 'auto' ? 'selected' : ''}>🌗 تلقائي ليلاً (6 مساءً – 6 صباحاً)</option>
+                  <option value="off" ${curFxNight === 'off' ? 'selected' : ''}>☀️ متوقفة (الوضع النهاري فقط)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="inline-row" style="flex-wrap:wrap;margin-top:4px;">
+              <button type="button" id="ownerSaveLuxuryFxBtn" class="btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> حفظ وتطبيق المؤثرات للجميع</button>
+              <button type="button" id="ownerPreviewEntranceBtn" class="btn-secondary btn-sm"><i class="fa-solid fa-wand-sparkles"></i> معاينة الدخول السينمائي (2ث)</button>
+            </div>
+          </div>
+        </div>
       `;
 
       body.querySelectorAll('.owner-subtab-btn').forEach((b) => {
@@ -4738,11 +5071,13 @@
 
       const runOwnerAct = async (payload, okMsg) => {
         try {
-          await api('/api/owner/action', { method: 'POST', body: payload });
+          const res = await api('/api/owner/action', { method: 'POST', body: payload });
           showToast(okMsg);
           openAdminPanel('owner_suite');
+          return res;
         } catch (err) {
           showToast(err.message, true);
+          return null;
         }
       };
 
@@ -4844,6 +5179,25 @@
           referral_bonus: Number($('ownerRefBonus').value) || 200
         }
       }, 'تم حفظ إعدادات التنشيط والمكافآت!'));
+
+      $('ownerPreviewEntranceBtn')?.addEventListener('click', () => {
+        if (state.user) showCinematicEntrance(state.user);
+      });
+
+      $('ownerSaveLuxuryFxBtn')?.addEventListener('click', async () => {
+        const protections = {
+          fx_owner_galaxy_identity: $('ownerFxGalaxyToggle')?.checked ? 1 : 0,
+          fx_glass_bubbles: $('ownerFxGlassToggle')?.checked ? 1 : 0,
+          fx_mic_waves: $('ownerFxMicWavesToggle')?.checked ? 1 : 0,
+          fx_cinematic_entrance: $('ownerFxEntranceToggle')?.checked ? 1 : 0,
+          fx_typing_avatars: $('ownerFxTypingToggle')?.checked ? 1 : 0,
+          fx_night_atmosphere: $('ownerFxNightSelect')?.value || 'always_on'
+        };
+        state.userNightPref = 'follow';
+        localStorage.setItem('chat_night_atmos_pref', 'follow');
+        const res = await runOwnerAct({ action: 'update_protections', protections }, 'تم حفظ وتطبيق لمسات الفخامة والمؤثرات على الجميع!');
+        if (res?.settings) applySiteSettings(res.settings);
+      });
     }
   }
 
@@ -4989,6 +5343,8 @@
       state.roomUsers = data.users || [];
       state.ytForceVideo = false;
       state.quizBotState = data.quizBot || { active: false };
+      state.typingUsers.clear();
+      renderTypingAvatarsBar();
       localStorage.setItem(ROOM_KEY, data.room.id);
       renderRoomBanner();
       renderMics();
@@ -5035,7 +5391,12 @@
     });
 
     socket.on('room_notice', (data) => {
-      if (state.currentRoom?.id === data?.roomId) appendRoomNotice(data);
+      if (state.currentRoom?.id === data?.roomId) {
+        appendRoomNotice(data);
+        if (data?.user && (data.kind === 'royal_join' || data.kind === 'join') && data.user.key !== state.user?.key) {
+          showCinematicEntrance(data.user);
+        }
+      }
     });
 
     socket.on('message_deleted', ({ roomId, msgId }) => {
@@ -5086,6 +5447,12 @@
         state.mics = slots || [];
         renderMics();
       }
+    });
+
+    socket.on('mic_speaking_level', ({ roomId, slot, level }) => {
+      if (state.currentRoom?.id !== roomId) return;
+      state.micLevelBySlot.set(Number(slot), { level: Number(level) || 0, ts: Date.now() });
+      startMicWaveformLoop();
     });
 
     socket.on('mic_force_mute', ({ muted }) => {
@@ -5235,10 +5602,30 @@
       applySiteSettings(settings);
     });
 
-    socket.on('user_typing', ({ roomId, userKey, name, isTyping }) => {
+    socket.on('user_typing', ({ roomId, userKey, name, role, avatarUrl, avatarFrame, isTyping }) => {
       if (state.currentRoom?.id !== roomId || userKey === state.user?.key) return;
-      $('typingIndicator').textContent = isTyping ? `✍️ ${name} يكتب الآن...` : '';
-      $('typingIndicator').classList.toggle('hidden', !isTyping);
+      if (isTyping) {
+        state.typingUsers.set(userKey, {
+          key: userKey,
+          name: name || 'عضو',
+          role: role || 'member',
+          avatarUrl: avatarUrl || '',
+          avatarFrame: avatarFrame || 'none',
+          expiresAt: Date.now() + 4500
+        });
+        if (!state.typingPruneTimer) {
+          state.typingPruneTimer = setInterval(() => {
+            renderTypingAvatarsBar();
+            if (state.typingUsers.size === 0 && state.typingPruneTimer) {
+              clearInterval(state.typingPruneTimer);
+              state.typingPruneTimer = null;
+            }
+          }, 1200);
+        }
+      } else {
+        state.typingUsers.delete(userKey);
+      }
+      renderTypingAvatarsBar();
     });
 
     socket.on('kicked', ({ reason }) => {
@@ -5641,9 +6028,20 @@
       $('radioPopover')?.classList.add('hidden');
     });
 
-    // Room switch & YouTube (URL + Live Search by Name)
+    // Room switch, Night Atmosphere toggle & YouTube (URL + Live Search by Name)
     $('switchRoomsBtn')?.addEventListener('click', openRoomsModal);
     $('roomSettingsBtn')?.addEventListener('click', () => openAdminPanel('rooms', state.currentRoom?.id || null));
+    $('toggleNightAtmosBtn')?.addEventListener('click', () => {
+      const globalMode = String(state.settings?.fx_night_atmosphere || 'always_on');
+      if (globalMode === 'off') {
+        return showToast('أجواء السهرة الليلية معطلة حالياً من المالك.', true);
+      }
+      const currentlyOn = isNightAtmosphereActive();
+      state.userNightPref = currentlyOn ? 'off' : 'on';
+      localStorage.setItem('chat_night_atmos_pref', state.userNightPref);
+      renderRoomBanner();
+      showToast(state.userNightPref === 'on' ? '🌙 تم تفعيل أجواء السهرة الليلية.' : '☀️ تم التبديل إلى الوضع النهاري.');
+    });
     $('toggleYoutubeBarBtn')?.addEventListener('click', () => {
       state.ytBarOpen = !state.ytBarOpen;
       renderRoomYoutubeBar();
@@ -6096,6 +6494,11 @@
         state.token = '';
       }
     }
+    setInterval(() => {
+      if (state.currentRoom && state.settings?.fx_night_atmosphere === 'auto' && state.userNightPref === 'follow') {
+        renderRoomBanner();
+      }
+    }, 60000);
   }
 
   bootstrap();
