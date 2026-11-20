@@ -283,6 +283,34 @@
       </div>
 
       <div id="frozenUserBanner" class="frozen-user-banner hidden"></div>
+      <!-- INLINE MESSAGE FONT & COLOR BAR -->
+      <div id="inlineMsgStyleBar" class="inline-msg-style-bar hidden">
+        <div class="inline-msg-style-head">
+          <span><i class="fa-solid fa-palette" style="color:#38bdf8;"></i> تنسيق لون وحجم خط الرسائل</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" id="inlineMsgNameCustBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-wand-magic-sparkles"></i> تخصيص الاسم</button>
+            <button type="button" id="inlineMsgCloseBtn" class="yt-mini-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div id="inlineMsgLockNote" class="lock-notice hidden" style="margin:0;padding:5px 8px;font-size:11px;"></div>
+        <div class="inline-msg-style-controls">
+          <div id="inlineMsgColorSwatches" class="inline-msg-swatches"></div>
+          <input type="color" id="inlineMsgColorPicker" value="#111827" title="اختر لوناً مخصصاً للرسالة" class="inline-msg-color-picker" />
+          <div class="inline-msg-sizes">
+            <button type="button" class="inline-msg-pill" data-msg-size="12">12</button>
+            <button type="button" class="inline-msg-pill active" data-msg-size="14">14</button>
+            <button type="button" class="inline-msg-pill" data-msg-size="16">16</button>
+            <button type="button" class="inline-msg-pill" data-msg-size="18">18</button>
+            <button type="button" class="inline-msg-pill" data-msg-size="20">20</button>
+          </div>
+          <div class="inline-msg-styles">
+            <button type="button" class="inline-msg-pill active" data-msg-style="Normal">عادي</button>
+            <button type="button" class="inline-msg-pill" data-msg-style="Bold">عريض</button>
+            <button type="button" class="inline-msg-pill" data-msg-style="Italic">مائل</button>
+          </div>
+        </div>
+      </div>
+
       <!-- BOTTOM INPUT BAR -->
       <section id="bottomBar" class="cody-input-bar">
         <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">
@@ -463,20 +491,27 @@
             </button>
           </div>
           <div class="profile-cover-top-right">
-            <button type="button" id="custSwitchToMoreBtn" class="hero-circle-glass-btn" title="تعديل الألوان والخطوط">
+            <button type="button" id="custSwitchToMoreBtn" class="hero-circle-glass-btn" title="تخصيص الألوان والخطوط والخصوصية">
               <i class="fa-solid fa-palette"></i>
             </button>
+          </div>
+          <div class="profile-cover-stats-bar">
+            <span class="hero-stat-pill" title="الإعجابات"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#ef4444;"></i> <span id="custLikesCountVal">0</span></span>
+            <span class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> <span id="custRatingAvgVal">5.0</span></span>
+            <span class="hero-stat-pill" title="الروبي"><i class="fa-solid fa-gem" style="color:#e11d48;"></i> <span id="custTopCoinsVal">0</span></span>
           </div>
           <input type="file" id="custCoverFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
           <input type="file" id="custAvatarFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
         </div>
 
-        <!-- SIDE-BY-SIDE 85x85 AVATAR + IDENTITY INFO -->
-        <div class="profile-identity-header-row">
+        <!-- CODYCHAT CENTERED CIRCULAR AVATAR + IDENTITY + MINI MUSIC PLAYER -->
+        <div class="profile-centered-identity">
           <div class="profile-avatar-stage profile-avatar-85-stage">
             <span id="custPreviewAvatarWrap" class="avatar-wrap profile-avatar-85 frame-none">
-              <img id="custPreviewAvatarImg" src="" alt="" class="hidden" />
-              <span id="custPreviewAvatarLetter" class="avatar-letter">ع</span>
+              <span class="avatar-core-circle">
+                <img id="custPreviewAvatarImg" src="" alt="" class="hidden" />
+                <span id="custPreviewAvatarLetter" class="avatar-letter">ع</span>
+              </span>
             </span>
             <div class="avatar-inner-actions">
               <button type="button" id="custUploadAvatarBtn" class="avatar-inner-circle-btn" title="تغيير الصورة الشخصية (يدعم GIF)">
@@ -487,99 +522,120 @@
               </button>
             </div>
           </div>
-          <div class="profile-identity-meta-col">
-            <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
-            <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
-            <div id="custPreviewBio" class="cust-preview-bio"></div>
-            <div class="profile-social-counters profile-social-counters-start">
-              <span class="social-pill"><i class="fa-solid fa-heart" style="color:#ef4444"></i> <span id="custLikesCountVal">0</span></span>
-              <span class="social-pill"><i class="fa-solid fa-star" style="color:#f59e0b"></i> <span id="custRatingAvgVal">5.0</span></span>
-              <span class="social-pill"><i class="fa-solid fa-gem" style="color:#e11d48"></i> <span id="custTopCoinsVal">0</span> روبي</span>
-            </div>
+          <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
+          <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
+          <div id="custPreviewBio" class="cust-preview-bio"></div>
+          <div id="custMiniMusicPlayer" class="profile-mini-music-bar">
+            <button type="button" id="custMiniMusicPlayBtn" class="mini-music-play-btn" title="تشغيل/إيقاف موسيقى الملف">
+              <i class="fa-solid fa-play"></i>
+            </button>
+            <span class="mini-music-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span id="custMiniMusicLabel" class="mini-music-label">أغنية البروفايل: بدون أغنية</span>
+            <button type="button" id="custMiniMusicEditBtn" class="mini-music-edit-btn" title="تغيير أغنية الملف"><i class="fa-solid fa-music"></i></button>
           </div>
         </div>
 
-        <!-- 6-TAB PROFILE NAVIGATION -->
-        <div class="cust-tabs-nav six-tabs">
-          <button type="button" class="cust-tab active" data-cust-tab="info"><i class="fa-solid fa-circle-info"></i> المعلومات</button>
-          <button type="button" class="cust-tab" data-cust-tab="friends"><i class="fa-solid fa-user-group"></i> الأصدقاء</button>
-          <button type="button" class="cust-tab" data-cust-tab="gifts"><i class="fa-solid fa-gift"></i> الهدايا</button>
-          <button type="button" class="cust-tab" data-cust-tab="relations"><i class="fa-solid fa-heart-pulse"></i> العلاقات</button>
-          <button type="button" class="cust-tab" data-cust-tab="posts"><i class="fa-solid fa-signs-post"></i> المنشورات</button>
-          <button type="button" class="cust-tab" data-cust-tab="more"><i class="fa-solid fa-sliders"></i> المزيد</button>
-        </div>
-
-        <div class="modal-body profile-modal-body">
-          <!-- TAB 1: المعلومات -->
-          <div id="custPane_info" class="cust-pane">
-            <div class="rank-duo-grid">
-              <div class="rank-duo-card interaction">
-                <span class="rd-label"><i class="fa-solid fa-fire"></i> ترتيب التفاعل</span>
-                <strong id="custInteractionRankNum">#1</strong>
-              </div>
-              <div class="rank-duo-card rich">
-                <span class="rd-label"><i class="fa-solid fa-crown"></i> ترتيب الأثرياء</span>
-                <strong id="custRichRankNum">#1</strong>
-              </div>
-            </div>
-
-            <div class="profile-link-box">
-              <input type="text" id="custProfileLinkInput" readonly />
-              <button type="button" id="custCopyLinkBtn" class="btn-primary btn-xs"><i class="fa-solid fa-copy"></i> نسخ الرابط</button>
-            </div>
-            <div id="custReferralBox" class="referral-invite-box hidden"></div>
-
-            <div class="form-grid-2">
-              <div>
-                <label>الاسم المستعار للعرض</label>
-                <input type="text" id="custDisplayName" maxlength="28" />
-              </div>
-              <div>
-                <label>عائلة VIP</label>
-                <input type="text" id="custVipFamily" maxlength="24" placeholder="مثال: ملوك العرب" />
-              </div>
-              <div>
-                <label>العمر</label>
-                <input type="text" id="custAgeInput" maxlength="10" placeholder="مثال: 24" />
-              </div>
-              <div>
-                <label>الجنس</label>
-                <select id="custGenderSelect">
-                  <option value="">غير محدد</option>
-                  <option value="ذكر">ذكر</option>
-                  <option value="أنثى">أنثى</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-grid-2">
-              <div>
-                <label>البلد / الإقامة</label>
-                <input type="text" id="custCountryInput" maxlength="40" placeholder="مثال: السعودية، مصر، العراق..." />
-              </div>
-              <div>
-                <label>النبذة / الحالة الشخصية</label>
-                <input type="text" id="custBioInput" maxlength="160" placeholder="اكتب نبذة قصيرة عنك..." />
-              </div>
-            </div>
+        <!-- DARK-SHADED LOWER STAGE + 2x3 GRID 6-TAB NAVIGATION -->
+        <div class="profile-lower-dark-stage">
+          <div class="cust-tabs-nav six-tabs">
+            <button type="button" class="cust-tab active" data-cust-tab="info"><i class="fa-solid fa-circle-info"></i> المعلومات</button>
+            <button type="button" class="cust-tab" data-cust-tab="my_frames"><i class="fa-solid fa-crown"></i> إطاراتي</button>
+            <button type="button" class="cust-tab" data-cust-tab="friends"><i class="fa-solid fa-user-group"></i> الأصدقاء</button>
+            <button type="button" class="cust-tab" data-cust-tab="gifts"><i class="fa-solid fa-gift"></i> الهدايا</button>
+            <button type="button" class="cust-tab" data-cust-tab="relations"><i class="fa-solid fa-heart-pulse"></i> العلاقات</button>
+            <button type="button" class="cust-tab" data-cust-tab="posts"><i class="fa-solid fa-signs-post"></i> المنشورات</button>
           </div>
 
-          <!-- TAB 2: الأصدقاء -->
-          <div id="custPane_friends" class="cust-pane hidden">
-            <div id="custFriendsList" class="news-feed-list"></div>
-          </div>
+          <div class="modal-body profile-modal-body">
+            <!-- TAB 1: المعلومات -->
+            <div id="custPane_info" class="cust-pane">
+              <div class="rank-duo-grid">
+                <div class="rank-duo-card rich rich-green">
+                  <span class="rd-label"><i class="fa-solid fa-gem"></i> ترتيب الأثرياء</span>
+                  <strong id="custRichRankNum">#1</strong>
+                </div>
+                <div class="rank-duo-card interaction interaction-blue">
+                  <span class="rd-label"><i class="fa-solid fa-fire"></i> ترتيب التفاعل</span>
+                  <strong id="custInteractionRankNum">#1</strong>
+                </div>
+              </div>
 
-          <!-- TAB 3: الهدايا -->
-          <div id="custPane_gifts" class="cust-pane hidden">
-            <div class="gifts-wallet-summary">
-              <div class="stat-mini"><span><i class="fa-solid fa-gem" style="color:#e11d48;"></i> رصيد الروبي</span><strong id="custCoinsBalance">0</strong></div>
-              <div class="stat-mini"><span><i class="fa-solid fa-box-open"></i> مستلمة</span><strong id="custGiftsReceivedCount">0</strong></div>
-              <div class="stat-mini"><span><i class="fa-solid fa-paper-plane"></i> مرسلة</span><strong id="custGiftsSentCount">0</strong></div>
-              <div class="stat-mini"><span><i class="fa-solid fa-fire"></i> التفاعل</span><strong id="custActivityPoints">0</strong></div>
+              <div class="profile-link-box">
+                <input type="text" id="custProfileLinkInput" readonly />
+                <button type="button" id="custCopyLinkBtn" class="btn-primary btn-xs"><i class="fa-solid fa-copy"></i> نسخ الرابط</button>
+              </div>
+              <div id="custReferralBox" class="referral-invite-box hidden"></div>
+
+              <div class="form-grid-2">
+                <div>
+                  <label>الاسم المستعار للعرض</label>
+                  <input type="text" id="custDisplayName" maxlength="28" />
+                </div>
+                <div>
+                  <label>عائلة VIP</label>
+                  <input type="text" id="custVipFamily" maxlength="24" placeholder="مثال: ملوك العرب" />
+                </div>
+                <div>
+                  <label>العمر</label>
+                  <input type="text" id="custAgeInput" maxlength="10" placeholder="مثال: 24" />
+                </div>
+                <div>
+                  <label>الجنس</label>
+                  <select id="custGenderSelect">
+                    <option value="">غير محدد</option>
+                    <option value="ذكر">ذكر</option>
+                    <option value="أنثى">أنثى</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid-2">
+                <div>
+                  <label>البلد / الإقامة</label>
+                  <input type="text" id="custCountryInput" maxlength="40" placeholder="مثال: السعودية، مصر، العراق..." />
+                </div>
+                <div>
+                  <label>النبذة / الحالة الشخصية</label>
+                  <input type="text" id="custBioInput" maxlength="160" placeholder="اكتب نبذة قصيرة عنك..." />
+                </div>
+              </div>
             </div>
-            <h4 class="sub-heading">سجل الهدايا المستلمة</h4>
-            <div id="custReceivedGiftsList" class="received-gifts-grid"></div>
-          </div>
+
+            <!-- TAB 2: إطاراتي وخلفياتي -->
+            <div id="custPane_my_frames" class="cust-pane hidden">
+              <div class="addon-block">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-crown" style="color:#fbbf24;"></i> إطاراتي المملوكة والتبديل السريع</h4>
+                </div>
+                <div id="custMyFramesGrid" class="frames-addon-grid"></div>
+                <button type="button" id="custOpenStoreFromFramesBtn" class="btn-primary btn-sm btn-full" style="margin-top:8px;">
+                  <i class="fa-solid fa-store"></i> فتح المتجر لشراء إطارات ورتب جديدة
+                </button>
+              </div>
+              <div class="addon-block" style="margin-top:8px;">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-sparkles" style="color:#38bdf8;"></i> خلفيات البطاقة المتحركة</h4>
+                </div>
+                <div id="custMyBgEffectsGrid" class="shine-grid"></div>
+              </div>
+            </div>
+
+            <!-- TAB 3: الأصدقاء -->
+            <div id="custPane_friends" class="cust-pane hidden">
+              <div id="custFriendsList" class="news-feed-list"></div>
+            </div>
+
+            <!-- TAB 4: الهدايا -->
+            <div id="custPane_gifts" class="cust-pane hidden">
+              <div class="gifts-wallet-summary">
+                <div class="stat-mini"><span><i class="fa-solid fa-gem" style="color:#e11d48;"></i> رصيد الروبي</span><strong id="custCoinsBalance">0</strong></div>
+                <div class="stat-mini"><span><i class="fa-solid fa-box-open"></i> مستلمة</span><strong id="custGiftsReceivedCount">0</strong></div>
+                <div class="stat-mini"><span><i class="fa-solid fa-paper-plane"></i> مرسلة</span><strong id="custGiftsSentCount">0</strong></div>
+                <div class="stat-mini"><span><i class="fa-solid fa-fire"></i> التفاعل</span><strong id="custActivityPoints">0</strong></div>
+              </div>
+              <h4 class="sub-heading">سجل الهدايا المستلمة</h4>
+              <div id="custReceivedGiftsList" class="received-gifts-grid"></div>
+            </div>
 
           <!-- TAB 4: العلاقات -->
           <div id="custPane_relations" class="cust-pane hidden">
@@ -807,6 +863,7 @@
           <div class="modal-footer-actions">
             <button type="button" id="saveCustomizeBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ وتطبيق التعديلات</button>
           </div>
+          </div>
         </div>
       </div>
     </div>
@@ -933,6 +990,7 @@
         </div>
         <div class="cust-tabs-nav" id="storeTabsBar">
           <button type="button" class="lb-tab store-tab active" data-store-tab="frames"><i class="fa-solid fa-crown"></i> الإطارات</button>
+          <button type="button" class="lb-tab store-tab" data-store-tab="ranks"><i class="fa-solid fa-medal"></i> الرتب (VIP وبريميوم)</button>
           <button type="button" class="lb-tab store-tab" data-store-tab="shines"><i class="fa-solid fa-wand-magic-sparkles"></i> لمعات الاسم</button>
           <button type="button" class="lb-tab store-tab" data-store-tab="nameplates"><i class="fa-solid fa-id-badge"></i> أشرطة الأسماء</button>
           <button type="button" class="lb-tab store-tab" data-store-tab="backgrounds"><i class="fa-solid fa-sparkles"></i> خلفيات البروفايل</button>

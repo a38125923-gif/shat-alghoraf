@@ -130,8 +130,9 @@ function ensureSupremeOwnersInStore() {
 const DEFAULT_RANKS = [
   {
     key: 'site_owner',
-    label: 'Owner / صاحب الموقع',
+    label: 'مالك الموقع',
     icon: '👑',
+    badge_style: 'crown_royal',
     image_url: '',
     bg_color: '#b91c1c',
     text_color: '#fef3c7',
@@ -148,7 +149,56 @@ const DEFAULT_RANKS = [
     perm_room_owner: 1,
     perm_publish_news: 1,
     perm_use_addons: 1,
+    perm_give_coins: 1,
     max_assignable_rank: 100
+  },
+  {
+    key: 'senior_admin',
+    label: 'الإدارة العليا',
+    icon: '🛡️',
+    badge_style: 'royal_shield',
+    image_url: '',
+    bg_color: '#dc2626',
+    text_color: '#ffffff',
+    power: 95,
+    tier_order: 8,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 1,
+    perm_set_rank: 1,
+    perm_clear_room: 1,
+    perm_manage_rooms: 1,
+    perm_access_panel: 1,
+    perm_room_owner: 1,
+    perm_publish_news: 1,
+    perm_use_addons: 1,
+    perm_give_coins: 1,
+    max_assignable_rank: 94
+  },
+  {
+    key: 'supervisor',
+    label: 'المشرفون',
+    icon: '⚔️',
+    badge_style: 'silver_shield',
+    image_url: '',
+    bg_color: '#2563eb',
+    text_color: '#ffffff',
+    power: 80,
+    tier_order: 6,
+    is_system: 1,
+    perm_mute: 1,
+    perm_kick: 1,
+    perm_ban: 0,
+    perm_set_rank: 0,
+    perm_clear_room: 1,
+    perm_manage_rooms: 0,
+    perm_access_panel: 1,
+    perm_room_owner: 0,
+    perm_publish_news: 0,
+    perm_use_addons: 1,
+    perm_give_coins: 0,
+    max_assignable_rank: 0
   },
   {
     key: 'super_owner',
@@ -306,12 +356,13 @@ const DEFAULT_RANKS = [
   })),
   {
     key: 'premium',
-    label: 'Premium',
-    icon: '✨',
+    label: 'عضو بريميوم',
+    icon: '💎',
+    badge_style: 'diamond_gem',
     image_url: '',
-    bg_color: '#f59e0b',
-    text_color: '#1f1300',
-    power: 88,
+    bg_color: '#7c3aed',
+    text_color: '#ffffff',
+    power: 40,
     tier_order: 2,
     is_system: 1,
     perm_mute: 0,
@@ -324,6 +375,7 @@ const DEFAULT_RANKS = [
     perm_room_owner: 0,
     perm_publish_news: 0,
     perm_use_addons: 1,
+    perm_give_coins: 0,
     max_assignable_rank: 0
   },
   ...[87, 86, 85, 84, 83, 82, 81, 80].map((n) => ({
@@ -460,13 +512,14 @@ const DEFAULT_RANKS = [
   },
   {
     key: 'royal_vip',
-    label: 'ملكي',
-    icon: '⚜️',
+    label: 'ملوك الموقع VIP',
+    icon: '🏆',
+    badge_style: 'gold_crown',
     image_url: '',
-    bg_color: '#ea580c',
-    text_color: '#ffffff',
-    power: 40,
-    tier_order: 0,
+    bg_color: '#eab308',
+    text_color: '#1c1917',
+    power: 55,
+    tier_order: 4,
     is_system: 1,
     perm_mute: 0,
     perm_kick: 0,
@@ -478,6 +531,7 @@ const DEFAULT_RANKS = [
     perm_room_owner: 0,
     perm_publish_news: 0,
     perm_use_addons: 1,
+    perm_give_coins: 0,
     max_assignable_rank: 0
   },
   {
@@ -526,11 +580,12 @@ const DEFAULT_RANKS = [
   })),
   {
     key: 'member',
-    label: 'عضو',
-    icon: '👤',
+    label: 'عضو مسجل',
+    icon: '⭐',
+    badge_style: 'gold_star',
     image_url: '',
-    bg_color: '#334155',
-    text_color: '#f8fafc',
+    bg_color: '#0f766e',
+    text_color: '#ffffff',
     power: 5,
     tier_order: 0,
     is_system: 1,
@@ -544,12 +599,14 @@ const DEFAULT_RANKS = [
     perm_room_owner: 0,
     perm_publish_news: 0,
     perm_use_addons: 1,
+    perm_give_coins: 0,
     max_assignable_rank: 0
   },
   {
     key: 'guest',
     label: 'زائر',
-    icon: '💬',
+    icon: '👤',
+    badge_style: 'neon_badge',
     image_url: '',
     bg_color: '#64748b',
     text_color: '#ffffff',
@@ -566,6 +623,7 @@ const DEFAULT_RANKS = [
     perm_room_owner: 0,
     perm_publish_news: 0,
     perm_use_addons: 0,
+    perm_give_coins: 0,
     max_assignable_rank: 0
   }
 ];
@@ -599,6 +657,27 @@ const DEFAULT_SITE_SETTINGS = {
   fx_cinematic_entrance: 1,
   fx_typing_avatars: 1,
   fx_night_atmosphere: 'always_on',
+  guest_can_chat: 1,
+  min_rank_pm: 'member',
+  min_rank_chat_media: 'member',
+  min_rank_mic: 'guest',
+  min_rank_avatar: 'member',
+  min_rank_cover: 'member',
+  min_rank_bg_effect: 'member',
+  min_rank_music: 'member',
+  min_rank_name_style: 'member',
+  min_rank_msg_style: 'member',
+  feat_mics: 1,
+  feat_pm: 1,
+  feat_store: 1,
+  feat_gifts: 1,
+  feat_youtube: 1,
+  feat_wall: 1,
+  vip_ruby_multiplier: 2,
+  premium_ruby_multiplier: 1.5,
+  rank_price_premium: 500,
+  rank_price_royal_vip: 1200,
+  frame_price_overrides: {},
   updated_at: new Date().toISOString()
 };
 
@@ -1199,6 +1278,10 @@ function normalizeRankDoc(docId, data) {
     perm_publish_news:
       data.perm_publish_news !== undefined ? (data.perm_publish_news ? 1 : 0) : defaultPublishNews,
     perm_use_addons: data.perm_use_addons !== undefined ? (data.perm_use_addons ? 1 : 0) : defaultUseAddons,
+    perm_give_coins:
+      data.perm_give_coins !== undefined
+        ? (data.perm_give_coins ? 1 : 0)
+        : (key === 'site_owner' || key === 'senior_admin' ? 1 : 0),
     max_assignable_rank:
       key === 'site_owner'
         ? 100
@@ -1714,13 +1797,34 @@ async function init(eventHooks = {}) {
 
     ensureSupremeOwnersInStore();
 
-    // Seed missing default ranks if none exist yet
+    // Seed missing default ranks & migrate canonical 7-tier labels/icons if still at legacy defaults
     const rankSeedBatch = [];
+    const legacyDefaultsMap = {
+      site_owner: 'Owner / صاحب الموقع',
+      royal_vip: 'ملكي',
+      premium: 'Premium',
+      member: 'عضو',
+      guest: 'زائر'
+    };
     for (const dr of DEFAULT_RANKS) {
-      if (!store.ranksByKey.has(dr.key)) {
+      const existing = store.ranksByKey.get(dr.key);
+      if (!existing) {
         const norm = normalizeRankDoc(dr.key, dr);
         store.ranksByKey.set(norm.key, norm);
         rankSeedBatch.push({ docId: norm.key, data: norm, merge: true });
+      } else if (legacyDefaultsMap[dr.key] && existing.label === legacyDefaultsMap[dr.key]) {
+        const refreshed = normalizeRankDoc(dr.key, {
+          ...existing,
+          label: dr.label,
+          icon: dr.icon,
+          badge_style: dr.badge_style,
+          bg_color: dr.bg_color,
+          text_color: dr.text_color,
+          power: dr.power,
+          tier_order: dr.tier_order
+        });
+        store.ranksByKey.set(refreshed.key, refreshed);
+        rankSeedBatch.push({ docId: refreshed.key, data: refreshed, merge: true });
       }
     }
     if (rankSeedBatch.length > 0) {
@@ -1807,7 +1911,8 @@ function mapRankRow(row) {
       access_panel: row.perm_access_panel === 1,
       room_owner: row.perm_room_owner === 1,
       publish_news: row.perm_publish_news === 1,
-      use_addons: row.perm_use_addons === 1
+      use_addons: row.perm_use_addons === 1,
+      give_coins: row.perm_give_coins === 1 || row.key === 'site_owner'
     }
   };
 }
@@ -1865,7 +1970,8 @@ const VALID_PERM_COLUMNS = {
   access_panel: 'perm_access_panel',
   room_owner: 'perm_room_owner',
   publish_news: 'perm_publish_news',
-  use_addons: 'perm_use_addons'
+  use_addons: 'perm_use_addons',
+  give_coins: 'perm_give_coins'
 };
 
 function hasPermission(role, permName) {
@@ -1929,6 +2035,7 @@ function createRank({
     perm_room_owner: permissions.room_owner ? 1 : 0,
     perm_publish_news: permissions.publish_news ? 1 : 0,
     perm_use_addons: permissions.use_addons ? 1 : 0,
+    perm_give_coins: permissions.give_coins ? 1 : 0,
     max_assignable_rank: Math.max(0, Math.min(99, rawMaxAssign)),
     created_at: nowIso()
   };
@@ -1990,6 +2097,7 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
     perm_room_owner: isOwner ? 1 : p.room_owner !== undefined ? (p.room_owner ? 1 : 0) : existing.perm_room_owner,
     perm_publish_news: isOwner ? 1 : p.publish_news !== undefined ? (p.publish_news ? 1 : 0) : existing.perm_publish_news,
     perm_use_addons: isOwner ? 1 : p.use_addons !== undefined ? (p.use_addons ? 1 : 0) : existing.perm_use_addons,
+    perm_give_coins: isOwner ? 1 : p.give_coins !== undefined ? (p.give_coins ? 1 : 0) : existing.perm_give_coins || 0,
     max_assignable_rank: nextMaxAssign
   };
 
@@ -2164,6 +2272,70 @@ function updateSiteSettings(patch = {}) {
         : ['always_on', 'auto', 'off'].includes(String(cur.fx_night_atmosphere))
           ? String(cur.fx_night_atmosphere)
           : 'always_on',
+    guest_can_chat:
+      patch.guest_can_chat !== undefined ? (patch.guest_can_chat ? 1 : 0) : cur.guest_can_chat !== 0 ? 1 : 0,
+    min_rank_pm:
+      patch.min_rank_pm !== undefined ? String(patch.min_rank_pm || 'member').slice(0, 36) : cur.min_rank_pm || 'member',
+    min_rank_chat_media:
+      patch.min_rank_chat_media !== undefined
+        ? String(patch.min_rank_chat_media || 'member').slice(0, 36)
+        : cur.min_rank_chat_media || 'member',
+    min_rank_mic:
+      patch.min_rank_mic !== undefined ? String(patch.min_rank_mic || 'guest').slice(0, 36) : cur.min_rank_mic || 'guest',
+    min_rank_avatar:
+      patch.min_rank_avatar !== undefined
+        ? String(patch.min_rank_avatar || 'member').slice(0, 36)
+        : cur.min_rank_avatar || 'member',
+    min_rank_cover:
+      patch.min_rank_cover !== undefined
+        ? String(patch.min_rank_cover || 'member').slice(0, 36)
+        : cur.min_rank_cover || 'member',
+    min_rank_bg_effect:
+      patch.min_rank_bg_effect !== undefined
+        ? String(patch.min_rank_bg_effect || 'member').slice(0, 36)
+        : cur.min_rank_bg_effect || 'member',
+    min_rank_music:
+      patch.min_rank_music !== undefined
+        ? String(patch.min_rank_music || 'member').slice(0, 36)
+        : cur.min_rank_music || 'member',
+    min_rank_name_style:
+      patch.min_rank_name_style !== undefined
+        ? String(patch.min_rank_name_style || 'member').slice(0, 36)
+        : cur.min_rank_name_style || 'member',
+    min_rank_msg_style:
+      patch.min_rank_msg_style !== undefined
+        ? String(patch.min_rank_msg_style || 'member').slice(0, 36)
+        : cur.min_rank_msg_style || 'member',
+    feat_mics: patch.feat_mics !== undefined ? (patch.feat_mics ? 1 : 0) : cur.feat_mics !== 0 ? 1 : 0,
+    feat_pm: patch.feat_pm !== undefined ? (patch.feat_pm ? 1 : 0) : cur.feat_pm !== 0 ? 1 : 0,
+    feat_store: patch.feat_store !== undefined ? (patch.feat_store ? 1 : 0) : cur.feat_store !== 0 ? 1 : 0,
+    feat_gifts: patch.feat_gifts !== undefined ? (patch.feat_gifts ? 1 : 0) : cur.feat_gifts !== 0 ? 1 : 0,
+    feat_youtube: patch.feat_youtube !== undefined ? (patch.feat_youtube ? 1 : 0) : cur.feat_youtube !== 0 ? 1 : 0,
+    feat_wall: patch.feat_wall !== undefined ? (patch.feat_wall ? 1 : 0) : cur.feat_wall !== 0 ? 1 : 0,
+    vip_ruby_multiplier:
+      patch.vip_ruby_multiplier !== undefined
+        ? Math.max(1, Math.min(10, Number(patch.vip_ruby_multiplier) || 2))
+        : Number(cur.vip_ruby_multiplier) || 2,
+    premium_ruby_multiplier:
+      patch.premium_ruby_multiplier !== undefined
+        ? Math.max(1, Math.min(10, Number(patch.premium_ruby_multiplier) || 1.5))
+        : Number(cur.premium_ruby_multiplier) || 1.5,
+    rank_price_premium:
+      patch.rank_price_premium !== undefined
+        ? Math.max(0, Math.min(1000000, Number(patch.rank_price_premium) || 0))
+        : Number(cur.rank_price_premium ?? 500),
+    rank_price_royal_vip:
+      patch.rank_price_royal_vip !== undefined
+        ? Math.max(0, Math.min(1000000, Number(patch.rank_price_royal_vip) || 0))
+        : Number(cur.rank_price_royal_vip ?? 1200),
+    frame_price_overrides:
+      patch.frame_price_overrides && typeof patch.frame_price_overrides === 'object' && !Array.isArray(patch.frame_price_overrides)
+        ? Object.fromEntries(
+            Object.entries(patch.frame_price_overrides).map(([k, v]) => [String(k).slice(0, 40), Math.max(0, Math.min(1000000, Number(v) || 0))])
+          )
+        : cur.frame_price_overrides && typeof cur.frame_price_overrides === 'object'
+          ? cur.frame_price_overrides
+          : {},
     updated_at: nowIso()
   };
 
@@ -2761,6 +2933,70 @@ function purchaseFrameWithRuby(userId, frameId, price = 0) {
     true
   );
   return { user: { ...current }, alreadyOwned };
+}
+
+function getRubyMultiplierForRole(role) {
+  const settings = getSiteSettings();
+  if (role === 'site_owner' || role === 'royal_vip' || role === 'vip') {
+    return Math.max(1, Number(settings.vip_ruby_multiplier) || 2);
+  }
+  if (role === 'premium') {
+    return Math.max(1, Number(settings.premium_ruby_multiplier) || 1.5);
+  }
+  return 1;
+}
+
+function purchaseRankWithRuby(userId, rankKey, price = 0) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return { error: 'الحساب غير موجود.' };
+  if (isSupremeOwnerEmail(current.email) || current.role === 'site_owner') {
+    return { error: 'حساب مالك الموقع يمتلك أعلى رتبة بالفعل.' };
+  }
+  if (!['premium', 'royal_vip'].includes(rankKey)) {
+    return { error: 'هذه الرتبة غير متاحة للشراء من المتجر.' };
+  }
+  const curPower = getRankPower(current.role);
+  const targetPower = getRankPower(rankKey);
+  if (current.role === rankKey) {
+    return { error: 'أنت تمتلك هذه الرتبة بالفعل!' };
+  }
+  if (curPower > targetPower) {
+    return { error: 'رتبتك الحالية أعلى من هذه الرتبة.' };
+  }
+  const cost = Math.max(0, Number(price) || 0);
+  if ((Number(current.coins) || 0) < cost) {
+    return { error: `رصيد الروبي غير كافٍ (${Number(current.coins) || 0} / ${cost} روبي).` };
+  }
+  current.coins = (Number(current.coins) || 0) - cost;
+  current.role = rankKey;
+  const owned = Array.isArray(current.owned_frames) ? [...current.owned_frames] : [];
+  if (rankKey === 'royal_vip') {
+    if (!owned.includes('royal_wings')) owned.push('royal_wings');
+    if (!current.avatar_frame || current.avatar_frame === 'none') {
+      current.avatar_frame = 'royal_wings';
+    }
+  } else if (rankKey === 'premium') {
+    if (!owned.includes('diamond_ring')) owned.push('diamond_ring');
+    if (!current.avatar_frame || current.avatar_frame === 'none') {
+      current.avatar_frame = 'diamond_ring';
+    }
+  }
+  current.owned_frames = owned;
+  enqueueSet(
+    'users',
+    String(current.id),
+    { coins: current.coins, role: current.role, owned_frames: owned, avatar_frame: current.avatar_frame },
+    true
+  );
+  const senderKey = `user:${current.id}`;
+  for (const m of store.messagesById.values()) {
+    if (m.sender_key === senderKey) {
+      m.sender_role = current.role;
+      m.avatar_frame = current.avatar_frame;
+      enqueueSet('messages', String(m.doc_id || m.id), { sender_role: current.role, avatar_frame: current.avatar_frame }, true);
+    }
+  }
+  return { user: { ...current } };
 }
 
 function adminClearUserAvatar(userId) {
@@ -4057,6 +4293,8 @@ module.exports = {
   adjustUserCoins,
   adjustUserRubyAndActivity,
   purchaseFrameWithRuby,
+  getRubyMultiplierForRole,
+  purchaseRankWithRuby,
   adminClearUserAvatar,
   updateUserRole,
   forceChangeUserDisplayName,

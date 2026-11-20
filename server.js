@@ -241,6 +241,73 @@ function canDo(role, permName) {
   return db.hasPermission(role, permName);
 }
 
+const rubyFracCarryByUser = new Map();
+
+function canPassSettingThreshold(userOrEntry, settingKey, fallbackRankKey = 'member') {
+  if (!userOrEntry) return false;
+  if (userOrEntry.role === 'site_owner' || db.isSupremeOwnerEmail(userOrEntry.email)) return true;
+  const settings = db.getSiteSettings();
+  const minKey = String(settings[settingKey] || fallbackRankKey || 'member');
+  if (minKey === 'disabled' || minKey === 'owner_only') return false;
+  if (minKey === 'guest') return true;
+  if (userOrEntry.isGuest || userOrEntry.role === 'guest') return false;
+  const userPower = db.getRankPower(userOrEntry.role);
+  const reqPower = db.getRankPower(minKey);
+  return userPower >= reqPower;
+}
+
+function computeRubyGainWithMultiplier(userId, role, baseRuby = 1) {
+  const mult = db.getRubyMultiplierForRole(role);
+  const prevCarry = rubyFracCarryByUser.get(userId) || 0;
+  const exact = baseRuby * mult + prevCarry;
+  const whole = Math.floor(exact + 1e-6);
+  rubyFracCarryByUser.set(userId, Math.max(0, exact - whole));
+  return Math.max(0, whole);
+}
+
+function getEffectiveFramesCatalog() {
+  const overrides = db.getSiteSettings().frame_price_overrides || {};
+  return SHOP_FRAMES.map((f) => {
+    const hasOverride = Object.prototype.hasOwnProperty.call(overrides, f.id);
+    const price = f.id === 'none' || f.ownerOnly ? f.price : hasOverride ? Math.max(0, Number(overrides[f.id]) || 0) : f.price;
+    return { ...f, price };
+  });
+}
+
+function getPurchasableRanksCatalog() {
+  const s = db.getSiteSettings();
+  const premRank = db.getRankByKey('premium');
+  const vipRank = db.getRankByKey('royal_vip');
+  return [
+    {
+      key: 'premium',
+      label: premRank?.label || 'عضو بريميوم',
+      icon: premRank?.icon || '💎',
+      color: premRank?.bg_color || '#7c3aed',
+      price: Math.max(0, Number(s.rank_price_premium ?? 500)),
+      multiplier: Number(s.premium_ruby_multiplier || 1.5),
+      perks: [
+        `مضاعف ربح الروبي ×${Number(s.premium_ruby_multiplier || 1.5)}`,
+        'إطار الألماس اللامع هدية مع الترقية',
+        'شارة بريميوم المميزة في قائمة الأعضاء والغرف'
+      ]
+    },
+    {
+      key: 'royal_vip',
+      label: vipRank?.label || 'ملوك الموقع VIP',
+      icon: vipRank?.icon || '🏆',
+      color: vipRank?.bg_color || '#eab308',
+      price: Math.max(0, Number(s.rank_price_royal_vip ?? 1200)),
+      multiplier: Number(s.vip_ruby_multiplier || 2),
+      perks: [
+        `مضاعف ربح الروبي ×${Number(s.vip_ruby_multiplier || 2)}`,
+        'بطاقة دخول سينمائية فاخرة عند دخول الغرف',
+        'إطار الأجنحة الذهبية الملكية هدية فورية'
+      ]
+    }
+  ];
+}
+
 function isUserStealth(userOrEntry) {
   if (!userOrEntry) return false;
   const role = userOrEntry.role;
@@ -1112,7 +1179,12 @@ app.get('/api/settings/public', (_req, res) => {
 // ==========================================
 // UPLOAD ENDPOINTS
 // ==========================================
-app.post('/api/upload/avatar', requireRegistered, uploadAvatar.single('file'), (req, res) => {
+app.post('/api/upload/avatar', requireRegistered, (req, res, next) => {
+  if (!canPassSettingThreshold(req.authUser, 'min_rank_avatar', 'member')) {
+    return res.status(403).json({ error: 'تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.' });
+  }
+  return next();
+}, uploadAvatar.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
   const url = `/uploads/avatars/${req.file.filename}`;
   db.updateUserCustomization(req.authUser.userId, { avatarUrl: url });
@@ -1120,7 +1192,12 @@ app.post('/api/upload/avatar', requireRegistered, uploadAvatar.single('file'), (
   return res.json({ url });
 });
 
-app.post('/api/upload/cover', requireRegistered, uploadCover.single('file'), (req, res) => {
+app.post('/api/upload/cover', requireRegistered, (req, res, next) => {
+  if (!canPassSettingThreshold(req.authUser, 'min_rank_cover', 'member')) {
+    return res.status(403).json({ error: 'تغيير صورة الغلاف مقيّد حالياً لرتبة أعلى من رتبتك.' });
+  }
+  return next();
+}, uploadCover.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الغلاف.' });
   const url = `/uploads/covers/${req.file.filename}`;
   db.updateUserCustomization(req.authUser.userId, { coverUrl: url });
@@ -1147,6 +1224,9 @@ app.delete('/api/profile/cover', requireRegistered, async (req, res) => {
 app.post('/api/upload/image', requireAuth, (req, res, next) => {
   if (req.authUser.isGuest && Number(db.getSiteSettings().lock_guest_images) === 1) {
     return res.status(403).json({ error: 'إرسال الصور للزوار مقفل حالياً من قبل المالك.' });
+  }
+  if (!canPassSettingThreshold(req.authUser, 'min_rank_chat_media', 'member')) {
+    return res.status(403).json({ error: 'إرسال الصور والملفات في الدردشة مقيّد حالياً لرتبة أعلى.' });
   }
   return next();
 }, uploadImage.single('file'), (req, res) => {
@@ -1234,6 +1314,9 @@ const FALLBACK_YOUTUBE_SONGS = [
 ];
 
 app.get('/api/youtube/search', requireAuth, async (req, res) => {
+  if (Number(db.getSiteSettings().feat_youtube) === 0 && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'ميزة اليوتيوب متوقفة مؤقتاً من قبل المالك.' });
+  }
   const q = String(req.query?.q || '').trim().slice(0, 120);
   if (!q) return res.status(400).json({ error: 'أدخل كلمة البحث عن أغنية أو فيديو يوتيوب.' });
 
@@ -1418,6 +1501,27 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
   if (wantsAddonEquip && !canUseAddons) {
     return res.status(403).json({ error: 'استخدام الإضافات (الإطارات واللمعة والموسيقى) غير مفعّل لرتبتك الحالية.' });
   }
+  if (profileBgEffect !== undefined && profileBgEffect !== 'none' && profileBgEffect !== req.authUser.profileBgEffect && !canPassSettingThreshold(req.authUser, 'min_rank_bg_effect', 'member')) {
+    return res.status(403).json({ error: 'خلفيات الملف المتحركة مقيّدة حالياً لرتبة أعلى من رتبتك.' });
+  }
+  if (profileMusic !== undefined && profileMusic !== '' && profileMusic !== req.authUser.profileMusic && !canPassSettingThreshold(req.authUser, 'min_rank_music', 'member')) {
+    return res.status(403).json({ error: 'إضافة أغنية الملف الشخصي مقيّدة حالياً لرتبة أعلى من رتبتك.' });
+  }
+  const changingNameStyle =
+    (nameColor !== undefined && nameColor !== req.authUser.nameColor) ||
+    (nameBgColor !== undefined && nameBgColor !== req.authUser.nameBgColor) ||
+    (neonColor !== undefined && neonColor !== req.authUser.neonColor);
+  if (changingNameStyle && !canPassSettingThreshold(req.authUser, 'min_rank_name_style', 'member')) {
+    return res.status(403).json({ error: 'تخصيص لون الاسم وتوهج النيون مقيّد حالياً لرتبة أعلى.' });
+  }
+  const changingMsgStyle =
+    (textColor !== undefined && textColor !== req.authUser.textColor) ||
+    (fontSize !== undefined && Number(fontSize) !== Number(req.authUser.fontSize || 14)) ||
+    (fontFamily !== undefined && fontFamily !== req.authUser.fontFamily) ||
+    (fontStyle !== undefined && fontStyle !== req.authUser.fontStyle);
+  if (changingMsgStyle && !canPassSettingThreshold(req.authUser, 'min_rank_msg_style', 'member')) {
+    return res.status(403).json({ error: 'تلوين وتكبير خط الرسائل مقيّد حالياً لرتبة أعلى من رتبتك.' });
+  }
 
   const updated = db.updateUserCustomization(req.authUser.userId, {
     displayName,
@@ -1453,8 +1557,11 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
 });
 
 app.get('/api/shop/items', (_req, res) => {
+  const s = db.getSiteSettings();
   res.json({
-    frames: SHOP_FRAMES,
+    storeEnabled: Number(s.feat_store) !== 0,
+    frames: getEffectiveFramesCatalog(),
+    ranks: getPurchasableRanksCatalog(),
     nameplates: SHOP_NAMEPLATES,
     shines: NAME_SHINES,
     nameAnimations: NAME_ANIMATIONS,
@@ -1469,10 +1576,29 @@ app.get('/api/shop/items', (_req, res) => {
 
 app.post('/api/shop/buy', requireRegistered, async (req, res) => {
   const { type = 'frame', itemId } = req.body || {};
-  if (type !== 'frame') {
-    return res.status(400).json({ error: 'الشراء بالروبي متاح لإطارات الصور حالياً.' });
+  const settings = db.getSiteSettings();
+  if (Number(settings.feat_store) === 0 && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'المتجر متوقف مؤقتاً من قبل مالك الموقع.' });
   }
-  const found = SHOP_FRAMES.find((f) => f.id === itemId);
+
+  if (type === 'rank') {
+    const catalog = getPurchasableRanksCatalog();
+    const targetRank = catalog.find((r) => r.key === itemId);
+    if (!targetRank) return res.status(400).json({ error: 'هذه الرتبة غير متوفرة للشراء.' });
+    const result = db.purchaseRankWithRuby(req.authUser.userId, targetRank.key, targetRank.price);
+    if (result?.error) return res.status(400).json({ error: result.error });
+    syncUserAcrossSockets(io, req.authUser.userId);
+    broadcastGlobalOnlineUsers(io);
+    for (const r of db.getAllRooms()) broadcastRoomUsers(io, r.id);
+    io.emit('persistent_members', buildPersistentMembersList());
+    await db.flushWrites();
+    return res.json({ user: mapUserRow(result.user), purchased: true, rank: targetRank });
+  }
+
+  if (type !== 'frame') {
+    return res.status(400).json({ error: 'الشراء بالروبي متاح للإطارات والرتب فقط.' });
+  }
+  const found = getEffectiveFramesCatalog().find((f) => f.id === itemId);
   if (!found) return res.status(400).json({ error: 'الإطار غير موجود.' });
   if (found.ownerOnly && req.authUser.role !== 'site_owner') {
     return res.status(403).json({ error: 'هذا الإطار حصري لصاحب الموقع فقط.' });
@@ -1492,7 +1618,7 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
     itemId === 'none' || itemId === 'default' || itemId === '' || itemId === false || itemId === 0;
 
   if (type === 'frame') {
-    const found = SHOP_FRAMES.find((f) => f.id === itemId);
+    const found = getEffectiveFramesCatalog().find((f) => f.id === itemId);
     if (!found) return res.status(400).json({ error: 'الإطار غير موجود.' });
     if (found.ownerOnly && req.authUser.role !== 'site_owner') {
       return res.status(403).json({ error: 'هذا الإطار حصري لصاحب الموقع فقط.' });
@@ -1517,6 +1643,12 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
 
   if (!isClearing && type !== 'name_anim' && type !== 'name_anim_speed' && !canUseAddons) {
     return res.status(403).json({ error: 'رتبتك لا تملك صلاحية استخدام الإضافات حالياً.' });
+  }
+  if (!isClearing && type === 'bg_effect' && !canPassSettingThreshold(req.authUser, 'min_rank_bg_effect', 'member')) {
+    return res.status(403).json({ error: 'خلفيات البروفايل المتحركة مقيّدة لرتبة أعلى من رتبتك.' });
+  }
+  if (!isClearing && type === 'music' && !canPassSettingThreshold(req.authUser, 'min_rank_music', 'member')) {
+    return res.status(403).json({ error: 'أغاني الملف الشخصي مقيّدة لرتبة أعلى من رتبتك.' });
   }
 
   let patch = null;
@@ -1564,6 +1696,9 @@ app.get('/api/gifts/user/:key', (req, res) => {
 
 app.post('/api/gifts/send', requireRegistered, async (req, res) => {
   try {
+    if (Number(db.getSiteSettings().feat_gifts) === 0 && req.authUser.role !== 'site_owner') {
+      return res.status(403).json({ error: 'ميزة إرسال الهدايا متوقفة مؤقتاً من قبل المالك.' });
+    }
     const { toKey, toName, giftId, roomId } = req.body || {};
     if (!toKey || !giftId) {
       return res.status(400).json({ error: 'يرجى تحديد المستلم والهدية.' });
@@ -1772,6 +1907,9 @@ app.post('/api/friends/respond', requireRegistered, async (req, res) => {
 });
 
 app.post('/api/wall', requireRegistered, async (req, res) => {
+  if (Number(db.getSiteSettings().feat_wall) === 0 && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'حائط المنشورات متوقف مؤقتاً من قبل المالك.' });
+  }
   const content = String(req.body?.content || '').trim().slice(0, 600);
   const imageUrl = String(req.body?.imageUrl || '').trim();
   const inviteRoomId = String(req.body?.inviteRoomId || '').trim().slice(0, 64);
@@ -2686,13 +2824,36 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       fx_mic_waves: settings.fx_mic_waves === 0 ? 0 : 1,
       fx_cinematic_entrance: settings.fx_cinematic_entrance === 0 ? 0 : 1,
       fx_typing_avatars: settings.fx_typing_avatars === 0 ? 0 : 1,
-      fx_night_atmosphere: settings.fx_night_atmosphere || 'always_on'
-    }
+      fx_night_atmosphere: settings.fx_night_atmosphere || 'always_on',
+      guest_can_chat: settings.guest_can_chat === 0 ? 0 : 1,
+      min_rank_pm: settings.min_rank_pm || 'member',
+      min_rank_chat_media: settings.min_rank_chat_media || 'member',
+      min_rank_mic: settings.min_rank_mic || 'guest',
+      min_rank_avatar: settings.min_rank_avatar || 'member',
+      min_rank_cover: settings.min_rank_cover || 'member',
+      min_rank_bg_effect: settings.min_rank_bg_effect || 'member',
+      min_rank_music: settings.min_rank_music || 'member',
+      min_rank_name_style: settings.min_rank_name_style || 'member',
+      min_rank_msg_style: settings.min_rank_msg_style || 'member',
+      feat_mics: settings.feat_mics === 0 ? 0 : 1,
+      feat_pm: settings.feat_pm === 0 ? 0 : 1,
+      feat_store: settings.feat_store === 0 ? 0 : 1,
+      feat_gifts: settings.feat_gifts === 0 ? 0 : 1,
+      feat_youtube: settings.feat_youtube === 0 ? 0 : 1,
+      feat_wall: settings.feat_wall === 0 ? 0 : 1,
+      vip_ruby_multiplier: Number(settings.vip_ruby_multiplier) || 2,
+      premium_ruby_multiplier: Number(settings.premium_ruby_multiplier) || 1.5,
+      rank_price_premium: Number(settings.rank_price_premium ?? 500),
+      rank_price_royal_vip: Number(settings.rank_price_royal_vip ?? 1200),
+      frame_price_overrides: settings.frame_price_overrides || {}
+    },
+    framesCatalog: getEffectiveFramesCatalog(),
+    ranks: db.getAllRanks()
   });
 });
 
 app.post('/api/owner/action', requireOwner, async (req, res) => {
-  const { action, targetKey, targetUserId, rubyDelta, activityDelta, roomId, toRoomId, enabled, message, content, title, asMode, targetUserKey, amountPerUser, rewardCoins, ipAddress, deviceId, reason, protections } = req.body || {};
+  const { action, targetKey, targetUserId, rubyDelta, activityDelta, roomId, toRoomId, enabled, message, content, title, asMode, targetUserKey, amountPerUser, rewardCoins, ipAddress, deviceId, reason, protections, rolePermissions } = req.body || {};
   const actor = req.authUser;
 
   if (action === 'manage_ruby') {
@@ -2990,6 +3151,28 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات الحماية والمميزات' });
     await db.flushWrites();
     return res.json({ ok: true, settings: updated });
+  }
+
+  if (action === 'update_master_matrix') {
+    const updatedSettings = protections ? db.updateSiteSettings(protections) : db.getSiteSettings();
+    let ranksChanged = false;
+    if (rolePermissions && typeof rolePermissions === 'object') {
+      for (const [rKey, perms] of Object.entries(rolePermissions)) {
+        if (rKey === 'site_owner' || rKey === 'guest') continue;
+        const r = db.updateRank(rKey, { permissions: perms });
+        if (r && !r.error) {
+          ranksChanged = true;
+          for (const entry of onlineSockets.values()) {
+            if (entry.role === rKey && entry.userId) syncUserAcrossSockets(io, entry.userId);
+          }
+        }
+      }
+    }
+    io.emit('site_settings_updated', updatedSettings);
+    if (ranksChanged) io.emit('ranks_updated', db.getAllRanks());
+    db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث مصفوفة الصلاحيات الشاملة' });
+    await db.flushWrites();
+    return res.json({ ok: true, settings: updatedSettings, ranks: db.getAllRanks() });
   }
 
   return res.status(400).json({ error: 'إجراء غير معروف.' });
@@ -3334,8 +3517,17 @@ io.on('connection', (socket) => {
       const isAdminNotice =
         Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
 
-      if (msgType === 'image' && entry.isGuest && Number(db.getSiteSettings().lock_guest_images) === 1) {
+      const siteSettings = db.getSiteSettings();
+      if (entry.isGuest && Number(siteSettings.guest_can_chat) === 0) {
+        if (typeof cb === 'function') cb({ error: 'الكتابة في الغرف العامة مقيّدة حالياً للأعضاء المسجلين فقط.' });
+        return;
+      }
+      if (msgType === 'image' && entry.isGuest && Number(siteSettings.lock_guest_images) === 1) {
         if (typeof cb === 'function') cb({ error: 'تم إقفال إرسال الصور للزوار من قبل المالك.' });
+        return;
+      }
+      if ((msgType === 'image' || msgType === 'sticker' || msgType === 'audio') && !canPassSettingThreshold(entry, 'min_rank_chat_media', 'member')) {
+        if (typeof cb === 'function') cb({ error: 'إرسال الصور والملصقات والصوتيات مقيّد لرتبة أعلى من رتبتك.' });
         return;
       }
       if (msgType === 'text' && !content) {
@@ -3358,6 +3550,8 @@ io.on('connection', (socket) => {
         return;
       }
 
+      const allowNameStyle = canPassSettingThreshold(entry, 'min_rank_name_style', 'member');
+      const allowMsgStyle = canPassSettingThreshold(entry, 'min_rank_msg_style', 'member');
       const isGhostOnly =
         entry.role !== 'site_owner' &&
         (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
@@ -3366,13 +3560,13 @@ io.on('connection', (socket) => {
         senderKey: entry.key,
         senderName: entry.name,
         senderRole: entry.role,
-        nameColor: entry.nameColor,
-        textColor: entry.textColor,
-        nameBgColor: entry.nameBgColor,
-        neonColor: entry.neonColor,
-        fontFamily: entry.fontFamily,
-        fontStyle: entry.fontStyle,
-        fontSize: entry.fontSize || 14,
+        nameColor: allowNameStyle ? entry.nameColor : '#0f172a',
+        textColor: allowMsgStyle ? entry.textColor : '#111827',
+        nameBgColor: allowNameStyle ? entry.nameBgColor : '',
+        neonColor: allowNameStyle ? entry.neonColor : '',
+        fontFamily: allowMsgStyle ? entry.fontFamily : 'Normal',
+        fontStyle: allowMsgStyle ? entry.fontStyle : 'Normal',
+        fontSize: allowMsgStyle ? (entry.fontSize || 14) : 14,
         avatarUrl: entry.avatarUrl,
         avatarFrame: entry.avatarFrame,
         nameplateStyle: entry.nameplateStyle,
@@ -3403,7 +3597,8 @@ io.on('connection', (socket) => {
       });
       if (entry.userId) {
         entry.activityPoints = (Number(entry.activityPoints) || 0) + 2;
-        const updatedUser = db.adjustUserCoins(entry.userId, 1);
+        const rubyEarned = computeRubyGainWithMultiplier(entry.userId, entry.role, 1);
+        const updatedUser = rubyEarned > 0 ? db.adjustUserCoins(entry.userId, rubyEarned) : db.findUserById(entry.userId);
         if (updatedUser) {
           entry.coins = Number(updatedUser.coins) || 0;
           const mappedUser = mapUserRow(updatedUser);
@@ -3500,6 +3695,14 @@ io.on('connection', (socket) => {
   socket.on('mic_take', ({ slot } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry || !entry.roomId) return;
+    if (Number(db.getSiteSettings().feat_mics) === 0 && entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'نظام المايكات الصوتية متوقف مؤقتاً من قبل المالك.' });
+      return;
+    }
+    if (!canPassSettingThreshold(entry, 'min_rank_mic', 'guest')) {
+      if (typeof cb === 'function') cb({ error: 'صعود المايكات مقيّد حالياً لرتبة أعلى من رتبتك.' });
+      return;
+    }
     if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
       if (typeof cb === 'function') cb({ error: 'حسابك مجمد حالياً ولا يمكنك صعود المايك.' });
       return;
@@ -3688,6 +3891,10 @@ io.on('connection', (socket) => {
     const entry = onlineSockets.get(socket.id);
     const targetRoomId = roomId || entry?.roomId;
     if (!entry || !targetRoomId) return;
+    if (Number(db.getSiteSettings().feat_youtube) === 0 && entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'ميزة اليوتيوب متوقفة مؤقتاً من قبل المالك.' });
+      return;
+    }
 
     const currentRoom = db.getRoomById(targetRoomId);
     if (!currentRoom) return;
@@ -3776,6 +3983,14 @@ io.on('connection', (socket) => {
     const entry = onlineSockets.get(socket.id);
     const clean = String(content || '').trim().slice(0, 800);
     if (!entry || !toKey || !clean) return;
+    if (Number(db.getSiteSettings().feat_pm) === 0 && entry.role !== 'site_owner') {
+      if (typeof cb === 'function') cb({ error: 'الرسائل الخاصة متوقفة مؤقتاً من قبل المالك.' });
+      return;
+    }
+    if (!canPassSettingThreshold(entry, 'min_rank_pm', 'member')) {
+      if (typeof cb === 'function') cb({ error: 'إرسال الرسائل الخاصة مقيّد حالياً لرتبة أعلى من رتبتك.' });
+      return;
+    }
     if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
       if (typeof cb === 'function') cb({ error: 'أنت مجمد حالياً ولا يمكنك إرسال رسائل خاصة.' });
       return;
@@ -4216,8 +4431,8 @@ io.on('connection', (socket) => {
 
   socket.on('admin_give_coins', async ({ userId, amount } = {}, cb) => {
     const entry = onlineSockets.get(socket.id);
-    if (!entry || entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'هذا الإجراء متاح لصاحب الموقع فقط.' });
+    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'give_coins'))) {
+      if (typeof cb === 'function') cb({ error: 'ليست لديك صلاحية منح النقاط أو الروبي.' });
       return;
     }
     const delta = Number(amount) || 0;
@@ -4382,7 +4597,9 @@ async function start() {
         }
         if (now - lastAt >= 5 * 60 * 1000) {
           onlineRewardTimestamps.set(uid, now);
-          const updated = db.adjustUserRubyAndActivity(uid, { rubyDelta: 1, activityDelta: 2 });
+          const uRow = db.findUserById(uid);
+          const rubyReward = uRow ? computeRubyGainWithMultiplier(uid, uRow.role, 1) : 1;
+          const updated = db.adjustUserRubyAndActivity(uid, { rubyDelta: rubyReward, activityDelta: 2 });
           if (updated) {
             anyRewarded = true;
             const mapped = mapUserRow(updated);
