@@ -1,5 +1,5 @@
 {
-  "name": "شات الغرف المباشر",
+  "name": "شات عربي الاصيل",
   "description": "تطبيق شات عربي فوري احترافي بنمط CodyChat مع مايكات صوتية WebRTC، نظام رتب وصلاحيات كامل، هدايا، أخبار، وتخزين سحابي دائم عبر Firebase Firestore",
   "requestFramePermissions": [
     "microphone"

@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#18181b" />
+    <meta name="theme-color" content="#0F172A" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>شات الغرف المباشر</title>
+    <title>شات عربي الاصيل</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Amita:wght@400;700&family=Averia+Libre:wght@400;700&family=Cairo:wght@400;600;700;800&family=Changa:wght@400;600;700&family=Charm:wght@400;700&family=Comic+Neue:wght@400;700&family=Comfortaa:wght@400;600;700&family=Grandstander:wght@400;600;700&family=Grenze+Gotisch:wght@400;600;700&family=Kalam:wght@400;700&family=Lemonada:wght@400;600;700&family=Lobster+Two:wght@400;700&family=Merienda:wght@400;700&family=Orbitron:wght@500;700&family=Quicksand:wght@500;700&family=Reem+Kufi:wght@500;700&family=Sansita:wght@400;700&family=Signika:wght@400;600;700&family=Tajawal:wght@400;500;700;800&family=Turret+Road:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=Amiri:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Cairo:wght@400;600;700;800&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -18,6 +18,7 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
+    <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="/styles.css" />
     <style id="dynamicCmsCss"></style>
   </head>
@@ -30,7 +31,7 @@
         <div class="auth-brand">
           <img id="authSiteLogo" class="auth-logo hidden" alt="شعار الموقع" />
           <div class="auth-badge"><i class="fa-solid fa-comments"></i> منصة الشات العربي المباشر</div>
-          <h1 id="authSiteName">شات الغرف المباشر</h1>
+          <h1 id="authSiteName">شات عربي الاصيل</h1>
           <p id="authSiteDesc">دردشة عربية فورية • مايكات صوتية • رتب وإطارات ملكية</p>
         </div>
 
@@ -75,7 +76,7 @@
         <div class="topbar-right">
           <div class="profile-trigger-wrap">
             <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي ولوحة التحكم">
-              <span id="topAvatarWrap" class="avatar-wrap frame-gold_royal">
+              <span id="topAvatarWrap" class="avatar-wrap frame-none">
                 <img id="topAvatarImg" src="" alt="صورتي" class="hidden" />
                 <span id="topAvatarLetter" class="avatar-letter">ع</span>
               </span>
@@ -139,6 +140,9 @@
           </button>
         </div>
       </header>
+      <div id="reconnectBanner" class="reconnect-banner hidden" role="status">
+        <i class="fa-solid fa-wifi"></i> <span>فُقد الاتصال، جاري إعادة المحاولة...</span>
+      </div>
       <div id="urgentBroadcastBar" class="urgent-broadcast-bar hidden"></div>
 
       <!-- MICS 1..5 (#1a237e) + BLUE DIVIDER BUTTONS + YOUTUBE BAR -->
@@ -277,7 +281,7 @@
         <div class="topic-banner-content">
           <span class="topic-warn-ico"><i class="fa-solid fa-bullhorn"></i></span>
           <strong class="topic-title-lbl">الموضوع:</strong>
-          <span id="topicBannerText" class="topic-text-val">أهلاً بكم في شات الغرف المباشر، نتمنى لكم أطيب الأوقات!</span>
+          <span id="topicBannerText" class="topic-text-val">أهلاً بكم في شات عربي الاصيل، نتمنى لكم أطيب الأوقات!</span>
         </div>
         <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -295,13 +299,13 @@
         <div id="inlineMsgLockNote" class="lock-notice hidden" style="margin:0;padding:5px 8px;font-size:11px;"></div>
         <div class="inline-msg-style-controls">
           <div id="inlineMsgColorSwatches" class="inline-msg-swatches"></div>
-          <input type="color" id="inlineMsgColorPicker" value="#111827" title="اختر لوناً مخصصاً للرسالة" class="inline-msg-color-picker" />
+          <input type="color" id="inlineMsgColorPicker" value="#e2e8f0" title="اختر لوناً مخصصاً للرسالة" class="inline-msg-color-picker" />
           <div class="inline-msg-sizes">
-            <button type="button" class="inline-msg-pill" data-msg-size="12">12</button>
+            <button type="button" class="inline-msg-pill" data-msg-size="13">13</button>
             <button type="button" class="inline-msg-pill active" data-msg-size="14">14</button>
+            <button type="button" class="inline-msg-pill" data-msg-size="15">15</button>
             <button type="button" class="inline-msg-pill" data-msg-size="16">16</button>
-            <button type="button" class="inline-msg-pill" data-msg-size="18">18</button>
-            <button type="button" class="inline-msg-pill" data-msg-size="20">20</button>
+            <button type="button" class="inline-msg-pill" data-msg-size="17">17</button>
           </div>
           <div class="inline-msg-styles">
             <button type="button" class="inline-msg-pill active" data-msg-style="Normal">عادي</button>
@@ -467,8 +471,8 @@
          MODALS
     ========================================== -->
 
-    <!-- 1. LUXURY 6-TAB OWN PROFILE & CUSTOMIZER MODAL -->
-    <div id="customizeModal" class="modal-backdrop hidden">
+    <!-- 1. LUXURY 6-TAB OWN PROFILE & CUSTOMIZER VIEW (SLIDE-OVER) -->
+    <div id="customizeModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md profile-luxury-card">
         <div id="custBgEffectLayer" class="profile-bg-effect-layer"></div>
 
@@ -477,20 +481,20 @@
           <img id="custCoverImg" src="" alt="" class="profile-cover-img hidden" />
           <div class="profile-cover-overlay"></div>
           <div class="profile-cover-top-actions cover-actions-left">
-            <button type="button" class="hero-circle-glass-btn cover-close-x-btn" data-close-modal="customizeModal" title="إغلاق">
-              <i class="fa-solid fa-xmark"></i>
+            <button type="button" class="rtl-back-pill cover-close-x-btn" data-close-modal="customizeModal" title="رجوع">
+              <i class="fa-solid fa-arrow-right"></i> <span>رجوع</span>
             </button>
             <button type="button" id="custCoverPreviewToggleBtn" class="hero-circle-glass-btn" title="معاينة صورة الغلاف">
               <i class="fa-solid fa-eye"></i>
-            </button>
-            <button type="button" id="custUploadCoverBtn" class="hero-circle-glass-btn" title="تغيير صورة الغلاف (يدعم GIF)">
-              <i class="fa-solid fa-camera"></i>
             </button>
             <button type="button" id="custDeleteCoverBtn" class="hero-circle-glass-btn danger-glass" title="حذف صورة الغلاف">
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
           <div class="profile-cover-top-right">
+            <button type="button" id="custUploadCoverBtn" class="cover-cam-pill-btn" title="رفع غلاف (يدعم GIF و PNG و JPG)">
+              <i class="fa-solid fa-camera"></i> <span>تغيير الغلاف</span>
+            </button>
             <button type="button" id="custSwitchToMoreBtn" class="hero-circle-glass-btn" title="تخصيص الألوان والخطوط والخصوصية">
               <i class="fa-solid fa-palette"></i>
             </button>
@@ -514,7 +518,7 @@
               </span>
             </span>
             <div class="avatar-inner-actions">
-              <button type="button" id="custUploadAvatarBtn" class="avatar-inner-circle-btn" title="تغيير الصورة الشخصية (يدعم GIF)">
+              <button type="button" id="custUploadAvatarBtn" class="avatar-cam-pill-btn" title="تغيير الصورة الشخصية (يدعم GIF)">
                 <i class="fa-solid fa-camera"></i>
               </button>
               <button type="button" id="custDeleteAvatarBtn" class="avatar-inner-circle-btn danger" title="حذف الصورة الشخصية">
@@ -653,22 +657,35 @@
 
           <!-- TAB 6: المزيد (لون/نيون/خلفية + الإضافات + الحساب + الخصوصية + الخروج) -->
           <div id="custPane_more" class="cust-pane hidden">
-            <!-- NAME COLOR WITH LIVE PREVIEW + SUB-TABS: لون | نيون | خلفية + 17 FONTS -->
+            <!-- NAME COLOR WITH LIVE PREVIEW + SUB-TABS: لون | تدرج | نيون | خلفية + ARABIC FONTS -->
             <div class="addon-block" id="custNameStyleSection">
               <div class="addon-block-head">
-                <h4><i class="fa-solid fa-palette"></i> لون الاسم ولون وحجم الخط</h4>
+                <h4><i class="fa-solid fa-palette"></i> المعاينة الحية وتنسيق الاسم والخط</h4>
               </div>
               <div id="custNameStyleLivePreview" class="namestyle-live-preview"></div>
               <div class="sub-pill-tabs" id="nameStyleSubTabs">
-                <button type="button" class="sub-pill-tab active" data-namestyle-tab="color">لون</button>
-                <button type="button" class="sub-pill-tab" data-namestyle-tab="neon">نيون</button>
+                <button type="button" class="sub-pill-tab active" data-namestyle-tab="color">لون ثابت</button>
+                <button type="button" class="sub-pill-tab" data-namestyle-tab="gradient">تدرج</button>
+                <button type="button" class="sub-pill-tab" data-namestyle-tab="neon">توهج نيون</button>
                 <button type="button" class="sub-pill-tab" data-namestyle-tab="bg">خلفية</button>
               </div>
               <div class="swatch-grid-boxes" id="nameColorSwatches"></div>
               <div id="nameStylePane_color" class="namestyle-pane">
                 <div class="inline-row" style="margin-top:6px;">
                   <label class="muted">تحديد لون مخصص للاسم:</label>
-                  <input type="color" id="custNameColor" value="#0f172a" />
+                  <input type="color" id="custNameColor" value="#f8fafc" />
+                </div>
+              </div>
+              <div id="nameStylePane_gradient" class="namestyle-pane hidden">
+                <div class="inline-row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
+                  <label class="muted">تدرج الاسم الملكي:</label>
+                  <select id="custNameGradient" style="flex:1;min-width:160px;">
+                    <option value="gold_royal">ذهب ملكي مشرق</option>
+                    <option value="cyan_neon">سماوي نيون</option>
+                    <option value="rose_fire">وردي ناري</option>
+                    <option value="emerald_aurora">زمردي متلألئ</option>
+                    <option value="violet_galaxy">بنفسجي كوني</option>
+                  </select>
                 </div>
               </div>
               <div id="nameStylePane_neon" class="namestyle-pane hidden">
@@ -688,29 +705,22 @@
 
               <div class="form-grid-2" style="margin-top:10px;">
                 <div>
-                  <label>لون نص الرسائل</label>
-                  <input type="color" id="custTextColor" value="#111827" />
+                  <label>لون نص الرسائل (متباين مع الليلي)</label>
+                  <div class="inline-row" style="gap:6px;">
+                    <input type="color" id="custTextColor" value="#e2e8f0" />
+                    <button type="button" id="custResetTextColorBtn" class="btn-secondary btn-xs">افتراضي</button>
+                  </div>
+                  <div id="custContrastHint" class="form-hint hidden" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
                 </div>
                 <div>
-                  <label>نوع الخط (17 خطاً)</label>
+                  <label>الخط العربي (6 خطوط)</label>
                   <select id="custFontFamily">
-                    <option value="Normal">Normal</option>
-                    <option value="Kalam">Kalam</option>
-                    <option value="Signika">Signika</option>
-                    <option value="Grandmaster">Grandmaster</option>
-                    <option value="Comic Neue">Comic Neue</option>
-                    <option value="Quicksand">Quicksand</option>
-                    <option value="Orbitron">Orbitron</option>
-                    <option value="Lemonada">Lemonada</option>
-                    <option value="Grenze Gotisch">Grenze Gotisch</option>
-                    <option value="Merienda">Merienda</option>
-                    <option value="Amita">Amita</option>
-                    <option value="Averia Libre">Averia Libre</option>
-                    <option value="Turret Road">Turret Road</option>
-                    <option value="Sansita">Sansita</option>
-                    <option value="Comfortaa">Comfortaa</option>
-                    <option value="Charm">Charm</option>
-                    <option value="Lobster Two">Lobster Two</option>
+                    <option value="Cairo">Cairo (كايرو - قياسي)</option>
+                    <option value="Tajawal">Tajawal (تجوال - عصري)</option>
+                    <option value="Amiri">Amiri (أميري - كلاسيكي)</option>
+                    <option value="Reem Kufi">Reem Kufi (ريم كوفي)</option>
+                    <option value="Aref Ruqaa">Aref Ruqaa (عارف رقعة)</option>
+                    <option value="Almarai">Almarai (المراعي)</option>
                   </select>
                 </div>
               </div>
@@ -724,8 +734,22 @@
                   </select>
                 </div>
                 <div>
-                  <label>حجم خط الاسم والرسالة (<span id="custFontSizeVal">14</span>px)</label>
-                  <input type="range" id="custFontSize" min="12" max="20" step="1" value="14" style="width:100%;padding:4px 0;" />
+                  <label>حجم خط الاسم (<span id="custNameFontSizeVal">14</span>px)</label>
+                  <input type="range" id="custNameFontSize" min="13" max="18" step="1" value="14" style="width:100%;padding:4px 0;" />
+                </div>
+              </div>
+              <div class="form-grid-2" style="margin-top:6px;">
+                <div>
+                  <label>حجم خط الرسالة (<span id="custFontSizeVal">14</span>px)</label>
+                  <input type="range" id="custFontSize" min="13" max="17" step="1" value="14" style="width:100%;padding:4px 0;" />
+                </div>
+                <div>
+                  <label>وضع لون الاسم</label>
+                  <select id="custNameStyleMode">
+                    <option value="solid">لون ثابت</option>
+                    <option value="gradient">تدرج لوني</option>
+                    <option value="glow">توهج نيون</option>
+                  </select>
                 </div>
               </div>
 
@@ -827,10 +851,10 @@
               </div>
             </div>
 
-            <!-- PRIVACY SWITCHES & STEALTH & LOGOUT -->
+            <!-- PRIVACY SWITCHES, SMART NOTIFICATIONS & STEALTH & LOGOUT -->
             <div class="addon-block">
               <div class="addon-block-head">
-                <h4><i class="fa-solid fa-user-lock"></i> إعدادات الخصوصية والتخفي</h4>
+                <h4><i class="fa-solid fa-user-lock"></i> إعدادات الخصوصية والإشعارات والتخفي</h4>
               </div>
               <div style="display:flex;flex-direction:column;gap:8px;">
                 <label class="switch-label">
@@ -841,6 +865,14 @@
                   <input type="checkbox" id="custAllowPmToggle" checked />
                   <span><i class="fa-solid fa-envelope-open-text"></i> السماح باستقبال الرسائل الخاصة</span>
                 </label>
+                <label class="switch-label">
+                  <input type="checkbox" id="custMuteSoundsToggle" />
+                  <span><i class="fa-solid fa-volume-xmark"></i> كتم أصوات التنبيهات والرسائل الواردة</span>
+                </label>
+                <div class="inline-row" style="justify-content:space-between;gap:8px;">
+                  <span style="font-size:12px;color:#cbd5e1;"><i class="fa-solid fa-bell"></i> إشعارات المتصفح عند تصغير النافذة (Web Push)</span>
+                  <button type="button" id="custEnableWebPushBtn" class="btn-secondary btn-xs">تفعيل الإشعارات</button>
+                </div>
               </div>
 
               <div id="custStealthCard" class="stealth-box hidden" style="margin-top:8px;">
@@ -861,26 +893,27 @@
           </div>
 
           <div class="modal-footer-actions">
-            <button type="button" id="saveCustomizeBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ وتطبيق التعديلات</button>
+            <button type="button" id="saveCustomizeBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ التغييرات وتطبيقها</button>
           </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 2. LUXURY MEMBER PROFILE CARD MODAL (WITH INLINE ADMIN TAB) -->
-    <div id="quickUserModal" class="modal-backdrop hidden">
+    <!-- 2. LUXURY MEMBER PROFILE CARD (SLIDE-OVER) -->
+    <div id="quickUserModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md profile-luxury-card">
         <div id="quickUserBody" class="profile-card-shell"></div>
       </div>
     </div>
 
-    <!-- 3. SEND GIFT MODAL -->
-    <div id="giftModal" class="modal-backdrop hidden">
+    <!-- 3. SEND GIFT BOTTOM SHEET -->
+    <div id="giftModal" class="modal-backdrop modal-sheet hidden">
       <div class="modal-card modal-card-md">
+        <div class="sheet-handle-pill" aria-hidden="true"></div>
         <div class="modal-header">
           <h3><i class="fa-solid fa-gift"></i> إرسال هدية إلى <span id="giftTargetName">العضو</span></h3>
-          <button type="button" class="modal-close" data-close-modal="giftModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="giftModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div class="modal-body">
           <div class="gift-balance-bar">
@@ -892,12 +925,12 @@
       </div>
     </div>
 
-    <!-- 4. NEWS FEED & PUBLISHER MODAL -->
-    <div id="newsModal" class="modal-backdrop hidden">
+    <!-- 4. NEWS FEED & PUBLISHER SLIDE-OVER -->
+    <div id="newsModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
           <h3><i class="fa-solid fa-newspaper"></i> أخبار وإعلانات الموقع</h3>
-          <button type="button" class="modal-close" data-close-modal="newsModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="newsModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div class="modal-body">
           <div id="newsPublishBar" class="news-publish-bar hidden">
@@ -917,12 +950,12 @@
       </div>
     </div>
 
-    <!-- 5. LEADERBOARDS MODAL -->
-    <div id="leaderboardsModal" class="modal-backdrop hidden">
+    <!-- 5. LEADERBOARDS SLIDE-OVER -->
+    <div id="leaderboardsModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
           <h3><i class="fa-solid fa-trophy"></i> المتصدرون والتفاعل المباشر</h3>
-          <button type="button" class="modal-close" data-close-modal="leaderboardsModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="leaderboardsModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div class="cust-tabs-nav">
           <button type="button" class="lb-tab active" data-lb-tab="rich"><i class="fa-solid fa-coins"></i> الأثرياء</button>
@@ -937,88 +970,167 @@
       </div>
     </div>
 
-    <!-- 6. SOCIAL MODAL -->
-    <div id="socialModal" class="modal-backdrop hidden">
+    <!-- 6. SOCIAL SLIDE-OVER -->
+    <div id="socialModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
           <h3 id="socialModalTitle">الإشعارات والتواصل</h3>
-          <button type="button" class="modal-close" data-close-modal="socialModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="socialModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div id="socialModalBody" class="modal-body"></div>
       </div>
     </div>
 
-    <!-- 7. ROOMS SWITCHER MODAL -->
-    <div id="roomsModal" class="modal-backdrop hidden">
+    <!-- 7. ROOMS SWITCHER SLIDE-OVER -->
+    <div id="roomsModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md">
         <div class="modal-header">
           <h3><i class="fa-solid fa-door-open"></i> غرف الدردشة المتاحة</h3>
-          <button type="button" class="modal-close" data-close-modal="roomsModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="roomsModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div id="roomsModalBody" class="modal-body"></div>
       </div>
     </div>
 
-    <!-- 8. FULL OWNER ADMIN & CMS PANEL MODAL -->
-    <div id="adminModal" class="modal-backdrop hidden">
+    <!-- 8. UNIFIED 5-TAB OWNER COMMAND CENTER (SLIDE-OVER) -->
+    <div id="adminModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-lg">
         <div class="modal-header">
-          <h3><i class="fa-solid fa-sliders"></i> لوحة تحكم المالك وإدارة النظام</h3>
-          <button type="button" class="modal-close" data-close-modal="adminModal"><i class="fa-solid fa-xmark"></i></button>
+          <h3><i class="fa-solid fa-crown" style="color:#F59E0B;"></i> لوحة قيادة المالك والنظام</h3>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="adminModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
-        <div class="admin-nav-tabs">
-          <button type="button" class="adm-tab active" data-adm-tab="stats"><i class="fa-solid fa-chart-simple"></i> الإحصائيات</button>
-          <button type="button" class="adm-tab" data-adm-tab="users"><i class="fa-solid fa-users-gear"></i> الأعضاء والرتب</button>
-          <button type="button" class="adm-tab" data-adm-tab="ranks"><i class="fa-solid fa-crown"></i> منشئ الرتب</button>
-          <button type="button" class="adm-tab" data-adm-tab="rooms"><i class="fa-solid fa-door-open"></i> الغرف</button>
-          <button type="button" class="adm-tab" data-adm-tab="news"><i class="fa-solid fa-newspaper"></i> الأخبار</button>
-          <button type="button" class="adm-tab" data-adm-tab="cms"><i class="fa-solid fa-paintbrush"></i> المظهر و CSS</button>
-          <button type="button" class="adm-tab" data-adm-tab="emojis"><i class="fa-regular fa-face-smile"></i> الإيموجيات</button>
-          <button type="button" class="adm-tab" data-adm-tab="bans"><i class="fa-solid fa-ban"></i> الحظر والبلاغات</button>
-          <button type="button" class="adm-tab hidden" id="admOwnerSuiteTabBtn" data-adm-tab="owner_suite"><i class="fa-solid fa-crown"></i> جناح المالك</button>
+        <div class="admin-nav-tabs" id="adminUnifiedTabsBar">
+          <button type="button" class="adm-tab active" data-adm-tab="ranks_matrix"><i class="fa-solid fa-crown"></i> منشئ الرتب والصلاحيات</button>
+          <button type="button" class="adm-tab" data-adm-tab="protection"><i class="fa-solid fa-shield-halved"></i> الحماية التلقائية</button>
+          <button type="button" class="adm-tab" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> بوت المسابقات الذكي</button>
+          <button type="button" class="adm-tab" data-adm-tab="members_control"><i class="fa-solid fa-users-gear"></i> الأعضاء والرقابة</button>
+          <button type="button" class="adm-tab" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل الرقابي</button>
         </div>
         <div id="adminModalBody" class="modal-body"></div>
       </div>
     </div>
 
-    <!-- 9. STORE MODAL (المتجر) -->
-    <div id="storeModal" class="modal-backdrop hidden">
-      <div class="modal-card modal-card-md">
-        <div class="modal-header">
-          <h3><i class="fa-solid fa-store"></i> متجر الإضافات والزينة</h3>
-          <button type="button" class="modal-close" data-close-modal="storeModal"><i class="fa-solid fa-xmark"></i></button>
+    <!-- 9. STORE SLIDE-OVER VIEW -->
+    <div id="storeModal" class="modal-backdrop modal-slideover hidden">
+      <div class="modal-card modal-card-md store-pro-modal-card">
+        <div class="store-blue-hero">
+          <div class="store-blue-hero-top">
+            <div class="store-blue-hero-title">
+              <span class="store-hero-icon"><i class="fa-solid fa-crown"></i></span>
+              <div>
+                <h3>متجر الإطارات</h3>
+                <p>إطارات متحركة حصرية • شارات VIP • لمعات وزينة الأسماء</p>
+              </div>
+            </div>
+            <button type="button" class="modal-close store-hero-close rtl-back-btn" data-close-modal="storeModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
+          </div>
+          <div class="store-blue-hero-balance">
+            <span class="store-ruby-hero-pill"><i class="fa-solid fa-gem"></i> رصيدك: <strong id="storeHeroRubyCount">0</strong> روبي</span>
+            <button type="button" id="storeHeroCustShortcutBtn" class="store-hero-style-btn"><i class="fa-solid fa-palette"></i> خطي ولوني</button>
+          </div>
         </div>
-        <div class="cust-tabs-nav" id="storeTabsBar">
-          <button type="button" class="lb-tab store-tab active" data-store-tab="frames"><i class="fa-solid fa-crown"></i> الإطارات</button>
-          <button type="button" class="lb-tab store-tab" data-store-tab="ranks"><i class="fa-solid fa-medal"></i> الرتب (VIP وبريميوم)</button>
-          <button type="button" class="lb-tab store-tab" data-store-tab="shines"><i class="fa-solid fa-wand-magic-sparkles"></i> لمعات الاسم</button>
-          <button type="button" class="lb-tab store-tab" data-store-tab="nameplates"><i class="fa-solid fa-id-badge"></i> أشرطة الأسماء</button>
-          <button type="button" class="lb-tab store-tab" data-store-tab="backgrounds"><i class="fa-solid fa-sparkles"></i> خلفيات البروفايل</button>
-          <button type="button" class="lb-tab store-tab" data-store-tab="badges"><i class="fa-solid fa-shield-halved"></i> أيقونات وأجنحة</button>
+        <div class="store-tabs-shell" id="storeTabsBar">
+          <div class="store-primary-tabs">
+            <button type="button" class="store-primary-tab store-tab" data-store-tab="my_frames"><i class="fa-solid fa-box-open"></i> إطاراتي</button>
+            <button type="button" class="store-primary-tab store-tab active" data-store-tab="store"><i class="fa-solid fa-store"></i> المتجر</button>
+          </div>
+          <div class="store-secondary-tabs">
+            <button type="button" class="lb-tab store-tab store-sub-pill" data-store-tab="ranks"><i class="fa-solid fa-medal"></i> الرتب</button>
+            <button type="button" class="lb-tab store-tab store-sub-pill" data-store-tab="shines"><i class="fa-solid fa-wand-magic-sparkles"></i> اللمعات</button>
+            <button type="button" class="lb-tab store-tab store-sub-pill" data-store-tab="nameplates"><i class="fa-solid fa-id-badge"></i> أشرطة</button>
+            <button type="button" class="lb-tab store-tab store-sub-pill" data-store-tab="backgrounds"><i class="fa-solid fa-sparkles"></i> خلفيات</button>
+            <button type="button" class="lb-tab store-tab store-sub-pill" data-store-tab="badges"><i class="fa-solid fa-shield-halved"></i> أجنحة</button>
+          </div>
         </div>
-        <div id="storeModalBody" class="modal-body"></div>
+        <div id="storeModalBody" class="modal-body store-modal-body"></div>
       </div>
     </div>
 
-    <!-- 10. DOWNLOAD APP MODAL (حمل التطبيق) -->
-    <div id="downloadAppModal" class="modal-backdrop hidden">
+    <!-- 10. DOWNLOAD APP BOTTOM SHEET -->
+    <div id="downloadAppModal" class="modal-backdrop modal-sheet hidden">
       <div class="modal-card modal-card-sm">
+        <div class="sheet-handle-pill" aria-hidden="true"></div>
         <div class="modal-header">
           <h3><i class="fa-solid fa-mobile-screen-button"></i> حمل التطبيق على جهازك</h3>
-          <button type="button" class="modal-close" data-close-modal="downloadAppModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="downloadAppModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div id="downloadAppBody" class="modal-body"></div>
       </div>
     </div>
 
-    <!-- 11. RANK PICKER MODAL (رفع / تنزيل الرتب) -->
-    <div id="rankPickerModal" class="modal-backdrop hidden">
+    <!-- 11. RANK PICKER BOTTOM SHEET -->
+    <div id="rankPickerModal" class="modal-backdrop modal-sheet hidden">
       <div class="modal-card modal-card-sm">
+        <div class="sheet-handle-pill" aria-hidden="true"></div>
         <div class="modal-header">
           <h3><i class="fa-solid fa-award"></i> رفع أو تنزيل رتبة: <span id="rankPickerTargetName">العضو</span></h3>
-          <button type="button" class="modal-close" data-close-modal="rankPickerModal"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="rankPickerModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
         </div>
         <div id="rankPickerBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- 12. DEDICATED ROOM SETTINGS & WALLPAPER BOTTOM SHEET -->
+    <div id="roomSettingsModal" class="modal-backdrop modal-sheet hidden">
+      <div class="modal-card modal-card-md">
+        <div class="sheet-handle-pill" aria-hidden="true"></div>
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-sliders"></i> إعدادات الغرفة والخلفية</h3>
+          <button type="button" class="modal-close rtl-back-btn" data-close-modal="roomSettingsModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="room-wp-preview-card">
+            <img id="rmSettingsWpPreviewImg" src="" alt="معاينة خلفية الغرفة" class="hidden" />
+            <div id="rmSettingsWpPlaceholder" class="room-wp-placeholder">
+              <i class="fa-regular fa-image"></i>
+              <span>لا توجد صورة خلفية مخصصة للغرفة حالياً</span>
+            </div>
+          </div>
+          <div class="inline-row" style="flex-wrap:wrap;gap:8px;">
+            <input type="file" id="rmSettingsWpFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
+            <button type="button" id="rmSettingsWpUploadBtn" class="btn-primary btn-sm" style="flex:1;">
+              <i class="fa-solid fa-cloud-arrow-up"></i> رفع خلفية (صورة أو GIF)
+            </button>
+            <button type="button" id="rmSettingsWpClearBtn" class="btn-danger btn-sm">
+              <i class="fa-solid fa-trash-can"></i> إزالة الخلفية
+            </button>
+          </div>
+          <div class="form-grid-2">
+            <div>
+              <label>اسم الغرفة</label>
+              <input type="text" id="rmSettingsName" maxlength="60" />
+            </div>
+            <div>
+              <label>وصف الغرفة</label>
+              <input type="text" id="rmSettingsDesc" maxlength="120" />
+            </div>
+            <div>
+              <label>لون السمة الافتراضي</label>
+              <select id="rmSettingsTheme">
+                <option value="warm_peach">خوخ دافئ</option>
+                <option value="sunset_rose">وردي غروب</option>
+                <option value="sky_breeze">سماوي نقي</option>
+                <option value="royal_night">ليلي ملكي</option>
+              </select>
+            </div>
+            <div>
+              <label>رسالة الموضوع / الترحيب</label>
+              <input type="text" id="rmSettingsWelcome" maxlength="200" placeholder="تظهر في شريط الموضوع..." />
+            </div>
+          </div>
+          <div>
+            <label>كلمة مرور الغرفة (اتركها فارغة لإبقاء الحالي، أو اكتب كلمة جديدة)</label>
+            <input type="text" id="rmSettingsPass" maxlength="50" placeholder="اختياري..." />
+          </div>
+          <label class="switch-label">
+            <input type="checkbox" id="rmSettingsMicsEnabled" checked />
+            <span><i class="fa-solid fa-microphone"></i> تفعيل المايكات الصوتية في الغرفة</span>
+          </label>
+          <input type="hidden" id="rmSettingsWpUrl" value="" />
+          <div class="inline-row" style="gap:8px;margin-top:4px;">
+            <button type="button" id="rmSettingsSaveBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الغرفة وتطبيقها</button>
+          </div>
+        </div>
       </div>
     </div>
 

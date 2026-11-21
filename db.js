@@ -119,10 +119,90 @@ function enforceSupremeOwnerUser(u) {
   return u;
 }
 
+const ALL_RANK_PERMISSIONS = [
+  'pm',
+  'chat_media',
+  'mic',
+  'youtube',
+  'wall',
+  'gifts',
+  'use_addons',
+  'immune',
+  'delete_msg',
+  'mute',
+  'kick',
+  'ban',
+  'manage_rooms',
+  'set_rank',
+  'stealth',
+  'give_coins',
+  'clear_room',
+  'access_panel',
+  'room_owner',
+  'publish_news',
+  'send_links'
+];
+
+function makeRankPerms(enabledList = []) {
+  const set = new Set(enabledList);
+  const out = {};
+  for (const p of ALL_RANK_PERMISSIONS) {
+    out[`perm_${p}`] = set.has('*') || set.has(p) ? 1 : 0;
+  }
+  return out;
+}
+
+const LEGACY_ROLE_MIGRATION_MAP = {
+  senior_admin: 'co_owner',
+  vip_owner: 'super_owner',
+  master_owner: 'super_owner',
+  master_super: 'super_owner',
+  director: 'general_admin',
+  general_mod: 'general_admin',
+  moderator: 'super_admin',
+  support_94: 'super_admin',
+  support_93: 'super_admin',
+  support_92: 'super_admin',
+  support_91: 'admin',
+  support_90: 'admin',
+  supervisor: 'admin',
+  admin_87: 'admin',
+  admin_86: 'admin',
+  admin_85: 'admin',
+  admin_84: 'admin',
+  admin_83: 'admin',
+  admin_82: 'admin',
+  admin_81: 'admin',
+  admin_80: 'admin',
+  founder_79: 'admin',
+  vip: 'royal_vip',
+  silver_vip: 'silver_member',
+  participant_10: 'gold_member',
+  participant_9: 'gold_member',
+  participant_8: 'silver_member',
+  participant_7: 'silver_member',
+  participant_6: 'silver_member',
+  participant_5: 'bronze_member',
+  participant_4: 'bronze_member',
+  participant_3: 'bronze_member',
+  participant_2: 'bronze_member',
+  participant_1: 'bronze_member'
+};
+
 function ensureSupremeOwnersInStore() {
   for (const u of store.usersById.values()) {
     if (isSupremeOwnerEmail(u.email)) {
       enforceSupremeOwnerUser(u);
+    } else if (u.role === 'site_owner') {
+      u.role = 'co_owner';
+      enqueueSet('users', String(u.id), { role: 'co_owner' }, true);
+      const senderKey = `user:${u.id}`;
+      for (const m of store.messagesById.values()) {
+        if (m.sender_key === senderKey && m.sender_role === 'site_owner') {
+          m.sender_role = 'co_owner';
+          enqueueSet('messages', String(m.doc_id || m.id), { sender_role: 'co_owner' }, true);
+        }
+      }
     }
   }
 }
@@ -130,454 +210,204 @@ function ensureSupremeOwnersInStore() {
 const DEFAULT_RANKS = [
   {
     key: 'site_owner',
-    label: 'مالك الموقع',
+    label: 'مالك',
     icon: '👑',
     badge_style: 'crown_royal',
     image_url: '',
     bg_color: '#b91c1c',
     text_color: '#fef3c7',
-    power: 100,
-    tier_order: 10,
+    power: 15,
+    tier_order: 15,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    perm_give_coins: 1,
-    max_assignable_rank: 100
+    max_assignable_rank: 15,
+    ...makeRankPerms(['*'])
   },
   {
-    key: 'senior_admin',
-    label: 'الإدارة العليا',
+    key: 'co_owner',
+    label: 'صاحب موقع',
     icon: '🛡️',
-    badge_style: 'royal_shield',
+    badge_style: 'gold_eagle',
     image_url: '',
     bg_color: '#dc2626',
     text_color: '#ffffff',
-    power: 95,
-    tier_order: 8,
+    power: 14,
+    tier_order: 14,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    perm_give_coins: 1,
-    max_assignable_rank: 94
+    max_assignable_rank: 13,
+    ...makeRankPerms(['*'])
   },
   {
-    key: 'supervisor',
-    label: 'المشرفون',
-    icon: '⚔️',
-    badge_style: 'silver_shield',
-    image_url: '',
-    bg_color: '#2563eb',
-    text_color: '#ffffff',
-    power: 80,
-    tier_order: 6,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 1,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    perm_give_coins: 0,
-    max_assignable_rank: 0
-  },
-  {
-    key: 'super_owner',
-    label: 'Super Owner',
-    icon: '💎',
-    image_url: '',
-    bg_color: '#d97706',
-    text_color: '#fffbeb',
-    power: 99,
-    tier_order: 5,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    max_assignable_rank: 98
-  },
-  {
-    key: 'vip_owner',
-    label: 'VIP Owner',
-    icon: '🌟',
-    image_url: '',
-    bg_color: '#ea580c',
-    text_color: '#fffbeb',
-    power: 98,
-    tier_order: 5,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    max_assignable_rank: 97
-  },
-  {
-    key: 'master_owner',
-    label: 'Master Owner',
-    icon: '⚜️',
-    image_url: '',
-    bg_color: '#c026d3',
-    text_color: '#ffffff',
-    power: 97,
-    tier_order: 5,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    max_assignable_rank: 96
-  },
-  {
-    key: 'master_super',
-    label: 'Master Super',
-    icon: '🔥',
+    key: 'general_admin',
+    label: 'إداري عام',
+    icon: '🎖️',
+    badge_style: 'royal_shield',
     image_url: '',
     bg_color: '#9333ea',
     text_color: '#ffffff',
-    power: 96,
-    tier_order: 5,
+    power: 13,
+    tier_order: 13,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    max_assignable_rank: 95
+    max_assignable_rank: 12,
+    ...makeRankPerms([
+      'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+      'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank',
+      'clear_room', 'access_panel', 'room_owner', 'publish_news', 'send_links'
+    ])
   },
   {
-    key: 'director',
-    label: 'Director',
-    icon: '🏛️',
+    key: 'super_owner',
+    label: 'سوبر أونر',
+    icon: '⚜️',
+    badge_style: 'diamond_medal',
     image_url: '',
-    bg_color: '#4f46e5',
-    text_color: '#ffffff',
-    power: 95,
-    tier_order: 5,
+    bg_color: '#d97706',
+    text_color: '#fffbeb',
+    power: 12,
+    tier_order: 12,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    max_assignable_rank: 94
-  },
-  {
-    key: 'moderator',
-    label: 'Moderator',
-    icon: '🛡️',
-    image_url: '',
-    bg_color: '#2563eb',
-    text_color: '#ffffff',
-    power: 94,
-    tier_order: 5,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 0,
-    perm_clear_room: 1,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
-  },
-  ...[94, 93, 92, 91, 90].map((n) => ({
-    key: `support_${n}`,
-    label: `Support ${n}`,
-    icon: '🎧',
-    image_url: '',
-    bg_color: '#0284c7',
-    text_color: '#ffffff',
-    power: n,
-    tier_order: 0,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: n >= 92 ? 1 : 0,
-    perm_set_rank: 0,
-    perm_clear_room: n >= 93 ? 1 : 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
-  })),
-  {
-    key: 'premium',
-    label: 'عضو بريميوم',
-    icon: '💎',
-    badge_style: 'diamond_gem',
-    image_url: '',
-    bg_color: '#7c3aed',
-    text_color: '#ffffff',
-    power: 40,
-    tier_order: 2,
-    is_system: 1,
-    perm_mute: 0,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 0,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    perm_give_coins: 0,
-    max_assignable_rank: 0
-  },
-  ...[87, 86, 85, 84, 83, 82, 81, 80].map((n) => ({
-    key: `admin_${n}`,
-    label: `عضو إداري رتبة ${n}`,
-    icon: '🔰',
-    image_url: '',
-    bg_color: '#059669',
-    text_color: '#ffffff',
-    power: n,
-    tier_order: 0,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: n >= 82 ? 1 : 0,
-    perm_ban: n >= 85 ? 1 : 0,
-    perm_set_rank: 0,
-    perm_clear_room: n >= 84 ? 1 : 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
-  })),
-  {
-    key: 'founder_79',
-    label: 'عضو مؤسس رتبة 79',
-    icon: '🏅',
-    image_url: '',
-    bg_color: '#0f766e',
-    text_color: '#ffffff',
-    power: 79,
-    tier_order: 0,
-    is_system: 1,
-    perm_mute: 1,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
+    max_assignable_rank: 11,
+    ...makeRankPerms([
+      'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+      'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank',
+      'clear_room', 'access_panel', 'room_owner', 'send_links'
+    ])
   },
   {
     key: 'owner',
     label: 'أونر',
     icon: '⭐',
+    badge_style: 'gold_crown',
     image_url: '',
     bg_color: '#f59e0b',
     text_color: '#1f1300',
-    power: 98,
-    tier_order: 0,
+    power: 11,
+    tier_order: 11,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 1,
-    perm_clear_room: 1,
-    perm_manage_rooms: 1,
-    perm_access_panel: 1,
-    perm_room_owner: 1,
-    perm_publish_news: 1,
-    perm_use_addons: 1,
-    max_assignable_rank: 97
+    max_assignable_rank: 10,
+    ...makeRankPerms([
+      'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+      'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank',
+      'clear_room', 'access_panel', 'room_owner', 'send_links'
+    ])
   },
   {
     key: 'super_admin',
     label: 'سوبر أدمن',
     icon: '🛡️',
+    badge_style: 'silver_shield',
     image_url: '',
-    bg_color: '#7c3aed',
+    bg_color: '#2563eb',
     text_color: '#ffffff',
-    power: 70,
-    tier_order: 0,
+    power: 10,
+    tier_order: 10,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 0,
-    perm_clear_room: 1,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms([
+      'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+      'delete_msg', 'mute', 'kick', 'ban', 'clear_room', 'access_panel', 'send_links'
+    ])
   },
   {
     key: 'admin',
     label: 'أدمن',
     icon: '🔰',
+    badge_style: 'royal_shield',
     image_url: '',
     bg_color: '#0284c7',
     text_color: '#ffffff',
-    power: 60,
-    tier_order: 0,
+    power: 9,
+    tier_order: 9,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 1,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms([
+      'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+      'delete_msg', 'mute', 'kick', 'clear_room', 'access_panel'
+    ])
   },
   {
-    key: 'general_mod',
-    label: 'إداري عام',
-    icon: '🎖️',
+    key: 'premium',
+    label: 'بريميوم',
+    icon: '💎',
+    badge_style: 'diamond_gem',
     image_url: '',
-    bg_color: '#059669',
+    bg_color: '#7c3aed',
     text_color: '#ffffff',
-    power: 50,
-    tier_order: 0,
+    power: 8,
+    tier_order: 8,
     is_system: 1,
-    perm_mute: 1,
-    perm_kick: 1,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 1,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune', 'send_links'])
   },
   {
     key: 'royal_vip',
-    label: 'ملوك الموقع VIP',
+    label: 'VIP',
     icon: '🏆',
-    badge_style: 'gold_crown',
+    badge_style: 'vip_wings',
     image_url: '',
     bg_color: '#eab308',
     text_color: '#1c1917',
-    power: 55,
-    tier_order: 4,
+    power: 7,
+    tier_order: 7,
     is_system: 1,
-    perm_mute: 0,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 0,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    perm_give_coins: 0,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune'])
   },
   {
-    key: 'silver_vip',
-    label: 'فضي',
-    icon: '🥈',
+    key: 'royal_member',
+    label: 'عضو ملكي',
+    icon: '👑',
+    badge_style: 'silver_crown',
     image_url: '',
-    bg_color: '#94a3b8',
-    text_color: '#0f172a',
-    power: 30,
-    tier_order: 0,
+    bg_color: '#db2777',
+    text_color: '#ffffff',
+    power: 6,
+    tier_order: 6,
     is_system: 1,
-    perm_mute: 0,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 0,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
   },
-  ...[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => ({
-    key: `participant_${n}`,
-    label: `عضو مشارك رتبة ${n}`,
-    icon: '🎗️',
+  {
+    key: 'gold_member',
+    label: 'عضو ذهبي',
+    icon: '🥇',
+    badge_style: 'gold_star',
     image_url: '',
-    bg_color: '#475569',
-    text_color: '#f8fafc',
-    power: 10 + n,
-    tier_order: 0,
+    bg_color: '#ca8a04',
+    text_color: '#ffffff',
+    power: 5,
+    tier_order: 5,
     is_system: 1,
-    perm_mute: 0,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 0,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    max_assignable_rank: 0
-  })),
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+  },
+  {
+    key: 'silver_member',
+    label: 'عضو فضي',
+    icon: '🥈',
+    badge_style: 'silver_wing',
+    image_url: '',
+    bg_color: '#64748b',
+    text_color: '#ffffff',
+    power: 4,
+    tier_order: 4,
+    is_system: 1,
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+  },
+  {
+    key: 'bronze_member',
+    label: 'عضو برونزي',
+    icon: '🥉',
+    badge_style: 'gold_star',
+    image_url: '',
+    bg_color: '#b45309',
+    text_color: '#ffffff',
+    power: 3,
+    tier_order: 3,
+    is_system: 1,
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+  },
   {
     key: 'member',
     label: 'عضو مسجل',
@@ -586,21 +416,11 @@ const DEFAULT_RANKS = [
     image_url: '',
     bg_color: '#0f766e',
     text_color: '#ffffff',
-    power: 5,
-    tier_order: 0,
+    power: 2,
+    tier_order: 2,
     is_system: 1,
-    perm_mute: 0,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 0,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 1,
-    perm_give_coins: 0,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
   },
   {
     key: 'guest',
@@ -608,29 +428,19 @@ const DEFAULT_RANKS = [
     icon: '👤',
     badge_style: 'neon_badge',
     image_url: '',
-    bg_color: '#64748b',
+    bg_color: '#475569',
     text_color: '#ffffff',
-    power: 0,
-    tier_order: 0,
+    power: 1,
+    tier_order: 1,
     is_system: 1,
-    perm_mute: 0,
-    perm_kick: 0,
-    perm_ban: 0,
-    perm_set_rank: 0,
-    perm_clear_room: 0,
-    perm_manage_rooms: 0,
-    perm_access_panel: 0,
-    perm_room_owner: 0,
-    perm_publish_news: 0,
-    perm_use_addons: 0,
-    perm_give_coins: 0,
-    max_assignable_rank: 0
+    max_assignable_rank: 0,
+    ...makeRankPerms([])
   }
 ];
 
 const DEFAULT_SITE_SETTINGS = {
   id: 1,
-  site_name: 'شات الغرف المباشر',
+  site_name: 'شات عربي الاصيل',
   site_description: 'دردشة عربية فورية • مايكات صوتية • رتب وإطارات ملكية',
   site_logo: '',
   welcome_message: '',
@@ -645,12 +455,22 @@ const DEFAULT_SITE_SETTINGS = {
   lock_guest_images: 0,
   block_vpn: 0,
   banned_words: [],
+  antiflood_enabled: 1,
+  antiflood_max_msgs: 5,
+  antiflood_window_sec: 6,
+  antiflood_mute_mins: 5,
+  banned_word_mute_mins: 10,
   online_boost: 0,
   lucky_box_enabled: 1,
   lucky_box_min: 50,
   lucky_box_max: 500,
   referral_bonus: 200,
   quiz_bot_enabled: 1,
+  quiz_interval_sec: 25,
+  quiz_hint_sec: 12,
+  quiz_reward_coins: 100,
+  quiz_msg_style: 'royal_gold',
+  quiz_custom_questions: [],
   fx_owner_galaxy_identity: 1,
   fx_glass_bubbles: 1,
   fx_mic_waves: 1,
@@ -673,10 +493,12 @@ const DEFAULT_SITE_SETTINGS = {
   feat_gifts: 1,
   feat_youtube: 1,
   feat_wall: 1,
-  vip_ruby_multiplier: 2,
-  premium_ruby_multiplier: 1.5,
-  rank_price_premium: 500,
-  rank_price_royal_vip: 1200,
+  royal_member_ruby_multiplier: 1.2,
+  vip_ruby_multiplier: 1.5,
+  premium_ruby_multiplier: 2,
+  rank_price_royal_member: 250,
+  rank_price_royal_vip: 600,
+  rank_price_premium: 1200,
   frame_price_overrides: {},
   updated_at: new Date().toISOString()
 };
@@ -1031,6 +853,7 @@ const store = {
   mutesByKey: new Map(),
   bansByKey: new Map(),
   customEmojisById: new Map(),
+  customFramesById: new Map(),
   privateMessagesById: new Map(),
   friendshipsByKey: new Map(),
   wallPostsById: new Map(),
@@ -1068,11 +891,34 @@ function normalizeUserDoc(docId, data) {
   const numId = Number(data.id) || Number(docId) || 0;
   const email = String(data.email || '').toLowerCase();
   const role = String(data.role || 'member');
-  const allowStealth = role === 'site_owner' || isSupremeOwnerEmail(email);
+  const allowStealth =
+    role === 'site_owner' || role === 'co_owner' || isSupremeOwnerEmail(email) || hasPermission(role, 'stealth');
   const avatarFrame = String(data.avatar_frame || 'none');
-  const ownedFrames = Array.isArray(data.owned_frames) ? data.owned_frames.map((x) => String(x)) : [];
-  if (avatarFrame && avatarFrame !== 'none' && !ownedFrames.includes(avatarFrame)) {
-    ownedFrames.push(avatarFrame);
+  const rawMeta = data.owned_frames_meta && typeof data.owned_frames_meta === 'object' ? data.owned_frames_meta : {};
+  const ownedFramesMeta = {};
+  const nowTs = Date.now();
+  for (const [fId, meta] of Object.entries(rawMeta)) {
+    if (!meta || typeof meta !== 'object') continue;
+    const exp = meta.expiresAt ? Number(meta.expiresAt) : null;
+    if (exp && exp <= nowTs) continue;
+    ownedFramesMeta[String(fId)] = {
+      durationType: meta.durationType === 'monthly' ? 'monthly' : 'permanent',
+      expiresAt: exp || null,
+      grantedAt: Number(meta.grantedAt) || nowTs,
+      source: String(meta.source || 'buy')
+    };
+  }
+  const rawOwned = Array.isArray(data.owned_frames) ? data.owned_frames.map((x) => String(x)) : [];
+  const ownedFrames = rawOwned.filter((fId) => {
+    const m = rawMeta[fId];
+    return !(m && m.expiresAt && Number(m.expiresAt) <= nowTs);
+  });
+  const effectiveFrame =
+    avatarFrame && avatarFrame !== 'none' && rawMeta[avatarFrame]?.expiresAt && Number(rawMeta[avatarFrame].expiresAt) <= nowTs
+      ? 'none'
+      : avatarFrame;
+  if (effectiveFrame && effectiveFrame !== 'none' && !ownedFrames.includes(effectiveFrame)) {
+    ownedFrames.push(effectiveFrame);
   }
   return {
     id: numId,
@@ -1081,17 +927,21 @@ function normalizeUserDoc(docId, data) {
     password_hash: String(data.password_hash || ''),
     role,
     display_name: String(data.display_name || ''),
-    name_color: String(data.name_color || '#ffffff'),
-    text_color: String(data.text_color || '#ffffff'),
+    name_color: String(data.name_color || '#f8fafc'),
+    text_color: String(data.text_color || '#e2e8f0'),
     name_bg_color: String(data.name_bg_color || ''),
     neon_color: String(data.neon_color || ''),
-    font_family: String(data.font_family || 'Normal'),
+    font_family: String(data.font_family || 'Cairo'),
     font_style: String(data.font_style || 'Normal'),
-    font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
+    font_size: Math.max(13, Math.min(17, Number(data.font_size) || 14)),
+    name_font_size: Math.max(13, Math.min(18, Number(data.name_font_size) || 14)),
+    name_style_mode: ['solid', 'gradient', 'glow'].includes(String(data.name_style_mode)) ? String(data.name_style_mode) : 'solid',
+    name_gradient: String(data.name_gradient || 'gold_royal'),
     avatar_url: String(data.avatar_url || ''),
     cover_url: String(data.cover_url || ''),
-    avatar_frame: avatarFrame,
+    avatar_frame: effectiveFrame,
     owned_frames: ownedFrames,
+    owned_frames_meta: ownedFramesMeta,
     nameplate_style: String(data.nameplate_style || 'default'),
     name_shine: String(data.name_shine || 'none'),
     name_anim: String(data.name_anim || 'none'),
@@ -1124,6 +974,8 @@ function normalizeUserDoc(docId, data) {
     gifts_sent: Number(data.gifts_sent) || 0,
     last_ip: String(data.last_ip || ''),
     last_device_id: String(data.last_device_id || ''),
+    last_fingerprint: String(data.last_fingerprint || ''),
+    last_ua: String(data.last_ua || ''),
     is_banned: data.is_banned ? 1 : 0,
     ban_reason: String(data.ban_reason || ''),
     created_at: String(data.created_at || nowIso())
@@ -1141,13 +993,16 @@ function normalizeGuestDoc(docId, data = {}) {
     display_name: cleanName,
     username: cleanName,
     role: 'guest',
-    name_color: String(data.name_color || '#0f172a'),
-    text_color: String(data.text_color || '#111827'),
+    name_color: String(data.name_color || '#f8fafc'),
+    text_color: String(data.text_color || '#e2e8f0'),
     name_bg_color: String(data.name_bg_color || ''),
     neon_color: String(data.neon_color || ''),
-    font_family: String(data.font_family || 'Normal'),
+    font_family: String(data.font_family || 'Cairo'),
     font_style: String(data.font_style || 'Normal'),
-    font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
+    font_size: Math.max(13, Math.min(17, Number(data.font_size) || 14)),
+    name_font_size: Math.max(13, Math.min(18, Number(data.name_font_size) || 14)),
+    name_style_mode: ['solid', 'gradient', 'glow'].includes(String(data.name_style_mode)) ? String(data.name_style_mode) : 'solid',
+    name_gradient: String(data.name_gradient || 'gold_royal'),
     avatar_url: String(data.avatar_url || ''),
     cover_url: String(data.cover_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
@@ -1157,8 +1012,11 @@ function normalizeGuestDoc(docId, data = {}) {
     name_anim_speed: String(data.name_anim_speed || 'normal'),
     vip_wings: data.vip_wings ? 1 : 0,
     bio: String(data.bio || ''),
+    country: String(data.country || ''),
     last_ip: String(data.last_ip || ''),
     last_device_id: String(data.last_device_id || ''),
+    last_fingerprint: String(data.last_fingerprint || ''),
+    last_ua: String(data.last_ua || ''),
     last_seen_at: String(data.last_seen_at || data.created_at || nowIso()),
     created_at: String(data.created_at || nowIso())
   };
@@ -1173,13 +1031,16 @@ function normalizeMessageDoc(docId, data) {
     sender_key: String(data.sender_key || ''),
     sender_name: String(data.sender_name || ''),
     sender_role: String(data.sender_role || 'member'),
-    name_color: String(data.name_color || '#ffffff'),
-    text_color: String(data.text_color || '#ffffff'),
+    name_color: String(data.name_color || '#f8fafc'),
+    text_color: String(data.text_color || '#e2e8f0'),
     name_bg_color: String(data.name_bg_color || ''),
     neon_color: String(data.neon_color || ''),
-    font_family: String(data.font_family || 'Normal'),
+    font_family: String(data.font_family || 'Cairo'),
     font_style: String(data.font_style || 'Normal'),
-    font_size: Math.max(12, Math.min(20, Number(data.font_size) || 14)),
+    font_size: Math.max(13, Math.min(17, Number(data.font_size) || 14)),
+    name_font_size: Math.max(13, Math.min(18, Number(data.name_font_size) || 14)),
+    name_style_mode: ['solid', 'gradient', 'glow'].includes(String(data.name_style_mode)) ? String(data.name_style_mode) : 'solid',
+    name_gradient: String(data.name_gradient || 'gold_royal'),
     avatar_url: String(data.avatar_url || ''),
     avatar_frame: String(data.avatar_frame || 'none'),
     nameplate_style: String(data.nameplate_style || 'default'),
@@ -1237,59 +1098,80 @@ function normalizeRoomDoc(docId, data) {
 
 function normalizeRankDoc(docId, data) {
   const key = String(data.key || docId);
-  const power = Number(data.power) || 0;
-  const defaultRoomOwner = key === 'site_owner' || data.perm_manage_rooms ? 1 : 0;
-  const defaultPublishNews = key === 'site_owner' || power >= 95 ? 1 : 0;
-  const defaultUseAddons = key === 'site_owner' || power >= 5 ? 1 : 0;
-  const defaultMaxAssign =
-    key === 'site_owner' ? 100 : data.perm_set_rank ? Math.max(0, power - 1) : 0;
-  const defaultBadgeStyle =
-    key === 'site_owner'
-      ? 'crown_royal'
-      : power >= 95
-        ? 'gold_eagle'
-        : power >= 80
-          ? 'diamond_medal'
-          : power >= 40
-            ? 'silver_wing'
-            : power >= 10
-              ? 'royal_shield'
-              : 'neon_badge';
+  const canonicalDef = DEFAULT_RANKS.find((r) => r.key === key);
+  let power = Number(data.power);
+  if (Number.isNaN(power)) power = canonicalDef ? canonicalDef.power : 2;
+  if (key === 'site_owner') power = 15;
+  else if (key === 'guest') power = 1;
+  else if (canonicalDef) power = canonicalDef.power;
+  else power = Math.max(1, Math.min(14, power > 15 ? Math.round((power / 100) * 14) : power));
 
-  return {
+  const fallbackPerms = (pName, defaultVal = 0) => {
+    if (data[`perm_${pName}`] !== undefined) return data[`perm_${pName}`] ? 1 : 0;
+    if (canonicalDef && canonicalDef[`perm_${pName}`] !== undefined) return canonicalDef[`perm_${pName}`] ? 1 : 0;
+    return defaultVal;
+  };
+
+  const defaultMaxAssign =
+    key === 'site_owner' ? 15 : data.perm_set_rank ? Math.max(0, Math.min(14, power - 1)) : 0;
+  const defaultBadgeStyle =
+    canonicalDef?.badge_style ||
+    (key === 'site_owner'
+      ? 'crown_royal'
+      : power >= 13
+        ? 'gold_eagle'
+        : power >= 10
+          ? 'diamond_medal'
+          : power >= 7
+            ? 'vip_wings'
+            : power >= 3
+              ? 'royal_shield'
+              : 'neon_badge');
+
+  const isOwner = key === 'site_owner';
+  const permDeleteMsg = isOwner ? 1 : (data.perm_delete_msg !== undefined ? (data.perm_delete_msg ? 1 : 0) : fallbackPerms('delete_msg', data.perm_clear_room ? 1 : 0));
+  const permClearRoom = isOwner ? 1 : (data.perm_clear_room !== undefined ? (data.perm_clear_room ? 1 : 0) : permDeleteMsg);
+
+  const obj = {
     key,
-    label: String(data.label || docId),
-    icon: String(data.icon || '⭐'),
+    label: String(data.label || canonicalDef?.label || docId),
+    icon: String(data.icon || canonicalDef?.icon || '⭐'),
     badge_style: String(data.badge_style || defaultBadgeStyle),
     image_url: String(data.image_url || ''),
-    bg_color: String(data.bg_color || '#334155'),
-    text_color: String(data.text_color || '#ffffff'),
+    bg_color: String(data.bg_color || canonicalDef?.bg_color || '#334155'),
+    text_color: String(data.text_color || canonicalDef?.text_color || '#ffffff'),
     power,
-    tier_order: Number(data.tier_order) || 0,
-    is_system: data.is_system ? 1 : 0,
-    perm_mute: data.perm_mute ? 1 : 0,
-    perm_kick: data.perm_kick ? 1 : 0,
-    perm_ban: data.perm_ban ? 1 : 0,
-    perm_set_rank: data.perm_set_rank ? 1 : 0,
-    perm_clear_room: data.perm_clear_room ? 1 : 0,
-    perm_manage_rooms: data.perm_manage_rooms ? 1 : 0,
-    perm_access_panel: data.perm_access_panel ? 1 : 0,
-    perm_room_owner: data.perm_room_owner !== undefined ? (data.perm_room_owner ? 1 : 0) : defaultRoomOwner,
-    perm_publish_news:
-      data.perm_publish_news !== undefined ? (data.perm_publish_news ? 1 : 0) : defaultPublishNews,
-    perm_use_addons: data.perm_use_addons !== undefined ? (data.perm_use_addons ? 1 : 0) : defaultUseAddons,
-    perm_give_coins:
-      data.perm_give_coins !== undefined
-        ? (data.perm_give_coins ? 1 : 0)
-        : (key === 'site_owner' || key === 'senior_admin' ? 1 : 0),
-    max_assignable_rank:
-      key === 'site_owner'
-        ? 100
-        : data.max_assignable_rank !== undefined
-          ? Math.max(0, Math.min(99, Number(data.max_assignable_rank) || 0))
-          : defaultMaxAssign,
+    tier_order: canonicalDef ? canonicalDef.tier_order : (Number(data.tier_order) || power),
+    is_system: canonicalDef ? 1 : (data.is_system ? 1 : 0),
+    perm_pm: isOwner ? 1 : fallbackPerms('pm', key === 'guest' ? 0 : 1),
+    perm_chat_media: isOwner ? 1 : fallbackPerms('chat_media', key === 'guest' ? 0 : 1),
+    perm_mic: isOwner ? 1 : fallbackPerms('mic', key === 'guest' ? 0 : 1),
+    perm_youtube: isOwner ? 1 : fallbackPerms('youtube', key === 'guest' ? 0 : 1),
+    perm_wall: isOwner ? 1 : fallbackPerms('wall', key === 'guest' ? 0 : 1),
+    perm_gifts: isOwner ? 1 : fallbackPerms('gifts', key === 'guest' ? 0 : 1),
+    perm_use_addons: isOwner ? 1 : fallbackPerms('use_addons', key === 'guest' ? 0 : 1),
+    perm_immune: isOwner ? 1 : fallbackPerms('immune', power >= 7 ? 1 : 0),
+    perm_delete_msg: permDeleteMsg,
+    perm_clear_room: permClearRoom,
+    perm_mute: isOwner ? 1 : fallbackPerms('mute', 0),
+    perm_kick: isOwner ? 1 : fallbackPerms('kick', 0),
+    perm_ban: isOwner ? 1 : fallbackPerms('ban', 0),
+    perm_manage_rooms: isOwner ? 1 : fallbackPerms('manage_rooms', 0),
+    perm_set_rank: isOwner ? 1 : fallbackPerms('set_rank', 0),
+    perm_stealth: isOwner ? 1 : fallbackPerms('stealth', key === 'co_owner' ? 1 : 0),
+    perm_give_coins: isOwner ? 1 : fallbackPerms('give_coins', key === 'co_owner' ? 1 : 0),
+    perm_access_panel: isOwner ? 1 : fallbackPerms('access_panel', power >= 9 ? 1 : 0),
+    perm_room_owner: isOwner ? 1 : fallbackPerms('room_owner', data.perm_manage_rooms ? 1 : 0),
+    perm_publish_news: isOwner ? 1 : fallbackPerms('publish_news', power >= 13 ? 1 : 0),
+    perm_send_links: isOwner ? 1 : fallbackPerms('send_links', power >= 8 ? 1 : 0),
+    max_assignable_rank: isOwner
+      ? 15
+      : data.max_assignable_rank !== undefined
+        ? Math.max(0, Math.min(14, Number(data.max_assignable_rank) > 15 ? Math.max(0, power - 1) : Number(data.max_assignable_rank) || 0))
+        : defaultMaxAssign,
     created_at: String(data.created_at || nowIso())
   };
+  return obj;
 }
 
 function attachRealtimeListeners() {
@@ -1425,12 +1307,16 @@ function attachRealtimeListeners() {
   let initialSettingsReady = false;
   unsubscribers.push(
     fsListen('settings', (changes) => {
+      let siteChanged = false;
       for (const ch of changes) {
         if (ch.id === 'site' && ch.type !== 'removed') {
           store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...ch.data, id: 1 };
+          siteChanged = true;
+        } else if (ch.id === 'store_frames_catalog' && ch.type !== 'removed') {
+          loadCustomFramesCatalogFromDoc(ch.data);
         }
       }
-      if (initialSettingsReady && hooks.onSettingsChanged) hooks.onSettingsChanged(getSiteSettings());
+      if (initialSettingsReady && siteChanged && hooks.onSettingsChanged) hooks.onSettingsChanged(getSiteSettings());
       initialSettingsReady = true;
     })
   );
@@ -1670,10 +1556,17 @@ async function init(eventHooks = {}) {
     }
 
     let hasSiteSettingsDoc = false;
+    let shouldMigrateSiteName = false;
     for (const d of settingsDocs) {
       if (d.id === 'site') {
         hasSiteSettingsDoc = true;
         store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...d.data, id: 1 };
+        if (!store.siteSettings.site_name || store.siteSettings.site_name === 'شات الغرف المباشر') {
+          store.siteSettings.site_name = DEFAULT_SITE_SETTINGS.site_name;
+          shouldMigrateSiteName = true;
+        }
+      } else if (d.id === 'store_frames_catalog') {
+        loadCustomFramesCatalogFromDoc(d.data);
       } else if (d.id === 'connectivity_probe' || d.id === 'probe_1') {
         enqueueDelete('settings', d.id);
       }
@@ -1797,31 +1690,56 @@ async function init(eventHooks = {}) {
 
     ensureSupremeOwnersInStore();
 
-    // Seed missing default ranks & migrate canonical 7-tier labels/icons if still at legacy defaults
+    // Remove obsolete legacy rank keys & migrate users/messages cleanly to canonical 15-rank hierarchy (Levels 15..1)
+    const legacyKeysToDelete = [];
+    for (const k of [...store.ranksByKey.keys()]) {
+      if (Object.prototype.hasOwnProperty.call(LEGACY_ROLE_MIGRATION_MAP, k)) {
+        store.ranksByKey.delete(k);
+        legacyKeysToDelete.push(k);
+      }
+    }
+    if (legacyKeysToDelete.length > 0) {
+      await fsBatchDelete('ranks', legacyKeysToDelete);
+    }
+
+    const rawRanksByKey = new Map();
+    for (const d of ranksDocs) {
+      if (d.data && !Object.prototype.hasOwnProperty.call(LEGACY_ROLE_MIGRATION_MAP, d.id)) {
+        rawRanksByKey.set(d.id, d.data);
+      }
+    }
+
     const rankSeedBatch = [];
     const legacyDefaultsMap = {
-      site_owner: 'Owner / صاحب الموقع',
-      royal_vip: 'ملكي',
-      premium: 'Premium',
-      member: 'عضو',
-      guest: 'زائر'
+      site_owner: ['Owner / صاحب الموقع', 'مالك الموقع', 'المالك'],
+      co_owner: ['الإدارة العليا'],
+      royal_vip: ['ملوك الموقع VIP', 'ملكي'],
+      premium: ['عضو بريميوم', 'Premium'],
+      member: ['عضو'],
+      guest: ['زائر']
     };
     for (const dr of DEFAULT_RANKS) {
       const existing = store.ranksByKey.get(dr.key);
+      const rawExisting = rawRanksByKey.get(dr.key);
+      const legacyLabels = legacyDefaultsMap[dr.key] || [];
+      const hadOldPowerScale = rawExisting && Number(rawExisting.power) !== dr.power;
+      const missingNewPerms = rawExisting && rawExisting.perm_pm === undefined;
       if (!existing) {
         const norm = normalizeRankDoc(dr.key, dr);
         store.ranksByKey.set(norm.key, norm);
         rankSeedBatch.push({ docId: norm.key, data: norm, merge: true });
-      } else if (legacyDefaultsMap[dr.key] && existing.label === legacyDefaultsMap[dr.key]) {
+      } else if (hadOldPowerScale || missingNewPerms || (legacyLabels.includes(existing.label) && existing.label !== dr.label)) {
         const refreshed = normalizeRankDoc(dr.key, {
           ...existing,
-          label: dr.label,
-          icon: dr.icon,
-          badge_style: dr.badge_style,
-          bg_color: dr.bg_color,
-          text_color: dr.text_color,
+          label: legacyLabels.includes(existing.label) ? dr.label : existing.label,
+          icon: existing.icon || dr.icon,
+          badge_style: existing.badge_style || dr.badge_style,
+          bg_color: existing.bg_color || dr.bg_color,
+          text_color: existing.text_color || dr.text_color,
           power: dr.power,
-          tier_order: dr.tier_order
+          tier_order: dr.tier_order,
+          is_system: 1,
+          max_assignable_rank: dr.key === 'site_owner' ? 15 : dr.max_assignable_rank
         });
         store.ranksByKey.set(refreshed.key, refreshed);
         rankSeedBatch.push({ docId: refreshed.key, data: refreshed, merge: true });
@@ -1831,8 +1749,39 @@ async function init(eventHooks = {}) {
       await fsBatchSet('ranks', rankSeedBatch);
     }
 
+    // Migrate any user holding legacy rank key without altering coins, points, or profile
+    const migratedUsersBatch = [];
+    for (const u of store.usersById.values()) {
+      let targetRole = u.role;
+      if (isSupremeOwnerEmail(u.email)) {
+        targetRole = 'site_owner';
+      } else if (targetRole === 'site_owner') {
+        targetRole = 'co_owner';
+      } else if (LEGACY_ROLE_MIGRATION_MAP[targetRole]) {
+        targetRole = LEGACY_ROLE_MIGRATION_MAP[targetRole];
+      } else if (!store.ranksByKey.has(targetRole) || targetRole === 'guest') {
+        targetRole = 'member';
+      }
+      if (targetRole !== u.role) {
+        u.role = targetRole;
+        migratedUsersBatch.push({ docId: String(u.id), data: { role: targetRole }, merge: true });
+      }
+    }
+    if (migratedUsersBatch.length > 0) {
+      await fsBatchSet('users', migratedUsersBatch);
+    }
+    for (const m of store.messagesById.values()) {
+      const mr = m.sender_role;
+      if (LEGACY_ROLE_MIGRATION_MAP[mr]) {
+        m.sender_role = LEGACY_ROLE_MIGRATION_MAP[mr];
+        enqueueSet('messages', String(m.doc_id || m.id), { sender_role: m.sender_role }, true);
+      }
+    }
+
     if (!hasSiteSettingsDoc) {
       await fsSetDoc('settings', 'site', store.siteSettings, true);
+    } else if (shouldMigrateSiteName) {
+      await fsSetDoc('settings', 'site', { site_name: store.siteSettings.site_name }, true);
     }
 
     if (store.roomsById.size === 0) {
@@ -1881,7 +1830,16 @@ function getStorageStatus() {
 // ==========================================
 function mapRankRow(row) {
   if (!row) return null;
-  const power = Number(row.power) || 0;
+  const power = Math.max(1, Math.min(15, Number(row.power) || 1));
+  const isOwner = row.key === 'site_owner';
+  const permissions = {};
+  for (const p of ALL_RANK_PERMISSIONS) {
+    permissions[p] = isOwner || row[`perm_${p}`] === 1;
+  }
+  if (permissions.delete_msg || permissions.clear_room) {
+    permissions.delete_msg = Boolean(permissions.delete_msg);
+    permissions.clear_room = Boolean(permissions.clear_room);
+  }
   return {
     key: row.key,
     label: row.label,
@@ -1891,29 +1849,16 @@ function mapRankRow(row) {
     bg_color: row.bg_color || '#334155',
     text_color: row.text_color || '#ffffff',
     power,
-    tier_order: Number(row.tier_order) || 0,
+    tier_order: Number(row.tier_order) || power,
     is_system: row.is_system === 1,
-    max_assignable_rank:
-      row.key === 'site_owner'
-        ? 100
-        : row.max_assignable_rank !== undefined
-          ? Number(row.max_assignable_rank) || 0
-          : row.perm_set_rank === 1
-            ? Math.max(0, power - 1)
-            : 0,
-    permissions: {
-      mute: row.perm_mute === 1,
-      kick: row.perm_kick === 1,
-      ban: row.perm_ban === 1,
-      set_rank: row.perm_set_rank === 1,
-      clear_room: row.perm_clear_room === 1,
-      manage_rooms: row.perm_manage_rooms === 1,
-      access_panel: row.perm_access_panel === 1,
-      room_owner: row.perm_room_owner === 1,
-      publish_news: row.perm_publish_news === 1,
-      use_addons: row.perm_use_addons === 1,
-      give_coins: row.perm_give_coins === 1 || row.key === 'site_owner'
-    }
+    max_assignable_rank: isOwner
+      ? 15
+      : row.max_assignable_rank !== undefined
+        ? Math.max(0, Math.min(14, Number(row.max_assignable_rank) || 0))
+        : row.perm_set_rank === 1
+          ? Math.max(0, power - 1)
+          : 0,
+    permissions
   };
 }
 
@@ -1937,14 +1882,14 @@ function getRankByKey(key) {
 
 function getRankPower(role) {
   const row = store.ranksByKey.get(role);
-  return row ? Number(row.power) || 0 : 0;
+  return row ? Math.max(1, Math.min(15, Number(row.power) || 1)) : 1;
 }
 
 function getMaxAssignablePower(role) {
-  if (role === 'site_owner') return 100;
+  if (role === 'site_owner') return 15;
   const row = store.ranksByKey.get(role);
   if (!row || row.perm_set_rank !== 1) return -1;
-  const ownPower = Number(row.power) || 0;
+  const ownPower = Math.max(1, Math.min(15, Number(row.power) || 1));
   const ceiling =
     row.max_assignable_rank !== undefined ? Number(row.max_assignable_rank) || 0 : Math.max(0, ownPower - 1);
   return Math.min(ownPower - 1, Math.max(0, ceiling));
@@ -1960,19 +1905,7 @@ function isValidRank(role) {
   return store.ranksByKey.has(role);
 }
 
-const VALID_PERM_COLUMNS = {
-  mute: 'perm_mute',
-  kick: 'perm_kick',
-  ban: 'perm_ban',
-  set_rank: 'perm_set_rank',
-  clear_room: 'perm_clear_room',
-  manage_rooms: 'perm_manage_rooms',
-  access_panel: 'perm_access_panel',
-  room_owner: 'perm_room_owner',
-  publish_news: 'perm_publish_news',
-  use_addons: 'perm_use_addons',
-  give_coins: 'perm_give_coins'
-};
+const VALID_PERM_COLUMNS = Object.fromEntries(ALL_RANK_PERMISSIONS.map((p) => [p, `perm_${p}`]));
 
 function hasPermission(role, permName) {
   if (!role) return false;
@@ -1986,6 +1919,15 @@ function hasPermission(role, permName) {
 function sanitizeHexColor(val, fallback) {
   const s = String(val || '').trim();
   return /^#[0-9a-fA-F]{3,8}$/.test(s) ? s : fallback;
+}
+
+function sanitizeRankImageUrl(rawUrl) {
+  const val = String(rawUrl || '').trim();
+  if (!val) return '';
+  if (val.startsWith('data:image/')) {
+    return val.slice(0, 65000);
+  }
+  return val.slice(0, 500);
 }
 
 function createRank({
@@ -2011,32 +1953,34 @@ function createRank({
 
   if (store.ranksByKey.has(safeKey)) return { error: 'مفتاح هذه الرتبة موجود مسبقاً.' };
 
-  const clampedPower = Math.max(1, Math.min(99, Number(power) || 15));
+  const clampedPower = Math.max(1, Math.min(14, Number(power) || 2));
   const rawMaxAssign =
-    maxAssignableRank !== undefined ? Number(maxAssignableRank) || 0 : permissions.set_rank ? clampedPower - 1 : 0;
+    maxAssignableRank !== undefined ? Number(maxAssignableRank) || 0 : permissions.set_rank ? Math.max(0, clampedPower - 1) : 0;
+
+  const permFields = {};
+  for (const p of ALL_RANK_PERMISSIONS) {
+    if (p === 'clear_room') {
+      permFields.perm_clear_room = permissions.clear_room !== undefined ? (permissions.clear_room ? 1 : 0) : (permissions.delete_msg ? 1 : 0);
+    } else if (p === 'delete_msg') {
+      permFields.perm_delete_msg = permissions.delete_msg !== undefined ? (permissions.delete_msg ? 1 : 0) : (permissions.clear_room ? 1 : 0);
+    } else {
+      permFields[`perm_${p}`] = permissions[p] ? 1 : 0;
+    }
+  }
+
   const docObj = {
     key: safeKey,
     label: cleanLabel,
     icon: String(icon || '⭐').trim().slice(0, 8) || '⭐',
     badge_style: String(badgeStyle || 'royal_shield').trim().slice(0, 40) || 'royal_shield',
-    image_url: String(imageUrl || '').trim(),
+    image_url: sanitizeRankImageUrl(imageUrl),
     bg_color: sanitizeHexColor(bgColor, '#334155'),
     text_color: sanitizeHexColor(textColor, '#ffffff'),
     power: clampedPower,
-    tier_order: 0,
+    tier_order: clampedPower,
     is_system: 0,
-    perm_mute: permissions.mute ? 1 : 0,
-    perm_kick: permissions.kick ? 1 : 0,
-    perm_ban: permissions.ban ? 1 : 0,
-    perm_set_rank: permissions.set_rank ? 1 : 0,
-    perm_clear_room: permissions.clear_room ? 1 : 0,
-    perm_manage_rooms: permissions.manage_rooms ? 1 : 0,
-    perm_access_panel: permissions.access_panel ? 1 : 0,
-    perm_room_owner: permissions.room_owner ? 1 : 0,
-    perm_publish_news: permissions.publish_news ? 1 : 0,
-    perm_use_addons: permissions.use_addons ? 1 : 0,
-    perm_give_coins: permissions.give_coins ? 1 : 0,
-    max_assignable_rank: Math.max(0, Math.min(99, rawMaxAssign)),
+    ...permFields,
+    max_assignable_rank: Math.max(0, Math.min(14, rawMaxAssign)),
     created_at: nowIso()
   };
 
@@ -2055,28 +1999,44 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
     badgeStyle !== undefined && String(badgeStyle).trim()
       ? String(badgeStyle).trim().slice(0, 40)
       : existing.badge_style || 'royal_shield';
-  const nextImg = imageUrl !== undefined ? String(imageUrl).trim() : existing.image_url;
+  const nextImg = imageUrl !== undefined ? sanitizeRankImageUrl(imageUrl) : existing.image_url;
   const nextBg = bgColor !== undefined ? sanitizeHexColor(bgColor, existing.bg_color) : existing.bg_color;
   const nextText = textColor !== undefined ? sanitizeHexColor(textColor, existing.text_color) : existing.text_color;
 
   let nextPower = existing.power;
   if (key === 'site_owner') {
-    nextPower = 100;
+    nextPower = 15;
   } else if (key === 'guest') {
-    nextPower = 0;
+    nextPower = 1;
   } else if (power !== undefined) {
-    nextPower = Math.max(1, Math.min(99, Number(power) || existing.power));
+    nextPower = Math.max(1, Math.min(14, Number(power) || existing.power));
   }
 
   const p = permissions || {};
   const isOwner = key === 'site_owner';
   const nextMaxAssign = isOwner
-    ? 100
+    ? 15
     : maxAssignableRank !== undefined
-      ? Math.max(0, Math.min(99, Number(maxAssignableRank) || 0))
+      ? Math.max(0, Math.min(14, Number(maxAssignableRank) || 0))
       : existing.max_assignable_rank !== undefined
-        ? Number(existing.max_assignable_rank)
+        ? Math.min(14, Number(existing.max_assignable_rank) || 0)
         : Math.max(0, nextPower - 1);
+
+  const permPatch = {};
+  for (const permName of ALL_RANK_PERMISSIONS) {
+    const col = `perm_${permName}`;
+    if (isOwner) {
+      permPatch[col] = 1;
+    } else if (p[permName] !== undefined) {
+      permPatch[col] = p[permName] ? 1 : 0;
+    } else if (permName === 'clear_room' && p.delete_msg !== undefined) {
+      permPatch[col] = p.delete_msg ? 1 : 0;
+    } else if (permName === 'delete_msg' && p.clear_room !== undefined) {
+      permPatch[col] = p.clear_room ? 1 : 0;
+    } else {
+      permPatch[col] = existing[col] ? 1 : 0;
+    }
+  }
 
   const updated = {
     ...existing,
@@ -2087,17 +2047,7 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
     bg_color: nextBg,
     text_color: nextText,
     power: nextPower,
-    perm_mute: isOwner ? 1 : p.mute !== undefined ? (p.mute ? 1 : 0) : existing.perm_mute,
-    perm_kick: isOwner ? 1 : p.kick !== undefined ? (p.kick ? 1 : 0) : existing.perm_kick,
-    perm_ban: isOwner ? 1 : p.ban !== undefined ? (p.ban ? 1 : 0) : existing.perm_ban,
-    perm_set_rank: isOwner ? 1 : p.set_rank !== undefined ? (p.set_rank ? 1 : 0) : existing.perm_set_rank,
-    perm_clear_room: isOwner ? 1 : p.clear_room !== undefined ? (p.clear_room ? 1 : 0) : existing.perm_clear_room,
-    perm_manage_rooms: isOwner ? 1 : p.manage_rooms !== undefined ? (p.manage_rooms ? 1 : 0) : existing.perm_manage_rooms,
-    perm_access_panel: isOwner ? 1 : p.access_panel !== undefined ? (p.access_panel ? 1 : 0) : existing.perm_access_panel,
-    perm_room_owner: isOwner ? 1 : p.room_owner !== undefined ? (p.room_owner ? 1 : 0) : existing.perm_room_owner,
-    perm_publish_news: isOwner ? 1 : p.publish_news !== undefined ? (p.publish_news ? 1 : 0) : existing.perm_publish_news,
-    perm_use_addons: isOwner ? 1 : p.use_addons !== undefined ? (p.use_addons ? 1 : 0) : existing.perm_use_addons,
-    perm_give_coins: isOwner ? 1 : p.give_coins !== undefined ? (p.give_coins ? 1 : 0) : existing.perm_give_coins || 0,
+    ...permPatch,
     max_assignable_rank: nextMaxAssign
   };
 
@@ -2180,6 +2130,97 @@ function deleteCustomEmoji(id) {
 }
 
 // ==========================================
+// CUSTOM STORE FRAMES CATALOG (GIF/WebP/PNG)
+// ==========================================
+function loadCustomFramesCatalogFromDoc(docData) {
+  store.customFramesById.clear();
+  const items = Array.isArray(docData?.items) ? docData.items : [];
+  for (const item of items) {
+    if (!item || !item.id || !item.imageUrl) continue;
+    store.customFramesById.set(String(item.id), {
+      id: String(item.id),
+      label: String(item.label || 'إطار مخصص').trim().slice(0, 60),
+      imageUrl: String(item.imageUrl || '').trim(),
+      price: Math.max(0, Number(item.price) || 0),
+      durationType: item.durationType === 'monthly' ? 'monthly' : 'permanent',
+      tier: 'ruby',
+      isCustom: true,
+      preview: String(item.preview || '#3b82f6'),
+      createdBy: String(item.createdBy || ''),
+      createdAt: String(item.createdAt || nowIso())
+    });
+  }
+}
+
+function persistCustomFramesCatalog() {
+  const items = getAllCustomFrames();
+  enqueueSet('settings', 'store_frames_catalog', { items, updated_at: nowIso() }, false);
+}
+
+function getAllCustomFrames() {
+  return [...store.customFramesById.values()].sort((a, b) =>
+    String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+  );
+}
+
+function addCustomFrame({ label, imageUrl, price = 0, durationType = 'permanent', preview = '#3b82f6', createdBy = '' }) {
+  const cleanLabel = String(label || '').trim().slice(0, 60);
+  const cleanUrl = String(imageUrl || '').trim();
+  if (cleanLabel.length < 2) return { error: 'أدخل اسم الإطار (حرفان على الأقل).' };
+  if (!cleanUrl || !cleanUrl.startsWith('/uploads/frames/')) {
+    return { error: 'يرجى رفع صورة الإطار (GIF / WebP / PNG) أولاً.' };
+  }
+  const id = `cframe_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const frame = {
+    id,
+    label: cleanLabel,
+    imageUrl: cleanUrl,
+    price: Math.max(0, Math.round(Number(price) || 0)),
+    durationType: durationType === 'monthly' ? 'monthly' : 'permanent',
+    tier: 'ruby',
+    isCustom: true,
+    preview: sanitizeHexColor(preview, '#3b82f6'),
+    createdBy: String(createdBy || ''),
+    createdAt: nowIso()
+  };
+  store.customFramesById.set(id, frame);
+  persistCustomFramesCatalog();
+  return { frame };
+}
+
+function deleteCustomFrame(frameId) {
+  const id = String(frameId || '').trim();
+  if (!store.customFramesById.has(id)) return false;
+  store.customFramesById.delete(id);
+  persistCustomFramesCatalog();
+  const affectedUserIds = [];
+  for (const u of store.usersById.values()) {
+    let changed = false;
+    const patch = {};
+    if (u.avatar_frame === id) {
+      u.avatar_frame = 'none';
+      patch.avatar_frame = 'none';
+      changed = true;
+    }
+    if (Array.isArray(u.owned_frames) && u.owned_frames.includes(id)) {
+      u.owned_frames = u.owned_frames.filter((x) => x !== id);
+      patch.owned_frames = u.owned_frames;
+      changed = true;
+    }
+    if (u.owned_frames_meta && u.owned_frames_meta[id]) {
+      delete u.owned_frames_meta[id];
+      patch.owned_frames_meta = u.owned_frames_meta;
+      changed = true;
+    }
+    if (changed) {
+      affectedUserIds.push(u.id);
+      enqueueSet('users', String(u.id), patch, true);
+    }
+  }
+  return { ok: true, affectedUserIds };
+}
+
+// ==========================================
 // SITE SETTINGS & THEME CMS HELPERS
 // ==========================================
 function getSiteSettings() {
@@ -2246,6 +2287,49 @@ function updateSiteSettings(patch = {}) {
         : Number(cur.referral_bonus ?? 200),
     quiz_bot_enabled:
       patch.quiz_bot_enabled !== undefined ? (patch.quiz_bot_enabled ? 1 : 0) : cur.quiz_bot_enabled !== 0 ? 1 : 0,
+    quiz_interval_sec:
+      patch.quiz_interval_sec !== undefined
+        ? Math.max(10, Math.min(120, Number(patch.quiz_interval_sec) || 25))
+        : Math.max(10, Math.min(120, Number(cur.quiz_interval_sec) || 25)),
+    quiz_hint_sec:
+      patch.quiz_hint_sec !== undefined
+        ? Math.max(5, Math.min(90, Number(patch.quiz_hint_sec) || 12))
+        : Math.max(5, Math.min(90, Number(cur.quiz_hint_sec) || 12)),
+    quiz_reward_coins:
+      patch.quiz_reward_coins !== undefined
+        ? Math.max(10, Math.min(5000, Number(patch.quiz_reward_coins) || 100))
+        : Math.max(10, Math.min(5000, Number(cur.quiz_reward_coins) || 100)),
+    quiz_msg_style:
+      patch.quiz_msg_style !== undefined &&
+      ['royal_gold', 'cyber_blue', 'emerald_neon', 'crimson_fire'].includes(String(patch.quiz_msg_style))
+        ? String(patch.quiz_msg_style)
+        : ['royal_gold', 'cyber_blue', 'emerald_neon', 'crimson_fire'].includes(String(cur.quiz_msg_style))
+          ? String(cur.quiz_msg_style)
+          : 'royal_gold',
+    quiz_custom_questions:
+      patch.quiz_custom_questions !== undefined
+        ? (Array.isArray(patch.quiz_custom_questions) ? patch.quiz_custom_questions : [])
+            .map((item, idx) => {
+              const q = String(item?.q || '').trim().slice(0, 240);
+              const displayAnswer = String(item?.displayAnswer || (Array.isArray(item?.a) ? item.a[0] : '') || '').trim().slice(0, 80);
+              const answers = Array.isArray(item?.a)
+                ? item.a.map((s) => String(s || '').trim().slice(0, 80)).filter(Boolean)
+                : String(item?.a || displayAnswer).split(/[,،|]/).map((s) => s.trim()).filter(Boolean);
+              if (!q || (!displayAnswer && answers.length === 0)) return null;
+              const finalAnswers = answers.length > 0 ? answers : [displayAnswer];
+              return {
+                id: String(item?.id || `q_${Date.now()}_${idx}`).slice(0, 50),
+                category: String(item?.category || 'مخصصة').trim().slice(0, 30) || 'مخصصة',
+                q,
+                displayAnswer: displayAnswer || finalAnswers[0],
+                a: finalAnswers.slice(0, 10)
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 300)
+        : Array.isArray(cur.quiz_custom_questions)
+          ? cur.quiz_custom_questions
+          : [],
     fx_owner_galaxy_identity:
       patch.fx_owner_galaxy_identity !== undefined
         ? (patch.fx_owner_galaxy_identity ? 1 : 0)
@@ -2312,22 +2396,48 @@ function updateSiteSettings(patch = {}) {
     feat_gifts: patch.feat_gifts !== undefined ? (patch.feat_gifts ? 1 : 0) : cur.feat_gifts !== 0 ? 1 : 0,
     feat_youtube: patch.feat_youtube !== undefined ? (patch.feat_youtube ? 1 : 0) : cur.feat_youtube !== 0 ? 1 : 0,
     feat_wall: patch.feat_wall !== undefined ? (patch.feat_wall ? 1 : 0) : cur.feat_wall !== 0 ? 1 : 0,
+    antiflood_enabled:
+      patch.antiflood_enabled !== undefined ? (patch.antiflood_enabled ? 1 : 0) : cur.antiflood_enabled !== 0 ? 1 : 0,
+    antiflood_max_msgs:
+      patch.antiflood_max_msgs !== undefined
+        ? Math.max(2, Math.min(30, Number(patch.antiflood_max_msgs) || 5))
+        : Number(cur.antiflood_max_msgs) || 5,
+    antiflood_window_sec:
+      patch.antiflood_window_sec !== undefined
+        ? Math.max(2, Math.min(60, Number(patch.antiflood_window_sec) || 6))
+        : Number(cur.antiflood_window_sec) || 6,
+    antiflood_mute_mins:
+      patch.antiflood_mute_mins !== undefined
+        ? Math.max(1, Math.min(1440, Number(patch.antiflood_mute_mins) || 5))
+        : Number(cur.antiflood_mute_mins) || 5,
+    banned_word_mute_mins:
+      patch.banned_word_mute_mins !== undefined
+        ? Math.max(1, Math.min(1440, Number(patch.banned_word_mute_mins) || 10))
+        : Number(cur.banned_word_mute_mins) || 10,
+    royal_member_ruby_multiplier:
+      patch.royal_member_ruby_multiplier !== undefined
+        ? Math.max(1, Math.min(10, Number(patch.royal_member_ruby_multiplier) || 1.2))
+        : Number(cur.royal_member_ruby_multiplier) || 1.2,
     vip_ruby_multiplier:
       patch.vip_ruby_multiplier !== undefined
-        ? Math.max(1, Math.min(10, Number(patch.vip_ruby_multiplier) || 2))
-        : Number(cur.vip_ruby_multiplier) || 2,
+        ? Math.max(1, Math.min(10, Number(patch.vip_ruby_multiplier) || 1.5))
+        : Number(cur.vip_ruby_multiplier) || 1.5,
     premium_ruby_multiplier:
       patch.premium_ruby_multiplier !== undefined
-        ? Math.max(1, Math.min(10, Number(patch.premium_ruby_multiplier) || 1.5))
-        : Number(cur.premium_ruby_multiplier) || 1.5,
-    rank_price_premium:
-      patch.rank_price_premium !== undefined
-        ? Math.max(0, Math.min(1000000, Number(patch.rank_price_premium) || 0))
-        : Number(cur.rank_price_premium ?? 500),
+        ? Math.max(1, Math.min(10, Number(patch.premium_ruby_multiplier) || 2))
+        : Number(cur.premium_ruby_multiplier) || 2,
+    rank_price_royal_member:
+      patch.rank_price_royal_member !== undefined
+        ? Math.max(0, Math.min(1000000, Number(patch.rank_price_royal_member) || 0))
+        : Number(cur.rank_price_royal_member ?? 250),
     rank_price_royal_vip:
       patch.rank_price_royal_vip !== undefined
         ? Math.max(0, Math.min(1000000, Number(patch.rank_price_royal_vip) || 0))
-        : Number(cur.rank_price_royal_vip ?? 1200),
+        : Number(cur.rank_price_royal_vip ?? 600),
+    rank_price_premium:
+      patch.rank_price_premium !== undefined
+        ? Math.max(0, Math.min(1000000, Number(patch.rank_price_premium) || 0))
+        : Number(cur.rank_price_premium ?? 1200),
     frame_price_overrides:
       patch.frame_price_overrides && typeof patch.frame_price_overrides === 'object' && !Array.isArray(patch.frame_price_overrides)
         ? Object.fromEntries(
@@ -2357,7 +2467,7 @@ function getUserCount() {
   return store.usersById.size;
 }
 
-function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
+function registerUser({ username, email, passwordHash, ipAddress, deviceId, fingerprint = '', userAgent = '', country = '' }) {
   const cleanUser = String(username || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
 
@@ -2379,16 +2489,21 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
     password_hash: passwordHash,
     role,
     display_name: cleanUser,
-    name_color: '#0f172a',
-    text_color: '#111827',
+    name_color: '#f8fafc',
+    text_color: '#e2e8f0',
     name_bg_color: '',
     neon_color: '',
-    font_family: 'Normal',
+    font_family: 'Cairo',
     font_style: 'Normal',
+    font_size: 14,
+    name_font_size: 14,
+    name_style_mode: 'solid',
+    name_gradient: 'gold_royal',
     avatar_url: '',
     cover_url: '',
-    avatar_frame: role === 'site_owner' ? 'kings_crown' : 'none',
-    owned_frames: role === 'site_owner' ? ['kings_crown', 'owner_sovereign'] : [],
+    avatar_frame: role === 'site_owner' ? 'owner_sovereign' : 'none',
+    owned_frames: role === 'site_owner' ? ['owner_sovereign'] : [],
+    owned_frames_meta: {},
     nameplate_style: role === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
     name_anim: 'none',
@@ -2399,7 +2514,7 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
     bio: '',
     age: '',
     gender: '',
-    country: '',
+    country: String(country || '').trim().slice(0, 36),
     allow_calls: 1,
     allow_pm: 1,
     likes_count: 0,
@@ -2415,6 +2530,8 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId }) {
     gifts_sent: 0,
     last_ip: ipAddress || '',
     last_device_id: deviceId || '',
+    last_fingerprint: String(fingerprint || '').trim().slice(0, 128),
+    last_ua: String(userAgent || '').trim().slice(0, 200),
     is_banned: 0,
     ban_reason: '',
     created_at: nowIso()
@@ -2445,7 +2562,7 @@ function findUserById(id) {
   return { ...u };
 }
 
-function updateUserIp(userId, ipAddress, deviceId = '') {
+function updateUserIp(userId, ipAddress, deviceId = '', extra = {}) {
   if (!userId) return;
   const u = store.usersById.get(Number(userId));
   if (!u) return;
@@ -2458,6 +2575,21 @@ function updateUserIp(userId, ipAddress, deviceId = '') {
     u.last_device_id = deviceId;
     patch.last_device_id = deviceId;
   }
+  const fp = String(extra?.fingerprint || '').trim().slice(0, 128);
+  if (fp && u.last_fingerprint !== fp) {
+    u.last_fingerprint = fp;
+    patch.last_fingerprint = fp;
+  }
+  const ua = String(extra?.userAgent || '').trim().slice(0, 200);
+  if (ua && u.last_ua !== ua) {
+    u.last_ua = ua;
+    patch.last_ua = ua;
+  }
+  const ctry = String(extra?.country || '').trim().slice(0, 36);
+  if (ctry && !u.country) {
+    u.country = ctry;
+    patch.country = ctry;
+  }
   if (Object.keys(patch).length > 0) {
     enqueueSet('users', String(u.id), patch, true);
   }
@@ -2466,8 +2598,8 @@ function updateUserIp(userId, ipAddress, deviceId = '') {
 function setUserStealth(userId, enabled) {
   const u = store.usersById.get(Number(userId));
   if (!u) return null;
-  if (u.role !== 'site_owner' && !isSupremeOwnerEmail(u.email)) {
-    return { error: 'وضع التخفي متاح لصاحب الموقع فقط.' };
+  if (u.role !== 'site_owner' && !isSupremeOwnerEmail(u.email) && !hasPermission(u.role, 'stealth')) {
+    return { error: 'وضع التخفي غير مفعل لرتبتك الحالية.' };
   }
   u.is_stealth = enabled ? 1 : 0;
   enqueueSet('users', String(u.id), { is_stealth: u.is_stealth }, true);
@@ -2660,6 +2792,9 @@ function updateUserCustomization(
     fontFamily,
     fontStyle,
     fontSize,
+    nameFontSize,
+    nameStyleMode,
+    nameGradient,
     avatarUrl,
     coverUrl,
     avatarFrame,
@@ -2694,13 +2829,21 @@ function updateUserCustomization(
     ...current,
     display_name: nextDisplay,
     name_history: nameHistory,
-    name_color: nameColor || current.name_color,
-    text_color: textColor !== undefined ? textColor || '#111827' : current.text_color || '#111827',
+    name_color: nameColor || current.name_color || '#f8fafc',
+    text_color: textColor !== undefined ? textColor || '#e2e8f0' : current.text_color || '#e2e8f0',
     name_bg_color: nameBgColor !== undefined ? String(nameBgColor || '').trim().slice(0, 30) : current.name_bg_color || '',
     neon_color: neonColor !== undefined ? String(neonColor || '').trim().slice(0, 30) : current.neon_color || '',
-    font_family: fontFamily !== undefined ? String(fontFamily || 'Normal').trim().slice(0, 40) : current.font_family || 'Normal',
+    font_family: fontFamily !== undefined ? String(fontFamily || 'Cairo').trim().slice(0, 40) : current.font_family || 'Cairo',
     font_style: fontStyle !== undefined ? String(fontStyle || 'Normal').trim().slice(0, 30) : current.font_style || 'Normal',
-    font_size: fontSize !== undefined ? Math.max(12, Math.min(20, Number(fontSize) || 14)) : current.font_size || 14,
+    font_size: fontSize !== undefined ? Math.max(13, Math.min(17, Number(fontSize) || 14)) : Math.max(13, Math.min(17, Number(current.font_size) || 14)),
+    name_font_size: nameFontSize !== undefined ? Math.max(13, Math.min(18, Number(nameFontSize) || 14)) : Math.max(13, Math.min(18, Number(current.name_font_size) || 14)),
+    name_style_mode:
+      nameStyleMode !== undefined && ['solid', 'gradient', 'glow'].includes(String(nameStyleMode))
+        ? String(nameStyleMode)
+        : ['solid', 'gradient', 'glow'].includes(String(current.name_style_mode))
+          ? String(current.name_style_mode)
+          : 'solid',
+    name_gradient: nameGradient !== undefined ? String(nameGradient || 'gold_royal').trim().slice(0, 30) : current.name_gradient || 'gold_royal',
     avatar_url: avatarUrl !== undefined ? avatarUrl : current.avatar_url,
     cover_url: coverUrl !== undefined ? coverUrl : current.cover_url || '',
     avatar_frame:
@@ -2735,11 +2878,12 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
   const cleanUser = String(username || '').trim().slice(0, 24);
   const cleanDisplay = String(displayName || cleanUser).trim().slice(0, 28) || cleanUser;
   const cleanEmail = String(email || '').trim().toLowerCase();
+  const requestedRole = isValidRank(role) ? role : 'member';
   const safeRole = isSupremeOwnerEmail(cleanEmail)
     ? 'site_owner'
-    : isValidRank(role)
-      ? role
-      : 'member';
+    : requestedRole === 'site_owner'
+      ? 'co_owner'
+      : requestedRole;
 
   for (const existing of store.usersById.values()) {
     if (existing.username.toLowerCase() === cleanUser.toLowerCase()) {
@@ -2766,8 +2910,9 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     font_style: 'Normal',
     avatar_url: '',
     cover_url: '',
-    avatar_frame: safeRole === 'site_owner' ? 'kings_crown' : 'none',
-    owned_frames: safeRole === 'site_owner' ? ['kings_crown', 'owner_sovereign'] : [],
+    avatar_frame: safeRole === 'site_owner' ? 'owner_sovereign' : 'none',
+    owned_frames: safeRole === 'site_owner' ? ['owner_sovereign'] : [],
+    owned_frames_meta: {},
     nameplate_style: safeRole === 'site_owner' ? 'crimson_royal' : 'default',
     name_shine: 'none',
     name_anim: 'none',
@@ -2823,7 +2968,11 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
   const nextPasswordHash = passwordHash || current.password_hash;
   const nextAvatar = avatarUrl !== undefined ? avatarUrl : current.avatar_url;
   const rawNextRole = role !== undefined && isValidRank(role) ? role : current.role;
-  const nextRole = targetIsSupreme || isSupremeOwnerEmail(nextEmail) ? 'site_owner' : rawNextRole;
+  const nextRole = targetIsSupreme || isSupremeOwnerEmail(nextEmail)
+    ? 'site_owner'
+    : rawNextRole === 'site_owner'
+      ? 'co_owner'
+      : rawNextRole;
 
   for (const other of store.usersById.values()) {
     if (other.id === current.id) continue;
@@ -2909,10 +3058,47 @@ function adjustUserRubyAndActivity(userId, { rubyDelta = 0, activityDelta = 0 } 
   return { ...current };
 }
 
-function purchaseFrameWithRuby(userId, frameId, price = 0) {
+function getValidOwnedFramesData(userRow) {
+  if (!userRow) return { ownedFrames: [], ownedFramesMeta: {}, activeFrame: 'none' };
+  const nowTs = Date.now();
+  const rawMeta = userRow.owned_frames_meta && typeof userRow.owned_frames_meta === 'object' ? userRow.owned_frames_meta : {};
+  const validMeta = {};
+  for (const [fId, m] of Object.entries(rawMeta)) {
+    if (!m || typeof m !== 'object') continue;
+    const exp = m.expiresAt ? Number(m.expiresAt) : null;
+    if (exp && exp <= nowTs) continue;
+    validMeta[fId] = {
+      durationType: m.durationType === 'monthly' ? 'monthly' : 'permanent',
+      expiresAt: exp || null,
+      grantedAt: Number(m.grantedAt) || nowTs,
+      source: String(m.source || 'buy')
+    };
+  }
+  const rawOwned = Array.isArray(userRow.owned_frames) ? userRow.owned_frames.map(String) : [];
+  const validOwned = rawOwned.filter((fId) => {
+    const m = rawMeta[fId];
+    return !(m && m.expiresAt && Number(m.expiresAt) <= nowTs);
+  });
+  let activeFrame = userRow.avatar_frame || 'none';
+  if (activeFrame !== 'none' && rawMeta[activeFrame]?.expiresAt && Number(rawMeta[activeFrame].expiresAt) <= nowTs) {
+    activeFrame = 'none';
+  }
+  return { ownedFrames: validOwned, ownedFramesMeta: validMeta, activeFrame };
+}
+
+function isFrameOwnedAndValid(userRow, frameId) {
+  if (!userRow) return false;
+  if (userRow.role === 'site_owner' || frameId === 'none') return true;
+  const { ownedFrames, activeFrame } = getValidOwnedFramesData(userRow);
+  return ownedFrames.includes(frameId) || activeFrame === frameId;
+}
+
+function purchaseFrameWithRuby(userId, frameId, price = 0, durationType = 'permanent') {
   const current = store.usersById.get(Number(userId));
   if (!current) return { error: 'الحساب غير موجود.' };
-  const owned = Array.isArray(current.owned_frames) ? [...current.owned_frames] : [];
+  const { ownedFrames, ownedFramesMeta } = getValidOwnedFramesData(current);
+  const owned = [...ownedFrames];
+  const meta = { ...ownedFramesMeta };
   const cost = Math.max(0, Number(price) || 0);
   const alreadyOwned = owned.includes(frameId) || frameId === 'none' || current.role === 'site_owner';
   if (!alreadyOwned && cost > 0) {
@@ -2921,29 +3107,100 @@ function purchaseFrameWithRuby(userId, frameId, price = 0) {
     }
     current.coins = (Number(current.coins) || 0) - cost;
   }
-  if (frameId && frameId !== 'none' && !owned.includes(frameId)) {
-    owned.push(frameId);
+  if (frameId && frameId !== 'none') {
+    if (!owned.includes(frameId)) owned.push(frameId);
+    if (!alreadyOwned || !meta[frameId]) {
+      const dur = durationType === 'monthly' ? 'monthly' : 'permanent';
+      meta[frameId] = {
+        durationType: dur,
+        expiresAt: dur === 'monthly' ? Date.now() + 30 * 24 * 60 * 60 * 1000 : null,
+        grantedAt: Date.now(),
+        source: 'buy'
+      };
+    }
   }
   current.owned_frames = owned;
+  current.owned_frames_meta = meta;
   current.avatar_frame = frameId || 'none';
   enqueueSet(
     'users',
     String(current.id),
-    { coins: current.coins, owned_frames: owned, avatar_frame: current.avatar_frame },
+    { coins: current.coins, owned_frames: owned, owned_frames_meta: meta, avatar_frame: current.avatar_frame },
     true
   );
   return { user: { ...current }, alreadyOwned };
 }
 
+function grantFrameToUser(userId, frameId, { durationType = 'permanent', grantedBy = '' } = {}) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return { error: 'العضو غير موجود.' };
+  if (!frameId || frameId === 'none') return { error: 'اختر إطاراً صحيحاً للمنح.' };
+  const { ownedFrames, ownedFramesMeta } = getValidOwnedFramesData(current);
+  const owned = [...ownedFrames];
+  if (!owned.includes(frameId)) owned.push(frameId);
+  const dur = durationType === 'monthly' ? 'monthly' : 'permanent';
+  const meta = {
+    ...ownedFramesMeta,
+    [frameId]: {
+      durationType: dur,
+      expiresAt: dur === 'monthly' ? Date.now() + 30 * 24 * 60 * 60 * 1000 : null,
+      grantedAt: Date.now(),
+      source: 'grant',
+      grantedBy: String(grantedBy || '')
+    }
+  };
+  current.owned_frames = owned;
+  current.owned_frames_meta = meta;
+  current.avatar_frame = frameId;
+  enqueueSet(
+    'users',
+    String(current.id),
+    { owned_frames: owned, owned_frames_meta: meta, avatar_frame: current.avatar_frame },
+    true
+  );
+  return { user: { ...current } };
+}
+
 function getRubyMultiplierForRole(role) {
   const settings = getSiteSettings();
-  if (role === 'site_owner' || role === 'royal_vip' || role === 'vip') {
-    return Math.max(1, Number(settings.vip_ruby_multiplier) || 2);
+  if (role === 'site_owner' || role === 'premium') {
+    return Math.max(1, Number(settings.premium_ruby_multiplier) || 2);
   }
-  if (role === 'premium') {
-    return Math.max(1, Number(settings.premium_ruby_multiplier) || 1.5);
+  if (role === 'royal_vip' || role === 'vip') {
+    return Math.max(1, Number(settings.vip_ruby_multiplier) || 1.5);
+  }
+  if (role === 'royal_member') {
+    return Math.max(1, Number(settings.royal_member_ruby_multiplier) || 1.2);
   }
   return 1;
+}
+
+function checkAndApplyAutoPromotion(userId) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return null;
+  if (isSupremeOwnerEmail(current.email) || current.role === 'site_owner') return null;
+  const curPower = getRankPower(current.role);
+  if (curPower > 5) return null;
+
+  const pts = Number(current.activity_points) || 0;
+  let targetRole = null;
+  if (pts >= 10000) targetRole = 'gold_member';
+  else if (pts >= 5000) targetRole = 'silver_member';
+  else if (pts >= 1000) targetRole = 'bronze_member';
+
+  if (!targetRole) return null;
+  const targetPower = getRankPower(targetRole);
+  if (targetPower <= curPower) return null;
+
+  const updated = updateUserRole(current.id, targetRole);
+  if (!updated) return null;
+  return {
+    promoted: true,
+    oldRole: current.role,
+    newRole: targetRole,
+    rank: getRankByKey(targetRole),
+    user: updated
+  };
 }
 
 function purchaseRankWithRuby(userId, rankKey, price = 0) {
@@ -2952,7 +3209,7 @@ function purchaseRankWithRuby(userId, rankKey, price = 0) {
   if (isSupremeOwnerEmail(current.email) || current.role === 'site_owner') {
     return { error: 'حساب مالك الموقع يمتلك أعلى رتبة بالفعل.' };
   }
-  if (!['premium', 'royal_vip'].includes(rankKey)) {
+  if (!['royal_member', 'royal_vip', 'premium'].includes(rankKey)) {
     return { error: 'هذه الرتبة غير متاحة للشراء من المتجر.' };
   }
   const curPower = getRankPower(current.role);
@@ -2970,15 +3227,20 @@ function purchaseRankWithRuby(userId, rankKey, price = 0) {
   current.coins = (Number(current.coins) || 0) - cost;
   current.role = rankKey;
   const owned = Array.isArray(current.owned_frames) ? [...current.owned_frames] : [];
-  if (rankKey === 'royal_vip') {
+  if (rankKey === 'premium') {
+    if (!owned.includes('diamond_ring')) owned.push('diamond_ring');
+    if (!current.avatar_frame || current.avatar_frame === 'none') {
+      current.avatar_frame = 'diamond_ring';
+    }
+  } else if (rankKey === 'royal_vip') {
     if (!owned.includes('royal_wings')) owned.push('royal_wings');
     if (!current.avatar_frame || current.avatar_frame === 'none') {
       current.avatar_frame = 'royal_wings';
     }
-  } else if (rankKey === 'premium') {
-    if (!owned.includes('diamond_ring')) owned.push('diamond_ring');
+  } else if (rankKey === 'royal_member') {
+    if (!owned.includes('kings_crown')) owned.push('kings_crown');
     if (!current.avatar_frame || current.avatar_frame === 'none') {
-      current.avatar_frame = 'diamond_ring';
+      current.avatar_frame = 'kings_crown';
     }
   }
   current.owned_frames = owned;
@@ -3019,6 +3281,9 @@ function updateUserRole(userId, newRole) {
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
   if (isSupremeOwnerEmail(current.email) && newRole !== 'site_owner') {
+    return null;
+  }
+  if (newRole === 'site_owner' && !isSupremeOwnerEmail(current.email)) {
     return null;
   }
   current.role = newRole;
@@ -3070,7 +3335,7 @@ function getAllRegisteredUsers() {
 // ==========================================
 // PERSISTENT GUESTS HELPERS
 // ==========================================
-function upsertGuest({ key, name, ipAddress = '', deviceId = '', nameColor, textColor, nameBgColor, neonColor, fontFamily, fontStyle, fontSize, avatarUrl, avatarFrame, nameplateStyle, nameShine, nameAnim, nameAnimSpeed, bio } = {}) {
+function upsertGuest({ key, name, ipAddress = '', deviceId = '', fingerprint = '', userAgent = '', country = '', nameColor, textColor, nameBgColor, neonColor, fontFamily, fontStyle, fontSize, nameFontSize, nameStyleMode, nameGradient, avatarUrl, avatarFrame, nameplateStyle, nameShine, nameAnim, nameAnimSpeed, bio } = {}) {
   if (!key || !String(key).startsWith('guest:')) return null;
   const existing = store.guestsByKey.get(key);
   const cleanName = name !== undefined && String(name).trim()
@@ -3083,13 +3348,16 @@ function upsertGuest({ key, name, ipAddress = '', deviceId = '', nameColor, text
     name: cleanName,
     display_name: cleanName,
     username: cleanName,
-    name_color: nameColor !== undefined ? nameColor : existing?.name_color || '#0f172a',
-    text_color: textColor !== undefined ? textColor : existing?.text_color || '#111827',
+    name_color: nameColor !== undefined ? nameColor : existing?.name_color || '#f8fafc',
+    text_color: textColor !== undefined ? textColor : existing?.text_color || '#e2e8f0',
     name_bg_color: nameBgColor !== undefined ? nameBgColor : existing?.name_bg_color || '',
     neon_color: neonColor !== undefined ? neonColor : existing?.neon_color || '',
-    font_family: fontFamily !== undefined ? fontFamily : existing?.font_family || 'Normal',
+    font_family: fontFamily !== undefined ? fontFamily : existing?.font_family || 'Cairo',
     font_style: fontStyle !== undefined ? fontStyle : existing?.font_style || 'Normal',
     font_size: fontSize !== undefined ? fontSize : existing?.font_size || 14,
+    name_font_size: nameFontSize !== undefined ? nameFontSize : existing?.name_font_size || 14,
+    name_style_mode: nameStyleMode !== undefined ? nameStyleMode : existing?.name_style_mode || 'solid',
+    name_gradient: nameGradient !== undefined ? nameGradient : existing?.name_gradient || 'gold_royal',
     avatar_url: avatarUrl !== undefined ? avatarUrl : existing?.avatar_url || '',
     avatar_frame: avatarFrame !== undefined ? avatarFrame : existing?.avatar_frame || 'none',
     nameplate_style: nameplateStyle !== undefined ? nameplateStyle : existing?.nameplate_style || 'default',
@@ -3097,8 +3365,11 @@ function upsertGuest({ key, name, ipAddress = '', deviceId = '', nameColor, text
     name_anim: nameAnim !== undefined ? nameAnim : existing?.name_anim || 'none',
     name_anim_speed: nameAnimSpeed !== undefined ? nameAnimSpeed : existing?.name_anim_speed || 'normal',
     bio: bio !== undefined ? bio : existing?.bio || '',
+    country: country || existing?.country || '',
     last_ip: ipAddress || existing?.last_ip || '',
     last_device_id: deviceId || existing?.last_device_id || '',
+    last_fingerprint: fingerprint || existing?.last_fingerprint || '',
+    last_ua: userAgent || existing?.last_ua || '',
     last_seen_at: now,
     created_at: existing?.created_at || now
   });
@@ -3303,7 +3574,7 @@ function createRoom({
     card_text_color: sanitizeHexColor(cardTextColor, ''),
     welcome_message: String(welcomeMessage || '').trim().slice(0, 250),
     room_password: String(roomPassword || '').trim().slice(0, 40),
-    min_rank_power: Math.max(0, Math.min(100, Number(minRankPower) || 0)),
+    min_rank_power: Math.max(0, Math.min(15, Number(minRankPower) || 0)),
     owner_user_id: resolvedOwnerId,
     owner_name: resolvedOwnerName,
     activity_points: 0,
@@ -3373,7 +3644,7 @@ function updateRoom(
       welcomeMessage !== undefined ? String(welcomeMessage).trim().slice(0, 250) : current.welcome_message || '',
     room_password: roomPassword !== undefined ? String(roomPassword).trim().slice(0, 40) : current.room_password || '',
     min_rank_power:
-      minRankPower !== undefined ? Math.max(0, Math.min(100, Number(minRankPower) || 0)) : Number(current.min_rank_power) || 0,
+      minRankPower !== undefined ? Math.max(0, Math.min(15, Number(minRankPower) || 0)) : Number(current.min_rank_power) || 0,
     owner_user_id: nextOwnerId,
     owner_name: nextOwnerName,
     mics_enabled: micsEnabled !== undefined ? (micsEnabled ? 1 : 0) : current.mics_enabled
@@ -3446,6 +3717,9 @@ function addMessage({
   fontFamily,
   fontStyle,
   fontSize,
+  nameFontSize,
+  nameStyleMode,
+  nameGradient,
   avatarUrl,
   avatarFrame,
   nameplateStyle,
@@ -3475,13 +3749,16 @@ function addMessage({
     sender_key: senderKey,
     sender_name: senderName,
     sender_role: senderRole || 'member',
-    name_color: nameColor || '#0f172a',
-    text_color: textColor || '#111827',
+    name_color: nameColor || '#f8fafc',
+    text_color: textColor || '#e2e8f0',
     name_bg_color: nameBgColor || '',
     neon_color: neonColor || '',
-    font_family: fontFamily || 'Normal',
+    font_family: fontFamily || 'Cairo',
     font_style: fontStyle || 'Normal',
-    font_size: Math.max(12, Math.min(20, Number(fontSize) || 14)),
+    font_size: Math.max(13, Math.min(17, Number(fontSize) || 14)),
+    name_font_size: Math.max(13, Math.min(18, Number(nameFontSize) || 14)),
+    name_style_mode: ['solid', 'gradient', 'glow'].includes(String(nameStyleMode)) ? String(nameStyleMode) : 'solid',
+    name_gradient: String(nameGradient || 'gold_royal'),
     avatar_url: avatarUrl || '',
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
@@ -3529,6 +3806,27 @@ function getRoomMessages(roomId, limit = 100, viewerKey = '') {
   return list.slice(-safeLimit);
 }
 
+function getRoomMessagesAfter(roomId, afterMs = 0, limit = 100, viewerKey = '') {
+  const safeAfter = Math.max(0, Number(afterMs) || 0);
+  const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
+  const list = [];
+  for (const m of store.messagesById.values()) {
+    if (
+      m.room_id === roomId &&
+      Number(m.created_at_ms || 0) > safeAfter &&
+      (!m.is_ghost_only || m.sender_key === viewerKey)
+    ) {
+      list.push(m);
+    }
+  }
+  list.sort(
+    (a, b) =>
+      (Number(a.created_at_ms) || 0) - (Number(b.created_at_ms) || 0) ||
+      (Number(a.id) || 0) - (Number(b.id) || 0)
+  );
+  return list.slice(-safeLimit);
+}
+
 function clearRoomMessages(roomId) {
   const docIds = [];
   for (const [k, m] of store.messagesById.entries()) {
@@ -3556,7 +3854,7 @@ function deleteMessageById(msgId) {
 // ==========================================
 // MUTES & BANS
 // ==========================================
-function setMute(targetKey, roomId, durationMs, mutedBy) {
+function setMute(targetKey, roomId, durationMs, mutedBy, reason = '') {
   if (isProtectedSupremeOwnerKey(targetKey)) return null;
   const expiresAt = Date.now() + durationMs;
   const rid = roomId || '*';
@@ -3565,7 +3863,8 @@ function setMute(targetKey, roomId, durationMs, mutedBy) {
     target_key: targetKey,
     room_id: rid,
     expires_at: expiresAt,
-    muted_by: mutedBy
+    muted_by: mutedBy,
+    reason: String(reason || '').trim().slice(0, 240)
   };
   store.mutesByKey.set(key, docObj);
   enqueueSet('mutes', safeDocId(key), docObj);
@@ -4267,6 +4566,11 @@ module.exports = {
   getAllCustomEmojis,
   addCustomEmoji,
   deleteCustomEmoji,
+  getAllCustomFrames,
+  addCustomFrame,
+  deleteCustomFrame,
+  getValidOwnedFramesData,
+  isFrameOwnedAndValid,
   getSiteSettings,
   updateSiteSettings,
   getEffectiveName,
@@ -4293,7 +4597,9 @@ module.exports = {
   adjustUserCoins,
   adjustUserRubyAndActivity,
   purchaseFrameWithRuby,
+  grantFrameToUser,
   getRubyMultiplierForRole,
+  checkAndApplyAutoPromotion,
   purchaseRankWithRuby,
   adminClearUserAvatar,
   updateUserRole,
@@ -4320,6 +4626,7 @@ module.exports = {
   deleteRoom,
   addMessage,
   getRoomMessages,
+  getRoomMessagesAfter,
   clearRoomMessages,
   deleteMessageById,
   setMute,
