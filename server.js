@@ -4070,7 +4070,7 @@ io.on('connection', (socket) => {
     if (entry) recentRoomPresence.delete(entry.key);
   });
 
-  socket.on('join_room', ({ roomId, password }, cb) => {
+  socket.on('join_room', ({ roomId, password, silent }, cb) => {
     const entry = onlineSockets.get(socket.id);
     if (!entry) return;
     if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
@@ -4101,7 +4101,7 @@ io.on('connection', (socket) => {
       }
     }
 
-    moveSocketToRoom(socket, roomId, false);
+    moveSocketToRoom(socket, roomId, Boolean(silent));
     if (typeof cb === 'function') cb({ ok: true });
   });
 

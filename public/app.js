@@ -6,6 +6,7 @@
   const GUEST_PROFILE_KEY = 'arabic_chat_guest_profile_v1';
   const SOUND_MUTE_KEY = 'arabic_chat_sound_muted';
   const FINGERPRINT_KEY = 'arabic_chat_fp_v1';
+  const USER_CACHE_KEY = 'arabic_chat_user_cache_v1';
 
   const NAME_ANIM_OPTIONS = [
     { id: 'none', label: 'ثابت (بدون حركة)' },
@@ -261,6 +262,7 @@
     editingRoomId: null,
     editingQuizQuestionId: null,
     lastRoomMsgTs: 0,
+    wasDisconnected: false,
     soundMuted: localStorage.getItem(SOUND_MUTE_KEY) === '1',
     profileAudioEl: null,
     profileSynthTimer: null,
@@ -2142,6 +2144,7 @@
   // ==========================================
   function openModal(id) {
     $(id)?.classList.remove('hidden');
+    refreshLucideIcons();
   }
 
   function closeModal(id) {
@@ -5986,6 +5989,27 @@
   // ==========================================
   // SOCKET.IO REAL-TIME CONNECTION & 10s HEARTBEAT
   // ==========================================
+  async function fetchMissedRoomMessages() {
+    const roomId = state.currentRoom?.id;
+    if (!roomId || !state.token) return;
+    try {
+      const afterTs = Math.max(0, Number(state.lastRoomMsgTs) || 0);
+      const res = await api(`/api/rooms/${encodeURIComponent(roomId)}/messages?after=${afterTs}&limit=100`);
+      const list = Array.isArray(res?.messages) ? res.messages : [];
+      for (const m of list) {
+        appendOrReconcileMessage(m);
+      }
+    } catch {
+      // ignore transient catch-up error
+    }
+  }
+
+  function setReconnectBannerVisible(visible) {
+    const banner = $('reconnectBanner');
+    if (!banner) return;
+    banner.classList.toggle('hidden', !visible);
+  }
+
   function connectSocket() {
     if (state.socket) {
       state.socket.disconnect();
@@ -5996,9 +6020,14 @@
       state.heartbeatTimer = null;
     }
 
-    const savedRoom = localStorage.getItem(ROOM_KEY) || 'general';
+    const savedRoom = state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general';
     const socket = io({
-      auth: { token: state.token, roomId: savedRoom, deviceId: state.deviceId },
+      auth: {
+        token: state.token,
+        roomId: savedRoom,
+        deviceId: state.deviceId,
+        fingerprint: state.fingerprint
+      },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -6009,14 +6038,28 @@
     state.socket = socket;
 
     socket.on('connect', () => {
+      setReconnectBannerVisible(false);
       socket.emit('heartbeat', { ts: Date.now() });
+      if (state.wasDisconnected) {
+        state.wasDisconnected = false;
+        fetchMissedRoomMessages();
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      if (reason !== 'io client disconnect') {
+        state.wasDisconnected = true;
+        setReconnectBannerVisible(true);
+      }
     });
 
     socket.io.on('reconnect_attempt', () => {
+      setReconnectBannerVisible(true);
       socket.auth = {
         token: state.token,
         roomId: state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general',
-        deviceId: state.deviceId
+        deviceId: state.deviceId,
+        fingerprint: state.fingerprint
       };
     });
 
@@ -6027,7 +6070,8 @@
           state.socket.auth = {
             token: state.token,
             roomId: state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general',
-            deviceId: state.deviceId
+            deviceId: state.deviceId,
+            fingerprint: state.fingerprint
           };
           state.socket.connect();
         }
@@ -6035,7 +6079,15 @@
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') recoverConnection();
       });
-      window.addEventListener('online', recoverConnection);
+      window.addEventListener('online', () => {
+        recoverConnection();
+      });
+      window.addEventListener('offline', () => {
+        if (state.token && state.user) {
+          state.wasDisconnected = true;
+          setReconnectBannerVisible(true);
+        }
+      });
     }
 
     // 10-second continuous heartbeat
@@ -6046,10 +6098,14 @@
     }, 10000);
 
     socket.on('connect_error', (err) => {
-      if (String(err?.message || '').startsWith('BANNED:') || err?.message === 'AUTH_REQUIRED') {
-        showToast(err.message, true);
+      const msg = String(err?.message || '');
+      if (msg.startsWith('BANNED:') || msg === 'AUTH_REQUIRED') {
+        showToast(msg, true);
         logoutUser();
+        return;
       }
+      state.wasDisconnected = true;
+      setReconnectBannerVisible(true);
     });
 
     socket.on('init_state', (data) => {
@@ -6273,7 +6329,9 @@
 
     socket.on('gift_received', ({ tx, gift }) => {
       showGiftCelebration(tx);
-      showToast(`🎁 استلمت هدية ${gift.emoji} ${gift.name} من ${tx.from_name}!`);
+      const giftMsg = `🎁 استلمت هدية ${gift.emoji} ${gift.name} من ${tx.from_name}!`;
+      showToast(giftMsg);
+      dispatchWebPush('هدية جديدة', giftMsg);
     });
 
     socket.on('new_notification', (notif) => {
@@ -6282,11 +6340,13 @@
         playNotificationChime(notif.category === 'gift' ? 'gift' : 'notif');
       }
       showToast(`${notif.title}: ${notif.body}`);
+      dispatchWebPush(notif.title || 'إشعار جديد', notif.body || '');
     });
 
     socket.on('mention_alert', ({ fromName, content }) => {
       playNotificationChime('mention');
       showToast(`🔔 نداء من ${fromName}: ${content}`);
+      dispatchWebPush(`🔔 نداء من ${fromName}`, content);
     });
 
     socket.on('admin_warning', ({ byName, reason }) => {
@@ -6319,6 +6379,7 @@
       if (pm.from_key !== state.user?.key) {
         playNotificationChime('notif');
         showToast(`✉️ رسالة خاصة من ${pm.from_name}`);
+        dispatchWebPush(`✉️ رسالة خاصة من ${pm.from_name}`, pm.content || '');
       }
       if (state.activeSlideDrawer === 'pm' && $('slideSheetDrawer')?.classList.contains('open')) {
         openSlideSheetDrawer('pm', state.activeSlidePmTarget);
@@ -6427,11 +6488,17 @@
     state.user = user;
     state.token = token;
     localStorage.setItem(TOKEN_KEY, token);
+    try {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    } catch {
+      // ignore storage quota
+    }
     if (user?.isGuest && user?.key) {
       localStorage.setItem(GUEST_PROFILE_KEY, JSON.stringify({ key: user.key, name: user.name || '' }));
     }
     $('authView').classList.add('hidden');
     $('appView').classList.remove('hidden');
+    setReconnectBannerVisible(false);
     connectSocket();
   }
 
@@ -6450,7 +6517,10 @@
     state.socket = null;
     state.user = null;
     state.token = '';
+    state.wasDisconnected = false;
+    setReconnectBannerVisible(false);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_CACHE_KEY);
     $('appView').classList.add('hidden');
     $('authView').classList.remove('hidden');
   }
@@ -7022,6 +7092,10 @@
       closeModal('customizeModal');
       openStoreModal('store');
     });
+    $('storeHeroCustShortcutBtn')?.addEventListener('click', () => {
+      closeModal('storeModal');
+      openCustomizeModal('options');
+    });
     $('custMiniMusicPlayBtn')?.addEventListener('click', () => {
       const ref = ($('custMusicCustomUrl')?.value.trim() || $('custMusicPreset')?.value || state.user?.profileMusic || '').trim();
       if (!ref) {
@@ -7046,9 +7120,34 @@
     $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
       b.addEventListener('click', () => switchNameStyleTab(b.dataset.namestyleTab));
     });
-    ['custDisplayName', 'custBioInput', 'custNameColor', 'custTextColor', 'custFontFamily', 'custFontStyle', 'custFontSize', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'].forEach((id) => {
+    [
+      'custDisplayName', 'custBioInput', 'custNameColor', 'custTextColor',
+      'custFontFamily', 'custFontStyle', 'custFontSize', 'custNameFontSize',
+      'custNameStyleMode', 'custNameGradient', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'
+    ].forEach((id) => {
       $(id)?.addEventListener('input', updateCustomizePreview);
       $(id)?.addEventListener('change', updateCustomizePreview);
+    });
+    $('custNameStyleMode')?.addEventListener('change', (e) => {
+      const mode = e.target.value;
+      const targetTab = mode === 'gradient' ? 'gradient' : (mode === 'glow' ? 'neon' : 'color');
+      switchNameStyleTab(targetTab);
+    });
+    $('custResetTextColorBtn')?.addEventListener('click', () => {
+      if ($('custTextColor')) $('custTextColor').value = '#e2e8f0';
+      updateCustomizePreview();
+      showToast('تمت استعادة لون النص الافتراضي المتباين.');
+    });
+    $('custMuteSoundsToggle')?.addEventListener('change', (e) => {
+      state.soundMuted = Boolean(e.target.checked);
+      localStorage.setItem(SOUND_MUTE_KEY, state.soundMuted ? '1' : '0');
+      showToast(state.soundMuted ? 'تم كتم أصوات التنبيهات.' : 'تم تفعيل أصوات التنبيهات.');
+    });
+    $('custEnableWebPushBtn')?.addEventListener('click', async () => {
+      const ok = await requestWebPushPermission();
+      if (ok && $('custEnableWebPushBtn')) {
+        $('custEnableWebPushBtn').textContent = 'الإشعارات مفعّلة ✓';
+      }
     });
     $('custNameAnimOffBtn')?.addEventListener('click', () => {
       if ($('custNameAnim')) $('custNameAnim').value = 'none';
@@ -7281,9 +7380,9 @@
       }
     }
 
-    const activeColor = (u.textColor || '#111827').toLowerCase();
+    const activeColor = (u.textColor || '#e2e8f0').toLowerCase();
     if ($('inlineMsgColorPicker')) {
-      $('inlineMsgColorPicker').value = /^#[0-9a-f]{6}$/i.test(activeColor) ? activeColor : '#111827';
+      $('inlineMsgColorPicker').value = /^#[0-9a-f]{6}$/i.test(activeColor) ? activeColor : '#e2e8f0';
       $('inlineMsgColorPicker').disabled = !canMsgStyle;
     }
 
@@ -7337,6 +7436,7 @@
       // ignore
     }
     bindEvents();
+    refreshLucideIcons();
     try {
       const pub = await api('/api/settings/public');
       if (pub?.settings) applySiteSettings(pub.settings);
@@ -7344,17 +7444,42 @@
       // ignore
     }
 
-    if (state.token) {
+    const restoreSessionWithRetry = async () => {
+      if (!state.token) return false;
       try {
         const me = await api('/api/me');
         if (me?.user) {
           enterApp(me.user, state.token);
-          return;
+          return true;
         }
-      } catch {
-        localStorage.removeItem(TOKEN_KEY);
-        state.token = '';
+      } catch (err) {
+        if (err?.status === 401 || err?.status === 403) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_CACHE_KEY);
+          state.token = '';
+          setReconnectBannerVisible(false);
+          if (err?.status === 403 && err?.message) showToast(err.message, true);
+          return false;
+        }
+        // Network or 5xx error: preserve token (Zero-Logout) & keep retry banner visible
+        try {
+          const cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null');
+          if (cachedUser && cachedUser.key) {
+            enterApp(cachedUser, state.token);
+            setReconnectBannerVisible(true);
+          }
+        } catch {
+          // ignore
+        }
+        setTimeout(() => {
+          if (state.token && !state.socket?.connected) restoreSessionWithRetry();
+        }, 4500);
       }
+      return false;
+    };
+
+    if (state.token) {
+      await restoreSessionWithRetry();
     }
     setInterval(() => {
       if (state.currentRoom && state.settings?.fx_night_atmosphere === 'auto' && state.userNightPref === 'follow') {
