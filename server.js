@@ -269,11 +269,16 @@ function getClientTelemetry(reqOrSocket) {
 }
 
 // ==========================================
-// TOKEN SIGNING & AUTH HELPERS
+// TOKEN SIGNING & PERSISTENT SESSION HELPERS
 // ==========================================
+const SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+
 function signToken(payloadObj) {
+  const now = Date.now();
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ ...payloadObj, iat: Date.now() })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({ ...payloadObj, iat: now, exp: payloadObj.exp || now + SESSION_TTL_MS })
+  ).toString('base64url');
   const sig = crypto
     .createHmac('sha256', TOKEN_SECRET)
     .update(`${header}.${payload}`)
@@ -292,10 +297,83 @@ function verifyToken(token) {
     .digest('base64url');
   if (sig !== expected) return null;
   try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (parsed && parsed.exp && Number(parsed.exp) <= Date.now()) return null;
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function issuePersistentSessionToken({ user = null, isGuest = false, guestKey = '', guestName = '', telemetry = {} } = {}) {
+  const sid = crypto.randomBytes(16).toString('hex');
+  if (isGuest) {
+    db.createUserSession({
+      sessionId: sid,
+      userId: null,
+      userKey: guestKey,
+      email: '',
+      role: 'guest',
+      isGuest: true,
+      name: guestName || 'زائر',
+      deviceId: telemetry.deviceId || '',
+      fingerprint: telemetry.fingerprint || '',
+      ipAddress: telemetry.ip || '',
+      userAgent: telemetry.userAgent || '',
+      ttlMs: SESSION_TTL_MS
+    });
+    return signToken({ sid, key: guestKey, name: guestName || 'زائر', isGuest: true });
+  }
+  const uid = Number(user?.userId || user?.id);
+  db.createUserSession({
+    sessionId: sid,
+    userId: uid,
+    userKey: `user:${uid}`,
+    email: user?.email || '',
+    role: user?.role || 'member',
+    isGuest: false,
+    name: user?.name || user?.username || '',
+    deviceId: telemetry.deviceId || '',
+    fingerprint: telemetry.fingerprint || '',
+    ipAddress: telemetry.ip || '',
+    userAgent: telemetry.userAgent || '',
+    ttlMs: SESSION_TTL_MS
+  });
+  return signToken({ sid, userId: uid, isGuest: false });
+}
+
+function validateAndTouchSession(payload, { role = '', telemetry = {}, userRow = null } = {}) {
+  if (!payload) return false;
+  if (!payload.sid) return true; // Backward compatibility for pre-existing valid HMAC tokens
+  const existing = db.getUserSession(payload.sid);
+  if (existing) {
+    if (existing.revoked) return false;
+    if (existing.expires_at && existing.expires_at <= Date.now()) return false;
+    db.touchUserSession(payload.sid, {
+      role: role || existing.role,
+      ipAddress: telemetry.ip || '',
+      deviceId: telemetry.deviceId || '',
+      fingerprint: telemetry.fingerprint || '',
+      ttlMs: SESSION_TTL_MS
+    });
+    return true;
+  }
+  // If HMAC token is valid and user exists, ensure session record is recovered in Firebase
+  db.createUserSession({
+    sessionId: payload.sid,
+    userId: payload.isGuest ? null : Number(payload.userId),
+    userKey: payload.isGuest ? payload.key : `user:${payload.userId}`,
+    email: userRow?.email || '',
+    role: role || userRow?.role || (payload.isGuest ? 'guest' : 'member'),
+    isGuest: Boolean(payload.isGuest),
+    name: payload.name || userRow?.username || '',
+    deviceId: telemetry.deviceId || '',
+    fingerprint: telemetry.fingerprint || '',
+    ipAddress: telemetry.ip || '',
+    userAgent: telemetry.userAgent || '',
+    ttlMs: SESSION_TTL_MS
+  });
+  return true;
 }
 
 function canDo(role, permName) {
@@ -536,9 +614,11 @@ function resolveAuthFromRequest(req) {
   const payload = verifyToken(token);
   if (!payload) return null;
 
-  const { ip, deviceId, fingerprint } = getClientTelemetry(req);
+  const telemetry = getClientTelemetry(req);
+  const { ip, deviceId, fingerprint } = telemetry;
 
   if (payload.isGuest) {
+    if (!validateAndTouchSession(payload, { role: 'guest', telemetry })) return null;
     const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId, fingerprint });
     if (ban) {
       return {
@@ -549,6 +629,8 @@ function resolveAuthFromRequest(req) {
     }
     const saved = db.findGuestByKey(payload.key);
     const guestObj = saved || db.upsertGuest({ key: payload.key, name: payload.name || 'زائر' });
+    req._authTokenPayload = payload;
+    req._authRawToken = token;
     return mapGuestRow(guestObj, payload.key, payload.name || 'زائر');
   }
 
@@ -560,6 +642,9 @@ function resolveAuthFromRequest(req) {
     }
     const freshRow = db.findUserById(row.id);
     if (!freshRow) return null;
+    if (!validateAndTouchSession(payload, { role: freshRow.role, telemetry, userRow: freshRow })) {
+      return null;
+    }
     if (!db.isSupremeOwnerEmail(freshRow.email) && freshRow.role !== 'site_owner') {
       const ban = db.isTargetBanned({
         targetKey: `user:${freshRow.id}`,
@@ -576,6 +661,8 @@ function resolveAuthFromRequest(req) {
         };
       }
     }
+    req._authTokenPayload = payload;
+    req._authRawToken = token;
     return mapUserRow(freshRow);
   }
   return null;
@@ -1414,7 +1501,11 @@ app.post('/api/register', async (req, res) => {
 
     const finalUser = db.findUserById(result.user.id);
     const mapped = mapUserRow(finalUser);
-    const token = signToken({ userId: mapped.userId, isGuest: false });
+    const token = issuePersistentSessionToken({
+      user: mapped,
+      isGuest: false,
+      telemetry: { ip, deviceId, fingerprint, userAgent }
+    });
     await db.flushWrites();
     io.emit('persistent_members', buildPersistentMembersList());
     return res.json({ token, user: mapped });
@@ -1467,7 +1558,12 @@ app.post('/api/login', async (req, res) => {
     db.updateUserIp(row.id, ip, deviceId, { fingerprint, userAgent, country });
     const freshRow = db.findUserById(row.id);
     const mapped = mapUserRow(freshRow);
-    const token = signToken({ userId: mapped.userId, isGuest: false });
+    const token = issuePersistentSessionToken({
+      user: mapped,
+      isGuest: false,
+      telemetry: { ip, deviceId, fingerprint, userAgent }
+    });
+    await db.flushWrites();
     return res.json({ token, user: mapped });
   } catch (err) {
     console.error('Login error:', err);
@@ -1493,14 +1589,19 @@ app.post('/api/guest', async (req, res) => {
   }
 
   const guestRow = db.upsertGuest({ key, name, ipAddress: ip, deviceId, fingerprint, userAgent, country });
-  await db.flushWrites();
   const user = mapGuestRow(guestRow, key, name);
-  const token = signToken({ key, name: user.name, isGuest: true });
+  const token = issuePersistentSessionToken({
+    isGuest: true,
+    guestKey: key,
+    guestName: user.name,
+    telemetry: { ip, deviceId, fingerprint, userAgent }
+  });
+  await db.flushWrites();
   io.emit('persistent_members', buildPersistentMembersList());
   return res.json({ token, user });
 });
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   const u = resolveAuthFromRequest(req);
   if (!u) return res.status(401).json({ error: 'جلسة غير صالحة.' });
   if (u.banned) {
@@ -1511,10 +1612,42 @@ app.get('/api/me', (req, res) => {
       reason: u.reason || 'حظر من الإدارة'
     });
   }
-  return res.json({ user: u });
+  let nextToken = req._authRawToken || '';
+  const payload = req._authTokenPayload;
+  const shouldRefreshToken =
+    !payload ||
+    !payload.sid ||
+    !payload.exp ||
+    Date.now() - Number(payload.iat || 0) > 7 * 24 * 60 * 60 * 1000;
+  if (shouldRefreshToken) {
+    const telemetry = getClientTelemetry(req);
+    if (u.isGuest) {
+      nextToken = issuePersistentSessionToken({
+        isGuest: true,
+        guestKey: u.key,
+        guestName: u.name,
+        telemetry
+      });
+    } else {
+      nextToken = issuePersistentSessionToken({
+        user: u,
+        isGuest: false,
+        telemetry
+      });
+    }
+    await db.flushWrites();
+  }
+  return res.json({ user: u, token: nextToken || undefined });
 });
 
-app.post('/api/logout', (_req, res) => {
+app.post('/api/logout', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  const payload = verifyToken(token);
+  if (payload?.sid) {
+    db.revokeUserSession(payload.sid);
+    await db.flushWrites();
+  }
   res.json({ ok: true });
 });
 
@@ -3532,6 +3665,7 @@ function checkQuizBotAnswer(entry, content) {
     db.adjustUserCoins(entry.userId, earnedPoints);
     db.incrementQuizPoints(entry.userId, earnedPoints);
     syncUserAcrossSockets(io, entry.userId);
+    db.flushWrites().catch(() => {});
   }
 
   const answerLabel = qObj.displayAnswer || qObj.a[0];
@@ -4268,8 +4402,12 @@ io.use((socket, next) => {
     const payload = verifyToken(token);
     if (!payload) return next(new Error('AUTH_REQUIRED'));
 
-    const { ip, deviceId, fingerprint, userAgent, country } = getClientTelemetry(socket);
+    const telemetry = getClientTelemetry(socket);
+    const { ip, deviceId, fingerprint, userAgent, country } = telemetry;
     if (payload.isGuest) {
+      if (!validateAndTouchSession(payload, { role: 'guest', telemetry })) {
+        return next(new Error('AUTH_REQUIRED'));
+      }
       if (Number(db.getSiteSettings().block_vpn) === 1 && isVpnOrProxyRequest(socket)) {
         return next(new Error('BANNED:تم حظر الدخول عبر VPN أو Proxy.'));
       }
@@ -4335,6 +4473,9 @@ io.use((socket, next) => {
 
     db.updateUserIp(row.id, ip, deviceId, { fingerprint, userAgent, country });
     const freshRow = db.findUserById(row.id);
+    if (!validateAndTouchSession(payload, { role: freshRow.role, telemetry, userRow: freshRow })) {
+      return next(new Error('AUTH_REQUIRED'));
+    }
     const mapped = mapUserRow(freshRow);
     socket.authSession = {
       socketId: socket.id,
@@ -5901,6 +6042,21 @@ async function start() {
     console.log(`Arabic CodyChat Server listening on http://0.0.0.0:${PORT}`);
   });
 }
+
+let isShuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Received ${signal}, flushing pending Firestore writes...`);
+  try {
+    await db.flushWrites();
+  } catch {
+    // ignore
+  }
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 start().catch((err) => {
   console.error('Fatal server startup error:', err);

@@ -884,6 +884,7 @@ const store = {
   pmLinkAlertsById: new Map(),
   notificationsById: new Map(),
   profileMediaById: new Map(),
+  sessionsById: new Map(),
   counters: {
     users: 0,
     messages: 0,
@@ -1204,6 +1205,29 @@ function normalizeRankDoc(docId, data) {
   return obj;
 }
 
+function normalizeSessionDoc(docId, data = {}) {
+  const sid = String(data.id || docId || '').trim();
+  return {
+    id: sid,
+    user_id: data.user_id ? Number(data.user_id) : null,
+    user_key: String(data.user_key || ''),
+    email: String(data.email || '').toLowerCase(),
+    role: String(data.role || 'member'),
+    is_guest: Boolean(data.is_guest),
+    name: String(data.name || ''),
+    device_id: String(data.device_id || ''),
+    fingerprint: String(data.fingerprint || ''),
+    ip_address: String(data.ip_address || ''),
+    user_agent: String(data.user_agent || '').slice(0, 200),
+    revoked: Boolean(data.revoked),
+    revoked_at: String(data.revoked_at || ''),
+    created_at: String(data.created_at || nowIso()),
+    last_seen_at: String(data.last_seen_at || nowIso()),
+    last_seen_ms: Number(data.last_seen_ms) || Date.now(),
+    expires_at: Number(data.expires_at) || Date.now() + 365 * 24 * 60 * 60 * 1000
+  };
+}
+
 function attachRealtimeListeners() {
   for (const unsub of unsubscribers) {
     try {
@@ -1504,6 +1528,20 @@ function attachRealtimeListeners() {
       }
     })
   );
+
+  unsubscribers.push(
+    fsListen('user_sessions', (changes) => {
+      for (const ch of changes) {
+        if (!ch.id) continue;
+        if (ch.type === 'removed') {
+          store.sessionsById.delete(String(ch.id));
+        } else {
+          const sess = normalizeSessionDoc(ch.id, ch.data || {});
+          if (sess.id) store.sessionsById.set(sess.id, sess);
+        }
+      }
+    })
+  );
 }
 
 async function init(eventHooks = {}) {
@@ -1531,13 +1569,20 @@ async function init(eventHooks = {}) {
         fsGetAll('wall_posts'),
         fsGetAll('reports'),
         fsGetAll('notifications'),
-        fsGetAll('counters')
+        fsGetAll('counters'),
+        fsGetAll('user_sessions')
       ]);
 
     let loadedCollections;
     try {
       createFirestoreDriver();
-      loadedCollections = await fetchAllCollections();
+      try {
+        loadedCollections = await fetchAllCollections();
+      } catch (firstErr) {
+        console.warn('Firestore initial fetch retry after transient error:', firstErr.message);
+        await new Promise((r) => setTimeout(r, 600));
+        loadedCollections = await fetchAllCollections();
+      }
     } catch (fsErr) {
       console.warn('Cloud Firestore unavailable, falling back to local SQLite:', fsErr.message);
       createSqliteFallbackDriver();
@@ -1562,7 +1607,8 @@ async function init(eventHooks = {}) {
       wallDocs,
       reportsDocs,
       notifDocs,
-      counterDocs
+      counterDocs,
+      sessionsDocs
     ] = loadedCollections;
 
     for (const c of counterDocs) {
@@ -1746,6 +1792,24 @@ async function init(eventHooks = {}) {
       }
     }
 
+    const sessionCleanupIds = [];
+    const nowSessionTs = Date.now();
+    for (const d of sessionsDocs || []) {
+      const sess = normalizeSessionDoc(d.id, d.data || {});
+      if (!sess.id) continue;
+      const isExpired = sess.expires_at && sess.expires_at <= nowSessionTs;
+      const isOldRevoked =
+        sess.revoked && sess.revoked_at && nowSessionTs - toMs(sess.revoked_at) > 7 * 24 * 60 * 60 * 1000;
+      if (isExpired || isOldRevoked) {
+        sessionCleanupIds.push(sess.id);
+      } else {
+        store.sessionsById.set(sess.id, sess);
+      }
+    }
+    if (sessionCleanupIds.length > 0) {
+      enqueueBatchDelete('user_sessions', sessionCleanupIds);
+    }
+
     ensureSupremeOwnersInStore();
 
     // Remove obsolete legacy rank keys & migrate users/messages cleanly to canonical 15-rank hierarchy (Levels 15..1)
@@ -1880,7 +1944,8 @@ function getStorageStatus() {
       ranks: store.ranksByKey.size,
       news: store.newsById.size,
       gifts: store.giftsById.size,
-      bans: store.bansByKey.size
+      bans: store.bansByKey.size,
+      sessions: store.sessionsById.size
     }
   };
 }
@@ -2830,6 +2895,7 @@ function deleteUserAccountPermanently(userId) {
       enqueueDelete('friendships', safeDocId(k));
     }
   }
+  revokeAllSessionsForUser(targetKey);
   return { ok: true, deletedKey: targetKey, deletedUserId: uid };
 }
 
@@ -4085,6 +4151,7 @@ function banTarget({
       enqueueSet('users', String(uid), { is_banned: 1, ban_reason: cleanReason }, true);
     }
   }
+  revokeAllSessionsForUser(targetKey);
   return true;
 }
 
@@ -4693,10 +4760,126 @@ function migrateGuestKeyReferences(oldKey, newKey, newName, newRole) {
   }
 }
 
+function createUserSession({
+  sessionId,
+  userId = null,
+  userKey = '',
+  email = '',
+  role = 'member',
+  isGuest = false,
+  name = '',
+  deviceId = '',
+  fingerprint = '',
+  ipAddress = '',
+  userAgent = '',
+  ttlMs = 365 * 24 * 60 * 60 * 1000
+} = {}) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return null;
+  const now = Date.now();
+  const record = {
+    id: sid,
+    user_id: userId ? Number(userId) : null,
+    user_key: String(userKey || ''),
+    email: String(email || '').toLowerCase(),
+    role: String(role || 'member'),
+    is_guest: Boolean(isGuest),
+    name: String(name || '').slice(0, 40),
+    device_id: String(deviceId || '').slice(0, 128),
+    fingerprint: String(fingerprint || '').slice(0, 128),
+    ip_address: String(ipAddress || '').slice(0, 80),
+    user_agent: String(userAgent || '').slice(0, 200),
+    revoked: false,
+    revoked_at: '',
+    created_at: nowIso(),
+    last_seen_at: nowIso(),
+    last_seen_ms: now,
+    expires_at: now + Math.max(60000, Number(ttlMs) || 365 * 24 * 60 * 60 * 1000)
+  };
+  store.sessionsById.set(sid, record);
+  enqueueSet('user_sessions', sid, record, true);
+  return { ...record };
+}
+
+function getUserSession(sessionId) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return null;
+  const sess = store.sessionsById.get(sid);
+  return sess ? { ...sess } : null;
+}
+
+function touchUserSession(sessionId, { role, ipAddress, deviceId, fingerprint, ttlMs = 365 * 24 * 60 * 60 * 1000 } = {}) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return null;
+  const sess = store.sessionsById.get(sid);
+  if (!sess || sess.revoked) return null;
+  const now = Date.now();
+  const roleChanged = Boolean(role && role !== sess.role);
+  const ipChanged = Boolean(ipAddress && ipAddress !== sess.ip_address);
+  const stale = now - (Number(sess.last_seen_ms) || 0) >= 5 * 60 * 1000;
+  sess.last_seen_ms = now;
+  sess.last_seen_at = nowIso();
+  sess.expires_at = now + Math.max(60000, Number(ttlMs) || 365 * 24 * 60 * 60 * 1000);
+  if (role) sess.role = String(role);
+  if (ipAddress) sess.ip_address = String(ipAddress).slice(0, 80);
+  if (deviceId) sess.device_id = String(deviceId).slice(0, 128);
+  if (fingerprint) sess.fingerprint = String(fingerprint).slice(0, 128);
+  if (stale || roleChanged || ipChanged) {
+    enqueueSet(
+      'user_sessions',
+      sid,
+      {
+        role: sess.role,
+        ip_address: sess.ip_address,
+        device_id: sess.device_id,
+        fingerprint: sess.fingerprint,
+        last_seen_at: sess.last_seen_at,
+        last_seen_ms: sess.last_seen_ms,
+        expires_at: sess.expires_at
+      },
+      true
+    );
+  }
+  return { ...sess };
+}
+
+function revokeUserSession(sessionId) {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return false;
+  const sess = store.sessionsById.get(sid);
+  if (sess) {
+    sess.revoked = true;
+    sess.revoked_at = nowIso();
+  }
+  enqueueSet('user_sessions', sid, { revoked: true, revoked_at: nowIso() }, true);
+  return true;
+}
+
+function revokeAllSessionsForUser(userKey) {
+  const targetKey = String(userKey || '').trim();
+  if (!targetKey || isProtectedSupremeOwnerKey(targetKey)) return 0;
+  let count = 0;
+  const revokedAt = nowIso();
+  for (const sess of store.sessionsById.values()) {
+    if (sess.user_key === targetKey && !sess.revoked) {
+      sess.revoked = true;
+      sess.revoked_at = revokedAt;
+      enqueueSet('user_sessions', sess.id, { revoked: true, revoked_at: revokedAt }, true);
+      count += 1;
+    }
+  }
+  return count;
+}
+
 module.exports = {
   init,
   flushWrites,
   getStorageStatus,
+  createUserSession,
+  getUserSession,
+  touchUserSession,
+  revokeUserSession,
+  revokeAllSessionsForUser,
   SUPREME_OWNER_EMAIL,
   GIFT_CATALOG,
   isSupremeOwnerEmail,

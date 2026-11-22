@@ -52,6 +52,133 @@
     return fp;
   }
 
+  const SESSION_COOKIE_NAME = 'ac_session_token';
+  const IDB_NAME = 'arabic_chat_persistence_v1';
+  const IDB_STORE = 'session';
+  const IDB_KEY = 'active_session';
+
+  function readSessionCookie() {
+    try {
+      const m = document.cookie.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`));
+      return m ? decodeURIComponent(m[1]) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function writeSessionCookie(token) {
+    try {
+      if (!token) return;
+      document.cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch {
+      // ignore
+    }
+  }
+
+  function clearSessionCookie() {
+    try {
+      document.cookie = `${SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+    } catch {
+      // ignore
+    }
+  }
+
+  function openSessionIdb() {
+    return new Promise((resolve) => {
+      try {
+        if (typeof indexedDB === 'undefined') return resolve(null);
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
+  async function readSessionFromIdb() {
+    const db = await openSessionIdb();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
+  async function writeSessionToIdb(payload) {
+    const db = await openSessionIdb();
+    if (!db) return;
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(payload, IDB_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function clearSessionFromIdb() {
+    const db = await openSessionIdb();
+    if (!db) return;
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(IDB_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  function persistSessionState(user, token) {
+    const tok = String(token || state?.token || '').trim();
+    if (tok) {
+      try {
+        localStorage.setItem(TOKEN_KEY, tok);
+      } catch {
+        // ignore
+      }
+      writeSessionCookie(tok);
+    }
+    if (user && typeof user === 'object') {
+      try {
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+      } catch {
+        // ignore
+      }
+      if (user.isGuest && user.key) {
+        try {
+          localStorage.setItem(GUEST_PROFILE_KEY, JSON.stringify({ key: user.key, name: user.name || '' }));
+        } catch {
+          // ignore
+        }
+      }
+    }
+    if (tok) {
+      writeSessionToIdb({ token: tok, user: user || null, savedAt: Date.now() });
+    }
+  }
+
+  function clearPersistedSession() {
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_CACHE_KEY);
+    } catch {
+      // ignore
+    }
+    clearSessionCookie();
+    clearSessionFromIdb();
+  }
+
   function parseHexRgb(hex) {
     const clean = String(hex || '').trim().replace('#', '');
     if (/^[0-9a-f]{3}$/i.test(clean)) {
@@ -225,7 +352,7 @@
   const state = {
     deviceId: getOrCreateDeviceId(),
     fingerprint: getClientFingerprint(),
-    token: localStorage.getItem(TOKEN_KEY) || '',
+    token: localStorage.getItem(TOKEN_KEY) || readSessionCookie() || '',
     user: null,
     settings: {},
     ranks: [],
@@ -1499,6 +1626,7 @@
   function renderUserIdentity() {
     const u = state.user;
     if (!u) return;
+    if (state.token) persistSessionState(u, state.token);
     const isOwner = isExclusiveOwnerObj(u);
     const isOwnerGalaxy = isOwner && isOwnerGalaxyVisualEnabled();
     let effectiveFrame = u.avatarFrame || 'none';
@@ -6616,6 +6744,7 @@
 
     socket.on('init_state', (data) => {
       state.user = data.user;
+      if (state.user && state.token) persistSessionState(state.user, state.token);
       state.ranks = data.ranks || [];
       state.emojis = data.emojis || [];
       state.rooms = data.rooms || [];
@@ -6643,6 +6772,7 @@
 
     socket.on('session_updated', ({ user }) => {
       state.user = user;
+      if (state.user && state.token) persistSessionState(state.user, state.token);
       renderUserIdentity();
     });
 
@@ -7029,15 +7159,7 @@
     $('authBackToChatBtn')?.classList.add('hidden');
     state.user = user;
     state.token = token;
-    localStorage.setItem(TOKEN_KEY, token);
-    try {
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
-    } catch {
-      // ignore storage quota
-    }
-    if (user?.isGuest && user?.key) {
-      localStorage.setItem(GUEST_PROFILE_KEY, JSON.stringify({ key: user.key, name: user.name || '' }));
-    }
+    persistSessionState(user, token);
     $('authView').classList.add('hidden');
     $('appView').classList.remove('hidden');
     setReconnectBannerVisible(false);
@@ -7045,6 +7167,18 @@
   }
 
   function logoutUser(opts = {}) {
+    const prevToken = state.token;
+    if (opts?.explicit && prevToken) {
+      try {
+        fetch('/api/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${prevToken}` },
+          keepalive: true
+        }).catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
     stopLocalMicStream();
     closeAllMicPeers();
     updateMutedStateUI(null);
@@ -7066,8 +7200,7 @@
     $('authBackToChatBtn')?.classList.add('hidden');
     if (!opts?.keepBanOverlay) hideBanBlockedScreen();
     setReconnectBannerVisible(false);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_CACHE_KEY);
+    clearPersistedSession();
     $('appView').classList.add('hidden');
     $('authView').classList.remove('hidden');
   }
@@ -7237,7 +7370,7 @@
       claimDailyLuckyBox();
     });
 
-    $('dropLogoutBtn').addEventListener('click', () => logoutUser());
+    $('dropLogoutBtn').addEventListener('click', () => logoutUser({ explicit: true }));
 
     // Top quick icons
     $('topReportBtn')?.addEventListener('click', () => openSocialModal('report'));
@@ -7337,7 +7470,7 @@
         else if (action === 'download_app') openDownloadAppModal();
         else if (action === 'owner_suite') openAdminPanel('owner_suite');
         else if (action === 'admin') openAdminPanel('stats');
-        else if (action === 'logout') logoutUser();
+        else if (action === 'logout') logoutUser({ explicit: true });
       });
     });
 
@@ -7884,7 +8017,7 @@
     });
     $('custMoreLogoutBtn')?.addEventListener('click', () => {
       closeModal('customizeModal');
-      logoutUser();
+      logoutUser({ explicit: true });
     });
     $('custMusicPreviewBtn')?.addEventListener('click', () => {
       const ref = $('custMusicCustomUrl').value.trim() || $('custMusicPreset').value;
@@ -8021,6 +8154,9 @@
   }
 
   async function bootstrap() {
+    if (state.token) {
+      $('authView')?.classList.add('hidden');
+    }
     const refParam = new URLSearchParams(window.location.search).get('ref');
     if (refParam) localStorage.setItem(REF_KEY, String(refParam).trim());
     try {
@@ -8031,8 +8167,32 @@
     } catch {
       // ignore
     }
+
     bindEvents();
     refreshLucideIcons();
+
+    const idbSess = await readSessionFromIdb();
+    if (!state.token && idbSess?.token) {
+      state.token = idbSess.token;
+      persistSessionState(idbSess.user || null, state.token);
+    }
+
+    let cachedUser = null;
+    try {
+      cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null') || idbSess?.user || null;
+    } catch {
+      cachedUser = idbSess?.user || null;
+    }
+
+    // Prevent login screen flash on refresh when an active persistent session exists
+    if (state.token) {
+      $('authView')?.classList.add('hidden');
+      if (cachedUser && cachedUser.key) {
+        state.user = cachedUser;
+        $('appView')?.classList.remove('hidden');
+        renderUserIdentity();
+      }
+    }
     try {
       const pub = await api('/api/settings/public');
       if (pub?.settings) applySiteSettings(pub.settings);
@@ -8045,27 +8205,28 @@
       try {
         const me = await api('/api/me');
         if (me?.user) {
-          enterApp(me.user, state.token);
+          const effectiveToken = me.token || state.token;
+          enterApp(me.user, effectiveToken);
           return true;
         }
       } catch (err) {
         if (err?.status === 401 || err?.status === 403) {
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_CACHE_KEY);
+          clearPersistedSession();
           state.token = '';
+          state.user = null;
           setReconnectBannerVisible(false);
-          if (err?.status === 403 && err?.message) showToast(err.message, true);
+          $('appView')?.classList.add('hidden');
+          if (err?.status === 403 && err?.message) {
+            showToast(err.message, true);
+          } else {
+            $('authView')?.classList.remove('hidden');
+          }
           return false;
         }
         // Network or 5xx error: preserve token (Zero-Logout) & keep retry banner visible
-        try {
-          const cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null');
-          if (cachedUser && cachedUser.key) {
-            enterApp(cachedUser, state.token);
-            setReconnectBannerVisible(true);
-          }
-        } catch {
-          // ignore
+        if (cachedUser && cachedUser.key) {
+          enterApp(cachedUser, state.token);
+          setReconnectBannerVisible(true);
         }
         setTimeout(() => {
           if (state.token && !state.socket?.connected) restoreSessionWithRetry();
@@ -8076,6 +8237,8 @@
 
     if (state.token) {
       await restoreSessionWithRetry();
+    } else {
+      $('authView')?.classList.remove('hidden');
     }
     setInterval(() => {
       if (state.currentRoom && state.settings?.fx_night_atmosphere === 'auto' && state.userNightPref === 'follow') {
