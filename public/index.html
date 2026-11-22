@@ -66,6 +66,9 @@
         </form>
 
         <div id="authError" class="form-error hidden"></div>
+        <button type="button" id="authBackToChatBtn" class="btn-secondary btn-full hidden" style="margin-top:8px;">
+          <i class="fa-solid fa-arrow-right"></i> العودة إلى الدردشة كزائر
+        </button>
       </div>
     </div>
 
@@ -75,7 +78,7 @@
       <header id="topBar" class="cody-topbar">
         <div class="topbar-right">
           <div class="profile-trigger-wrap">
-            <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي ولوحة التحكم">
+            <button id="profileMenuBtn" type="button" class="avatar-btn" title="ملفي الشخصي وخياراتي">
               <span id="topAvatarWrap" class="avatar-wrap frame-none">
                 <img id="topAvatarImg" src="" alt="صورتي" class="hidden" />
                 <span id="topAvatarLetter" class="avatar-letter">ع</span>
@@ -93,15 +96,10 @@
               <button type="button" id="dropCustomizeBtn" class="drop-item"><i class="fa-solid fa-wand-magic-sparkles"></i> تخصيص الألوان والإضافات</button>
               <button type="button" id="dropGiftsTabBtn" class="drop-item"><i class="fa-solid fa-gift"></i> هداياي ومحفظتي</button>
               <button type="button" id="dropLuckyBoxBtn" class="drop-item"><i class="fa-solid fa-box-open" style="color:#d97706"></i> صندوق الحظ اليومي</button>
-              <button type="button" id="dropStealthBtn" class="drop-item hidden"><i class="fa-solid fa-user-secret"></i> وضع التخفي (إخفاء التواجد)</button>
-              <button type="button" id="dropOwnerSuiteBtn" class="drop-item hidden"><i class="fa-solid fa-crown" style="color:#d97706"></i> جناح المالك الحصري</button>
-              <button type="button" id="dropAdminBtn" class="drop-item hidden"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
+              <button type="button" id="dropGuestRegisterBtn" class="drop-item guest-reg-drop-item hidden"><i class="fa-solid fa-user-plus"></i> تسجيل عضوية</button>
               <button type="button" id="dropLogoutBtn" class="drop-item danger"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
             </div>
           </div>
-          <span id="topStealthBadge" class="stealth-pill hidden" title="وضع التخفي مفعل">
-            <i class="fa-solid fa-user-secret"></i>
-          </span>
           <button type="button" id="goldRichBtn" class="top-icon-btn gold-tint" title="الأثرياء">
             <span class="ti-ico"><i class="fa-solid fa-crown"></i></span>
             <span class="ti-lbl">الأثرياء</span>
@@ -252,6 +250,7 @@
       <div class="chat-workspace-body">
         <main id="chatStage" class="chat-stage">
           <div id="nightStarsLayer" class="night-stars-backdrop hidden" aria-hidden="true"></div>
+          <div id="ownerModAlertBanner" class="owner-mod-alert-banner hidden"></div>
           <div id="pinnedRoyalBanner" class="pinned-royal-banner hidden"></div>
           <div id="chatFeed" class="chat-feed"></div>
           <div id="typingIndicator" class="typing-indicator hidden"></div>
@@ -287,6 +286,7 @@
       </div>
 
       <div id="frozenUserBanner" class="frozen-user-banner hidden"></div>
+      <div id="mutedAlertBanner" class="muted-alert-banner hidden"></div>
       <!-- INLINE MESSAGE FONT & COLOR BAR -->
       <div id="inlineMsgStyleBar" class="inline-msg-style-bar hidden">
         <div class="inline-msg-style-head">
@@ -341,6 +341,9 @@
         </div>
 
         <div class="input-left-tools">
+          <button type="button" id="guestRegisterBottomBtn" class="guest-register-chat-btn hidden" title="تسجيل عضوية دائمة">
+            <i class="fa-solid fa-user-plus"></i><span>تسجيل عضوية</span>
+          </button>
           <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="المايك الصوتي (تسجيل)">
             <i class="fa-solid fa-microphone"></i>
           </button>
@@ -356,9 +359,7 @@
               <button type="button" id="plusWallBtn" class="drop-item"><i class="fa-solid fa-signs-post"></i> الحائط والمنشورات</button>
               <button type="button" id="plusYoutubeBtn" class="drop-item"><i class="fa-brands fa-youtube"></i> مشغل يوتيوب الغرفة</button>
               <button type="button" id="plusReportBtn" class="drop-item"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
-              <button type="button" id="plusAdminNoticeBtn" class="drop-item hidden"><i class="fa-solid fa-bullhorn"></i> إرسال كإشعار إدارة</button>
               <button type="button" id="plusCustomizeTextBtn" class="drop-item"><i class="fa-solid fa-palette"></i> تخصيص الخط والألوان</button>
-              <button type="button" id="plusClearRoomBtn" class="drop-item danger hidden"><i class="fa-solid fa-broom"></i> مسح رسائل الغرفة</button>
             </div>
           </div>
         </div>
@@ -444,8 +445,6 @@
           <button type="button" class="drawer-item" data-drawer="quiz_points"><i class="fa-solid fa-award"></i> نقاط المسابقات</button>
           <button type="button" class="drawer-item" data-drawer="store"><i class="fa-solid fa-store"></i> المتجر</button>
           <button type="button" class="drawer-item" data-drawer="download_app"><i class="fa-solid fa-mobile-screen-button"></i> حمل التطبيق</button>
-          <button type="button" class="drawer-item hidden" id="drawerOwnerSuiteBtn" data-drawer="owner_suite"><i class="fa-solid fa-crown" style="color:#d97706"></i> جناح المالك الحصري</button>
-          <button type="button" class="drawer-item hidden" id="drawerAdminBtn" data-drawer="admin"><i class="fa-solid fa-sliders"></i> لوحة التحكم</button>
           <button type="button" class="drawer-item danger" data-drawer="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
         </nav>
         <div id="drawerBodyContent" class="drawer-body-content"></div>
@@ -564,6 +563,15 @@
                 </div>
               </div>
 
+              <div id="custGuestUpgradeCard" class="guest-upgrade-card hidden">
+                <div>
+                  <strong><i class="fa-solid fa-user-plus"></i> أنت تتصفح كزائر حالياً</strong>
+                  <p>سجّل عضوية دائمة لحفظ رصيدك، أصدقائك، ورتبتك داخل الشات.</p>
+                </div>
+                <button type="button" id="custGuestRegisterBtn" class="btn-primary btn-sm">
+                  <i class="fa-solid fa-user-plus"></i> تسجيل عضوية
+                </button>
+              </div>
               <div class="profile-link-box">
                 <input type="text" id="custProfileLinkInput" readonly />
                 <button type="button" id="custCopyLinkBtn" class="btn-primary btn-xs"><i class="fa-solid fa-copy"></i> نسخ الرابط</button>
@@ -875,20 +883,11 @@
                 </div>
               </div>
 
-              <div id="custStealthCard" class="stealth-box hidden" style="margin-top:8px;">
-                <div>
-                  <strong><i class="fa-solid fa-user-secret"></i> وضع التخفي للمالك</strong>
-                  <p>إخفاء دخولك ومغادرتك واسمك من قوائم المتواجدين بالكامل.</p>
-                </div>
-                <label class="switch-label">
-                  <input type="checkbox" id="custStealthToggle" />
-                  <span>تفعيل التخفي</span>
-                </label>
+              <div id="custMoreLogoutWrap" style="margin-top:10px;">
+                <button type="button" id="custMoreLogoutBtn" class="btn-danger btn-sm" style="width:100%;">
+                  <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج من الحساب
+                </button>
               </div>
-
-              <button type="button" id="custMoreLogoutBtn" class="btn-danger btn-sm" style="margin-top:10px;width:100%;">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج من الحساب
-              </button>
             </div>
           </div>
 
@@ -992,25 +991,7 @@
       </div>
     </div>
 
-    <!-- 8. UNIFIED 5-TAB OWNER COMMAND CENTER (SLIDE-OVER) -->
-    <div id="adminModal" class="modal-backdrop modal-slideover hidden">
-      <div class="modal-card modal-card-lg">
-        <div class="modal-header">
-          <h3><i class="fa-solid fa-crown" style="color:#F59E0B;"></i> لوحة قيادة المالك والنظام</h3>
-          <button type="button" class="modal-close rtl-back-btn" data-close-modal="adminModal"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
-        </div>
-        <div class="admin-nav-tabs" id="adminUnifiedTabsBar">
-          <button type="button" class="adm-tab active" data-adm-tab="ranks_matrix"><i class="fa-solid fa-crown"></i> منشئ الرتب والصلاحيات</button>
-          <button type="button" class="adm-tab" data-adm-tab="protection"><i class="fa-solid fa-shield-halved"></i> الحماية التلقائية</button>
-          <button type="button" class="adm-tab" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> بوت المسابقات الذكي</button>
-          <button type="button" class="adm-tab" data-adm-tab="members_control"><i class="fa-solid fa-users-gear"></i> الأعضاء والرقابة</button>
-          <button type="button" class="adm-tab" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل الرقابي</button>
-        </div>
-        <div id="adminModalBody" class="modal-body"></div>
-      </div>
-    </div>
-
-    <!-- 9. STORE SLIDE-OVER VIEW -->
+    <!-- 8. STORE SLIDE-OVER VIEW -->
     <div id="storeModal" class="modal-backdrop modal-slideover hidden">
       <div class="modal-card modal-card-md store-pro-modal-card">
         <div class="store-blue-hero">
@@ -1131,6 +1112,19 @@
             <button type="button" id="rmSettingsSaveBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الغرفة وتطبيقها</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- FULLSCREEN PERMANENT BAN BLOCK OVERLAY -->
+    <div id="bannedOverlay" class="banned-fullscreen-overlay hidden" role="alertdialog" aria-modal="true">
+      <div class="banned-fullscreen-card">
+        <div class="banned-fullscreen-icon"><i class="fa-solid fa-ban"></i></div>
+        <h2>تم حظرك من دخول الشات</h2>
+        <p id="bannedOverlayReasonText" class="banned-reason-msg">تم حظرك بواسطة الإدارة.</p>
+        <div id="bannedOverlayMeta" class="banned-meta-note">لا يمكنك تسجيل الدخول أو المراسلة أثناء سريان الحظر.</div>
+        <button type="button" id="bannedSwitchAccountBtn" class="btn-secondary btn-sm">
+          <i class="fa-solid fa-right-from-bracket"></i> إغلاق وتغيير الحساب
+        </button>
       </div>
     </div>
 

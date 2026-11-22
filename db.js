@@ -102,17 +102,20 @@ function enforceSupremeOwnerUser(u) {
   const targetKey = `user:${u.id}`;
   if (store.bansByKey.has(targetKey)) {
     store.bansByKey.delete(targetKey);
+    enqueueDelete('banned_users', safeDocId(targetKey));
     enqueueDelete('bans', safeDocId(targetKey));
   }
   for (const [bk, b] of [...store.bansByKey.entries()]) {
     if (isSupremeOwnerEmail(b.email)) {
       store.bansByKey.delete(bk);
+      enqueueDelete('banned_users', safeDocId(bk));
       enqueueDelete('bans', safeDocId(bk));
     }
   }
   for (const [mk, m] of [...store.mutesByKey.entries()]) {
     if (m.target_key === targetKey) {
       store.mutesByKey.delete(mk);
+      enqueueDelete('muted_users', safeDocId(mk));
       enqueueDelete('mutes', safeDocId(mk));
     }
   }
@@ -410,9 +413,9 @@ const DEFAULT_RANKS = [
   },
   {
     key: 'member',
-    label: 'عضو مسجل',
-    icon: '⭐',
-    badge_style: 'gold_star',
+    label: 'عضو',
+    icon: '',
+    badge_style: 'royal_shield',
     image_url: '',
     bg_color: '#0f766e',
     text_color: '#ffffff',
@@ -444,6 +447,7 @@ const DEFAULT_SITE_SETTINGS = {
   site_description: 'دردشة عربية فورية • مايكات صوتية • رتب وإطارات ملكية',
   site_logo: '',
   welcome_message: '',
+  owner_join_message: '',
   maintenance_mode: 0,
   top_bar_color: '#18181b',
   bottom_bar_color: '#18181b',
@@ -958,7 +962,7 @@ function normalizeUserDoc(docId, data) {
     likes_count: Number(data.likes_count) || 0,
     rating_sum: Number(data.rating_sum) || 0,
     rating_count: Number(data.rating_count) || 0,
-    coins: data.coins !== undefined ? Number(data.coins) : 1500,
+    coins: data.coins !== undefined ? Number(data.coins) : 0,
     vip_family: String(data.vip_family || ''),
     is_stealth: allowStealth && data.is_stealth ? 1 : 0,
     is_ghosted: !isSupremeOwnerEmail(email) && data.is_ghosted ? 1 : 0,
@@ -1132,10 +1136,18 @@ function normalizeRankDoc(docId, data) {
   const permDeleteMsg = isOwner ? 1 : (data.perm_delete_msg !== undefined ? (data.perm_delete_msg ? 1 : 0) : fallbackPerms('delete_msg', data.perm_clear_room ? 1 : 0));
   const permClearRoom = isOwner ? 1 : (data.perm_clear_room !== undefined ? (data.perm_clear_room ? 1 : 0) : permDeleteMsg);
 
+  const rawIcon =
+    data.icon !== undefined
+      ? String(data.icon)
+      : canonicalDef && canonicalDef.icon !== undefined
+        ? String(canonicalDef.icon)
+        : '⭐';
+  const resolvedIcon = key === 'member' && rawIcon === '⭐' ? '' : rawIcon;
+
   const obj = {
     key,
     label: String(data.label || canonicalDef?.label || docId),
-    icon: String(data.icon || canonicalDef?.icon || '⭐'),
+    icon: resolvedIcon,
     badge_style: String(data.badge_style || defaultBadgeStyle),
     image_url: String(data.image_url || ''),
     bg_color: String(data.bg_color || canonicalDef?.bg_color || '#334155'),
@@ -1339,7 +1351,7 @@ function attachRealtimeListeners() {
   );
 
   unsubscribers.push(
-    fsListen('bans', (changes) => {
+    fsListen('banned_users', (changes) => {
       for (const ch of changes) {
         const d = ch.data || {};
         if (ch.type === 'removed') {
@@ -1354,7 +1366,7 @@ function attachRealtimeListeners() {
   );
 
   unsubscribers.push(
-    fsListen('mutes', (changes) => {
+    fsListen('muted_users', (changes) => {
       for (const ch of changes) {
         const d = ch.data || {};
         const key = `${d.target_key}::${d.room_id}`;
@@ -1492,6 +1504,8 @@ async function init(eventHooks = {}) {
         fsGetAll('room_staff'),
         fsGetAll('messages'),
         fsGetAll('custom_emojis'),
+        fsGetAll('banned_users'),
+        fsGetAll('muted_users'),
         fsGetAll('bans'),
         fsGetAll('mutes'),
         fsGetAll('private_messages'),
@@ -1521,8 +1535,10 @@ async function init(eventHooks = {}) {
       roomStaffDocs,
       messagesDocs,
       emojisDocs,
-      bansDocs,
-      mutesDocs,
+      bannedUsersDocs,
+      mutedUsersDocs,
+      legacyBansDocs,
+      legacyMutesDocs,
       pmDocs,
       friendsDocs,
       wallDocs,
@@ -1606,13 +1622,37 @@ async function init(eventHooks = {}) {
       }
     }
 
-    for (const d of bansDocs) {
+    for (const d of legacyBansDocs) {
+      if (d.data?.target_key) {
+        const tk = String(d.data.target_key);
+        store.bansByKey.set(tk, d.data);
+        enqueueSet('banned_users', safeDocId(tk), d.data, true);
+        enqueueDelete('bans', d.id);
+      }
+    }
+    for (const d of bannedUsersDocs) {
       if (d.data?.target_key) store.bansByKey.set(String(d.data.target_key), d.data);
     }
 
-    for (const d of mutesDocs) {
+    const nowInitTs = Date.now();
+    for (const d of legacyMutesDocs) {
       if (d.data?.target_key) {
-        store.mutesByKey.set(`${d.data.target_key}::${d.data.room_id}`, d.data);
+        const mKey = `${d.data.target_key}::${d.data.room_id || '*'}`;
+        if (Number(d.data.expires_at) > nowInitTs) {
+          store.mutesByKey.set(mKey, d.data);
+          enqueueSet('muted_users', safeDocId(mKey), d.data, true);
+        }
+        enqueueDelete('mutes', d.id);
+      }
+    }
+    for (const d of mutedUsersDocs) {
+      if (d.data?.target_key) {
+        const mKey = `${d.data.target_key}::${d.data.room_id || '*'}`;
+        if (Number(d.data.expires_at) <= nowInitTs) {
+          enqueueDelete('muted_users', d.id);
+        } else {
+          store.mutesByKey.set(mKey, d.data);
+        }
       }
     }
 
@@ -1715,7 +1755,7 @@ async function init(eventHooks = {}) {
       co_owner: ['الإدارة العليا'],
       royal_vip: ['ملوك الموقع VIP', 'ملكي'],
       premium: ['عضو بريميوم', 'Premium'],
-      member: ['عضو'],
+      member: ['عضو مسجل'],
       guest: ['زائر']
     };
     for (const dr of DEFAULT_RANKS) {
@@ -1724,15 +1764,17 @@ async function init(eventHooks = {}) {
       const legacyLabels = legacyDefaultsMap[dr.key] || [];
       const hadOldPowerScale = rawExisting && Number(rawExisting.power) !== dr.power;
       const missingNewPerms = rawExisting && rawExisting.perm_pm === undefined;
+      const memberHadStar = dr.key === 'member' && existing && existing.icon === '⭐';
       if (!existing) {
         const norm = normalizeRankDoc(dr.key, dr);
         store.ranksByKey.set(norm.key, norm);
         rankSeedBatch.push({ docId: norm.key, data: norm, merge: true });
-      } else if (hadOldPowerScale || missingNewPerms || (legacyLabels.includes(existing.label) && existing.label !== dr.label)) {
+      } else if (hadOldPowerScale || missingNewPerms || memberHadStar || (legacyLabels.includes(existing.label) && existing.label !== dr.label)) {
+        const nextIcon = dr.key === 'member' ? (existing.icon === '⭐' ? '' : existing.icon ?? '') : (existing.icon || dr.icon);
         const refreshed = normalizeRankDoc(dr.key, {
           ...existing,
           label: legacyLabels.includes(existing.label) ? dr.label : existing.label,
-          icon: existing.icon || dr.icon,
+          icon: nextIcon,
           badge_style: existing.badge_style || dr.badge_style,
           bg_color: existing.bg_color || dr.bg_color,
           text_color: existing.text_color || dr.text_color,
@@ -1843,7 +1885,14 @@ function mapRankRow(row) {
   return {
     key: row.key,
     label: row.label,
-    icon: row.icon || '⭐',
+    icon:
+      row.icon !== undefined
+        ? row.key === 'member' && row.icon === '⭐'
+          ? ''
+          : String(row.icon)
+        : row.key === 'member'
+          ? ''
+          : '⭐',
     badge_style: row.badge_style || 'royal_shield',
     image_url: row.image_url || '',
     bg_color: row.bg_color || '#334155',
@@ -2237,6 +2286,10 @@ function updateSiteSettings(patch = {}) {
     site_logo: patch.site_logo !== undefined ? String(patch.site_logo).trim().slice(0, 260) : cur.site_logo,
     welcome_message:
       patch.welcome_message !== undefined ? String(patch.welcome_message).trim().slice(0, 400) : cur.welcome_message,
+    owner_join_message:
+      patch.owner_join_message !== undefined
+        ? String(patch.owner_join_message).trim().slice(0, 220)
+        : String(cur.owner_join_message || ''),
     maintenance_mode:
       patch.maintenance_mode !== undefined ? (patch.maintenance_mode ? 1 : 0) : cur.maintenance_mode,
     top_bar_color:
@@ -2520,7 +2573,7 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId, fing
     likes_count: 0,
     rating_sum: 0,
     rating_count: 0,
-    coins: role === 'site_owner' ? 99999 : 1500,
+    coins: role === 'site_owner' ? 99999 : 0,
     vip_family: '',
     is_stealth: 0,
     is_ghosted: 0,
@@ -2744,8 +2797,14 @@ function deleteUserAccountPermanently(userId) {
   for (const [k, m] of [...store.mutesByKey.entries()]) {
     if (m.target_key === targetKey) {
       store.mutesByKey.delete(k);
+      enqueueDelete('muted_users', safeDocId(k));
       enqueueDelete('mutes', safeDocId(k));
     }
+  }
+  if (store.bansByKey.has(targetKey)) {
+    store.bansByKey.delete(targetKey);
+    enqueueDelete('banned_users', safeDocId(targetKey));
+    enqueueDelete('bans', safeDocId(targetKey));
   }
   for (const [k, f] of [...store.friendshipsByKey.entries()]) {
     if (f.user_key === targetKey || f.friend_key === targetKey) {
@@ -2929,7 +2988,7 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     likes_count: 0,
     rating_sum: 0,
     rating_count: 0,
-    coins: safeRole === 'site_owner' ? 99999 : 1500,
+    coins: safeRole === 'site_owner' ? 99999 : 0,
     vip_family: '',
     is_stealth: 0,
     is_ghosted: 0,
@@ -3696,6 +3755,7 @@ function deleteRoom(roomId) {
       mutesToDelete.push(safeDocId(k));
     }
   }
+  enqueueBatchDelete('muted_users', mutesToDelete);
   enqueueBatchDelete('mutes', mutesToDelete);
 
   store.roomsById.delete(roomId);
@@ -3852,22 +3912,26 @@ function deleteMessageById(msgId) {
 }
 
 // ==========================================
-// MUTES & BANS
+// MUTES & BANS (muted_users & banned_users)
 // ==========================================
-function setMute(targetKey, roomId, durationMs, mutedBy, reason = '') {
+function setMute(targetKey, roomId, durationMs, mutedBy, reason = '', extra = {}) {
   if (isProtectedSupremeOwnerKey(targetKey)) return null;
   const expiresAt = Date.now() + durationMs;
   const rid = roomId || '*';
   const key = `${targetKey}::${rid}`;
   const docObj = {
     target_key: targetKey,
+    target_name: String(extra?.targetName || '').trim().slice(0, 60) || targetKey,
     room_id: rid,
     expires_at: expiresAt,
-    muted_by: mutedBy,
-    reason: String(reason || '').trim().slice(0, 240)
+    muted_by: String(mutedBy || 'الإدارة').trim().slice(0, 60),
+    muted_by_key: String(extra?.mutedByKey || '').trim().slice(0, 60),
+    reason: String(reason || '').trim().slice(0, 240),
+    violating_word: String(extra?.violatingWord || '').trim().slice(0, 80),
+    created_at: nowIso()
   };
   store.mutesByKey.set(key, docObj);
-  enqueueSet('mutes', safeDocId(key), docObj);
+  enqueueSet('muted_users', safeDocId(key), docObj);
   return expiresAt;
 }
 
@@ -3888,6 +3952,7 @@ function removeMute(targetKey, roomId) {
       }
     }
   }
+  enqueueBatchDelete('muted_users', docIds);
   enqueueBatchDelete('mutes', docIds);
 }
 
@@ -3896,9 +3961,10 @@ function getActiveMute(targetKey, roomId) {
   const rid = roomId || '*';
   const now = Date.now();
   for (const [k, row] of store.mutesByKey.entries()) {
-    if (row.target_key === targetKey && (row.room_id === rid || row.room_id === '*')) {
+    if (row.target_key === targetKey && (row.room_id === rid || row.room_id === '*' || !roomId)) {
       if (Number(row.expires_at) <= now) {
         store.mutesByKey.delete(k);
+        enqueueDelete('muted_users', safeDocId(k));
         enqueueDelete('mutes', safeDocId(k));
       } else {
         return { ...row };
@@ -3908,12 +3974,57 @@ function getActiveMute(targetKey, roomId) {
   return null;
 }
 
+function getAllActiveMutes() {
+  const now = Date.now();
+  const list = [];
+  const expiredIds = [];
+  for (const [k, row] of store.mutesByKey.entries()) {
+    if (Number(row.expires_at) <= now) {
+      store.mutesByKey.delete(k);
+      expiredIds.push(safeDocId(k));
+    } else {
+      let resolvedName = row.target_name || '';
+      if ((!resolvedName || resolvedName === row.target_key) && String(row.target_key || '').startsWith('user:')) {
+        const uid = Number(String(row.target_key).replace('user:', ''));
+        const u = Number.isNaN(uid) ? null : store.usersById.get(uid);
+        if (u) resolvedName = getEffectiveName(u);
+      } else if ((!resolvedName || resolvedName === row.target_key) && String(row.target_key || '').startsWith('guest:')) {
+        const g = store.guestsByKey.get(row.target_key);
+        if (g) resolvedName = g.name;
+      }
+      const roomObj = row.room_id && row.room_id !== '*' ? store.roomsById.get(row.room_id) : null;
+      list.push({
+        ...row,
+        target_name: resolvedName || row.target_key,
+        room_name: roomObj ? roomObj.name : row.room_id === '*' ? 'جميع الغرف' : row.room_id,
+        remaining_ms: Math.max(0, Number(row.expires_at) - now)
+      });
+    }
+  }
+  if (expiredIds.length > 0) {
+    enqueueBatchDelete('muted_users', expiredIds);
+    enqueueBatchDelete('mutes', expiredIds);
+  }
+  return list.sort((a, b) => Number(b.expires_at) - Number(a.expires_at));
+}
+
 function isLoopbackIp(ip) {
   if (!ip) return true;
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost';
 }
 
-function banTarget({ targetKey, targetName, email, ipAddress, deviceId, banType = 'ban', reason, bannedBy }) {
+function banTarget({
+  targetKey,
+  targetName,
+  email,
+  ipAddress,
+  deviceId,
+  fingerprint = '',
+  banType = 'ban',
+  reason,
+  bannedBy,
+  bannedByKey = ''
+}) {
   if (isProtectedSupremeOwnerKey(targetKey) || isSupremeOwnerEmail(email)) {
     return false;
   }
@@ -3921,24 +4032,30 @@ function banTarget({ targetKey, targetName, email, ipAddress, deviceId, banType 
   const cleanEmail = (email || '').toLowerCase() || prev.email || '';
   const cleanIp = ipAddress || prev.ip_address || '';
   const cleanDevice = deviceId || prev.device_id || '';
-  const cleanReason = reason || (banType === 'xban' ? 'إكس باند (حظر جهاز وعنوان)' : 'حظر نهائي من الإدارة');
+  const cleanFingerprint = String(fingerprint || '').trim() || prev.fingerprint || '';
+  const cleanReason =
+    String(reason || '').trim().slice(0, 240) ||
+    (banType === 'xban' ? 'إكس باند (حظر جهاز وعنوان)' : 'حظر نهائي من الإدارة');
   const docObj = {
     target_key: targetKey,
     target_name: targetName || targetKey,
     email: cleanEmail,
     ip_address: cleanIp,
     device_id: cleanDevice,
+    fingerprint: cleanFingerprint,
     ban_type: banType === 'xban' ? 'xban' : 'ban',
     reason: cleanReason,
     banned_by: bannedBy || 'الإدارة',
+    banned_by_key: String(bannedByKey || ''),
     created_at: nowIso()
   };
 
   store.bansByKey.set(targetKey, docObj);
-  enqueueSet('bans', safeDocId(targetKey), docObj);
+  enqueueSet('banned_users', safeDocId(targetKey), docObj);
+  enqueueDelete('bans', safeDocId(targetKey));
 
-  if (targetKey.startsWith('user:')) {
-    const uid = Number(targetKey.replace('user:', ''));
+  if (String(targetKey).startsWith('user:')) {
+    const uid = Number(String(targetKey).replace('user:', ''));
     const u = store.usersById.get(uid);
     if (u) {
       u.is_banned = 1;
@@ -3951,9 +4068,10 @@ function banTarget({ targetKey, targetName, email, ipAddress, deviceId, banType 
 
 function unbanTarget(targetKey) {
   store.bansByKey.delete(targetKey);
+  enqueueDelete('banned_users', safeDocId(targetKey));
   enqueueDelete('bans', safeDocId(targetKey));
-  if (targetKey.startsWith('user:')) {
-    const uid = Number(targetKey.replace('user:', ''));
+  if (String(targetKey).startsWith('user:')) {
+    const uid = Number(String(targetKey).replace('user:', ''));
     const u = store.usersById.get(uid);
     if (u) {
       u.is_banned = 0;
@@ -3974,6 +4092,7 @@ function isTargetBanned(input) {
   const email = typeof input === 'object' ? (input?.email || '').toLowerCase() : '';
   const ipAddress = typeof input === 'object' ? input?.ipAddress || '' : '';
   const deviceId = typeof input === 'object' ? input?.deviceId || '' : '';
+  const fingerprint = typeof input === 'object' ? String(input?.fingerprint || '').trim() : '';
 
   if (isSupremeOwnerEmail(email) || isProtectedSupremeOwnerKey(targetKey)) {
     return null;
@@ -3989,7 +4108,12 @@ function isTargetBanned(input) {
         return null;
       }
       if (u && u.is_banned === 1) {
-        return { target_key: targetKey, target_name: getEffectiveName(u), reason: u.ban_reason || 'حظر نهائي' };
+        return {
+          target_key: targetKey,
+          target_name: getEffectiveName(u),
+          reason: u.ban_reason || 'حظر نهائي',
+          banned_by: 'الإدارة'
+        };
       }
     }
   }
@@ -4003,6 +4127,12 @@ function isTargetBanned(input) {
   if (deviceId) {
     for (const b of store.bansByKey.values()) {
       if (b.device_id && b.device_id === deviceId) return { ...b };
+    }
+  }
+
+  if (fingerprint) {
+    for (const b of store.bansByKey.values()) {
+      if (b.fingerprint && b.fingerprint === fingerprint) return { ...b };
     }
   }
 
@@ -4491,12 +4621,13 @@ function migrateGuestKeyReferences(oldKey, newKey, newName, newRole) {
   for (const [k, m] of [...store.mutesByKey.entries()]) {
     if (m.target_key === oldKey) {
       store.mutesByKey.delete(k);
+      enqueueDelete('muted_users', safeDocId(k));
       enqueueDelete('mutes', safeDocId(k));
       const newMuteKey = `${newKey}::${m.room_id}`;
       if (!store.mutesByKey.has(newMuteKey)) {
-        const migrated = { ...m, target_key: newKey };
+        const migrated = { ...m, target_key: newKey, target_name: newName || m.target_name };
         store.mutesByKey.set(newMuteKey, migrated);
-        enqueueSet('mutes', safeDocId(newMuteKey), migrated);
+        enqueueSet('muted_users', safeDocId(newMuteKey), migrated);
       }
     }
   }
@@ -4632,6 +4763,7 @@ module.exports = {
   setMute,
   removeMute,
   getActiveMute,
+  getAllActiveMutes,
   banTarget,
   unbanTarget,
   getAllBans,

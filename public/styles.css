@@ -4883,7 +4883,7 @@ textarea:focus {
 }
 
 /* ========================================================
-   EXCLUSIVE OWNER IDENTITY: "سيد المجرة والزمن" (GALAXY & TIME)
+   EXCLUSIVE OWNER IDENTITY: ROYAL FOUNDER ECLIPSE
 ======================================================== */
 @keyframes eclipseCoronaRotate {
   from { transform: rotate(0deg); }
@@ -7592,4 +7592,250 @@ textarea:focus {
 .news-card .muted {
   color: #94a3b8;
 }
+
+/* ==========================================
+   PHASE 1: SECURITY, BAN OVERLAY, MUTE COUNTDOWN, OWNER ALERTS & GUEST REGISTER
+   ========================================== */
+.banned-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(circle at top, rgba(127, 29, 29, 0.92), rgba(2, 6, 23, 0.97));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.banned-fullscreen-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 28px 22px;
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 40px rgba(239, 68, 68, 0.18);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #f8fafc;
+}
+
+.banned-fullscreen-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.48);
+  color: #f87171;
+  font-size: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.banned-fullscreen-card h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fecaca;
+}
+
+.banned-reason-msg {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.7;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
+  width: 100%;
+}
+
+.banned-meta-note {
+  font-size: 12.5px;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.muted-alert-banner {
+  width: 100%;
+  max-width: 100%;
+  background: linear-gradient(90deg, rgba(153, 27, 27, 0.94), rgba(185, 28, 28, 0.92));
+  border-top: 1px solid rgba(252, 165, 165, 0.45);
+  border-bottom: 1px solid rgba(252, 165, 165, 0.35);
+  color: #fef2f2;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 41;
+}
+
+.muted-alert-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  flex-wrap: wrap;
+}
+
+.muted-alert-main i {
+  color: #fecaca;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.muted-countdown-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(254, 202, 202, 0.48);
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.owner-mod-alert-banner {
+  margin: 6px 10px 0;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.94), rgba(127, 29, 29, 0.92));
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+  color: #fef3c7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 35;
+}
+
+.owner-mod-alert-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.owner-mod-alert-content > i {
+  color: #fbbf24;
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.owner-mod-alert-body {
+  color: #f8fafc;
+  font-size: 12px;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.owner-alert-word-pill {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.35);
+  border: 1px solid rgba(252, 165, 165, 0.55);
+  color: #fecaca;
+  font-weight: 800;
+  font-size: 11px;
+}
+
+.guest-register-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.92), rgba(37, 99, 235, 0.9));
+  color: #f0f9ff;
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
+}
+
+.guest-register-chat-btn:hover {
+  filter: brightness(1.1);
+}
+
+.guest-reg-drop-item {
+  color: #38bdf8 !important;
+  font-weight: 800;
+}
+
+.guest-upgrade-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.22), rgba(30, 41, 59, 0.85));
+  border: 1px solid rgba(56, 189, 248, 0.38);
+}
+
+.guest-upgrade-card strong {
+  display: block;
+  color: #e0f2fe;
+  font-size: 13.5px;
+}
+
+.guest-upgrade-card small {
+  display: block;
+  color: #bae6fd;
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+@media (max-width: 480px) {
+  .cody-input-bar {
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .guest-register-chat-btn {
+    height: 34px;
+    padding: 0 8px;
+    font-size: 10.5px;
+    gap: 4px;
+  }
+
+  .muted-alert-banner {
+    padding: 7px 9px;
+    font-size: 11.5px;
+  }
+
+  .guest-upgrade-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 
