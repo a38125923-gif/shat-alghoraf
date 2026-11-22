@@ -483,7 +483,7 @@
             <button type="button" class="rtl-back-pill cover-close-x-btn" data-close-modal="customizeModal" title="رجوع">
               <i class="fa-solid fa-arrow-right"></i> <span>رجوع</span>
             </button>
-            <button type="button" id="custCoverPreviewToggleBtn" class="hero-circle-glass-btn" title="معاينة صورة الغلاف">
+            <button type="button" id="custCoverPreviewToggleBtn" class="hero-circle-glass-btn" title="معاينة البطاقة وصورة الغلاف">
               <i class="fa-solid fa-eye"></i>
             </button>
             <button type="button" id="custDeleteCoverBtn" class="hero-circle-glass-btn danger-glass" title="حذف صورة الغلاف">
@@ -527,6 +527,7 @@
           </div>
           <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
           <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
+          <div id="custPreviewStatus" class="cust-preview-status hidden"></div>
           <div id="custPreviewBio" class="cust-preview-bio"></div>
           <div id="custMiniMusicPlayer" class="profile-mini-music-bar">
             <button type="button" id="custMiniMusicPlayBtn" class="mini-music-play-btn" title="تشغيل/إيقاف موسيقى الملف">
@@ -607,9 +608,26 @@
                   <input type="text" id="custCountryInput" maxlength="40" placeholder="مثال: السعودية، مصر، العراق..." />
                 </div>
                 <div>
-                  <label>النبذة / الحالة الشخصية</label>
-                  <input type="text" id="custBioInput" maxlength="160" placeholder="اكتب نبذة قصيرة عنك..." />
+                  <label>حالتي الآن</label>
+                  <input type="text" id="custStatusInput" maxlength="80" placeholder="مثال: متاح للدردشة ✨ أو أستمع للموسيقى..." />
                 </div>
+              </div>
+
+              <div class="cust-status-presets-wrap">
+                <span class="muted" style="font-size:11.5px;display:block;margin-bottom:5px;"><i class="fa-solid fa-face-smile"></i> اختيار سريع للحالة:</span>
+                <div id="custStatusPresets" class="cust-status-chips-row">
+                  <button type="button" class="cust-status-chip" data-status="🟢 متاح للدردشة">🟢 متاح للدردشة</button>
+                  <button type="button" class="cust-status-chip" data-status="🎧 أستمع للموسيقى">🎧 أستمع للموسيقى</button>
+                  <button type="button" class="cust-status-chip" data-status="☕ رايق ومزاج عالي">☕ رايق</button>
+                  <button type="button" class="cust-status-chip" data-status="⛔ مشغول حالياً">⛔ مشغول</button>
+                  <button type="button" class="cust-status-chip" data-status="✈️ مسافر">✈️ مسافر</button>
+                  <button type="button" class="cust-status-chip" data-status="">✕ مسح الحالة</button>
+                </div>
+              </div>
+
+              <div style="margin-top:8px;">
+                <label>رسالة معلوماتي (نبذة عني تظهر في البطاقة)</label>
+                <textarea id="custBioInput" rows="2" maxlength="160" placeholder="اكتب رسالة معلوماتي الخاصة بك لتظهر للجميع في بطاقتك..."></textarea>
               </div>
             </div>
 

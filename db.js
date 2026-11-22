@@ -5,6 +5,7 @@ const {
   initializeFirestore,
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   deleteDoc,
@@ -692,6 +693,21 @@ async function fsGetAll(colName) {
   return snap.docs.map((d) => ({ id: d.id, data: d.data() }));
 }
 
+async function fsGetDoc(colName, docId) {
+  if (fsMode === 'sqlite') {
+    const row = sqliteDb
+      .prepare('SELECT data FROM kv_docs WHERE col = ? AND doc_id = ?')
+      .get(String(colName), String(docId));
+    return row ? JSON.parse(row.data) : null;
+  }
+  if (fsMode === 'admin') {
+    const snap = await fsAdminDb.collection(colName).doc(String(docId)).get();
+    return snap.exists ? snap.data() : null;
+  }
+  const snap = await getDoc(doc(collection(fsClientDb, colName), String(docId)));
+  return snap.exists() ? snap.data() : null;
+}
+
 async function fsSetDoc(colName, docId, data, merge = false) {
   const cleanData = JSON.parse(JSON.stringify(data));
   if (fsMode === 'sqlite') {
@@ -867,6 +883,7 @@ const store = {
   adminLogsById: new Map(),
   pmLinkAlertsById: new Map(),
   notificationsById: new Map(),
+  profileMediaById: new Map(),
   counters: {
     users: 0,
     messages: 0,
@@ -954,6 +971,7 @@ function normalizeUserDoc(docId, data) {
     vip_wings: data.vip_wings ? 1 : 0,
     profile_music: String(data.profile_music || ''),
     bio: String(data.bio || ''),
+    status_text: String(data.status_text || ''),
     age: String(data.age || ''),
     gender: String(data.gender || ''),
     country: String(data.country || ''),
@@ -2352,13 +2370,13 @@ function updateSiteSettings(patch = {}) {
       patch.quiz_reward_coins !== undefined
         ? Math.max(10, Math.min(5000, Number(patch.quiz_reward_coins) || 100))
         : Math.max(10, Math.min(5000, Number(cur.quiz_reward_coins) || 100)),
-    quiz_msg_style:
-      patch.quiz_msg_style !== undefined &&
-      ['royal_gold', 'cyber_blue', 'emerald_neon', 'crimson_fire'].includes(String(patch.quiz_msg_style))
-        ? String(patch.quiz_msg_style)
-        : ['royal_gold', 'cyber_blue', 'emerald_neon', 'crimson_fire'].includes(String(cur.quiz_msg_style))
-          ? String(cur.quiz_msg_style)
-          : 'royal_gold',
+    quiz_msg_style: (() => {
+      const legacyMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'classic_compact' };
+      const allowed = ['royal_gold', 'glass_modern', 'cyber_blue', 'emerald_neon', 'crimson_fire', 'classic_compact'];
+      const pick = patch.quiz_msg_style !== undefined ? String(patch.quiz_msg_style) : String(cur.quiz_msg_style || 'royal_gold');
+      const normalized = legacyMap[pick] || pick;
+      return allowed.includes(normalized) ? normalized : 'royal_gold';
+    })(),
     quiz_custom_questions:
       patch.quiz_custom_questions !== undefined
         ? (Array.isArray(patch.quiz_custom_questions) ? patch.quiz_custom_questions : [])
@@ -2865,6 +2883,7 @@ function updateUserCustomization(
     vipWings,
     profileMusic,
     bio,
+    statusText,
     vipFamily,
     age,
     gender,
@@ -2920,6 +2939,7 @@ function updateUserCustomization(
     vip_wings: vipWings !== undefined ? (vipWings ? 1 : 0) : current.vip_wings ? 1 : 0,
     profile_music: profileMusic !== undefined ? String(profileMusic || '').trim().slice(0, 300) : current.profile_music || '',
     bio: bio !== undefined ? String(bio || '').trim().slice(0, 160) : current.bio || '',
+    status_text: statusText !== undefined ? String(statusText || '').trim().slice(0, 80) : current.status_text || '',
     vip_family: vipFamily !== undefined ? vipFamily.trim().slice(0, 24) : current.vip_family || '',
     age: age !== undefined ? String(age || '').trim().slice(0, 16) : current.age || '',
     gender: gender !== undefined ? String(gender || '').trim().slice(0, 20) : current.gender || '',
@@ -3788,6 +3808,7 @@ function addMessage({
   nameAnimSpeed,
   vipWings,
   isAdminNotice,
+  quizStyle,
   isGift,
   isGhostOnly,
   giftData,
@@ -3827,6 +3848,7 @@ function addMessage({
     name_anim_speed: nameAnimSpeed || 'normal',
     vip_wings: vipWings ? 1 : 0,
     is_admin_notice: Boolean(isAdminNotice),
+    quiz_style: quizStyle ? String(quizStyle).slice(0, 32) : '',
     is_gift: Boolean(isGift),
     is_ghost_only: Boolean(isGhostOnly),
     gift_data: giftData || null,
@@ -4795,5 +4817,57 @@ module.exports = {
   getNotificationsForUser,
   getUnreadNotificationCount,
   markNotificationsRead,
-  migrateGuestKeyReferences
+  migrateGuestKeyReferences,
+  async saveProfileMedia(mediaId, { mimeType, dataBase64, kind = 'avatar', userId = null } = {}) {
+    const cleanId = safeDocId(String(mediaId || ''));
+    if (!cleanId || !dataBase64) return false;
+    const record = {
+      id: cleanId,
+      mimeType: String(mimeType || 'image/jpeg').slice(0, 64),
+      dataBase64: String(dataBase64),
+      kind: kind === 'cover' ? 'cover' : 'avatar',
+      userId: userId ? Number(userId) : null,
+      updatedAt: nowIso()
+    };
+    store.profileMediaById.set(cleanId, record);
+    if (store.profileMediaById.size > 250) {
+      const oldestKey = store.profileMediaById.keys().next().value;
+      if (oldestKey) store.profileMediaById.delete(oldestKey);
+    }
+    try {
+      await fsSetDoc('profile_media', cleanId, record, false);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  async getProfileMedia(mediaId) {
+    const cleanId = safeDocId(String(mediaId || ''));
+    if (!cleanId) return null;
+    if (store.profileMediaById.has(cleanId)) return store.profileMediaById.get(cleanId);
+    try {
+      const docData = await fsGetDoc('profile_media', cleanId);
+      if (docData && docData.dataBase64) {
+        store.profileMediaById.set(cleanId, docData);
+        if (store.profileMediaById.size > 250) {
+          const oldestKey = store.profileMediaById.keys().next().value;
+          if (oldestKey) store.profileMediaById.delete(oldestKey);
+        }
+        return docData;
+      }
+    } catch {
+      // ignore read failure
+    }
+    return null;
+  },
+  async deleteProfileMedia(mediaId) {
+    const cleanId = safeDocId(String(mediaId || ''));
+    if (!cleanId) return;
+    store.profileMediaById.delete(cleanId);
+    try {
+      await fsDeleteDoc('profile_media', cleanId);
+    } catch {
+      // ignore delete failure
+    }
+  }
 };

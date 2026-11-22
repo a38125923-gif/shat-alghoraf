@@ -459,6 +459,7 @@ function mapUserRow(u) {
     vipWings: Boolean(u.vip_wings),
     profileMusic: u.profile_music || '',
     bio: u.bio || '',
+    statusText: u.status_text || '',
     age: u.age || '',
     gender: u.gender || '',
     country: u.country || '',
@@ -919,6 +920,7 @@ function getRoomUsersList(roomId) {
         vipWings: Boolean(entry.vipWings),
         profileMusic: entry.profileMusic || '',
         bio: entry.bio || '',
+        statusText: entry.statusText || '',
         age: entry.age || '',
         gender: entry.gender || '',
         country: entry.country || '',
@@ -970,6 +972,7 @@ function buildGlobalOnlineUsers() {
       vipWings: Boolean(entry.vipWings),
       profileMusic: entry.profileMusic || '',
       bio: entry.bio || '',
+      statusText: entry.statusText || '',
       age: entry.age || '',
       gender: entry.gender || '',
       country: entry.country || '',
@@ -1026,6 +1029,7 @@ function buildPersistentMembersList() {
       vipWings: Boolean(u.vip_wings),
       profileMusic: u.profile_music || '',
       bio: u.bio || '',
+      statusText: u.status_text || '',
       age: u.age || '',
       gender: u.gender || '',
       country: u.country || '',
@@ -1185,6 +1189,7 @@ function syncUserAcrossSockets(io, userId) {
         vipWings: mapped.vipWings,
         profileMusic: mapped.profileMusic,
         bio: mapped.bio,
+        statusText: mapped.statusText,
         age: mapped.age,
         gender: mapped.gender,
         country: mapped.country,
@@ -1531,17 +1536,60 @@ app.get('/api/settings/public', (_req, res) => {
 // ==========================================
 // UPLOAD ENDPOINTS
 // ==========================================
+app.get('/api/profile-media/:id', async (req, res) => {
+  const cleanId = String(req.params.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!cleanId) return res.status(404).end();
+  const media = await db.getProfileMedia(cleanId);
+  if (!media || !media.dataBase64) return res.status(404).end();
+  const buf = Buffer.from(String(media.dataBase64), 'base64');
+  res.setHeader('Content-Type', media.mimeType || 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  return res.send(buf);
+});
+
+async function persistUploadedProfileImage(req, kind) {
+  const fallbackUrl = `/uploads/${kind === 'cover' ? 'covers' : 'avatars'}/${req.file.filename}`;
+  let finalUrl = fallbackUrl;
+  let savedInFirebase = false;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    // Keep within Firestore 1 MB document size limit (~720 KB raw -> ~960 KB base64)
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `${kind}_${req.authUser.userId}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/jpeg',
+        dataBase64: buf.toString('base64'),
+        kind,
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        savedInFirebase = true;
+      }
+    }
+  } catch {
+    // fallback to disk upload path
+  }
+  const prevUrl = String(kind === 'cover' ? req.authUser.coverUrl || '' : req.authUser.avatarUrl || '');
+  if (prevUrl.startsWith('/api/profile-media/')) {
+    const oldMediaId = prevUrl.replace('/api/profile-media/', '').split('?')[0];
+    if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+  }
+  return { url: finalUrl, savedInFirebase };
+}
+
 app.post('/api/upload/avatar', requireRegistered, (req, res, next) => {
   if (!canPassSettingThreshold(req.authUser, 'min_rank_avatar', 'member')) {
     return res.status(403).json({ error: 'تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.' });
   }
   return next();
-}, uploadAvatar.single('file'), (req, res) => {
+}, uploadAvatar.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
-  const url = `/uploads/avatars/${req.file.filename}`;
-  db.updateUserCustomization(req.authUser.userId, { avatarUrl: url });
+  const { url, savedInFirebase } = await persistUploadedProfileImage(req, 'avatar');
+  const updated = db.updateUserCustomization(req.authUser.userId, { avatarUrl: url });
   syncUserAcrossSockets(io, req.authUser.userId);
-  return res.json({ url });
+  await db.flushWrites();
+  return res.json({ ok: true, url, savedInFirebase, user: updated ? mapUserRow(updated) : null });
 });
 
 app.post('/api/upload/cover', requireRegistered, (req, res, next) => {
@@ -1549,15 +1597,21 @@ app.post('/api/upload/cover', requireRegistered, (req, res, next) => {
     return res.status(403).json({ error: 'تغيير صورة الغلاف مقيّد حالياً لرتبة أعلى من رتبتك.' });
   }
   return next();
-}, uploadCover.single('file'), (req, res) => {
+}, uploadCover.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الغلاف.' });
-  const url = `/uploads/covers/${req.file.filename}`;
-  db.updateUserCustomization(req.authUser.userId, { coverUrl: url });
+  const { url, savedInFirebase } = await persistUploadedProfileImage(req, 'cover');
+  const updated = db.updateUserCustomization(req.authUser.userId, { coverUrl: url });
   syncUserAcrossSockets(io, req.authUser.userId);
-  return res.json({ url });
+  await db.flushWrites();
+  return res.json({ ok: true, url, savedInFirebase, user: updated ? mapUserRow(updated) : null });
 });
 
 app.delete('/api/profile/avatar', requireRegistered, async (req, res) => {
+  const prevUrl = String(req.authUser.avatarUrl || '');
+  if (prevUrl.startsWith('/api/profile-media/')) {
+    const oldMediaId = prevUrl.replace('/api/profile-media/', '').split('?')[0];
+    if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+  }
   const updated = db.updateUserCustomization(req.authUser.userId, { avatarUrl: '' });
   if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
   syncUserAcrossSockets(io, req.authUser.userId);
@@ -1566,6 +1620,11 @@ app.delete('/api/profile/avatar', requireRegistered, async (req, res) => {
 });
 
 app.delete('/api/profile/cover', requireRegistered, async (req, res) => {
+  const prevUrl = String(req.authUser.coverUrl || '');
+  if (prevUrl.startsWith('/api/profile-media/')) {
+    const oldMediaId = prevUrl.replace('/api/profile-media/', '').split('?')[0];
+    if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+  }
   const updated = db.updateUserCustomization(req.authUser.userId, { coverUrl: '' });
   if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
   syncUserAcrossSockets(io, req.authUser.userId);
@@ -1866,6 +1925,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     vipWings,
     profileMusic,
     bio,
+    statusText,
     vipFamily,
     age,
     gender,
@@ -1956,6 +2016,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     vipWings,
     profileMusic,
     bio,
+    statusText,
     vipFamily,
     age,
     gender,
@@ -3209,16 +3270,23 @@ function getEffectiveQuizBank() {
 }
 
 function getQuizStylePalette(styleKey) {
-  switch (String(styleKey || 'royal_gold')) {
+  const legacyMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'classic_compact' };
+  const raw = String(styleKey || 'royal_gold');
+  const key = legacyMap[raw] || raw;
+  switch (key) {
+    case 'glass_modern':
+      return { key: 'glass_modern', textColor: '#e0f2fe', bgColor: '#0f172a' };
     case 'cyber_blue':
-      return { textColor: '#bae6fd', bgColor: '#0c4a6e' };
+      return { key: 'cyber_blue', textColor: '#7dd3fc', bgColor: '#0c4a6e' };
     case 'emerald_neon':
-      return { textColor: '#a7f3d0', bgColor: '#064e3b' };
+      return { key: 'emerald_neon', textColor: '#6ee7b7', bgColor: '#064e3b' };
     case 'crimson_fire':
-      return { textColor: '#fecdd3', bgColor: '#881337' };
+      return { key: 'crimson_fire', textColor: '#fda4af', bgColor: '#881337' };
+    case 'classic_compact':
+      return { key: 'classic_compact', textColor: '#f1f5f9', bgColor: '#334155' };
     case 'royal_gold':
     default:
-      return { textColor: '#fde68a', bgColor: '#1e293b' };
+      return { key: 'royal_gold', textColor: '#fde68a', bgColor: '#1e293b' };
   }
 }
 
@@ -3234,6 +3302,7 @@ function emitQuizBotMessage(roomId, content, textColor = '', nameBgColor = '') {
     textColor: textColor || palette.textColor,
     nameBgColor: nameBgColor || palette.bgColor,
     isAdminNotice: true,
+    quizStyle: palette.key,
     msgType: 'text',
     content
   });
@@ -3243,6 +3312,7 @@ function emitQuizBotMessage(roomId, content, textColor = '', nameBgColor = '') {
 function emitQuizBotState(roomId) {
   const bot = roomQuizBots.get(roomId);
   const settings = db.getSiteSettings();
+  const palette = getQuizStylePalette(settings.quiz_msg_style);
   io.to(`room:${roomId}`).emit('quiz_bot_state', {
     roomId,
     active: Boolean(bot && bot.active),
@@ -3251,7 +3321,8 @@ function emitQuizBotState(roomId) {
     enabledSetting: Number(settings.quiz_bot_enabled) !== 0,
     intervalSec: Number(settings.quiz_interval_sec) || 25,
     hintSec: Number(settings.quiz_hint_sec) || 12,
-    rewardCoins: Number(settings.quiz_reward_coins) || 100
+    rewardCoins: Number(settings.quiz_reward_coins) || 100,
+    msgStyle: palette.key
   });
 }
 

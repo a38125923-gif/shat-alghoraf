@@ -2117,9 +2117,10 @@
   // ==========================================
   function createMessageRowElement(msg) {
     const row = document.createElement('div');
-    const isAdminNotice = Boolean(msg.is_admin_notice);
+    const isQuizBotMsg = msg.sender_key === 'system:quizbot';
+    const isAdminNotice = Boolean(msg.is_admin_notice) && !isQuizBotMsg;
     const isGift = Boolean(msg.is_gift);
-    const isOwnerSender = msg.sender_role === 'site_owner' && msg.sender_key !== 'system:quizbot' && msg.sender_key !== 'system:official';
+    const isOwnerSender = msg.sender_role === 'site_owner' && !isQuizBotMsg && msg.sender_key !== 'system:official';
     const rawContent = String(msg.content || '');
     const myName = String(state.user?.name || '').trim();
     const myUser = String(state.user?.username || '').trim();
@@ -2130,6 +2131,10 @@
 
     const timeStr = formatTimeAgo(msg.created_at_ms || msg.created_at);
     const msgFontSize = Math.max(13, Math.min(17, Number(msg.font_size || msg.fontSize) || 14));
+
+    const legacyQuizMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'classic_compact' };
+    const rawQuizStyle = String(msg.quiz_style || state.settings?.quiz_msg_style || 'royal_gold');
+    const quizStyleKey = legacyQuizMap[rawQuizStyle] || rawQuizStyle;
 
     let inlineTextHtml = '';
     let mediaBelowHtml = '';
@@ -2143,7 +2148,11 @@
     } else {
       const rendered = renderMessageTextWithMentions(msg.content);
       hasMention = rendered.hasMention;
-      const prefix = isAdminNotice ? '<span class="admin-notice-prefix">إشعار الإدارة</span>' : '';
+      const prefix = isQuizBotMsg
+        ? '<span class="quiz-bot-badge">مسابقة</span>'
+        : isAdminNotice
+          ? '<span class="admin-notice-prefix">إشعار الإدارة</span>'
+          : '';
       const rawTxtColor = String(msg.text_color || '').trim();
       const readableColor = isAdminNotice
         ? '#fecaca'
@@ -2160,7 +2169,7 @@
     const rankTierClass = isOwnerSender ? 'rank-tier-owner' : tierMeta.msgClass;
     const rankGlowColor = isOwnerSender ? 'rgba(251, 191, 36, 0.62)' : tierMeta.glowColor;
 
-    row.className = `cody-msg-row ${tierMeta.tierClass}${useGlassBubbles ? ` glass-bubble-msg ${rankTierClass}` : ''}${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${useOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : (isOwnerSender && !isAdminNotice ? ' owner-gold-glass-fallback' : '')}`;
+    row.className = `cody-msg-row ${tierMeta.tierClass}${useGlassBubbles ? ` glass-bubble-msg ${rankTierClass}` : ''}${isQuizBotMsg ? ` quiz-bot-msg-card quiz-style-${escapeHtml(quizStyleKey)}` : ''}${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${useOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : (isOwnerSender && !isAdminNotice ? ' owner-gold-glass-fallback' : '')}`;
     if (useGlassBubbles && !useOwnerPortal) {
       row.style.setProperty('--msg-rank-glow', rankGlowColor);
     }
@@ -2591,6 +2600,7 @@
     let u = { ...(liveMatch || {}), ...rawUser };
     if (!u.profileMusic && liveMatch?.profileMusic) u.profileMusic = liveMatch.profileMusic;
     if (!u.bio && liveMatch?.bio) u.bio = liveMatch.bio;
+    if (!u.statusText && liveMatch?.statusText) u.statusText = liveMatch.statusText;
     if (!u.vipFamily && liveMatch?.vipFamily) u.vipFamily = liveMatch.vipFamily;
     if (!u.coverUrl && liveMatch?.coverUrl) u.coverUrl = liveMatch.coverUrl;
     if (!u.profileBgEffect && liveMatch?.profileBgEffect) u.profileBgEffect = liveMatch.profileBgEffect;
@@ -2655,14 +2665,14 @@
     $('quickUserBody').innerHTML = `
       <div class="profile-luxury-card ${escapeHtml(bgEffectClass)}${isTargetOwnerGalaxy ? ' owner-black-gold-theme owner-galaxy-theme' : ''}">
         <div class="${isTargetOwnerGalaxy ? 'owner-cosmic-bg-layer' : 'profile-bg-effect-layer'}"></div>
-        <div class="profile-cover-hero" id="quCoverHero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}')` : ''}">
+        <div class="profile-cover-hero${u.coverUrl ? ' has-cover-img' : ''}" id="quCoverHero" style="${u.coverUrl ? `background-image:url('${escapeHtml(u.coverUrl)}');background-size:cover;background-position:center;width:100%;` : ''}">
           ${isTargetOwnerGalaxy ? '<div class="owner-cosmic-cover-vortex" aria-hidden="true"></div>' : ''}
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
           <div class="profile-cover-overlay"></div>
           ${isTargetOwnerGalaxy ? '<span class="owner-galaxy-corner-seal"><i class="fa-solid fa-crown"></i> مؤسس ومالك الشات</span>' : ''}
           <div class="profile-cover-top-actions cover-actions-left">
             <button type="button" class="rtl-back-pill cover-close-x-btn" id="quHeroCloseBtn" title="رجوع"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
-            <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة صورة الغلاف"><i class="fa-solid fa-eye"></i></button>
+            <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة الغلاف والبطاقة"><i class="fa-solid fa-eye"></i></button>
           </div>
           <div class="profile-cover-stats-bar">
             <button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#fb7185;"></i> <span id="quLikesCount">${Number(u.likesCount || 0)}</span></button>
@@ -2681,6 +2691,7 @@
             ${formatNameHTML(u)}
           </div>
           <div class="profile-role-subtitle" id="quHeaderRoleSub">${isTargetOwnerGalaxy ? '<span class="owner-galaxy-title-pill"><i class="fa-solid fa-crown"></i> مؤسس ومالك الشات</span> ' : ''}${escapeHtml(getRank(u.role).label)} • المستوى ${Math.max(1, Number(u.level) || Number(getRank(u.role).power) || 1)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}</div>
+          ${u.statusText ? `<div class="profile-status-pill"><i class="fa-solid fa-circle-dot"></i> ${escapeHtml(u.statusText)}</div>` : ''}
           ${u.bio ? `<p class="profile-bio-line">${escapeHtml(u.bio)}</p>` : ''}
           ${hasMusic ? `
             <div class="profile-mini-music-bar">
@@ -2723,8 +2734,10 @@
                   <strong>${interactionRank > 0 ? `#${interactionRank}` : '—'}</strong>
                 </div>
               </div>
+              ${u.bio ? `<div class="profile-about-card"><strong><i class="fa-solid fa-message"></i> رسالة معلوماتي</strong><p>${escapeHtml(u.bio)}</p></div>` : ''}
               <div class="info-kv-list">
                 <div class="info-kv-row"><span><i class="fa-solid fa-ranking-star"></i> المستوى</span><strong>المستوى ${Math.max(1, Number(u.level) || Number(getRank(u.role).power) || 1)}</strong></div>
+                <div class="info-kv-row"><span><i class="fa-solid fa-circle-dot"></i> الحالة</span><strong>${escapeHtml(u.statusText || 'متصل')}</strong></div>
                 <div class="info-kv-row"><span><i class="fa-solid fa-cake-candles"></i> العمر</span><strong>${u.age ? escapeHtml(String(u.age)) : 'غير محدد'}</strong></div>
                 <div class="info-kv-row"><span><i class="fa-solid fa-venus-mars"></i> الجنس</span><strong>${escapeHtml(u.gender || 'غير محدد')}</strong></div>
                 <div class="info-kv-row"><span><i class="fa-solid fa-earth-asia"></i> البلد</span><strong>${escapeHtml(u.country || 'غير محدد')}</strong></div>
@@ -2815,8 +2828,16 @@
 
     $('quHeroCloseBtn')?.addEventListener('click', () => closeModal('quickUserModal'));
     $('quCoverPreviewToggleBtn')?.addEventListener('click', () => {
-      $('quCoverHero')?.classList.toggle('cover-preview-clean');
-      $('quCoverPreviewToggleBtn')?.classList.toggle('active');
+      const hero = $('quCoverHero');
+      const card = document.querySelector('#quickUserModal .profile-luxury-card');
+      if (!hero) return;
+      const clean = hero.classList.toggle('cover-preview-clean');
+      card?.classList.toggle('profile-card-preview-mode', clean);
+      const btn = $('quCoverPreviewToggleBtn');
+      if (btn) {
+        btn.classList.toggle('active', clean);
+        btn.innerHTML = clean ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
+      }
     });
 
     const allQuPanes = showAdminTab
@@ -3367,9 +3388,14 @@
 
     const u = state.user;
     $('custCoverHero')?.classList.remove('cover-preview-clean');
-    $('custCoverPreviewToggleBtn')?.classList.remove('active');
+    document.querySelector('#customizeModal .profile-luxury-card')?.classList.remove('profile-card-preview-mode');
+    if ($('custCoverPreviewToggleBtn')) {
+      $('custCoverPreviewToggleBtn').classList.remove('active');
+      $('custCoverPreviewToggleBtn').innerHTML = '<i class="fa-solid fa-eye"></i>';
+    }
     $('custDisplayName').value = u.displayName || u.name || '';
     $('custVipFamily').value = u.vipFamily || '';
+    if ($('custStatusInput')) $('custStatusInput').value = u.statusText || '';
     $('custBioInput').value = u.bio || '';
     if ($('custAgeInput')) $('custAgeInput').value = u.age ? String(u.age) : '';
     if ($('custGenderSelect')) $('custGenderSelect').value = u.gender || '';
@@ -3832,25 +3858,30 @@
     }
 
     if ($('custCoverImg') && $('custCoverHero')) {
+      const hero = $('custCoverHero');
       if (u.coverUrl) {
         $('custCoverImg').src = u.coverUrl;
         $('custCoverImg').classList.remove('hidden');
-        $('custCoverHero').style.backgroundImage = `url('${u.coverUrl}')`;
+        hero.classList.add('has-cover-img');
+        hero.style.backgroundImage = `url('${u.coverUrl}')`;
+        hero.style.backgroundSize = 'cover';
+        hero.style.backgroundPosition = 'center';
+        hero.style.width = '100%';
       } else {
         $('custCoverImg').classList.add('hidden');
-        $('custCoverHero').style.backgroundImage = '';
+        hero.classList.remove('has-cover-img');
+        hero.style.backgroundImage = '';
       }
-      const coverHero = $('custCoverHero');
-      coverHero.querySelectorAll('.owner-cosmic-cover-vortex, .owner-galaxy-corner-seal').forEach((n) => n.remove());
+      hero.querySelectorAll('.owner-cosmic-cover-vortex, .owner-galaxy-corner-seal').forEach((n) => n.remove());
       if (isOwnerGalaxy) {
         const vortex = document.createElement('div');
         vortex.className = 'owner-cosmic-cover-vortex';
         vortex.setAttribute('aria-hidden', 'true');
-        coverHero.insertBefore(vortex, coverHero.firstChild);
+        hero.insertBefore(vortex, hero.firstChild);
         const seal = document.createElement('span');
         seal.className = 'owner-galaxy-corner-seal';
         seal.innerHTML = '<i class="fa-solid fa-crown"></i> مؤسس ومالك الشات';
-        coverHero.appendChild(seal);
+        hero.appendChild(seal);
       }
     }
     if ($('custDeleteCoverBtn')) {
@@ -3859,11 +3890,13 @@
 
     const card = document.querySelector('#customizeModal .profile-luxury-card');
     if (card) {
+      const wasPreviewMode = card.classList.contains('profile-card-preview-mode');
       card.className = 'modal-card modal-card-md profile-luxury-card';
       if (isOwnerGalaxy) card.classList.add('owner-black-gold-theme', 'owner-galaxy-theme');
       if (u.profileBgEffect && u.profileBgEffect !== 'none') {
         card.classList.add(`bg-effect-${u.profileBgEffect}`);
       }
+      if (wasPreviewMode) card.classList.add('profile-card-preview-mode');
     }
     const bgLayer = $('custBgEffectLayer');
     if (bgLayer) {
@@ -3876,6 +3909,11 @@
       $('custPreviewRoleLine').innerHTML = isOwnerGalaxy
         ? `<span class="owner-galaxy-title-pill"><i class="fa-solid fa-crown"></i> مؤسس ومالك الشات</span> ${escapeHtml(getRank(u.role).label)} • المستوى ${lvlNum}`
         : `${escapeHtml(getRank(u.role).label)} • المستوى ${lvlNum}`;
+    }
+    const curStatusVal = ($('custStatusInput')?.value ?? u.statusText ?? '').trim();
+    if ($('custPreviewStatus')) {
+      $('custPreviewStatus').textContent = curStatusVal;
+      $('custPreviewStatus').classList.toggle('hidden', !curStatusVal);
     }
     $('custPreviewBio').textContent = $('custBioInput').value || u.bio || '';
 
@@ -3940,6 +3978,7 @@
         body: {
           displayName: $('custDisplayName').value,
           vipFamily: $('custVipFamily').value,
+          statusText: $('custStatusInput')?.value || '',
           bio: $('custBioInput').value,
           age: $('custAgeInput')?.value ? Number($('custAgeInput').value) : 0,
           gender: $('custGenderSelect')?.value || '',
@@ -5704,11 +5743,14 @@
           <div><label class="muted">زمن التلميح التلقائي (ثوانٍ: 5–60)</label><input type="number" id="qbHintSec" min="5" max="60" value="${Number(qs.quiz_hint_sec) || 12}" /></div>
           <div><label class="muted">جائزة الروبي الأساسية (💎)</label><input type="number" id="qbRewardCoins" min="10" max="5000" value="${Number(qs.quiz_reward_coins) || 100}" /></div>
           <div>
-            <label class="muted">نمط رسالة السؤال</label>
+            <label class="muted">نمط رسالة السؤال (6 أنماط عرض)</label>
             <select id="qbMsgStyle">
-              <option value="royal" ${qs.quiz_msg_style === 'royal' ? 'selected' : ''}>ملكي ذهبي</option>
-              <option value="glass" ${qs.quiz_msg_style === 'glass' ? 'selected' : ''}>زجاجي عصري</option>
-              <option value="classic" ${qs.quiz_msg_style === 'classic' ? 'selected' : ''}>كلاسيكي سريع</option>
+              <option value="royal_gold" ${(!qs.quiz_msg_style || qs.quiz_msg_style === 'royal_gold' || qs.quiz_msg_style === 'royal') ? 'selected' : ''}>1. ملكي ذهبي فاخر</option>
+              <option value="glass_modern" ${(qs.quiz_msg_style === 'glass_modern' || qs.quiz_msg_style === 'glass') ? 'selected' : ''}>2. زجاجي عصري متوهج</option>
+              <option value="cyber_blue" ${qs.quiz_msg_style === 'cyber_blue' ? 'selected' : ''}>3. سايبر أزرق مستقبلي</option>
+              <option value="emerald_neon" ${qs.quiz_msg_style === 'emerald_neon' ? 'selected' : ''}>4. زمردي نيون ساطع</option>
+              <option value="crimson_fire" ${qs.quiz_msg_style === 'crimson_fire' ? 'selected' : ''}>5. قرمزي ناري حاد</option>
+              <option value="classic_compact" ${(qs.quiz_msg_style === 'classic_compact' || qs.quiz_msg_style === 'classic') ? 'selected' : ''}>6. كلاسيكي هادئ سريع</option>
             </select>
           </div>
         </div>
@@ -5764,7 +5806,7 @@
         intervalSec: Number($('qbIntervalSec')?.value) || 26,
         hintSec: Number($('qbHintSec')?.value) || 12,
         rewardCoins: Number($('qbRewardCoins')?.value) || 100,
-        msgStyle: $('qbMsgStyle')?.value || 'royal'
+        msgStyle: $('qbMsgStyle')?.value || 'royal_gold'
       }, 'تم حفظ إعدادات بوت المسابقات!', 'quiz_bot');
     });
 
@@ -7599,15 +7641,28 @@
     });
     $('custCoverPreviewToggleBtn')?.addEventListener('click', () => {
       const hero = $('custCoverHero');
+      const card = document.querySelector('#customizeModal .profile-luxury-card');
       if (!hero) return;
       const clean = hero.classList.toggle('cover-preview-clean');
-      $('custCoverPreviewToggleBtn')?.classList.toggle('active', clean);
+      card?.classList.toggle('profile-card-preview-mode', clean);
+      const btn = $('custCoverPreviewToggleBtn');
+      if (btn) {
+        btn.classList.toggle('active', clean);
+        btn.innerHTML = clean ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
+      }
+      showToast(clean ? 'وضع المعاينة الكاملة للغلاف والبطاقة مفعّل' : 'تمت العودة لوضع تعديل الملف الشخصي');
+    });
+    $('custStatusPresets')?.querySelectorAll('.cust-status-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        if ($('custStatusInput')) $('custStatusInput').value = chip.dataset.status || '';
+        updateCustomizePreview();
+      });
     });
     $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
       b.addEventListener('click', () => switchNameStyleTab(b.dataset.namestyleTab));
     });
     [
-      'custDisplayName', 'custBioInput', 'custNameColor', 'custTextColor',
+      'custDisplayName', 'custStatusInput', 'custBioInput', 'custNameColor', 'custTextColor',
       'custFontFamily', 'custFontStyle', 'custFontSize', 'custNameFontSize',
       'custNameStyleMode', 'custNameGradient', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'
     ].forEach((id) => {
@@ -7656,18 +7711,81 @@
       $('custNeonColor').dataset.cleared = '1';
       updateCustomizePreview();
     });
-    $('custUploadAvatarBtn')?.addEventListener('click', () => $('custAvatarFile')?.click());
+    async function prepareProfileImageForFirebase(file, kind) {
+      if (!file) return file;
+      const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name || '');
+      if (isGif) return file;
+      const maxDim = kind === 'cover' ? 1280 : 480;
+      return new Promise((resolve) => {
+        const img = new Image();
+        const objUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          try {
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            if (!w || !h) {
+              URL.revokeObjectURL(objUrl);
+              return resolve(file);
+            }
+            if (w > maxDim || h > maxDim) {
+              const scale = maxDim / Math.max(w, h);
+              w = Math.max(1, Math.round(w * scale));
+              h = Math.max(1, Math.round(h * scale));
+            } else if (file.size <= 350 * 1024) {
+              URL.revokeObjectURL(objUrl);
+              return resolve(file);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              URL.revokeObjectURL(objUrl);
+              return resolve(file);
+            }
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+              URL.revokeObjectURL(objUrl);
+              if (!blob) return resolve(file);
+              const outName = (file.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
+              resolve(new File([blob], outName, { type: 'image/webp' }));
+            }, 'image/webp', 0.86);
+          } catch {
+            URL.revokeObjectURL(objUrl);
+            resolve(file);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve(file);
+        };
+        img.src = objUrl;
+      });
+    }
+
+    $('custUploadAvatarBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      $('custAvatarFile')?.click();
+    });
     $('custAvatarFile')?.addEventListener('change', async () => {
-      const file = $('custAvatarFile').files[0];
-      if (!file) return;
+      const rawFile = $('custAvatarFile').files[0];
+      if (!rawFile) return;
       try {
+        const file = await prepareProfileImageForFirebase(rawFile, 'avatar');
         const fd = new FormData();
         fd.append('file', file);
         const res = await api('/api/upload/avatar', { method: 'POST', body: fd });
-        state.user.avatarUrl = res.url;
+        if (res?.user) state.user = res.user;
+        else if (state.user) state.user.avatarUrl = res.url;
+        try {
+          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(state.user));
+        } catch {
+          // ignore
+        }
         updateCustomizePreview();
         renderUserIdentity();
-        showToast('تم رفع وحفظ الصورة الشخصية (بما فيها GIF المتحركة) بنجاح!');
+        showToast('تم رفع وحفظ الصورة الشخصية في قاعدة البيانات بنجاح!');
       } catch (err) {
         showToast(err.message, true);
       } finally {
@@ -7687,17 +7805,28 @@
         showToast(err.message, true);
       }
     });
-    $('custUploadCoverBtn')?.addEventListener('click', () => $('custCoverFile')?.click());
+    $('custUploadCoverBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      $('custCoverFile')?.click();
+    });
     $('custCoverFile')?.addEventListener('change', async () => {
-      const file = $('custCoverFile').files[0];
-      if (!file) return;
+      const rawFile = $('custCoverFile').files[0];
+      if (!rawFile) return;
       try {
+        const file = await prepareProfileImageForFirebase(rawFile, 'cover');
         const fd = new FormData();
         fd.append('file', file);
         const res = await api('/api/upload/cover', { method: 'POST', body: fd });
-        state.user.coverUrl = res.url;
+        if (res?.user) state.user = res.user;
+        else if (state.user) state.user.coverUrl = res.url;
+        try {
+          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(state.user));
+        } catch {
+          // ignore
+        }
         updateCustomizePreview();
-        showToast('تم رفع وحفظ غلاف الملف الشخصي بنجاح!');
+        showToast('تم رفع وحفظ صورة الغلاف في قاعدة البيانات بنجاح!');
       } catch (err) {
         showToast(err.message, true);
       } finally {
