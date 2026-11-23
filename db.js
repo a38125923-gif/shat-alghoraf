@@ -498,6 +498,15 @@ const DEFAULT_SITE_SETTINGS = {
   feat_gifts: 1,
   feat_youtube: 1,
   feat_wall: 1,
+  feat_profile_likes: 1,
+  feat_profile_rating: 1,
+  feat_profile_music: 1,
+  feat_profile_friends: 1,
+  feat_profile_gifts: 1,
+  feat_profile_relations: 1,
+  feat_profile_wall: 1,
+  custom_drawer_sections: [],
+  custom_profile_fields: [],
   royal_member_ruby_multiplier: 1.2,
   vip_ruby_multiplier: 1.5,
   premium_ruby_multiplier: 2,
@@ -615,6 +624,301 @@ const unsubscribers = [];
 const pendingWrites = new Set();
 const localEmittedMessageIds = new Set();
 
+const JSON_DATA_DIR = path.join(__dirname, 'data', 'json');
+let jsonSnapshotDirty = false;
+let jsonSnapshotTimer = null;
+let jsonWritePromise = null;
+let lastJsonSavedAt = null;
+
+function ensureJsonDataDir() {
+  fs.mkdirSync(JSON_DATA_DIR, { recursive: true });
+}
+
+function writeJsonAtomicSync(filename, dataObj) {
+  ensureJsonDataDir();
+  const target = path.join(JSON_DATA_DIR, filename);
+  const tmp = `${target}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(dataObj, null, 2), 'utf8');
+  fs.renameSync(tmp, target);
+}
+
+function readJsonFileSafe(filename) {
+  try {
+    const filePath = path.join(JSON_DATA_DIR, filename);
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    if (!raw || !raw.trim()) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function buildOrganizedJsonBuckets() {
+  return {
+    'users.json': {
+      updatedAt: nowIso(),
+      items: Array.from(store.usersById.values())
+    },
+    'guests.json': {
+      updatedAt: nowIso(),
+      items: Array.from(store.guestsByKey.values())
+    },
+    'ranks.json': {
+      updatedAt: nowIso(),
+      items: Array.from(store.ranksByKey.values())
+    },
+    'settings.json': {
+      updatedAt: nowIso(),
+      siteSettings: store.siteSettings,
+      customFrames: Array.from(store.customFramesById.values())
+    },
+    'rooms.json': {
+      updatedAt: nowIso(),
+      rooms: Array.from(store.roomsById.values()),
+      roomStaff: Array.from(store.roomStaffByKey.values())
+    },
+    'messages.json': {
+      updatedAt: nowIso(),
+      items: Array.from(store.messagesById.values())
+    },
+    'social.json': {
+      updatedAt: nowIso(),
+      customEmojis: Array.from(store.customEmojisById.values()),
+      privateMessages: Array.from(store.privateMessagesById.values()),
+      friendships: Array.from(store.friendshipsByKey.values()),
+      wallPosts: Array.from(store.wallPostsById.values()),
+      news: Array.from(store.newsById.values()),
+      gifts: Array.from(store.giftsById.values())
+    },
+    'moderation.json': {
+      updatedAt: nowIso(),
+      bans: Array.from(store.bansByKey.values()),
+      mutes: Array.from(store.mutesByKey.values()),
+      reports: Array.from(store.reportsById.values()),
+      adminLogs: Array.from(store.adminLogsById.values()),
+      pmLinkAlerts: Array.from(store.pmLinkAlertsById.values()),
+      notifications: Array.from(store.notificationsById.values())
+    },
+    'sessions.json': {
+      updatedAt: nowIso(),
+      items: Array.from(store.sessionsById.values())
+    },
+    'media.json': {
+      updatedAt: nowIso(),
+      items: Array.from(store.profileMediaById.values())
+    },
+    'counters.json': {
+      updatedAt: nowIso(),
+      counters: { ...store.counters }
+    }
+  };
+}
+
+async function writeAllOrganizedJsonFiles() {
+  if (jsonWritePromise) return jsonWritePromise;
+  jsonWritePromise = (async () => {
+    try {
+      ensureJsonDataDir();
+      const buckets = buildOrganizedJsonBuckets();
+      for (const [fname, payload] of Object.entries(buckets)) {
+        const target = path.join(JSON_DATA_DIR, fname);
+        const tmp = `${target}.${process.pid}.tmp`;
+        await fs.promises.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+        await fs.promises.rename(tmp, target);
+      }
+      jsonSnapshotDirty = false;
+      lastJsonSavedAt = nowIso();
+    } catch (err) {
+      console.error('JSON persistence snapshot failed:', err.message);
+    } finally {
+      jsonWritePromise = null;
+    }
+  })();
+  return jsonWritePromise;
+}
+
+function scheduleJsonSnapshot() {
+  jsonSnapshotDirty = true;
+  if (jsonSnapshotTimer) return;
+  jsonSnapshotTimer = setTimeout(() => {
+    jsonSnapshotTimer = null;
+    if (jsonSnapshotDirty && initialized) {
+      writeAllOrganizedJsonFiles().catch(() => {});
+    }
+  }, 400);
+}
+
+function hydrateMissingStoreFromOrganizedJson() {
+  let hydratedCount = 0;
+  const countersJson = readJsonFileSafe('counters.json');
+  if (countersJson?.counters && typeof countersJson.counters === 'object') {
+    for (const [k, v] of Object.entries(countersJson.counters)) {
+      store.counters[k] = Math.max(store.counters[k] || 0, Number(v) || 0);
+    }
+  }
+
+  const usersJson = readJsonFileSafe('users.json');
+  if (Array.isArray(usersJson?.items)) {
+    for (const raw of usersJson.items) {
+      const u = normalizeUserDoc(raw.id, raw);
+      if (u.id && !store.usersById.has(u.id)) {
+        store.usersById.set(u.id, u);
+        store.counters.users = Math.max(store.counters.users, u.id);
+        hydratedCount += 1;
+      }
+    }
+  }
+
+  const guestsJson = readJsonFileSafe('guests.json');
+  if (Array.isArray(guestsJson?.items)) {
+    for (const raw of guestsJson.items) {
+      const g = normalizeGuestDoc(raw.key, raw);
+      if (g.key && !store.guestsByKey.has(g.key)) {
+        store.guestsByKey.set(g.key, g);
+      }
+    }
+  }
+
+  const ranksJson = readJsonFileSafe('ranks.json');
+  if (Array.isArray(ranksJson?.items)) {
+    for (const raw of ranksJson.items) {
+      if (raw?.key && !Object.prototype.hasOwnProperty.call(LEGACY_ROLE_MIGRATION_MAP, raw.key) && !store.ranksByKey.has(raw.key)) {
+        const rk = normalizeRankDoc(raw.key, raw);
+        store.ranksByKey.set(rk.key, rk);
+        hydratedCount += 1;
+      }
+    }
+  }
+
+  const settingsJson = readJsonFileSafe('settings.json');
+  if (settingsJson?.siteSettings && store.siteSettings === DEFAULT_SITE_SETTINGS) {
+    store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...settingsJson.siteSettings, id: 1 };
+  }
+  if (Array.isArray(settingsJson?.customFrames) && store.customFramesById.size === 0) {
+    for (const cf of settingsJson.customFrames) {
+      if (cf?.id) store.customFramesById.set(String(cf.id), cf);
+    }
+  }
+
+  const roomsJson = readJsonFileSafe('rooms.json');
+  if (Array.isArray(roomsJson?.rooms)) {
+    for (const raw of roomsJson.rooms) {
+      const rm = normalizeRoomDoc(raw.id, raw);
+      if (rm.id && !store.roomsById.has(rm.id)) {
+        store.roomsById.set(rm.id, rm);
+        hydratedCount += 1;
+      }
+    }
+  }
+  if (Array.isArray(roomsJson?.roomStaff)) {
+    for (const st of roomsJson.roomStaff) {
+      if (st?.room_id && st?.user_id) {
+        const sk = `${st.room_id}:${st.user_id}`;
+        if (!store.roomStaffByKey.has(sk)) store.roomStaffByKey.set(sk, st);
+      }
+    }
+  }
+
+  const messagesJson = readJsonFileSafe('messages.json');
+  if (Array.isArray(messagesJson?.items)) {
+    for (const raw of messagesJson.items) {
+      const msg = normalizeMessageDoc(raw.doc_id || raw.id, raw);
+      if (msg.id && !store.messagesById.has(String(msg.id))) {
+        store.messagesById.set(String(msg.id), msg);
+        if (typeof msg.id === 'number') store.counters.messages = Math.max(store.counters.messages, msg.id);
+      }
+    }
+  }
+
+  const socialJson = readJsonFileSafe('social.json');
+  if (socialJson) {
+    for (const e of socialJson.customEmojis || []) {
+      if (e?.id && !store.customEmojisById.has(Number(e.id))) {
+        store.customEmojisById.set(Number(e.id), e);
+        store.counters.custom_emojis = Math.max(store.counters.custom_emojis, Number(e.id));
+      }
+    }
+    for (const pm of socialJson.privateMessages || []) {
+      if (pm?.id && !store.privateMessagesById.has(Number(pm.id))) {
+        store.privateMessagesById.set(Number(pm.id), pm);
+        store.counters.private_messages = Math.max(store.counters.private_messages, Number(pm.id));
+      }
+    }
+    for (const fr of socialJson.friendships || []) {
+      if (fr?.user_key && fr?.friend_key) {
+        const fk = `${fr.user_key}::${fr.friend_key}`;
+        if (!store.friendshipsByKey.has(fk)) store.friendshipsByKey.set(fk, fr);
+      }
+    }
+    for (const wp of socialJson.wallPosts || []) {
+      if (wp?.id && !store.wallPostsById.has(Number(wp.id))) {
+        store.wallPostsById.set(Number(wp.id), wp);
+        store.counters.wall_posts = Math.max(store.counters.wall_posts, Number(wp.id));
+      }
+    }
+    for (const n of socialJson.news || []) {
+      if (n?.id && !store.newsById.has(Number(n.id))) {
+        store.newsById.set(Number(n.id), n);
+        store.counters.news = Math.max(store.counters.news, Number(n.id));
+      }
+    }
+    for (const g of socialJson.gifts || []) {
+      if (g?.id && !store.giftsById.has(Number(g.id))) {
+        store.giftsById.set(Number(g.id), g);
+        store.counters.gifts = Math.max(store.counters.gifts, Number(g.id));
+      }
+    }
+  }
+
+  const modJson = readJsonFileSafe('moderation.json');
+  if (modJson) {
+    for (const b of modJson.bans || []) {
+      if (b?.target_key && !store.bansByKey.has(b.target_key)) store.bansByKey.set(b.target_key, b);
+    }
+    const nowTs = Date.now();
+    for (const m of modJson.mutes || []) {
+      if (m?.target_key && Number(m.expires_at) > nowTs) {
+        const mk = `${m.target_key}::${m.room_id || '*'}`;
+        if (!store.mutesByKey.has(mk)) store.mutesByKey.set(mk, m);
+      }
+    }
+    for (const r of modJson.reports || []) {
+      if (r?.id && !store.reportsById.has(Number(r.id))) store.reportsById.set(Number(r.id), r);
+    }
+    for (const lg of modJson.adminLogs || []) {
+      if (lg?.id && !store.adminLogsById.has(Number(lg.id))) store.adminLogsById.set(Number(lg.id), lg);
+    }
+    for (const al of modJson.pmLinkAlerts || []) {
+      if (al?.id && !store.pmLinkAlertsById.has(Number(al.id))) store.pmLinkAlertsById.set(Number(al.id), al);
+    }
+    for (const nt of modJson.notifications || []) {
+      if (nt?.id && !store.notificationsById.has(Number(nt.id))) store.notificationsById.set(Number(nt.id), nt);
+    }
+  }
+
+  const sessionsJson = readJsonFileSafe('sessions.json');
+  if (Array.isArray(sessionsJson?.items)) {
+    const nowTs = Date.now();
+    for (const raw of sessionsJson.items) {
+      const sess = normalizeSessionDoc(raw.id, raw);
+      if (sess.id && !store.sessionsById.has(sess.id) && (!sess.expires_at || sess.expires_at > nowTs)) {
+        store.sessionsById.set(sess.id, sess);
+      }
+    }
+  }
+
+  const mediaJson = readJsonFileSafe('media.json');
+  if (Array.isArray(mediaJson?.items)) {
+    for (const m of mediaJson.items) {
+      if (m?.id && m?.dataBase64 && !store.profileMediaById.has(String(m.id))) {
+        store.profileMediaById.set(String(m.id), m);
+      }
+    }
+  }
+  return hydratedCount;
+}
+
 function trackWrite(promise) {
   pendingWrites.add(promise);
   promise.finally(() => pendingWrites.delete(promise));
@@ -624,6 +928,13 @@ function trackWrite(promise) {
 async function flushWrites() {
   while (pendingWrites.size > 0) {
     await Promise.allSettled([...pendingWrites]);
+  }
+  if (jsonSnapshotTimer) {
+    clearTimeout(jsonSnapshotTimer);
+    jsonSnapshotTimer = null;
+  }
+  if (jsonSnapshotDirty || !lastJsonSavedAt) {
+    await writeAllOrganizedJsonFiles();
   }
 }
 
@@ -844,14 +1155,17 @@ function fsListen(colName, onChanges) {
 }
 
 function enqueueSet(colName, docId, data, merge = false) {
+  scheduleJsonSnapshot();
   return trackWrite(fsSetDoc(colName, docId, data, merge).catch(() => {}));
 }
 
 function enqueueDelete(colName, docId) {
+  scheduleJsonSnapshot();
   return trackWrite(fsDeleteDoc(colName, docId).catch(() => {}));
 }
 
 function enqueueBatchDelete(colName, docIds) {
+  scheduleJsonSnapshot();
   return trackWrite(
     fsBatchDelete(colName, docIds).catch((err) => {
       console.error(`Batch delete error [${colName}]:`, err.message);
@@ -999,6 +1313,14 @@ function normalizeUserDoc(docId, data) {
     last_device_id: String(data.last_device_id || ''),
     last_fingerprint: String(data.last_fingerprint || ''),
     last_ua: String(data.last_ua || ''),
+    custom_fields:
+      data.custom_fields && typeof data.custom_fields === 'object' && !Array.isArray(data.custom_fields)
+        ? Object.fromEntries(
+            Object.entries(data.custom_fields)
+              .slice(0, 30)
+              .map(([k, v]) => [String(k).slice(0, 48), String(v || '').slice(0, 180)])
+          )
+        : {},
     is_banned: data.is_banned ? 1 : 0,
     ban_reason: String(data.ban_reason || ''),
     created_at: String(data.created_at || nowIso())
@@ -1919,10 +2241,14 @@ async function init(eventHooks = {}) {
 
     await fsSetDoc('counters', 'sequences', store.counters, true);
 
+    hydrateMissingStoreFromOrganizedJson();
+    ensureSupremeOwnersInStore();
+    await writeAllOrganizedJsonFiles();
+
     attachRealtimeListeners();
     initialized = true;
     console.log(
-      `Cloud Firestore connected (${fsMode} mode) -> project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID} | users=${store.usersById.size}, rooms=${store.roomsById.size}, messages=${store.messagesById.size}, ranks=${store.ranksByKey.size}`
+      `Cloud Firestore connected (${fsMode} mode) -> project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID} | JSON dir=${JSON_DATA_DIR} | users=${store.usersById.size}, rooms=${store.roomsById.size}, messages=${store.messagesById.size}, ranks=${store.ranksByKey.size}`
     );
   })();
 
@@ -1930,11 +2256,27 @@ async function init(eventHooks = {}) {
 }
 
 function getStorageStatus() {
+  let jsonFiles = [];
+  try {
+    ensureJsonDataDir();
+    jsonFiles = fs
+      .readdirSync(JSON_DATA_DIR)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => {
+        const st = fs.statSync(path.join(JSON_DATA_DIR, f));
+        return { name: f, sizeBytes: st.size, updatedAt: st.mtime.toISOString() };
+      });
+  } catch {
+    jsonFiles = [];
+  }
   return {
     provider: fsMode === 'sqlite' ? 'sqlite' : 'firebase-firestore',
     mode: fsMode,
     projectId: FIREBASE_PROJECT_ID,
     databaseId: FIRESTORE_DATABASE_ID,
+    jsonDataDir: JSON_DATA_DIR,
+    jsonFiles,
+    lastJsonSavedAt,
     initialized,
     counts: {
       users: store.usersById.size,
@@ -1945,7 +2287,8 @@ function getStorageStatus() {
       news: store.newsById.size,
       gifts: store.giftsById.size,
       bans: store.bansByKey.size,
-      sessions: store.sessionsById.size
+      sessions: store.sessionsById.size,
+      media: store.profileMediaById.size
     }
   };
 }
@@ -2436,8 +2779,8 @@ function updateSiteSettings(patch = {}) {
         ? Math.max(10, Math.min(5000, Number(patch.quiz_reward_coins) || 100))
         : Math.max(10, Math.min(5000, Number(cur.quiz_reward_coins) || 100)),
     quiz_msg_style: (() => {
-      const legacyMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'classic_compact' };
-      const allowed = ['royal_gold', 'glass_modern', 'cyber_blue', 'emerald_neon', 'crimson_fire', 'classic_compact'];
+      const legacyMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'glass_modern', classic_compact: 'glass_modern' };
+      const allowed = ['royal_gold', 'cyber_blue', 'emerald_neon', 'crimson_fire', 'glass_modern'];
       const pick = patch.quiz_msg_style !== undefined ? String(patch.quiz_msg_style) : String(cur.quiz_msg_style || 'royal_gold');
       const normalized = legacyMap[pick] || pick;
       return allowed.includes(normalized) ? normalized : 'royal_gold';
@@ -2532,6 +2875,59 @@ function updateSiteSettings(patch = {}) {
     feat_gifts: patch.feat_gifts !== undefined ? (patch.feat_gifts ? 1 : 0) : cur.feat_gifts !== 0 ? 1 : 0,
     feat_youtube: patch.feat_youtube !== undefined ? (patch.feat_youtube ? 1 : 0) : cur.feat_youtube !== 0 ? 1 : 0,
     feat_wall: patch.feat_wall !== undefined ? (patch.feat_wall ? 1 : 0) : cur.feat_wall !== 0 ? 1 : 0,
+    feat_profile_likes:
+      patch.feat_profile_likes !== undefined ? (patch.feat_profile_likes ? 1 : 0) : cur.feat_profile_likes !== 0 ? 1 : 0,
+    feat_profile_rating:
+      patch.feat_profile_rating !== undefined ? (patch.feat_profile_rating ? 1 : 0) : cur.feat_profile_rating !== 0 ? 1 : 0,
+    feat_profile_music:
+      patch.feat_profile_music !== undefined ? (patch.feat_profile_music ? 1 : 0) : cur.feat_profile_music !== 0 ? 1 : 0,
+    feat_profile_friends:
+      patch.feat_profile_friends !== undefined ? (patch.feat_profile_friends ? 1 : 0) : cur.feat_profile_friends !== 0 ? 1 : 0,
+    feat_profile_gifts:
+      patch.feat_profile_gifts !== undefined ? (patch.feat_profile_gifts ? 1 : 0) : cur.feat_profile_gifts !== 0 ? 1 : 0,
+    feat_profile_relations:
+      patch.feat_profile_relations !== undefined ? (patch.feat_profile_relations ? 1 : 0) : cur.feat_profile_relations !== 0 ? 1 : 0,
+    feat_profile_wall:
+      patch.feat_profile_wall !== undefined ? (patch.feat_profile_wall ? 1 : 0) : cur.feat_profile_wall !== 0 ? 1 : 0,
+    custom_drawer_sections:
+      patch.custom_drawer_sections !== undefined
+        ? (Array.isArray(patch.custom_drawer_sections) ? patch.custom_drawer_sections : [])
+            .map((sec, idx) => {
+              const title = String(sec?.title || '').trim().slice(0, 48);
+              if (!title) return null;
+              const rawType = String(sec?.type || 'text');
+              const type = ['text', 'rules', 'quiz_points', 'leaderboards'].includes(rawType) ? rawType : 'text';
+              return {
+                id: String(sec?.id || `sec_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `sec_${idx}`,
+                title,
+                icon: String(sec?.icon || '📌').trim().slice(0, 12) || '📌',
+                type,
+                content: String(sec?.content || '').trim().slice(0, 4000)
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 30)
+        : Array.isArray(cur.custom_drawer_sections)
+          ? cur.custom_drawer_sections
+          : [],
+    custom_profile_fields:
+      patch.custom_profile_fields !== undefined
+        ? (Array.isArray(patch.custom_profile_fields) ? patch.custom_profile_fields : [])
+            .map((fld, idx) => {
+              const label = String(fld?.label || '').trim().slice(0, 40);
+              if (!label) return null;
+              return {
+                id: String(fld?.id || `fld_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || `fld_${idx}`,
+                label,
+                placeholder: String(fld?.placeholder || '').trim().slice(0, 80),
+                enabled: fld?.enabled !== false
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 20)
+        : Array.isArray(cur.custom_profile_fields)
+          ? cur.custom_profile_fields
+          : [],
     antiflood_enabled:
       patch.antiflood_enabled !== undefined ? (patch.antiflood_enabled ? 1 : 0) : cur.antiflood_enabled !== 0 ? 1 : 0,
     antiflood_max_msgs:
@@ -2955,7 +3351,8 @@ function updateUserCustomization(
     gender,
     country,
     allowCalls,
-    allowPm
+    allowPm,
+    customFields
   }
 ) {
   const current = store.usersById.get(Number(userId));
@@ -2967,6 +3364,15 @@ function updateUserCustomization(
   if (nextDisplay && curName && nextDisplay !== curName) {
     nameHistory.push({ oldName: curName, newName: nextDisplay, changedBy: curName, at: nowIso() });
     if (nameHistory.length > 30) nameHistory.shift();
+  }
+
+  let nextCustomFields = current.custom_fields && typeof current.custom_fields === 'object' ? { ...current.custom_fields } : {};
+  if (customFields && typeof customFields === 'object' && !Array.isArray(customFields)) {
+    nextCustomFields = Object.fromEntries(
+      Object.entries({ ...nextCustomFields, ...customFields })
+        .slice(0, 30)
+        .map(([k, v]) => [String(k).slice(0, 48), String(v ?? '').trim().slice(0, 180)])
+    );
   }
 
   const updated = {
@@ -3010,6 +3416,7 @@ function updateUserCustomization(
     age: age !== undefined ? String(age || '').trim().slice(0, 16) : current.age || '',
     gender: gender !== undefined ? String(gender || '').trim().slice(0, 20) : current.gender || '',
     country: country !== undefined ? String(country || '').trim().slice(0, 36) : current.country || '',
+    custom_fields: nextCustomFields,
     allow_calls: allowCalls !== undefined ? (allowCalls ? 1 : 0) : current.allow_calls === 0 ? 0 : 1,
     allow_pm: allowPm !== undefined ? (allowPm ? 1 : 0) : current.allow_pm === 0 ? 0 : 1
   };
@@ -5017,6 +5424,7 @@ module.exports = {
       const oldestKey = store.profileMediaById.keys().next().value;
       if (oldestKey) store.profileMediaById.delete(oldestKey);
     }
+    scheduleJsonSnapshot();
     try {
       await fsSetDoc('profile_media', cleanId, record, false);
       return true;
@@ -5047,10 +5455,317 @@ module.exports = {
     const cleanId = safeDocId(String(mediaId || ''));
     if (!cleanId) return;
     store.profileMediaById.delete(cleanId);
+    scheduleJsonSnapshot();
     try {
       await fsDeleteDoc('profile_media', cleanId);
     } catch {
       // ignore delete failure
     }
+  },
+  async exportFullBackup() {
+    try {
+      const allMediaDocs = await fsGetAll('profile_media');
+      for (const m of allMediaDocs || []) {
+        if (m?.data?.id && m?.data?.dataBase64 && !store.profileMediaById.has(m.data.id)) {
+          store.profileMediaById.set(m.data.id, m.data);
+        }
+      }
+    } catch {
+      // ignore offline media fetch
+    }
+    return {
+      format: 'arabic-chat-backup-v1',
+      exportedAt: nowIso(),
+      firestoreProjectId: FIREBASE_PROJECT_ID,
+      firestoreDatabaseId: FIRESTORE_DATABASE_ID,
+      counters: { ...store.counters },
+      users: Array.from(store.usersById.values()),
+      guests: Array.from(store.guestsByKey.values()),
+      ranks: Array.from(store.ranksByKey.values()),
+      siteSettings: getSiteSettings(),
+      customFrames: Array.from(store.customFramesById.values()),
+      rooms: Array.from(store.roomsById.values()),
+      roomStaff: Array.from(store.roomStaffByKey.values()),
+      messages: Array.from(store.messagesById.values()),
+      customEmojis: Array.from(store.customEmojisById.values()),
+      bans: Array.from(store.bansByKey.values()),
+      mutes: Array.from(store.mutesByKey.values()),
+      privateMessages: Array.from(store.privateMessagesById.values()),
+      friendships: Array.from(store.friendshipsByKey.values()),
+      wallPosts: Array.from(store.wallPostsById.values()),
+      news: Array.from(store.newsById.values()),
+      gifts: Array.from(store.giftsById.values()),
+      reports: Array.from(store.reportsById.values()),
+      adminLogs: Array.from(store.adminLogsById.values()),
+      pmLinkAlerts: Array.from(store.pmLinkAlertsById.values()),
+      notifications: Array.from(store.notificationsById.values()),
+      sessions: Array.from(store.sessionsById.values()),
+      profileMedia: Array.from(store.profileMediaById.values())
+    };
+  },
+  async restoreFullBackup(rawBackup, { preserveSessionId = '' } = {}) {
+    const b = rawBackup && typeof rawBackup === 'object' ? rawBackup : null;
+    if (!b || (!Array.isArray(b.users) && !Array.isArray(b.ranks) && !Array.isArray(b.rooms) && !b.siteSettings)) {
+      return { error: 'ملف النسخ الاحتياطي غير صالح أو فارغ.' };
+    }
+
+    const preservedSess = preserveSessionId ? store.sessionsById.get(String(preserveSessionId)) : null;
+
+    if (b.counters && typeof b.counters === 'object') {
+      for (const [k, v] of Object.entries(b.counters)) {
+        store.counters[k] = Math.max(store.counters[k] || 0, Number(v) || 0);
+      }
+    }
+
+    if (Array.isArray(b.ranks) && b.ranks.length > 0) {
+      store.ranksByKey.clear();
+      for (const raw of b.ranks) {
+        if (!raw?.key) continue;
+        const rk = normalizeRankDoc(raw.key, raw);
+        store.ranksByKey.set(rk.key, rk);
+      }
+      for (const dr of DEFAULT_RANKS) {
+        if (!store.ranksByKey.has(dr.key)) {
+          store.ranksByKey.set(dr.key, normalizeRankDoc(dr.key, dr));
+        }
+      }
+    }
+
+    if (Array.isArray(b.users)) {
+      store.usersById.clear();
+      for (const raw of b.users) {
+        const u = normalizeUserDoc(raw.id, raw);
+        if (u.id) {
+          store.usersById.set(u.id, u);
+          store.counters.users = Math.max(store.counters.users, u.id);
+        }
+      }
+      ensureSupremeOwnersInStore();
+    }
+
+    if (Array.isArray(b.guests)) {
+      store.guestsByKey.clear();
+      for (const raw of b.guests) {
+        const g = normalizeGuestDoc(raw.key, raw);
+        if (g.key) store.guestsByKey.set(g.key, g);
+      }
+    }
+
+    if (b.siteSettings && typeof b.siteSettings === 'object') {
+      store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...b.siteSettings, id: 1 };
+    }
+
+    if (Array.isArray(b.customFrames)) {
+      store.customFramesById.clear();
+      for (const cf of b.customFrames) {
+        if (cf?.id) store.customFramesById.set(String(cf.id), cf);
+      }
+    }
+
+    if (Array.isArray(b.rooms) && b.rooms.length > 0) {
+      store.roomsById.clear();
+      for (const raw of b.rooms) {
+        const rm = normalizeRoomDoc(raw.id, raw);
+        if (rm.id) store.roomsById.set(rm.id, rm);
+      }
+    }
+    if (Array.isArray(b.roomStaff)) {
+      store.roomStaffByKey.clear();
+      for (const st of b.roomStaff) {
+        if (st?.room_id && st?.user_id) {
+          store.roomStaffByKey.set(`${st.room_id}:${st.user_id}`, st);
+        }
+      }
+    }
+
+    if (Array.isArray(b.messages)) {
+      store.messagesById.clear();
+      for (const raw of b.messages) {
+        const msg = normalizeMessageDoc(raw.doc_id || raw.id, raw);
+        if (msg.id) {
+          store.messagesById.set(String(msg.id), msg);
+          if (typeof msg.id === 'number') store.counters.messages = Math.max(store.counters.messages, msg.id);
+        }
+      }
+    }
+
+    if (Array.isArray(b.customEmojis)) {
+      store.customEmojisById.clear();
+      for (const e of b.customEmojis) {
+        if (e?.id) {
+          store.customEmojisById.set(Number(e.id), e);
+          store.counters.custom_emojis = Math.max(store.counters.custom_emojis, Number(e.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.bans)) {
+      store.bansByKey.clear();
+      for (const bn of b.bans) {
+        if (bn?.target_key && !isProtectedSupremeOwnerKey(bn.target_key)) {
+          store.bansByKey.set(String(bn.target_key), bn);
+        }
+      }
+    }
+
+    if (Array.isArray(b.mutes)) {
+      store.mutesByKey.clear();
+      const nowTs = Date.now();
+      for (const mt of b.mutes) {
+        if (mt?.target_key && Number(mt.expires_at) > nowTs) {
+          store.mutesByKey.set(`${mt.target_key}::${mt.room_id || '*'}`, mt);
+        }
+      }
+    }
+
+    if (Array.isArray(b.privateMessages)) {
+      store.privateMessagesById.clear();
+      for (const pm of b.privateMessages) {
+        if (pm?.id) {
+          store.privateMessagesById.set(Number(pm.id), pm);
+          store.counters.private_messages = Math.max(store.counters.private_messages, Number(pm.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.friendships)) {
+      store.friendshipsByKey.clear();
+      for (const fr of b.friendships) {
+        if (fr?.user_key && fr?.friend_key) {
+          store.friendshipsByKey.set(`${fr.user_key}::${fr.friend_key}`, fr);
+        }
+      }
+    }
+
+    if (Array.isArray(b.wallPosts)) {
+      store.wallPostsById.clear();
+      for (const wp of b.wallPosts) {
+        if (wp?.id) {
+          store.wallPostsById.set(Number(wp.id), wp);
+          store.counters.wall_posts = Math.max(store.counters.wall_posts, Number(wp.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.news)) {
+      store.newsById.clear();
+      for (const n of b.news) {
+        if (n?.id) {
+          store.newsById.set(Number(n.id), n);
+          store.counters.news = Math.max(store.counters.news, Number(n.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.gifts)) {
+      store.giftsById.clear();
+      for (const g of b.gifts) {
+        if (g?.id) {
+          store.giftsById.set(Number(g.id), g);
+          store.counters.gifts = Math.max(store.counters.gifts, Number(g.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.reports)) {
+      store.reportsById.clear();
+      for (const r of b.reports) {
+        if (r?.id) {
+          store.reportsById.set(Number(r.id), r);
+          store.counters.reports = Math.max(store.counters.reports, Number(r.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.adminLogs)) {
+      store.adminLogsById.clear();
+      for (const lg of b.adminLogs) {
+        if (lg?.id) {
+          store.adminLogsById.set(Number(lg.id), lg);
+          store.counters.admin_logs = Math.max(store.counters.admin_logs, Number(lg.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.pmLinkAlerts)) {
+      store.pmLinkAlertsById.clear();
+      for (const al of b.pmLinkAlerts) {
+        if (al?.id) {
+          store.pmLinkAlertsById.set(Number(al.id), al);
+          store.counters.pm_link_alerts = Math.max(store.counters.pm_link_alerts, Number(al.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.notifications)) {
+      store.notificationsById.clear();
+      for (const nt of b.notifications) {
+        if (nt?.id) {
+          store.notificationsById.set(Number(nt.id), nt);
+          store.counters.notifications = Math.max(store.counters.notifications, Number(nt.id));
+        }
+      }
+    }
+
+    if (Array.isArray(b.sessions)) {
+      const nowTs = Date.now();
+      for (const raw of b.sessions) {
+        const sess = normalizeSessionDoc(raw.id, raw);
+        if (sess.id && !sess.revoked && (!sess.expires_at || sess.expires_at > nowTs)) {
+          store.sessionsById.set(sess.id, sess);
+        }
+      }
+    }
+    if (preservedSess && preservedSess.id) {
+      store.sessionsById.set(preservedSess.id, preservedSess);
+    }
+
+    if (Array.isArray(b.profileMedia)) {
+      for (const m of b.profileMedia) {
+        if (m?.id && m?.dataBase64) {
+          store.profileMediaById.set(String(m.id), m);
+        }
+      }
+    }
+
+    // Persist everything back to Firebase Firestore & organized JSON files on disk
+    try {
+      await Promise.all([
+        fsBatchSet('ranks', Array.from(store.ranksByKey.values()).map((r) => ({ docId: r.key, data: r, merge: false }))),
+        fsBatchSet('users', Array.from(store.usersById.values()).map((u) => ({ docId: String(u.id), data: u, merge: false }))),
+        fsBatchSet('rooms', Array.from(store.roomsById.values()).map((rm) => ({ docId: rm.id, data: rm, merge: false }))),
+        fsBatchSet('room_staff', Array.from(store.roomStaffByKey.values()).map((st) => ({ docId: safeDocId(`${st.room_id}:${st.user_id}`), data: st, merge: false }))),
+        fsBatchSet('messages', Array.from(store.messagesById.values()).map((m) => ({ docId: String(m.doc_id || m.id), data: m, merge: false }))),
+        fsBatchSet('custom_emojis', Array.from(store.customEmojisById.values()).map((e) => ({ docId: String(e.id), data: e, merge: false }))),
+        fsBatchSet('banned_users', Array.from(store.bansByKey.values()).map((bn) => ({ docId: safeDocId(bn.target_key), data: bn, merge: false }))),
+        fsBatchSet('muted_users', Array.from(store.mutesByKey.values()).map((mt) => ({ docId: safeDocId(`${mt.target_key}::${mt.room_id || '*'}`), data: mt, merge: false }))),
+        fsBatchSet('private_messages', Array.from(store.privateMessagesById.values()).map((pm) => ({ docId: String(pm.id), data: pm, merge: false }))),
+        fsBatchSet('friendships', Array.from(store.friendshipsByKey.values()).map((fr) => ({ docId: safeDocId(`${fr.user_key}::${fr.friend_key}`), data: fr, merge: false }))),
+        fsBatchSet('wall_posts', [
+          ...Array.from(store.wallPostsById.values()).map((wp) => ({ docId: String(wp.id), data: wp, merge: false })),
+          ...Array.from(store.newsById.values()).map((n) => ({ docId: `news_${n.id}`, data: { ...n, post_type: 'news' }, merge: false })),
+          ...Array.from(store.giftsById.values()).map((g) => ({ docId: `gift_${g.id}`, data: { ...g, post_type: 'gift_tx' }, merge: false }))
+        ]),
+        fsBatchSet('reports', [
+          ...Array.from(store.reportsById.values()).map((r) => ({ docId: String(r.id), data: r, merge: false })),
+          ...Array.from(store.adminLogsById.values()).map((lg) => ({ docId: `log_${lg.id}`, data: { ...lg, log_type: 'admin_log' }, merge: false })),
+          ...Array.from(store.pmLinkAlertsById.values()).map((al) => ({ docId: `pml_${al.id}`, data: { ...al, log_type: 'pm_link_alert' }, merge: false }))
+        ]),
+        fsBatchSet('notifications', Array.from(store.notificationsById.values()).map((nt) => ({ docId: String(nt.id), data: nt, merge: false }))),
+        fsBatchSet('user_sessions', Array.from(store.sessionsById.values()).map((s) => ({ docId: String(s.id), data: s, merge: false }))),
+        fsBatchSet('profile_media', Array.from(store.profileMediaById.values()).map((m) => ({ docId: String(m.id), data: m, merge: false }))),
+        fsSetDoc('settings', 'site', store.siteSettings, false),
+        fsSetDoc('settings', 'store_frames_catalog', {
+          items: Object.fromEntries(Array.from(store.customFramesById.entries())),
+          updatedAt: nowIso()
+        }, false),
+        fsSetDoc('counters', 'sequences', store.counters, true)
+      ]);
+    } catch (syncErr) {
+      console.error('Firestore restore sync partial error:', syncErr.message);
+    }
+
+    await writeAllOrganizedJsonFiles();
+    return { ok: true, counts: getStorageStatus().counts };
   }
 };

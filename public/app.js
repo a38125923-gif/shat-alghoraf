@@ -7,6 +7,7 @@
   const SOUND_MUTE_KEY = 'arabic_chat_sound_muted';
   const FINGERPRINT_KEY = 'arabic_chat_fp_v1';
   const USER_CACHE_KEY = 'arabic_chat_user_cache_v1';
+  const MIRROR_CACHE_KEY = 'arabic_chat_mirror_v1';
 
   const NAME_ANIM_OPTIONS = [
     { id: 'none', label: 'ثابت (بدون حركة)' },
@@ -177,6 +178,66 @@
     }
     clearSessionCookie();
     clearSessionFromIdb();
+  }
+
+  let _mirrorSaveTimer = null;
+  function syncLocalMirror(immediate = false) {
+    const commit = () => {
+      try {
+        const snapshot = {
+          v: 1,
+          savedAt: Date.now(),
+          roomId: state?.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general',
+          settings: state?.settings || {},
+          ranks: Array.isArray(state?.ranks) ? state.ranks : [],
+          rooms: Array.isArray(state?.rooms) ? state.rooms : [],
+          emojis: Array.isArray(state?.emojis) ? state.emojis.slice(0, 120) : [],
+          persistentMembers: Array.isArray(state?.persistentMembers) ? state.persistentMembers.slice(0, 80) : [],
+          messages: Array.isArray(state?.messages) ? state.messages.slice(-60) : []
+        };
+        localStorage.setItem(MIRROR_CACHE_KEY, JSON.stringify(snapshot));
+      } catch {
+        // ignore storage quota errors gracefully
+      }
+    };
+    if (immediate) {
+      if (_mirrorSaveTimer) {
+        clearTimeout(_mirrorSaveTimer);
+        _mirrorSaveTimer = null;
+      }
+      commit();
+      return;
+    }
+    if (_mirrorSaveTimer) clearTimeout(_mirrorSaveTimer);
+    _mirrorSaveTimer = setTimeout(() => {
+      _mirrorSaveTimer = null;
+      commit();
+    }, 250);
+  }
+
+  function hydrateLocalMirrorOnBoot() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(MIRROR_CACHE_KEY) || 'null');
+      if (!raw || typeof raw !== 'object') return false;
+      if (Array.isArray(raw.ranks) && raw.ranks.length && !state.ranks.length) {
+        state.ranks = raw.ranks;
+      }
+      if (Array.isArray(raw.rooms) && raw.rooms.length && !state.rooms.length) {
+        state.rooms = raw.rooms;
+      }
+      if (Array.isArray(raw.emojis) && raw.emojis.length && !state.emojis.length) {
+        state.emojis = raw.emojis;
+      }
+      if (Array.isArray(raw.persistentMembers) && raw.persistentMembers.length && !state.persistentMembers.length) {
+        state.persistentMembers = raw.persistentMembers;
+      }
+      if (raw.settings && typeof raw.settings === 'object' && Object.keys(raw.settings).length) {
+        applySiteSettings(raw.settings, true);
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function parseHexRgb(hex) {
@@ -1029,6 +1090,7 @@
               <button type="button" class="adm-tab" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> بوت المسابقات الذكي</button>
               <button type="button" class="adm-tab" data-adm-tab="members_control"><i class="fa-solid fa-users-gear"></i> الأعضاء والرقابة</button>
               <button type="button" class="adm-tab" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل الرقابي</button>
+              ${isOwner ? '<button type="button" class="adm-tab" id="ownerToolsAdmTab" data-adm-tab="owner_tools"><i class="fa-solid fa-toolbox"></i> الباك أب والأقسام</button>' : ''}
             </div>
             <div id="adminModalBody" class="modal-body"></div>
           </div>
@@ -1041,6 +1103,25 @@
             renderAdminTab(b.dataset.admTab);
           });
         });
+      } else {
+        const tabsBar = $('adminUnifiedTabsBar');
+        if (tabsBar) {
+          if (isOwner && !$('ownerToolsAdmTab')) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'adm-tab';
+            btn.id = 'ownerToolsAdmTab';
+            btn.dataset.admTab = 'owner_tools';
+            btn.innerHTML = '<i class="fa-solid fa-toolbox"></i> الباك أب والأقسام';
+            btn.addEventListener('click', () => {
+              tabsBar.querySelectorAll('.adm-tab').forEach((x) => x.classList.toggle('active', x === btn));
+              renderAdminTab('owner_tools');
+            });
+            tabsBar.appendChild(btn);
+          } else if (!isOwner) {
+            $('ownerToolsAdmTab')?.remove();
+          }
+        }
       }
     } else {
       $('adminModal')?.remove();
@@ -1458,7 +1539,88 @@
     return { html, hasMention: tokens.length > 0 || html.includes('mention-inline-badge') };
   }
 
-  function applySiteSettings(s) {
+  function openCustomDrawerSectionModal(section) {
+    if (!section) return;
+    let modal = $('customSectionModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'customSectionModal';
+      modal.className = 'modal-backdrop modal-slideover hidden';
+      modal.innerHTML = `
+        <div class="modal-card modal-card-md">
+          <div class="modal-header">
+            <h3 id="customSectionModalTitle"><i class="fa-solid fa-bookmark"></i> قسم مخصص</h3>
+            <button type="button" class="modal-close rtl-back-btn" id="customSectionModalCloseBtn"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
+          </div>
+          <div id="customSectionModalBody" class="modal-body"></div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      $('customSectionModalCloseBtn')?.addEventListener('click', () => closeModal('customSectionModal'));
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal('customSectionModal');
+      });
+    }
+    const iconCls = section.icon && /^fa-[a-z0-9-\s]+$/i.test(String(section.icon).trim())
+      ? String(section.icon).trim()
+      : 'fa-solid fa-star';
+    if ($('customSectionModalTitle')) {
+      $('customSectionModalTitle').innerHTML = `<i class="${escapeHtml(iconCls)}" style="color:#F59E0B;"></i> ${escapeHtml(section.title || 'قسم')}`;
+    }
+    if ($('customSectionModalBody')) {
+      const content = String(section.content || '').trim();
+      $('customSectionModalBody').innerHTML = `
+        <div class="custom-drawer-section-card">
+          ${content
+            ? content.split(/\n+/).map((line) => `<p>${escapeHtml(line)}</p>`).join('')
+            : '<div class="muted">لا يوجد محتوى مضاف لهذا القسم بعد.</div>'}
+        </div>
+      `;
+    }
+    openModal('customSectionModal');
+  }
+
+  function renderDynamicDrawerSections(s = state.settings) {
+    const drawerNav = document.querySelector('#mainDrawer .drawer-nav');
+    if (!drawerNav) return;
+    drawerNav.querySelectorAll('.drawer-item-custom').forEach((el) => el.remove());
+    const sections = Array.isArray(s?.custom_drawer_sections) ? s.custom_drawer_sections : [];
+    if (!sections.length) return;
+    const anchor =
+      $('drawerOwnerSuiteBtn') ||
+      $('drawerAdminBtn') ||
+      drawerNav.querySelector('.drawer-item[data-drawer="logout"]') ||
+      null;
+    sections.forEach((sec) => {
+      if (!sec || !sec.title) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'drawer-item drawer-item-custom';
+      btn.dataset.customSectionId = String(sec.id || '');
+      const iconCls = sec.icon && /^fa-[a-z0-9-\s]+$/i.test(String(sec.icon).trim())
+        ? String(sec.icon).trim()
+        : 'fa-solid fa-star';
+      btn.innerHTML = `<i class="${escapeHtml(iconCls)}" style="color:#F59E0B;"></i> ${escapeHtml(sec.title)}`;
+      btn.addEventListener('click', () => {
+        $('drawerBackdrop')?.classList.add('hidden');
+        $('mainDrawer')?.classList.add('hidden');
+        if (sec.type === 'quiz_points') {
+          openLeaderboardsModal('quizLeaders');
+        } else if (sec.type === 'leaderboards') {
+          openLeaderboardsModal('rich');
+        } else {
+          openCustomDrawerSectionModal(sec);
+        }
+      });
+      if (anchor && anchor.parentNode === drawerNav) {
+        drawerNav.insertBefore(btn, anchor);
+      } else {
+        drawerNav.appendChild(btn);
+      }
+    });
+  }
+
+  function applySiteSettings(s, skipMirror = false) {
     if (!s) return;
     state.settings = s;
     document.title = s.site_name || 'شات الغرف المباشر';
@@ -1514,6 +1676,7 @@
     $('plusUploadImageBtn')?.classList.toggle('hidden', !canMediaUi);
     $('voiceRecordBtn')?.classList.toggle('hidden', !canMediaUi);
     document.querySelector('.drawer-item[data-drawer="store"]')?.classList.toggle('hidden', !canStoreUi);
+    renderDynamicDrawerSections(s);
     const msgInputEl = $('messageInput');
     if (msgInputEl && state.user) {
       const guestBlocked = state.user.isGuest && Number(s.guest_can_chat ?? 1) === 0;
@@ -1524,7 +1687,7 @@
     if (!$('inlineMsgStyleBar')?.classList.contains('hidden')) {
       renderInlineMsgStyleBar();
     }
-
+    if (!skipMirror) syncLocalMirror();
     if (state.currentRoom) {
       renderRoomBanner();
       renderAllMessages();
@@ -2794,9 +2957,16 @@
     const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || hasPerm('set_rank'));
     const canGiveCoins = Boolean(targetUserId) && (isOwner || (allowedByImmunity && hasPerm('give_coins')));
     const showAdminTab = Boolean(allowedByImmunity && (canMod || canBan || canKick || canClearRoom || canRank || canGiveCoins || isOwner));
-    const canGift = !isMe && !state.user?.isGuest && isFeatureEnabled('feat_gifts') && (isOwner || hasPerm('gifts'));
+    const canGift = !isMe && !state.user?.isGuest && isFeatureEnabled('feat_gifts') && isFeatureEnabled('feat_profile_gifts') && (isOwner || hasPerm('gifts'));
     const canPmTarget = !isMe && u.allowPm !== false && isFeatureEnabled('feat_pm') && (isOwner || (passesSettingRankThreshold('min_rank_pm') && hasPerm('pm')));
-    const hasMusic = Boolean(u.profileMusic && String(u.profileMusic).trim());
+    const allowProfLikes = isFeatureEnabled('feat_profile_likes');
+    const allowProfRating = isFeatureEnabled('feat_profile_rating');
+    const allowProfMusic = isFeatureEnabled('feat_profile_music');
+    const allowProfFriends = isFeatureEnabled('feat_profile_friends');
+    const allowProfGifts = isFeatureEnabled('feat_profile_gifts');
+    const allowProfRelations = isFeatureEnabled('feat_profile_relations');
+    const allowProfWall = isFeatureEnabled('feat_profile_wall');
+    const hasMusic = allowProfMusic && Boolean(u.profileMusic && String(u.profileMusic).trim());
     const musicLabelMap = {
       'preset:calm_lofi': 'أنغام هادئة',
       'preset:royal_oud': 'نغمة ملكية',
@@ -2817,6 +2987,12 @@
     const userWallPosts = (state.social.wallPosts || []).filter((p) => p.author_key === u.key);
     const friendsList = (state.social.friends || []).filter((f) => f.status === 'accepted');
     const profileLink = `${window.location.origin}/?profile=${encodeURIComponent(u.key)}`;
+    const dynFields = (state.settings?.custom_profile_fields || []).filter((f) => f && f.enabled !== false && f.label);
+    const uCustomFields = (u.customFields && typeof u.customFields === 'object') ? u.customFields : {};
+    const dynFieldsHtml = dynFields.map((fld) => {
+      const val = String(uCustomFields[fld.id] || '').trim();
+      return `<div class="info-kv-row"><span><i class="fa-solid fa-tag"></i> ${escapeHtml(fld.label)}</span><strong>${escapeHtml(val || 'غير محدد')}</strong></div>`;
+    }).join('');
 
     const assignableRanks = canRank ? getAssignableRanksForActor() : [];
     const currentRoleObj = getRank(u.role);
@@ -2840,8 +3016,8 @@
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة الغلاف والبطاقة"><i class="fa-solid fa-eye"></i></button>
           </div>
           <div class="profile-cover-stats-bar">
-            <button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#fb7185;"></i> <span id="quLikesCount">${Number(u.likesCount || 0)}</span></button>
-            <div class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <span id="quRatingAvg">${avgRating}</span></div>
+            ${allowProfLikes ? `<button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#fb7185;"></i> <span id="quLikesCount">${Number(u.likesCount || 0)}</span></button>` : ''}
+            ${allowProfRating ? `<div class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <span id="quRatingAvg">${avgRating}</span></div>` : ''}
             <div class="hero-stat-pill" title="الروبي"><i class="fa-solid fa-gem" style="color:#f43f5e;"></i> <span id="quHeroCoinsVal">${Number(u.coins || 0)}</span></div>
           </div>
         </div>
@@ -2864,13 +3040,14 @@
               <span class="mini-music-eq" aria-hidden="true"><i></i><i></i><i></i></span>
               <span class="mini-music-label">${escapeHtml(musicLabel)}</span>
             </div>` : ''}
-          <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
-            ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
-          </div>
+          ${allowProfRating ? `
+            <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
+              ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
+            </div>` : ''}
           <div class="qu-quick-action-strip">
             <button type="button" class="btn-secondary btn-xs" id="quMentionBtn"><i class="fa-solid fa-bullhorn"></i> نداء</button>
             ${canPmTarget ? '<button type="button" class="btn-primary btn-xs" id="quPmBtn"><i class="fa-solid fa-envelope"></i> رسالة</button>' : ''}
-            ${!isMe && !state.user?.isGuest && isReg ? '<button type="button" class="btn-secondary btn-xs" id="quFriendBtn"><i class="fa-solid fa-user-plus"></i> صداقة</button>' : ''}
+            ${allowProfFriends && !isMe && !state.user?.isGuest && isReg ? '<button type="button" class="btn-secondary btn-xs" id="quFriendBtn"><i class="fa-solid fa-user-plus"></i> صداقة</button>' : ''}
             ${canGift ? '<button type="button" class="btn-primary btn-xs" style="background:#db2777" id="quGiftBtn"><i class="fa-solid fa-gift"></i> هدية</button>' : ''}
           </div>
         </div>
@@ -2878,10 +3055,10 @@
         <div class="profile-lower-dark-stage">
           <div class="profile-6tabs-bar" id="quTabsBar">
             <button type="button" class="qu-tab active" data-qu-tab="info"><i class="fa-solid fa-circle-info"></i><span>المعلومات</span></button>
-            <button type="button" class="qu-tab" data-qu-tab="friends"><i class="fa-solid fa-user-group"></i><span>الأصدقاء</span></button>
-            <button type="button" class="qu-tab" data-qu-tab="gifts"><i class="fa-solid fa-gift"></i><span>الهدايا</span></button>
-            <button type="button" class="qu-tab" data-qu-tab="relations"><i class="fa-solid fa-heart-pulse"></i><span>العلاقات</span></button>
-            <button type="button" class="qu-tab" data-qu-tab="posts"><i class="fa-solid fa-newspaper"></i><span>المنشورات</span></button>
+            ${allowProfFriends ? '<button type="button" class="qu-tab" data-qu-tab="friends"><i class="fa-solid fa-user-group"></i><span>الأصدقاء</span></button>' : ''}
+            ${allowProfGifts ? '<button type="button" class="qu-tab" data-qu-tab="gifts"><i class="fa-solid fa-gift"></i><span>الهدايا</span></button>' : ''}
+            ${allowProfRelations ? '<button type="button" class="qu-tab" data-qu-tab="relations"><i class="fa-solid fa-heart-pulse"></i><span>العلاقات</span></button>' : ''}
+            ${allowProfWall ? '<button type="button" class="qu-tab" data-qu-tab="posts"><i class="fa-solid fa-newspaper"></i><span>المنشورات</span></button>' : ''}
             ${showAdminTab
               ? '<button type="button" class="qu-tab admin-tab-pill" data-qu-tab="admin"><i class="fa-solid fa-shield-halved"></i><span>الإدارة</span></button>'
               : '<button type="button" class="qu-tab" data-qu-tab="more"><i class="fa-solid fa-ellipsis"></i><span>المزيد</span></button>'}
@@ -2907,6 +3084,7 @@
                 <div class="info-kv-row"><span><i class="fa-solid fa-venus-mars"></i> الجنس</span><strong>${escapeHtml(u.gender || 'غير محدد')}</strong></div>
                 <div class="info-kv-row"><span><i class="fa-solid fa-earth-asia"></i> البلد</span><strong>${escapeHtml(u.country || 'غير محدد')}</strong></div>
                 <div class="info-kv-row"><span><i class="fa-solid fa-bolt"></i> نقاط التفاعل</span><strong>${Number(u.activityPoints || 0)}</strong></div>
+                ${dynFieldsHtml}
               </div>
               <div class="copy-link-box">
                 <input type="text" readonly value="${escapeHtml(profileLink)}" id="quProfileLinkInput" />
@@ -3030,9 +3208,10 @@
       if (state.user?.isGuest) return showToast('الإعجاب متاح للأعضاء المسجلين.', true);
       try {
         const res = await api('/api/profile/interact', { method: 'POST', body: { targetKey: u.key, like: true } });
-        if (res?.target) {
-          u.likesCount = res.target.likesCount;
-          if ($('quLikesCount')) $('quLikesCount').textContent = String(res.target.likesCount || 0);
+        const upd = res?.user || res?.target;
+        if (upd) {
+          u.likesCount = upd.likesCount;
+          if ($('quLikesCount')) $('quLikesCount').textContent = String(upd.likesCount || 0);
         }
         showToast('تم إرسال الإعجاب للملف.');
       } catch (err) {
@@ -3046,9 +3225,10 @@
         const stars = Number(btn.dataset.star);
         try {
           const res = await api('/api/profile/interact', { method: 'POST', body: { targetKey: u.key, rating: stars } });
-          if (res?.target) {
-            u.ratingSum = res.target.ratingSum;
-            u.ratingCount = res.target.ratingCount;
+          const upd = res?.user || res?.target;
+          if (upd) {
+            u.ratingSum = upd.ratingSum;
+            u.ratingCount = upd.ratingCount;
             const nextAvg = u.ratingCount > 0 ? (u.ratingSum / u.ratingCount).toFixed(1) : '0.0';
             if ($('quRatingAvg')) $('quRatingAvg').textContent = nextAvg;
           }
@@ -3755,10 +3935,53 @@
     if ($('custFontStyle')) $('custFontStyle').disabled = !canMsgStyle;
     if ($('custFontSize')) $('custFontSize').disabled = !canMsgStyle;
 
+    // Global Profile Feature Toggles + Dynamic Profile Fields
+    const featLikes = isFeatureEnabled('feat_profile_likes');
+    const featRating = isFeatureEnabled('feat_profile_rating');
+    const featMusic = isFeatureEnabled('feat_profile_music');
+    const featFriends = isFeatureEnabled('feat_profile_friends');
+    const featGifts = isFeatureEnabled('feat_profile_gifts');
+    const featRelations = isFeatureEnabled('feat_profile_relations');
+    const featWall = isFeatureEnabled('feat_profile_wall');
+
+    $('custLikesStatPill')?.classList.toggle('hidden', !featLikes);
+    $('custRatingStatPill')?.classList.toggle('hidden', !featRating);
+    $('custMiniMusicPlayer')?.classList.toggle('hidden', !featMusic);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="friends"]')?.classList.toggle('hidden', !featFriends);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="gifts"]')?.classList.toggle('hidden', !featGifts);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="relations"]')?.classList.toggle('hidden', !featRelations);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="posts"]')?.classList.toggle('hidden', !featWall);
+
+    const dynWrap = $('custDynamicProfileFieldsWrap');
+    if (dynWrap) {
+      const enabledDynFields = (state.settings?.custom_profile_fields || []).filter((f) => f && f.enabled !== false && f.label);
+      const uCustom = (u.customFields && typeof u.customFields === 'object') ? u.customFields : {};
+      if (enabledDynFields.length) {
+        dynWrap.classList.remove('hidden');
+        dynWrap.innerHTML = enabledDynFields.map((fld) => `
+          <div>
+            <label class="muted">${escapeHtml(fld.label)}</label>
+            <input type="text" class="cust-dynamic-field-inp" data-field-id="${escapeHtml(fld.id)}" value="${escapeHtml(uCustom[fld.id] || '')}" placeholder="${escapeHtml(fld.placeholder || fld.label)}" maxlength="120" />
+          </div>
+        `).join('');
+      } else {
+        dynWrap.innerHTML = '';
+        dynWrap.classList.add('hidden');
+      }
+    }
+
     renderCustomizeAddonsGrids(canAddons, canBgEff);
     const initialModeTab = u.nameStyleMode === 'gradient' ? 'gradient' : (u.nameStyleMode === 'glow' ? 'neon' : (state.activeNameStyleTab || 'color'));
     switchNameStyleTab(initialModeTab);
-    const resolvedTab = initialTab === 'account' ? 'info' : (initialTab === 'options' || initialTab === 'addons' ? 'more' : initialTab);
+    let resolvedTab = initialTab === 'account' ? 'info' : (initialTab === 'options' || initialTab === 'addons' ? 'more' : initialTab);
+    if (
+      (resolvedTab === 'friends' && !featFriends) ||
+      (resolvedTab === 'gifts' && !featGifts) ||
+      (resolvedTab === 'relations' && !featRelations) ||
+      (resolvedTab === 'posts' && !featWall)
+    ) {
+      resolvedTab = 'info';
+    }
     switchCustomizeTab(resolvedTab);
     updateCustomizePreview();
     openModal('customizeModal');
@@ -4144,6 +4367,11 @@
       }
       const customUrl = $('custMusicCustomUrl')?.value.trim() || '';
       const profileMusic = customUrl || ($('custMusicPreset')?.value || '');
+      const customFields = { ...((state.user?.customFields && typeof state.user.customFields === 'object') ? state.user.customFields : {}) };
+      document.querySelectorAll('#custDynamicProfileFieldsWrap .cust-dynamic-field-inp').forEach((inp) => {
+        const fid = String(inp.dataset.fieldId || '').trim();
+        if (fid) customFields[fid] = inp.value.trim();
+      });
       const res = await api('/api/profile/customize', {
         method: 'POST',
         body: {
@@ -4169,10 +4397,13 @@
           nameAnim: $('custNameAnim')?.value || 'none',
           nameAnimSpeed: $('custNameAnimSpeed')?.value || 'normal',
           vipWings: $('custVipWingsToggle').checked,
-          profileMusic
+          profileMusic,
+          customFields
         }
       });
       state.user = res.user;
+      persistSessionState(state.user, state.token);
+      syncLocalMirror();
       renderUserIdentity();
       updateCustomizePreview();
       showToast('تم حفظ وتطبيق تعديلات ملفك الشخصي!');
@@ -4581,47 +4812,32 @@
   function openDownloadAppModal() {
     const body = $('downloadAppBody');
     if (!body) return;
-    const siteName = state.settings?.site_name || 'شات الغرف';
-    const hasPrompt = Boolean(state.deferredInstallPrompt);
     body.innerHTML = `
       <div class="download-app-box">
-        <div class="download-app-hero">
-          <i class="fa-solid fa-mobile-screen-button"></i>
-          <strong>تثبيت تطبيق ${escapeHtml(siteName)}</strong>
-          <p class="muted">افتح الشات كتطبيق مستقل سريع مع إشعارات فورية بلمسة واحدة.</p>
-        </div>
-        ${hasPrompt
-          ? `<button type="button" id="installPwaTriggerBtn" class="btn-primary btn-full"><i class="fa-solid fa-download"></i> تثبيت التطبيق الآن</button>`
-          : ''}
-        <div class="admin-list-card" style="flex-direction:column;align-items:flex-start;gap:6px;">
-          <strong><i class="fa-brands fa-android" style="color:#16a34a;"></i> أجهزة أندرويد (Chrome):</strong>
-          <span class="muted">اضغط على القائمة (⋮) في أعلى المتصفح ثم اختر <b>"الإضافة إلى الشاشة الرئيسية"</b> أو <b>"تثبيت التطبيق"</b>.</span>
-        </div>
-        <div class="admin-list-card" style="flex-direction:column;align-items:flex-start;gap:6px;">
-          <strong><i class="fa-brands fa-apple" style="color:#f8fafc;"></i> أجهزة آيفون (Safari):</strong>
-          <span class="muted">اضغط على زر المشاركة (⬆️) في الأسفل ثم اختر <b>"إضافة إلى الصفحة الرئيسية"</b>.</span>
-        </div>
-        <button type="button" id="copyAppDownloadLinkBtn" class="btn-secondary btn-full"><i class="fa-solid fa-copy"></i> نسخ رابط الموقع</button>
+        <button type="button" id="installPwaTriggerBtn" class="btn-primary btn-full">
+          <i class="fa-solid fa-download"></i> تثبيت التطبيق الآن
+        </button>
       </div>
     `;
     $('installPwaTriggerBtn')?.addEventListener('click', async () => {
       const promptEv = state.deferredInstallPrompt;
-      if (!promptEv) return;
-      promptEv.prompt();
-      const choice = await promptEv.userChoice.catch(() => ({ outcome: 'dismissed' }));
-      state.deferredInstallPrompt = null;
-      if (choice?.outcome === 'accepted') {
-        showToast('تم تثبيت التطبيق بنجاح!');
-        closeModal('downloadAppModal');
-      } else {
-        openDownloadAppModal();
+      if (promptEv) {
+        promptEv.prompt();
+        const choice = await promptEv.userChoice.catch(() => ({ outcome: 'dismissed' }));
+        state.deferredInstallPrompt = null;
+        if (choice?.outcome === 'accepted') {
+          showToast('تم تثبيت التطبيق بنجاح!');
+          closeModal('downloadAppModal');
+        }
+        return;
       }
-    });
-    $('copyAppDownloadLinkBtn')?.addEventListener('click', () => {
-      navigator.clipboard?.writeText(window.location.origin).then(
-        () => showToast('تم نسخ رابط الموقع!'),
-        () => showToast(window.location.origin)
-      );
+      const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone === true;
+      if (isStandalone) {
+        showToast('التطبيق مثبّت ومفتوح بالفعل.');
+        closeModal('downloadAppModal');
+        return;
+      }
+      showToast('لتثبيت التطبيق من متصفحك الحالي اختر "إضافة إلى الشاشة الرئيسية" من قائمة المتصفح.');
     });
     openModal('downloadAppModal');
   }
@@ -5156,6 +5372,7 @@
     if (t === 'quiz_bot') return { tab: 'quiz_bot', sub: subOverride || null };
     if (t === 'members_control') return { tab: 'members_control', sub: subOverride || null };
     if (t === 'audit_log') return { tab: 'audit_log', sub: subOverride || null };
+    if (t === 'owner_tools') return { tab: 'owner_tools', sub: subOverride || null };
     if (t === 'ranks') return { tab: 'ranks_matrix', sub: subOverride || 'creator' };
     if (t === 'master_matrix' || t === 'store_mgr') return { tab: 'ranks_matrix', sub: subOverride || 'matrix' };
     if (t === 'stats') return { tab: 'ranks_matrix', sub: subOverride || 'creator' };
@@ -5244,6 +5461,7 @@
     if (tab === 'quiz_bot') return renderAdminQuizBotTab(body, ov, suite, isOwner);
     if (tab === 'members_control') return renderAdminMembersControlTab(body, ov, suite, isOwner);
     if (tab === 'audit_log') return renderAdminAuditLogTab(body, ov, suite, isOwner);
+    if (tab === 'owner_tools') return renderAdminOwnerToolsTab(body, ov, suite, isOwner);
   }
 
   function renderAdminRanksMatrixTab(body, ov, suite, isOwner) {
@@ -5914,14 +6132,13 @@
           <div><label class="muted">زمن التلميح التلقائي (ثوانٍ: 5–60)</label><input type="number" id="qbHintSec" min="5" max="60" value="${Number(qs.quiz_hint_sec) || 12}" /></div>
           <div><label class="muted">جائزة الروبي الأساسية (💎)</label><input type="number" id="qbRewardCoins" min="10" max="5000" value="${Number(qs.quiz_reward_coins) || 100}" /></div>
           <div>
-            <label class="muted">نمط رسالة السؤال (6 أنماط عرض)</label>
+            <label class="muted">لون رسالة البوت (5 خيارات ألوان)</label>
             <select id="qbMsgStyle">
-              <option value="royal_gold" ${(!qs.quiz_msg_style || qs.quiz_msg_style === 'royal_gold' || qs.quiz_msg_style === 'royal') ? 'selected' : ''}>1. ملكي ذهبي فاخر</option>
-              <option value="glass_modern" ${(qs.quiz_msg_style === 'glass_modern' || qs.quiz_msg_style === 'glass') ? 'selected' : ''}>2. زجاجي عصري متوهج</option>
-              <option value="cyber_blue" ${qs.quiz_msg_style === 'cyber_blue' ? 'selected' : ''}>3. سايبر أزرق مستقبلي</option>
-              <option value="emerald_neon" ${qs.quiz_msg_style === 'emerald_neon' ? 'selected' : ''}>4. زمردي نيون ساطع</option>
-              <option value="crimson_fire" ${qs.quiz_msg_style === 'crimson_fire' ? 'selected' : ''}>5. قرمزي ناري حاد</option>
-              <option value="classic_compact" ${(qs.quiz_msg_style === 'classic_compact' || qs.quiz_msg_style === 'classic') ? 'selected' : ''}>6. كلاسيكي هادئ سريع</option>
+              <option value="royal_gold" ${(!qs.quiz_msg_style || qs.quiz_msg_style === 'royal_gold' || qs.quiz_msg_style === 'royal') ? 'selected' : ''}>1. ذهبي ملكي فاخر</option>
+              <option value="cyber_blue" ${qs.quiz_msg_style === 'cyber_blue' ? 'selected' : ''}>2. أزرق سايبر متوهج</option>
+              <option value="emerald_neon" ${qs.quiz_msg_style === 'emerald_neon' ? 'selected' : ''}>3. أخضر زمردي نيون</option>
+              <option value="crimson_fire" ${qs.quiz_msg_style === 'crimson_fire' ? 'selected' : ''}>4. أحمر قرمزي ناري</option>
+              <option value="glass_modern" ${(qs.quiz_msg_style === 'glass_modern' || qs.quiz_msg_style === 'glass' || qs.quiz_msg_style === 'classic' || qs.quiz_msg_style === 'classic_compact') ? 'selected' : ''}>5. سماوي زجاجي حديث</option>
             </select>
           </div>
         </div>
@@ -6132,7 +6349,7 @@
             <h4><i class="fa-solid fa-clock-rotate-left"></i> سجل تغيير الأسماء</h4>
             ${(suite.users || []).filter((u) => (u.nameHistory || []).length).map((u) => `
               <div class="admin-list-card">
-                <div><strong>${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})</strong><div class="muted">الأسماء السابقة: ${(u.nameHistory || []).map((h) => escapeHtml(h.name)).join(' ← ')}</div></div>
+                <div><strong>${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})</strong><div class="muted">الأسماء السابقة: ${(u.nameHistory || []).map((h) => escapeHtml(h.oldName ? `${h.oldName} ← ${h.newName || ''}` : (h.name || ''))).join(' • ')}</div></div>
               </div>
             `).join('') || '<div class="muted">لا توجد تغييرات أسماء مسجلة.</div>'}
           </div>
@@ -6616,6 +6833,304 @@
     renderFiltered();
   }
 
+  function renderAdminOwnerToolsTab(body, ov, suite, isOwner) {
+    if (!isOwner) {
+      body.innerHTML = '<div class="form-error">هذه الأدوات حصرية للمالك فقط.</div>';
+      return;
+    }
+    const s = ov.settings || state.settings || {};
+    const storage = suite.storageStatus || {};
+    const counts = storage.counts || {};
+    let drawerSections = Array.isArray(s.custom_drawer_sections) ? JSON.parse(JSON.stringify(s.custom_drawer_sections)) : [];
+    let profileFields = Array.isArray(s.custom_profile_fields) ? JSON.parse(JSON.stringify(s.custom_profile_fields)) : [];
+    let editingDrawerId = state.editingCustomDrawerId || null;
+    const editingDrawerSec = editingDrawerId ? drawerSections.find((x) => x.id === editingDrawerId) : null;
+
+    const lastJsonText = storage.lastJsonSavedAt
+      ? new Date(storage.lastJsonSavedAt).toLocaleString('ar-EG')
+      : 'محدّث الآن';
+
+    body.innerHTML = `
+      <div class="owner-suite-section">
+        <h4><i class="fa-solid fa-database" style="color:#F59E0B;"></i> الحفظ الدائم (JSON المنظم) والنسخ الاحتياطي والاستعادة</h4>
+        <div class="muted">يتم حفظ جميع الحسابات والصور والرتب والغرف والرسائل في ملفات JSON منظمة مع مزامنة فورية في متصفحك وقاعدة البيانات.</div>
+        <div class="owner-json-status-chips">
+          <span><i class="fa-solid fa-users"></i> الحسابات: ${Number(counts.users || 0)}</span>
+          <span><i class="fa-solid fa-crown"></i> الرتب: ${Number(counts.ranks || 0)}</span>
+          <span><i class="fa-solid fa-door-open"></i> الغرف: ${Number(counts.rooms || 0)}</span>
+          <span><i class="fa-solid fa-comments"></i> الرسائل: ${Number(counts.messages || 0)}</span>
+          <span><i class="fa-solid fa-images"></i> الصور المحفوظة: ${Number(counts.media || 0)}</span>
+          <span><i class="fa-regular fa-clock"></i> آخر مزامنة: ${escapeHtml(lastJsonText)}</span>
+        </div>
+        <div class="owner-backup-actions-row">
+          <button type="button" id="ownerExportBackupBtn" class="btn-primary btn-sm">
+            <i class="fa-solid fa-download"></i> نسخ احتياطي للبيانات
+          </button>
+          <div class="owner-restore-upload-box">
+            <input type="file" id="ownerRestoreBackupFile" accept=".json,application/json" />
+            <button type="button" id="ownerRestoreBackupBtn" class="btn-secondary btn-sm">
+              <i class="fa-solid fa-upload"></i> استعادة البيانات
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="owner-suite-section" style="margin-top:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h4><i class="fa-solid fa-bars-staggered" style="color:#38bdf8;"></i> منشئ أقسام القائمة الجانبية (${drawerSections.length})</h4>
+          ${editingDrawerSec ? '<button type="button" id="ownerCancelDrawerSecBtn" class="btn-secondary btn-xs">إلغاء التعديل</button>' : ''}
+        </div>
+        <div class="form-grid-2">
+          <div><label class="muted">عنوان القسم في القائمة</label><input type="text" id="ownerDrawerSecTitle" value="${escapeHtml(editingDrawerSec?.title || '')}" placeholder="مثال: القوانين، نقاط المسابقات، جدول الفعاليات" /></div>
+          <div>
+            <label class="muted">أيقونة القسم (FontAwesome)</label>
+            <input type="text" id="ownerDrawerSecIcon" value="${escapeHtml(editingDrawerSec?.icon || 'fa-solid fa-star')}" placeholder="fa-solid fa-star" />
+          </div>
+        </div>
+        <div>
+          <label class="muted">نوع القسم</label>
+          <select id="ownerDrawerSecType">
+            <option value="text" ${(!editingDrawerSec || editingDrawerSec.type === 'text') ? 'selected' : ''}>صفحة محتوى نصي</option>
+            <option value="rules" ${editingDrawerSec?.type === 'rules' ? 'selected' : ''}>قسم القوانين والإرشادات</option>
+            <option value="leaderboards" ${editingDrawerSec?.type === 'leaderboards' ? 'selected' : ''}>تصدر الكبار والأثرياء</option>
+            <option value="quiz_points" ${editingDrawerSec?.type === 'quiz_points' ? 'selected' : ''}>نقاط المسابقات المباشرة</option>
+          </select>
+        </div>
+        <div id="ownerDrawerSecContentWrap">
+          <label class="muted">محتوى القسم (يظهر للمستخدمين عند الضغط)</label>
+          <textarea id="ownerDrawerSecContent" rows="3" placeholder="اكتب النص أو القوانين التي ستظهر عند فتح هذا القسم...">${escapeHtml(editingDrawerSec?.content || '')}</textarea>
+        </div>
+        <button type="button" id="ownerSaveDrawerSecBtn" class="btn-primary btn-sm">
+          <i class="fa-solid ${editingDrawerSec ? 'fa-check' : 'fa-plus'}"></i> ${editingDrawerSec ? 'تحديث القسم وحفظه' : 'إضافة قسم للقائمة الجانبية'}
+        </button>
+        <div class="news-feed-list" style="margin-top:8px;">
+          ${drawerSections.length ? drawerSections.map((sec, idx) => `
+            <div class="admin-list-card">
+              <div style="min-width:0;flex:1;">
+                <strong><i class="${escapeHtml(sec.icon || 'fa-solid fa-star')}" style="color:#F59E0B;"></i> ${escapeHtml(sec.title)}</strong>
+                <div class="muted">${sec.type === 'quiz_points' ? 'نقاط المسابقات' : sec.type === 'leaderboards' ? 'الكبار والأثرياء' : (sec.type === 'rules' ? 'القوانين' : 'محتوى مخصص')}</div>
+              </div>
+              <div class="inline-row">
+                <button type="button" class="btn-secondary btn-xs drw-move-btn" data-idx="${idx}" data-dir="-1" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                <button type="button" class="btn-secondary btn-xs drw-move-btn" data-idx="${idx}" data-dir="1" ${idx === drawerSections.length - 1 ? 'disabled' : ''}>▼</button>
+                <button type="button" class="btn-secondary btn-xs drw-edit-btn" data-sid="${escapeHtml(sec.id)}">تعديل</button>
+                <button type="button" class="btn-danger btn-xs drw-del-btn" data-sid="${escapeHtml(sec.id)}">حذف</button>
+              </div>
+            </div>
+          `).join('') : '<div class="muted">لا توجد أقسام مخصصة بعد — أضف قسماً ليظهر فوراً في القائمة الجانبية للجميع.</div>'}
+        </div>
+      </div>
+
+      <div class="owner-suite-section" style="margin-top:10px;">
+        <h4><i class="fa-solid fa-id-card-clip" style="color:#a78bfa;"></i> حقول البروفايل الديناميكية والتحكم بالميزات التفاعلية</h4>
+        <div class="luxury-fx-grid">
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatLikes" ${Number(s.feat_profile_likes ?? 1) !== 0 ? 'checked' : ''} /><strong>الإعجابات في الملف الشخصي</strong></div></label>
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatRating" ${Number(s.feat_profile_rating ?? 1) !== 0 ? 'checked' : ''} /><strong>تقييم النجوم</strong></div></label>
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatMusic" ${Number(s.feat_profile_music ?? 1) !== 0 ? 'checked' : ''} /><strong>أغنية البروفايل</strong></div></label>
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatFriends" ${Number(s.feat_profile_friends ?? 1) !== 0 ? 'checked' : ''} /><strong>قائمة الأصدقاء</strong></div></label>
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatGifts" ${Number(s.feat_profile_gifts ?? 1) !== 0 ? 'checked' : ''} /><strong>الهدايا في البروفايل</strong></div></label>
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatRelations" ${Number(s.feat_profile_relations ?? 1) !== 0 ? 'checked' : ''} /><strong>العلاقات والقبيلة</strong></div></label>
+          <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatWall" ${Number(s.feat_profile_wall ?? 1) !== 0 ? 'checked' : ''} /><strong>منشورات الحائط بالملف</strong></div></label>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(148,163,184,0.2);margin:8px 0;" />
+        <strong>حقول إضافية يملؤها العضو في ملفه الشخصي (${profileFields.length}):</strong>
+        <div class="form-grid-2" style="margin-top:6px;">
+          <input type="text" id="ownerProfFieldLabel" placeholder="اسم الحقل (مثال: الهواية أو التخصص)" />
+          <input type="text" id="ownerProfFieldPlaceholder" placeholder="نص توضيحي (مثال: اكتب هوايتك المفضلة)" />
+        </div>
+        <button type="button" id="ownerAddProfFieldBtn" class="btn-secondary btn-xs" style="margin-top:4px;">
+          <i class="fa-solid fa-plus"></i> إضافة حقل للبروفايل
+        </button>
+
+        <div class="news-feed-list" style="margin-top:8px;">
+          ${profileFields.length ? profileFields.map((fld, idx) => `
+            <div class="admin-list-card">
+              <div style="min-width:0;flex:1;">
+                <strong>${escapeHtml(fld.label)}</strong>
+                <div class="muted">${escapeHtml(fld.placeholder || 'بدون نص توضيحي')}</div>
+              </div>
+              <div class="inline-row">
+                <label class="switch-label" style="margin:0;">
+                  <input type="checkbox" class="prof-dyn-enable-chk" data-idx="${idx}" ${fld.enabled !== false ? 'checked' : ''} />
+                  <span>مفعّل</span>
+                </label>
+                <button type="button" class="btn-danger btn-xs prof-dyn-del-btn" data-idx="${idx}">حذف</button>
+              </div>
+            </div>
+          `).join('') : '<div class="muted">لا توجد حقول إضافية مضافة بعد.</div>'}
+        </div>
+
+        <button type="button" id="ownerSaveProfileBuilderBtn" class="btn-primary btn-sm" style="margin-top:8px;">
+          <i class="fa-solid fa-floppy-disk"></i> حفظ حقول البروفايل والميزات التفاعلية
+        </button>
+      </div>
+    `;
+
+    // Sync content box visibility with section type
+    const syncContentWrap = () => {
+      const tp = $('ownerDrawerSecType')?.value || 'text';
+      $('ownerDrawerSecContentWrap')?.classList.toggle('hidden', tp === 'leaderboards' || tp === 'quiz_points');
+    };
+    syncContentWrap();
+    $('ownerDrawerSecType')?.addEventListener('change', syncContentWrap);
+
+    // 1) Backup Download
+    $('ownerExportBackupBtn')?.addEventListener('click', async () => {
+      const btn = $('ownerExportBackupBtn');
+      try {
+        if (btn) btn.disabled = true;
+        const headers = {
+          'X-Device-Id': state.deviceId,
+          'X-Client-Fingerprint': state.fingerprint
+        };
+        if (state.token) headers.Authorization = `Bearer ${state.token}`;
+        const res = await fetch('/api/owner/backup', { headers });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'تعذر إنشاء النسخة الاحتياطية.');
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `asil-chat-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        showToast('تم تحميل النسخة الاحتياطية الكاملة بنجاح!');
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    // 2) Backup Restore
+    $('ownerRestoreBackupBtn')?.addEventListener('click', async () => {
+      const file = $('ownerRestoreBackupFile')?.files?.[0];
+      if (!file) return showToast('اختر ملف النسخة الاحتياطية (.json) أولاً.', true);
+      if (!confirm('سيتم استعادة البيانات والصور والرتب والغرف من هذا الملف مع بقاء اتصالك وجلسات الدخول نشطة. هل تريد المتابعة؟')) return;
+      const btn = $('ownerRestoreBackupBtn');
+      try {
+        if (btn) btn.disabled = true;
+        const rawText = await file.text();
+        const parsed = JSON.parse(rawText);
+        const res = await api('/api/owner/restore', { method: 'POST', body: { backup: parsed } });
+        if (res?.settings) applySiteSettings(res.settings);
+        if (res?.ranks) state.ranks = res.ranks;
+        syncLocalMirror(true);
+        const c = res?.restoredCounts || {};
+        showToast(`تمت استعادة البيانات بنجاح! (${Number(c.users || 0)} عضو • ${Number(c.rooms || 0)} غرفة • ${Number(c.messages || 0)} رسالة)`);
+        await openAdminPanel('owner_tools');
+      } catch (err) {
+        showToast(err.message || 'ملف النسخة الاحتياطية غير صالح.', true);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    // 3) Sidebar Drawer Sections Builder
+    $('ownerCancelDrawerSecBtn')?.addEventListener('click', () => {
+      state.editingCustomDrawerId = null;
+      renderAdminOwnerToolsTab(body, ov, suite, isOwner);
+    });
+    $('ownerSaveDrawerSecBtn')?.addEventListener('click', () => {
+      const title = ($('ownerDrawerSecTitle')?.value || '').trim();
+      if (!title) return showToast('اكتب عنوان القسم أولاً.', true);
+      const icon = ($('ownerDrawerSecIcon')?.value || 'fa-solid fa-star').trim();
+      const type = $('ownerDrawerSecType')?.value || 'text';
+      const content = ($('ownerDrawerSecContent')?.value || '').trim();
+      if (editingDrawerSec) {
+        drawerSections = drawerSections.map((sec) =>
+          sec.id === editingDrawerSec.id ? { ...sec, title, icon, type, content } : sec
+        );
+        state.editingCustomDrawerId = null;
+      } else {
+        drawerSections.push({
+          id: `sec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          title,
+          icon,
+          type,
+          content
+        });
+      }
+      runOwnerCmdAction({ action: 'save_custom_drawer_sections', sections: drawerSections }, 'تم حفظ أقسام القائمة الجانبية وتحديثها للجميع!', 'owner_tools');
+    });
+
+    body.querySelectorAll('.drw-move-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        const idx = Number(b.dataset.idx);
+        const dir = Number(b.dataset.dir);
+        const target = idx + dir;
+        if (target < 0 || target >= drawerSections.length) return;
+        const copy = [...drawerSections];
+        const [item] = copy.splice(idx, 1);
+        copy.splice(target, 0, item);
+        runOwnerCmdAction({ action: 'save_custom_drawer_sections', sections: copy }, 'تم تعديل ترتيب الأقسام.', 'owner_tools');
+      });
+    });
+    body.querySelectorAll('.drw-edit-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        state.editingCustomDrawerId = b.dataset.sid;
+        renderAdminOwnerToolsTab(body, ov, suite, isOwner);
+      });
+    });
+    body.querySelectorAll('.drw-del-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        if (state.editingCustomDrawerId === b.dataset.sid) state.editingCustomDrawerId = null;
+        const next = drawerSections.filter((sec) => sec.id !== b.dataset.sid);
+        runOwnerCmdAction({ action: 'save_custom_drawer_sections', sections: next }, 'تم حذف القسم من القائمة الجانبية.', 'owner_tools');
+      });
+    });
+
+    // 4) Profile Builder: Dynamic Fields & Feature Toggles
+    const collectBuilderPayload = () => ({
+      action: 'save_profile_builder',
+      profileFeatures: {
+        feat_profile_likes: $('profFeatLikes')?.checked ? 1 : 0,
+        feat_profile_rating: $('profFeatRating')?.checked ? 1 : 0,
+        feat_profile_music: $('profFeatMusic')?.checked ? 1 : 0,
+        feat_profile_friends: $('profFeatFriends')?.checked ? 1 : 0,
+        feat_profile_gifts: $('profFeatGifts')?.checked ? 1 : 0,
+        feat_profile_relations: $('profFeatRelations')?.checked ? 1 : 0,
+        feat_profile_wall: $('profFeatWall')?.checked ? 1 : 0
+      },
+      customProfileFields: profileFields.map((fld, idx) => {
+        const chk = body.querySelector(`.prof-dyn-enable-chk[data-idx="${idx}"]`);
+        return { ...fld, enabled: chk ? chk.checked : fld.enabled !== false };
+      })
+    });
+
+    $('ownerAddProfFieldBtn')?.addEventListener('click', () => {
+      const label = ($('ownerProfFieldLabel')?.value || '').trim();
+      const placeholder = ($('ownerProfFieldPlaceholder')?.value || '').trim();
+      if (!label) return showToast('اكتب اسم الحقل أولاً.', true);
+      const payload = collectBuilderPayload();
+      payload.customProfileFields.push({
+        id: `fld_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        label,
+        placeholder,
+        enabled: true
+      });
+      runOwnerCmdAction(payload, 'تمت إضافة الحقل الجديد للبروفايل!', 'owner_tools');
+    });
+
+    body.querySelectorAll('.prof-dyn-del-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        const idx = Number(b.dataset.idx);
+        const payload = collectBuilderPayload();
+        payload.customProfileFields = payload.customProfileFields.filter((_, i) => i !== idx);
+        runOwnerCmdAction(payload, 'تم حذف الحقل من البروفايل.', 'owner_tools');
+      });
+    });
+
+    $('ownerSaveProfileBuilderBtn')?.addEventListener('click', () => {
+      runOwnerCmdAction(collectBuilderPayload(), 'تم حفظ إعدادات وحقول الملف الشخصي للجميع!', 'owner_tools');
+    });
+  }
+
   function triggerGoldRainAnimation() {
     const overlay = document.createElement('div');
     overlay.className = 'gold-rain-overlay';
@@ -6795,7 +7310,8 @@
       state.persistentMembers = data.persistentMembers || [];
       state.news = data.news || [];
       state.giftsCatalog = data.giftsCatalog || [];
-      applySiteSettings(data.settings);
+      applySiteSettings(data.settings, true);
+      syncLocalMirror(true);
       updateNotificationBadge(data.unreadNotifCount || 0);
       updateMutedStateUI(data.activeMute || null);
       renderUserIdentity();
@@ -6816,6 +7332,7 @@
     socket.on('session_updated', ({ user }) => {
       state.user = user;
       if (state.user && state.token) persistSessionState(state.user, state.token);
+      syncLocalMirror();
       renderUserIdentity();
     });
 
@@ -6837,6 +7354,7 @@
       renderAllMessages();
       renderRoomUsers();
       renderUserIdentity();
+      syncLocalMirror();
     });
 
     socket.on('room_users', ({ roomId, users, roomKingKey }) => {
@@ -6858,6 +7376,7 @@
           renderRoomBanner();
         }
       }
+      syncLocalMirror();
     });
 
     socket.on('online_users_global', (list) => {
@@ -6868,11 +7387,13 @@
     socket.on('persistent_members', (list) => {
       state.persistentMembers = list || [];
       renderRoomUsers();
+      syncLocalMirror();
     });
 
     socket.on('new_message', (msg) => {
       if (state.currentRoom?.id === msg.room_id) {
         appendOrReconcileMessage(msg);
+        syncLocalMirror();
       }
     });
 
@@ -7079,6 +7600,7 @@
 
     socket.on('ranks_updated', (ranks) => {
       state.ranks = ranks || [];
+      syncLocalMirror();
       renderUserIdentity();
       renderRoomUsers();
       renderAllMessages();
@@ -7086,6 +7608,7 @@
 
     socket.on('emojis_updated', (emojis) => {
       state.emojis = emojis || [];
+      syncLocalMirror();
       renderEmojiPopoverGrid();
     });
 
@@ -7792,6 +8315,9 @@
       switchCustomizeTab('more');
       setTimeout(() => $('custNameStyleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     });
+    $('custQuickBgEffectsBtn')?.addEventListener('click', () => {
+      switchCustomizeTab('my_frames');
+    });
     $('custOpenStoreFromFramesBtn')?.addEventListener('click', () => {
       closeModal('customizeModal');
       openStoreModal('store');
@@ -8253,6 +8779,7 @@
     }
 
     bindEvents();
+    hydrateLocalMirrorOnBoot();
     refreshLucideIcons();
 
     const idbSess = await readSessionFromIdb();

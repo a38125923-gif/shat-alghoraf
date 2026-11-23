@@ -598,7 +598,8 @@ function mapUserRow(u) {
     activityPoints: Number(u.activity_points) || 0,
     quizPoints: Number(u.quiz_points) || 0,
     giftsReceived: Number(u.gifts_received) || 0,
-    giftsSent: Number(u.gifts_sent) || 0
+    giftsSent: Number(u.gifts_sent) || 0,
+    customFields: u.custom_fields && typeof u.custom_fields === 'object' ? u.custom_fields : {}
   };
 }
 
@@ -2067,6 +2068,13 @@ app.post('/api/profile/credentials', requireRegistered, async (req, res) => {
 
 app.post('/api/profile/interact', requireAuth, async (req, res) => {
   const { targetKey, like, rating } = req.body || {};
+  const settings = db.getSiteSettings();
+  if (like && Number(settings.feat_profile_likes) === 0 && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'ميزة الإعجاب بالبروفايل متوقفة حالياً من المالك.' });
+  }
+  if (rating && Number(settings.feat_profile_rating) === 0 && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'ميزة تقييم النجوم متوقفة حالياً من المالك.' });
+  }
   if (!targetKey || !String(targetKey).startsWith('user:')) {
     return res.status(400).json({ error: 'التفاعل متاح لملفات الأعضاء المسجلين فقط.' });
   }
@@ -2111,7 +2119,8 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     gender,
     country,
     allowCalls,
-    allowPm
+    allowPm,
+    customFields
   } = req.body || {};
 
   if (textColor !== undefined && !isReadableDarkBgColor(textColor)) {
@@ -2202,7 +2211,8 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     gender,
     country,
     allowCalls,
-    allowPm
+    allowPm,
+    customFields
   });
   if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
   syncUserAcrossSockets(io, req.authUser.userId);
@@ -3450,7 +3460,7 @@ function getEffectiveQuizBank() {
 }
 
 function getQuizStylePalette(styleKey) {
-  const legacyMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'classic_compact' };
+  const legacyMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'glass_modern', classic_compact: 'glass_modern' };
   const raw = String(styleKey || 'royal_gold');
   const key = legacyMap[raw] || raw;
   switch (key) {
@@ -3462,8 +3472,6 @@ function getQuizStylePalette(styleKey) {
       return { key: 'emerald_neon', textColor: '#6ee7b7', bgColor: '#064e3b' };
     case 'crimson_fire':
       return { key: 'crimson_fire', textColor: '#fda4af', bgColor: '#881337' };
-    case 'classic_compact':
-      return { key: 'classic_compact', textColor: '#f1f5f9', bgColor: '#334155' };
     case 'royal_gold':
     default:
       return { key: 'royal_gold', textColor: '#fde68a', bgColor: '#1e293b' };
@@ -3869,6 +3877,15 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       feat_gifts: settings.feat_gifts === 0 ? 0 : 1,
       feat_youtube: settings.feat_youtube === 0 ? 0 : 1,
       feat_wall: settings.feat_wall === 0 ? 0 : 1,
+      feat_profile_likes: settings.feat_profile_likes === 0 ? 0 : 1,
+      feat_profile_rating: settings.feat_profile_rating === 0 ? 0 : 1,
+      feat_profile_music: settings.feat_profile_music === 0 ? 0 : 1,
+      feat_profile_friends: settings.feat_profile_friends === 0 ? 0 : 1,
+      feat_profile_gifts: settings.feat_profile_gifts === 0 ? 0 : 1,
+      feat_profile_relations: settings.feat_profile_relations === 0 ? 0 : 1,
+      feat_profile_wall: settings.feat_profile_wall === 0 ? 0 : 1,
+      custom_drawer_sections: Array.isArray(settings.custom_drawer_sections) ? settings.custom_drawer_sections : [],
+      custom_profile_fields: Array.isArray(settings.custom_profile_fields) ? settings.custom_profile_fields : [],
       royal_member_ruby_multiplier: Number(settings.royal_member_ruby_multiplier) || 1.2,
       vip_ruby_multiplier: Number(settings.vip_ruby_multiplier) || 1.5,
       premium_ruby_multiplier: Number(settings.premium_ruby_multiplier) || 2,
@@ -3877,6 +3894,7 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       rank_price_premium: Number(settings.rank_price_premium ?? 1500),
       frame_price_overrides: settings.frame_price_overrides || {}
     },
+    storageStatus: db.getStorageStatus(),
     framesCatalog: getEffectiveFramesCatalog(),
     ranks: db.getAllRanks()
   });
@@ -4287,7 +4305,151 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     return res.json({ ok: true, settings: updatedSettings, ranks: db.getAllRanks() });
   }
 
+  if (action === 'save_custom_drawer_sections') {
+    const { sections } = req.body || {};
+    const updated = db.updateSiteSettings({ custom_drawer_sections: Array.isArray(sections) ? sections : [] });
+    io.emit('site_settings_updated', updated);
+    db.addAdminLog({
+      actorKey: actor.key,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: 'تحديث أقسام القائمة الجانبية',
+      details: `${(updated.custom_drawer_sections || []).length} قسم`
+    });
+    await db.flushWrites();
+    return res.json({ ok: true, settings: updated });
+  }
+
+  if (action === 'save_profile_builder') {
+    const { fields, toggles } = req.body || {};
+    const patch = {};
+    if (Array.isArray(fields)) patch.custom_profile_fields = fields;
+    if (toggles && typeof toggles === 'object') {
+      const allowedToggles = [
+        'feat_profile_likes',
+        'feat_profile_rating',
+        'feat_profile_music',
+        'feat_profile_friends',
+        'feat_profile_gifts',
+        'feat_profile_relations',
+        'feat_profile_wall'
+      ];
+      for (const tk of allowedToggles) {
+        if (toggles[tk] !== undefined) patch[tk] = toggles[tk] ? 1 : 0;
+      }
+    }
+    const updated = db.updateSiteSettings(patch);
+    io.emit('site_settings_updated', updated);
+    db.addAdminLog({
+      actorKey: actor.key,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: 'تحديث حقول وميزات الملف الشخصي',
+      details: `${(updated.custom_profile_fields || []).length} حقل ديناميكي`
+    });
+    await db.flushWrites();
+    return res.json({ ok: true, settings: updated });
+  }
+
   return res.status(400).json({ error: 'إجراء غير معروف.' });
+});
+
+app.get('/api/owner/backup', requireOwner, async (_req, res) => {
+  try {
+    await db.flushWrites();
+    const dbBackup = await db.exportFullBackup();
+    const uploads = [];
+    const subdirs = ['avatars', 'covers', 'news', 'emojis', 'wallpapers', 'chat'];
+    for (const sub of subdirs) {
+      const dirPath = path.join(UPLOAD_ROOT, sub);
+      if (!fs.existsSync(dirPath)) continue;
+      let files = [];
+      try {
+        files = fs.readdirSync(dirPath);
+      } catch {
+        files = [];
+      }
+      for (const fname of files) {
+        if (!fname || fname.startsWith('.') || fname.includes('..')) continue;
+        const full = path.join(dirPath, fname);
+        try {
+          const stat = fs.statSync(full);
+          if (!stat.isFile() || stat.size > 8 * 1024 * 1024) continue;
+          const buf = await fs.promises.readFile(full);
+          uploads.push({
+            subdir: sub,
+            filename: fname,
+            dataBase64: buf.toString('base64')
+          });
+        } catch {
+          // skip unreadable upload file
+        }
+      }
+    }
+    const bundle = {
+      format: 'asil-chat-full-backup-v1',
+      exportedAt: new Date().toISOString(),
+      db: dbBackup,
+      uploads
+    };
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="asil-chat-backup-${stamp}.json"`);
+    return res.send(JSON.stringify(bundle));
+  } catch (err) {
+    return res.status(500).json({ error: `تعذر إنشاء النسخة الاحتياطية: ${err.message}` });
+  }
+});
+
+app.post('/api/owner/restore', requireOwner, express.json({ limit: '80mb' }), async (req, res) => {
+  try {
+    const raw = req.body || {};
+    const dbPayload = raw.db && typeof raw.db === 'object' ? raw.db : raw;
+    const uploadsList = Array.isArray(raw.uploads) ? raw.uploads : [];
+    const allowedSubdirs = new Set(['avatars', 'covers', 'news', 'emojis', 'wallpapers', 'chat']);
+
+    for (const up of uploadsList) {
+      const sub = String(up?.subdir || '');
+      const fname = path.basename(String(up?.filename || '')).replace(/[^a-zA-Z0-9._-]/g, '');
+      const b64 = String(up?.dataBase64 || '');
+      if (!allowedSubdirs.has(sub) || !fname || !b64) continue;
+      const targetDir = path.join(UPLOAD_ROOT, sub);
+      fs.mkdirSync(targetDir, { recursive: true });
+      const targetPath = path.join(targetDir, fname);
+      await fs.promises.writeFile(targetPath, Buffer.from(b64, 'base64'));
+    }
+
+    const result = await db.restoreFullBackup(dbPayload, { preserveSessionId: req.sessionId || '' });
+    if (result?.error) return res.status(400).json({ error: result.error });
+
+    io.emit('ranks_updated', db.getAllRanks());
+    io.emit('site_settings_updated', db.getSiteSettings());
+    broadcastRoomsList(io);
+    io.emit('emojis_updated', db.getAllCustomEmojis());
+    io.emit('persistent_members', buildPersistentMembersList());
+    for (const entry of onlineSockets.values()) {
+      if (entry.userId) syncUserAcrossSockets(io, entry.userId);
+    }
+
+    db.addAdminLog({
+      actorKey: req.authUser.key,
+      actorName: req.authUser.name,
+      actorRole: req.authUser.role,
+      action: 'استعادة نسخة احتياطية كاملة للبيانات',
+      details: `مستخدمون: ${result.counts?.users || 0} • غرف: ${result.counts?.rooms || 0} • رسائل: ${result.counts?.messages || 0}`
+    });
+    await db.flushWrites();
+
+    return res.json({
+      ok: true,
+      counts: result.counts,
+      storageStatus: db.getStorageStatus(),
+      settings: db.getSiteSettings(),
+      ranks: db.getAllRanks()
+    });
+  } catch (err) {
+    return res.status(500).json({ error: `فشلت استعادة البيانات: ${err.message}` });
+  }
 });
 
 // ==========================================

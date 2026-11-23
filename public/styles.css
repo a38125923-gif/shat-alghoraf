@@ -8071,19 +8071,12 @@ textarea:focus {
 }
 
 .cody-msg-row.quiz-bot-msg-card.quiz-style-classic_compact {
-  background: rgba(30, 41, 59, 0.92) !important;
-  border: 1px solid rgba(148, 163, 184, 0.42) !important;
-  padding: 6px 10px;
-}
-
-.cody-msg-row.quiz-bot-msg-card.quiz-style-classic_compact .quiz-bot-badge {
-  background: rgba(148, 163, 184, 0.22);
-  border-color: rgba(203, 213, 225, 0.45);
-  color: #f1f5f9;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(30, 58, 138, 0.45)) !important;
+  border-color: rgba(125, 211, 252, 0.58) !important;
 }
 
 /* ==========================================================================
-   MY PROFILE (#customizeModal): FLOATING CENTERED CARD + 220PX COVER + 90PX SQUARE AVATAR
+   MY PROFILE (#customizeModal): FLOATING CENTERED CARD + 240PX COVER + 90PX SQUARE AVATAR INSIDE BOTTOM-RIGHT
    ========================================================================== */
 @keyframes floatingProfileIn {
   from {
@@ -8150,14 +8143,16 @@ textarea:focus {
 
 #customizeModal .profile-cover-hero {
   width: 100%;
-  height: 220px;
-  min-height: 220px;
+  height: 240px;
+  min-height: 240px;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 #customizeModal .profile-cover-hero.cover-preview-clean {
-  height: 245px;
-  min-height: 245px;
+  height: 256px;
+  min-height: 256px;
 }
 
 #customizeModal .profile-cover-hero .profile-cover-img {
@@ -8167,38 +8162,74 @@ textarea:focus {
   object-position: center;
 }
 
-#customizeModal .profile-cover-stats-bar {
-  bottom: 10px;
+#customizeModal .profile-cover-top-actions.cover-actions-left {
+  top: 10px;
   left: 10px;
   right: auto;
-  max-width: calc(100% - 122px);
-}
-
-#customizeModal .profile-centered-identity {
-  margin-top: -45px;
-  padding: 0 14px 12px;
+  z-index: 40;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: right;
-  gap: 5px;
-  background: transparent !important;
-  position: relative;
-  z-index: 25;
+  align-items: center;
+  gap: 6px;
 }
 
-#customizeModal .profile-card-preview-mode .profile-centered-identity {
-  margin-top: 10px;
+#customizeModal .profile-cover-top-right {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+}
+
+#customizeModal .hero-circle-glass-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(15, 23, 42, 0.68);
+  color: #f8fafc;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#customizeModal .hero-circle-glass-btn.active {
+  background: rgba(245, 158, 11, 0.9);
+  color: #0f172a;
+  border-color: #fde68a;
+}
+
+#customizeModal .profile-cover-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 28;
+  padding: 28px 12px 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 10px;
+  background: linear-gradient(180deg, transparent 0%, rgba(2, 6, 23, 0.62) 44%, rgba(2, 6, 23, 0.9) 100%);
+  pointer-events: auto;
 }
 
 #customizeModal .profile-avatar-85-stage {
   width: 90px;
   height: 90px;
+  flex-shrink: 0;
   border-radius: 14px;
-  align-self: flex-start;
   position: relative;
-  z-index: 30;
-  margin-bottom: 4px;
+  z-index: 35;
+  margin-bottom: 0;
 }
 
 #customizeModal .avatar-wrap.profile-avatar-85 {
@@ -8206,7 +8237,7 @@ textarea:focus {
   height: 90px;
   border-radius: 14px;
   font-size: 32px;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.55);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.65);
 }
 
 #customizeModal .avatar-wrap.profile-avatar-85 .avatar-core-circle,
@@ -8241,17 +8272,20 @@ textarea:focus {
 
 #customizeModal .avatar-inner-actions {
   position: absolute;
-  bottom: -8px;
-  left: -8px;
-  right: -8px;
-  z-index: 60;
+  bottom: -6px;
+  left: -6px;
+  right: -6px;
+  z-index: 65;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   pointer-events: none;
 }
 
 #customizeModal .avatar-cam-pill-btn {
   pointer-events: auto;
   position: relative;
-  z-index: 70;
+  z-index: 75;
   width: 34px;
   height: 34px;
   min-width: 34px;
@@ -8269,14 +8303,118 @@ textarea:focus {
 #customizeModal .avatar-inner-circle-btn {
   pointer-events: auto;
   position: relative;
-  z-index: 70;
+  z-index: 75;
   width: 28px;
   height: 28px;
   touch-action: manipulation;
 }
 
-#customizeModal .cust-preview-name-row,
-#customizeModal .profile-role-subtitle,
+#customizeModal .profile-cover-identity-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+#customizeModal .cust-preview-name-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  justify-content: flex-start;
+  text-align: right;
+  text-shadow: 0 2px 6px rgba(2, 6, 23, 0.9);
+}
+
+#customizeModal .profile-role-subtitle {
+  width: 100%;
+  text-align: right;
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.92);
+  text-shadow: 0 1px 4px rgba(2, 6, 23, 0.85);
+}
+
+#customizeModal .profile-cover-stats-bar {
+  position: static;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+#customizeModal .profile-cover-hero.cover-preview-clean .profile-cover-stats-bar,
+#customizeModal .profile-cover-hero.cover-preview-clean .profile-cover-bottom-bar {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+#customizeModal .profile-below-cover-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+#customizeModal .below-cover-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.85);
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#customizeModal .below-cover-pill-btn:hover {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(30, 41, 59, 1);
+}
+
+#customizeModal .below-cover-pill-btn.danger-pill {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.36);
+}
+
+#customizeModal .profile-centered-identity {
+  margin-top: 0;
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: right;
+  gap: 5px;
+  background: transparent !important;
+  position: relative;
+  z-index: 25;
+}
+
+#customizeModal .profile-card-preview-mode .profile-below-cover-bar,
+#customizeModal .profile-card-preview-mode .avatar-inner-actions,
+#customizeModal .profile-card-preview-mode #custUploadCoverBtn,
+#customizeModal .profile-card-preview-mode #custMiniMusicEditBtn,
+#customizeModal .profile-card-preview-mode .profile-lower-dark-stage {
+  display: none !important;
+}
+
 #customizeModal .cust-preview-status,
 #customizeModal .cust-preview-bio {
   width: 100%;
@@ -8287,6 +8425,53 @@ textarea:focus {
 #customizeModal .profile-mini-music-bar {
   align-self: flex-start;
 }
+
+/* ==========================================================================
+   OWNER BACKUP/RESTORE, SIDEBAR SECTION BUILDER & PROFILE BUILDER
+   ========================================================================== */
+.owner-backup-actions-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.owner-restore-upload-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px dashed rgba(245, 158, 11, 0.45);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.owner-json-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.owner-json-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+}
+
+.custom-drawer-section-card {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  padding: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  color: #f1f5f9;
+}
+
 
 
 

@@ -501,58 +501,72 @@
       <div class="modal-card modal-card-md profile-luxury-card">
         <div id="custBgEffectLayer" class="profile-bg-effect-layer"></div>
 
-        <!-- WIDE COVER PHOTO HERO -->
+        <!-- WIDE 240PX COVER PHOTO HERO -->
         <div class="profile-cover-hero" id="custCoverHero">
           <img id="custCoverImg" src="" alt="" class="profile-cover-img hidden" />
           <div class="profile-cover-overlay"></div>
           <div class="profile-cover-top-actions cover-actions-left">
-            <button type="button" class="rtl-back-pill cover-close-x-btn" data-close-modal="customizeModal" title="رجوع">
-              <i class="fa-solid fa-arrow-right"></i> <span>رجوع</span>
+            <button type="button" class="hero-circle-glass-btn cover-close-x-btn" data-close-modal="customizeModal" title="إغلاق">
+              ✕
             </button>
             <button type="button" id="custCoverPreviewToggleBtn" class="hero-circle-glass-btn" title="معاينة البطاقة وصورة الغلاف">
               <i class="fa-solid fa-eye"></i>
             </button>
-            <button type="button" id="custDeleteCoverBtn" class="hero-circle-glass-btn danger-glass" title="حذف صورة الغلاف">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
           </div>
           <div class="profile-cover-top-right">
-            <button type="button" id="custUploadCoverBtn" class="cover-cam-pill-btn" title="رفع غلاف (يدعم GIF و PNG و JPG)">
-              <i class="fa-solid fa-camera"></i> <span>تغيير الغلاف</span>
-            </button>
-            <button type="button" id="custSwitchToMoreBtn" class="hero-circle-glass-btn" title="تخصيص الألوان والخطوط والخصوصية">
-              <i class="fa-solid fa-palette"></i>
+            <button type="button" id="custUploadCoverBtn" class="hero-circle-glass-btn cover-cam-icon-btn" title="تغيير صورة الغلاف (يدعم GIF و PNG و JPG)">
+              <i class="fa-solid fa-camera"></i>
             </button>
           </div>
-          <div class="profile-cover-stats-bar">
-            <span class="hero-stat-pill" title="الإعجابات"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#ef4444;"></i> <span id="custLikesCountVal">0</span></span>
-            <span class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> <span id="custRatingAvgVal">5.0</span></span>
-            <span class="hero-stat-pill" title="الروبي"><i class="fa-solid fa-gem" style="color:#e11d48;"></i> <span id="custTopCoinsVal">0</span></span>
+
+          <div class="profile-cover-bottom-bar">
+            <div class="profile-avatar-stage profile-avatar-85-stage">
+              <span id="custPreviewAvatarWrap" class="avatar-wrap profile-avatar-85 frame-none">
+                <span class="avatar-core-circle">
+                  <img id="custPreviewAvatarImg" src="" alt="" class="hidden" />
+                  <span id="custPreviewAvatarLetter" class="avatar-letter">ع</span>
+                </span>
+              </span>
+              <div class="avatar-inner-actions">
+                <label for="custAvatarFile" id="custUploadAvatarBtn" class="avatar-cam-pill-btn" role="button" tabindex="0" title="تغيير الصورة الشخصية">
+                  <i class="fa-solid fa-camera"></i>
+                </label>
+                <button type="button" id="custDeleteAvatarBtn" class="avatar-inner-circle-btn danger" title="حذف الصورة الشخصية">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="profile-cover-identity-meta">
+              <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
+              <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
+              <div class="profile-cover-stats-bar">
+                <span class="hero-stat-pill" id="custLikesStatPill" title="الإعجابات"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#ef4444;"></i> <span id="custLikesCountVal">0</span></span>
+                <span class="hero-stat-pill" id="custRatingStatPill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> <span id="custRatingAvgVal">5.0</span></span>
+                <span class="hero-stat-pill" id="custRubyStatPill" title="النقاط والروبي"><i class="fa-solid fa-gem" style="color:#e11d48;"></i> <span id="custTopCoinsVal">0</span></span>
+              </div>
+            </div>
           </div>
+
           <input type="file" id="custCoverFile" accept="image/*" class="sr-file-input" />
           <input type="file" id="custAvatarFile" accept="image/*" class="sr-file-input" />
         </div>
 
-        <!-- CODYCHAT CENTERED CIRCULAR AVATAR + IDENTITY + MINI MUSIC PLAYER -->
+        <!-- ORGANIZED ROW UNDERNEATH THE COVER FOR COLORS / BACKGROUNDS / COVER ACTIONS -->
+        <div class="profile-below-cover-bar" id="custBelowCoverActionsBar">
+          <button type="button" id="custSwitchToMoreBtn" class="below-cover-pill-btn" title="تخصيص الألوان والخطوط والخصوصية">
+            <i class="fa-solid fa-palette"></i> <span>الألوان والخطوط</span>
+          </button>
+          <button type="button" id="custQuickBgEffectsBtn" class="below-cover-pill-btn" title="الإطارات والخلفيات المتحركة">
+            <i class="fa-solid fa-sparkles"></i> <span>الخلفيات والإطارات</span>
+          </button>
+          <button type="button" id="custDeleteCoverBtn" class="below-cover-pill-btn danger-pill hidden" title="حذف صورة الغلاف">
+            <i class="fa-solid fa-trash-can"></i> <span>حذف الغلاف</span>
+          </button>
+        </div>
+
+        <!-- COMPACT STATUS / BIO / MINI MUSIC PLAYER STRIP -->
         <div class="profile-centered-identity">
-          <div class="profile-avatar-stage profile-avatar-85-stage">
-            <span id="custPreviewAvatarWrap" class="avatar-wrap profile-avatar-85 frame-none">
-              <span class="avatar-core-circle">
-                <img id="custPreviewAvatarImg" src="" alt="" class="hidden" />
-                <span id="custPreviewAvatarLetter" class="avatar-letter">ع</span>
-              </span>
-            </span>
-            <div class="avatar-inner-actions">
-              <label for="custAvatarFile" id="custUploadAvatarBtn" class="avatar-cam-pill-btn" role="button" tabindex="0" title="تغيير الصورة الشخصية">
-                <i class="fa-solid fa-camera"></i>
-              </label>
-              <button type="button" id="custDeleteAvatarBtn" class="avatar-inner-circle-btn danger" title="حذف الصورة الشخصية">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
-            </div>
-          </div>
-          <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
-          <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
           <div id="custPreviewStatus" class="cust-preview-status hidden"></div>
           <div id="custPreviewBio" class="cust-preview-bio"></div>
           <div id="custMiniMusicPlayer" class="profile-mini-music-bar">
@@ -655,6 +669,7 @@
                 <label>رسالة معلوماتي (نبذة عني تظهر في البطاقة)</label>
                 <textarea id="custBioInput" rows="2" maxlength="160" placeholder="اكتب رسالة معلوماتي الخاصة بك لتظهر للجميع في بطاقتك..."></textarea>
               </div>
+              <div id="custDynamicProfileFieldsWrap" class="form-grid-2 hidden" style="margin-top:8px;"></div>
             </div>
 
             <!-- TAB 2: إطاراتي وخلفياتي -->
