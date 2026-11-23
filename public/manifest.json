@@ -1,0 +1,25 @@
+{
+  "name": "شات الاصيل - دردشة عربية كتابية وصوتية",
+  "short_name": "شات الاصيل",
+  "description": "شات الاصيل - شات العرب الأصيل للدردشة العربية الكتابية والصوتية المباشرة.",
+  "start_url": "/",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "theme_color": "#0F172A",
+  "background_color": "#0F172A",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

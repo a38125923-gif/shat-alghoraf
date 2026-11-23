@@ -1079,6 +1079,43 @@
     return myPower >= reqPower;
   }
 
+  function canUploadAnimatedGif(userObj = state.user) {
+    if (!userObj) return false;
+    if (userObj.role === 'site_owner' || userObj.isSupremeOwner) return true;
+    if (userObj.isGuest || userObj.role === 'guest') return false;
+    const ranks = Array.isArray(state.ranks) ? state.ranks : [];
+    const topNonOwnerRanks = ranks
+      .filter((r) => r && r.key !== 'site_owner' && r.key !== 'guest')
+      .sort((a, b) => Number(b.power || 0) - Number(a.power || 0))
+      .slice(0, 2);
+    if (topNonOwnerRanks.length >= 2) {
+      if (topNonOwnerRanks.some((r) => r.key === userObj.role)) return true;
+      const minTopPower = Number(topNonOwnerRanks[1].power || 13);
+      return Number(getRank(userObj.role)?.power || 0) >= minTopPower;
+    }
+    return (
+      userObj.role === 'co_owner' ||
+      userObj.role === 'general_admin' ||
+      Number(getRank(userObj.role)?.power || 0) >= 13
+    );
+  }
+
+  function syncProfileUploadControlsForRole(userObj = state.user) {
+    const gifAllowed = canUploadAnimatedGif(userObj);
+    if ($('custCoverFile')) $('custCoverFile').setAttribute('accept', 'image/*');
+    if ($('custAvatarFile')) $('custAvatarFile').setAttribute('accept', 'image/*');
+    if ($('custUploadCoverBtn')) {
+      $('custUploadCoverBtn').title = gifAllowed
+        ? 'رفع غلاف (يدعم GIF المتحركة و PNG و JPG)'
+        : 'رفع غلاف (صور ثابتة مضغوطة — GIF للمالك وأعلى رتبتين فقط)';
+    }
+    if ($('custUploadAvatarBtn')) {
+      $('custUploadAvatarBtn').title = gifAllowed
+        ? 'تغيير الصورة الشخصية (يدعم GIF المتحركة)'
+        : 'تغيير الصورة الشخصية (صور ثابتة مضغوطة — GIF للمالك وأعلى رتبتين فقط)';
+    }
+  }
+
   function isFeatureEnabled(settingKey) {
     return Number(state.settings?.[settingKey] ?? 1) !== 0;
   }
@@ -3515,6 +3552,7 @@
     }
 
     const u = state.user;
+    syncProfileUploadControlsForRole(u);
     $('custCoverHero')?.classList.remove('cover-preview-clean');
     document.querySelector('#customizeModal .profile-luxury-card')?.classList.remove('profile-card-preview-mode');
     if ($('custCoverPreviewToggleBtn')) {
@@ -3697,7 +3735,12 @@
 
     $('custAddonsLockNotice').classList.toggle('hidden', canAddons);
     $('custVipWingsToggle').disabled = !canAddons;
-    if ($('custUploadAvatarBtn')) $('custUploadAvatarBtn').disabled = !canAvatar;
+    if ($('custAvatarFile')) $('custAvatarFile').disabled = !canAvatar;
+    if ($('custUploadAvatarBtn')) {
+      $('custUploadAvatarBtn').classList.toggle('is-disabled', !canAvatar);
+      $('custUploadAvatarBtn').setAttribute('aria-disabled', canAvatar ? 'false' : 'true');
+    }
+    if ($('custCoverFile')) $('custCoverFile').disabled = !canCover;
     if ($('custUploadCoverBtn')) $('custUploadCoverBtn').disabled = !canCover;
     if ($('custMusicPreset')) $('custMusicPreset').disabled = !canMusic;
     if ($('custMusicCustomUrl')) $('custMusicCustomUrl').disabled = !canMusic;
@@ -7844,11 +7887,31 @@
       $('custNeonColor').dataset.cleared = '1';
       updateCustomizePreview();
     });
+    async function isGifUploadFile(file) {
+      if (!file) return false;
+      if (String(file.type || '').toLowerCase() === 'image/gif' || /\.gif$/i.test(file.name || '')) {
+        return true;
+      }
+      try {
+        const headerBytes = new Uint8Array(await file.slice(0, 6).arrayBuffer());
+        const sig = String.fromCharCode(...headerBytes);
+        return sig === 'GIF87a' || sig === 'GIF89a';
+      } catch {
+        return false;
+      }
+    }
+
     async function prepareProfileImageForFirebase(file, kind) {
       if (!file) return file;
-      const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name || '');
-      if (isGif) return file;
-      const maxDim = kind === 'cover' ? 1280 : 480;
+      const isGif = await isGifUploadFile(file);
+      if (isGif) {
+        if (!canUploadAnimatedGif(state.user)) {
+          throw new Error('رفع صور GIF المتحركة متاح للمالك وأعلى رتبتين فقط.');
+        }
+        return file;
+      }
+      const maxDim = kind === 'cover' ? 1200 : 400;
+      const quality = kind === 'cover' ? 0.82 : 0.84;
       return new Promise((resolve) => {
         const img = new Image();
         const objUrl = URL.createObjectURL(file);
@@ -7860,13 +7923,11 @@
               URL.revokeObjectURL(objUrl);
               return resolve(file);
             }
-            if (w > maxDim || h > maxDim) {
+            const needsResize = w > maxDim || h > maxDim;
+            if (needsResize) {
               const scale = maxDim / Math.max(w, h);
               w = Math.max(1, Math.round(w * scale));
               h = Math.max(1, Math.round(h * scale));
-            } else if (file.size <= 350 * 1024) {
-              URL.revokeObjectURL(objUrl);
-              return resolve(file);
             }
             const canvas = document.createElement('canvas');
             canvas.width = w;
@@ -7877,12 +7938,23 @@
               return resolve(file);
             }
             ctx.drawImage(img, 0, 0, w, h);
-            canvas.toBlob((blob) => {
+            const finalizeBlob = (blob, mimeType, ext) => {
               URL.revokeObjectURL(objUrl);
               if (!blob) return resolve(file);
-              const outName = (file.name || 'image').replace(/\.[^.]+$/, '') + '.webp';
-              resolve(new File([blob], outName, { type: 'image/webp' }));
-            }, 'image/webp', 0.86);
+              if (!needsResize && file.type === mimeType && blob.size >= file.size) {
+                return resolve(file);
+              }
+              const baseName = (file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
+              resolve(new File([blob], `${baseName}.${ext}`, { type: mimeType }));
+            };
+            canvas.toBlob((webpBlob) => {
+              if (webpBlob && webpBlob.type === 'image/webp') {
+                return finalizeBlob(webpBlob, 'image/webp', 'webp');
+              }
+              canvas.toBlob((jpegBlob) => {
+                finalizeBlob(jpegBlob, 'image/jpeg', 'jpg');
+              }, 'image/jpeg', quality);
+            }, 'image/webp', quality);
           } catch {
             URL.revokeObjectURL(objUrl);
             resolve(file);
@@ -7897,9 +7969,21 @@
     }
 
     $('custUploadAvatarBtn')?.addEventListener('click', (e) => {
-      e.preventDefault();
       e.stopPropagation();
-      $('custAvatarFile')?.click();
+      if ($('custAvatarFile')?.disabled) {
+        e.preventDefault();
+        showToast('تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.', true);
+      }
+    });
+    $('custUploadAvatarBtn')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if ($('custAvatarFile')?.disabled) {
+          showToast('تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.', true);
+          return;
+        }
+        $('custAvatarFile')?.click();
+      }
     });
     $('custAvatarFile')?.addEventListener('change', async () => {
       const rawFile = $('custAvatarFile').files[0];

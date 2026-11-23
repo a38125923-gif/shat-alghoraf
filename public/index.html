@@ -4,8 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#0F172A" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <title>شات عربي الاصيل</title>
+    <meta name="google-site-verification" content="N86e7LVyXdrGuk6kLOqv4T732hGtETanK2cw_9O_f_U" />
+    <title>شات الاصيل - دردشة عربية كتابية وصوتية</title>
+    <meta
+      name="description"
+      content="شات الاصيل - دردشة عربية كتابية وصوتية مجانية على مدار الساعة. انضم إلى شات العرب الأصيل للتعارف والدردشة في غرف كتابية وصوتية متطورة."
+    />
+    <meta
+      name="keywords"
+      content="شات الاصيل, شات العرب الأصيل, شات عربي, شات كتابي, دردشة عربية, شات صوتي"
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="icon" type="image/jpeg" href="https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg" />
+    <link rel="shortcut icon" type="image/jpeg" href="https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg" />
+    <link rel="apple-touch-icon" href="https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ar_AR" />
+    <meta property="og:site_name" content="شات الاصيل" />
+    <meta property="og:title" content="شات الاصيل - دردشة عربية كتابية وصوتية" />
+    <meta
+      property="og:description"
+      content="شات الاصيل - شات العرب الأصيل للدردشة العربية الكتابية والصوتية المباشرة بتجربة سريعة وعصرية."
+    />
+    <meta property="og:image" content="https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="شات الاصيل - دردشة عربية كتابية وصوتية" />
+    <meta name="twitter:description" content="شات الاصيل - شات عربي كتابي وصوتي مباشر للتعارف والدردشة." />
+    <meta name="twitter:image" content="https://i.ibb.co/zWvBzfmW/IMG-20261123-142841.jpg" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -470,8 +496,8 @@
          MODALS
     ========================================== -->
 
-    <!-- 1. LUXURY 6-TAB OWN PROFILE & CUSTOMIZER VIEW (SLIDE-OVER) -->
-    <div id="customizeModal" class="modal-backdrop modal-slideover hidden">
+    <!-- 1. LUXURY 6-TAB OWN PROFILE & CUSTOMIZER VIEW (FLOATING CARD) -->
+    <div id="customizeModal" class="modal-backdrop modal-floating-profile hidden">
       <div class="modal-card modal-card-md profile-luxury-card">
         <div id="custBgEffectLayer" class="profile-bg-effect-layer"></div>
 
@@ -503,8 +529,8 @@
             <span class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> <span id="custRatingAvgVal">5.0</span></span>
             <span class="hero-stat-pill" title="الروبي"><i class="fa-solid fa-gem" style="color:#e11d48;"></i> <span id="custTopCoinsVal">0</span></span>
           </div>
-          <input type="file" id="custCoverFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
-          <input type="file" id="custAvatarFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
+          <input type="file" id="custCoverFile" accept="image/*" class="sr-file-input" />
+          <input type="file" id="custAvatarFile" accept="image/*" class="sr-file-input" />
         </div>
 
         <!-- CODYCHAT CENTERED CIRCULAR AVATAR + IDENTITY + MINI MUSIC PLAYER -->
@@ -517,9 +543,9 @@
               </span>
             </span>
             <div class="avatar-inner-actions">
-              <button type="button" id="custUploadAvatarBtn" class="avatar-cam-pill-btn" title="تغيير الصورة الشخصية (يدعم GIF)">
+              <label for="custAvatarFile" id="custUploadAvatarBtn" class="avatar-cam-pill-btn" role="button" tabindex="0" title="تغيير الصورة الشخصية">
                 <i class="fa-solid fa-camera"></i>
-              </button>
+              </label>
               <button type="button" id="custDeleteAvatarBtn" class="avatar-inner-circle-btn danger" title="حذف الصورة الشخصية">
                 <i class="fa-solid fa-trash-can"></i>
               </button>

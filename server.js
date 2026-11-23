@@ -395,6 +395,45 @@ function canPassSettingThreshold(userOrEntry, settingKey, fallbackRankKey = 'mem
   return userPower >= reqPower;
 }
 
+function canUserUploadAnimatedGif(userOrEntry) {
+  if (!userOrEntry) return false;
+  if (userOrEntry.role === 'site_owner' || db.isSupremeOwnerEmail(userOrEntry.email)) return true;
+  if (userOrEntry.isGuest || userOrEntry.role === 'guest') return false;
+  const ranks = db.getAllRanks();
+  const topNonOwnerRanks = ranks
+    .filter((r) => r && r.key !== 'site_owner' && r.key !== 'guest')
+    .sort((a, b) => Number(b.power || 0) - Number(a.power || 0))
+    .slice(0, 2);
+  if (topNonOwnerRanks.some((r) => r.key === userOrEntry.role)) return true;
+  const minTopPower = topNonOwnerRanks.length >= 2
+    ? Number(topNonOwnerRanks[1].power || 13)
+    : 13;
+  return db.getRankPower(userOrEntry.role) >= minTopPower;
+}
+
+async function isUploadedGifFile(file) {
+  if (!file) return false;
+  if (String(file.mimetype || '').toLowerCase() === 'image/gif') return true;
+  if (/\.gif$/i.test(file.originalname || '') || /\.gif$/i.test(file.filename || '')) return true;
+  if (!file.path) return false;
+  try {
+    const fd = await fs.promises.open(file.path, 'r');
+    try {
+      const header = Buffer.alloc(6);
+      const { bytesRead } = await fd.read(header, 0, 6, 0);
+      if (bytesRead === 6) {
+        const sig = header.toString('ascii');
+        if (sig === 'GIF87a' || sig === 'GIF89a') return true;
+      }
+    } finally {
+      await fd.close();
+    }
+  } catch {
+    // ignore read error
+  }
+  return false;
+}
+
 function computeRubyGainWithMultiplier(userId, role, baseRuby = 1) {
   const mult = db.getRubyMultiplierForRole(role);
   const prevCarry = rubyFracCarryByUser.get(userId) || 0;
@@ -1718,6 +1757,10 @@ app.post('/api/upload/avatar', requireRegistered, (req, res, next) => {
   return next();
 }, uploadAvatar.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
+  if ((await isUploadedGifFile(req.file)) && !canUserUploadAnimatedGif(req.authUser)) {
+    if (req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    return res.status(403).json({ error: 'رفع صور GIF المتحركة متاح للمالك وأعلى رتبتين فقط.' });
+  }
   const { url, savedInFirebase } = await persistUploadedProfileImage(req, 'avatar');
   const updated = db.updateUserCustomization(req.authUser.userId, { avatarUrl: url });
   syncUserAcrossSockets(io, req.authUser.userId);
@@ -1732,6 +1775,10 @@ app.post('/api/upload/cover', requireRegistered, (req, res, next) => {
   return next();
 }, uploadCover.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الغلاف.' });
+  if ((await isUploadedGifFile(req.file)) && !canUserUploadAnimatedGif(req.authUser)) {
+    if (req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    return res.status(403).json({ error: 'رفع صور GIF المتحركة متاح للمالك وأعلى رتبتين فقط.' });
+  }
   const { url, savedInFirebase } = await persistUploadedProfileImage(req, 'cover');
   const updated = db.updateUserCustomization(req.authUser.userId, { coverUrl: url });
   syncUserAcrossSockets(io, req.authUser.userId);
