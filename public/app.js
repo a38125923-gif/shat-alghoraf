@@ -1088,6 +1088,7 @@
               <button type="button" class="adm-tab active" data-adm-tab="ranks_matrix"><i class="fa-solid fa-crown"></i> منشئ الرتب والصلاحيات</button>
               <button type="button" class="adm-tab" data-adm-tab="protection"><i class="fa-solid fa-shield-halved"></i> الحماية التلقائية</button>
               <button type="button" class="adm-tab" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> بوت المسابقات الذكي</button>
+              ${isOwner ? '<button type="button" class="adm-tab" id="welcomeBotAdmTab" data-adm-tab="welcome_bot"><i class="fa-solid fa-wand-magic-sparkles"></i> البوت الترحيبي</button>' : ''}
               <button type="button" class="adm-tab" data-adm-tab="members_control"><i class="fa-solid fa-users-gear"></i> الأعضاء والرقابة</button>
               <button type="button" class="adm-tab" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل الرقابي</button>
               ${isOwner ? '<button type="button" class="adm-tab" id="ownerToolsAdmTab" data-adm-tab="owner_tools"><i class="fa-solid fa-toolbox"></i> الباك أب والأقسام</button>' : ''}
@@ -1106,6 +1107,27 @@
       } else {
         const tabsBar = $('adminUnifiedTabsBar');
         if (tabsBar) {
+          if (isOwner && !$('welcomeBotAdmTab')) {
+            const wBtn = document.createElement('button');
+            wBtn.type = 'button';
+            wBtn.className = 'adm-tab';
+            wBtn.id = 'welcomeBotAdmTab';
+            wBtn.dataset.admTab = 'welcome_bot';
+            wBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> البوت الترحيبي';
+            wBtn.addEventListener('click', () => {
+              tabsBar.querySelectorAll('.adm-tab').forEach((x) => x.classList.toggle('active', x === wBtn));
+              renderAdminTab('welcome_bot');
+            });
+            const quizBtn = tabsBar.querySelector('[data-adm-tab="quiz_bot"]');
+            if (quizBtn && quizBtn.nextSibling) {
+              tabsBar.insertBefore(wBtn, quizBtn.nextSibling);
+            } else {
+              tabsBar.appendChild(wBtn);
+            }
+          } else if (!isOwner) {
+            $('welcomeBotAdmTab')?.remove();
+          }
+
           if (isOwner && !$('ownerToolsAdmTab')) {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -2446,9 +2468,11 @@
   function createMessageRowElement(msg) {
     const row = document.createElement('div');
     const isQuizBotMsg = msg.sender_key === 'system:quizbot';
-    const isAdminNotice = Boolean(msg.is_admin_notice) && !isQuizBotMsg;
+    const isVirtualSender = String(msg.sender_key || '').startsWith('virtual:');
+    const isWelcomeBotMsg = Boolean(msg.is_welcome_bot) || msg.sender_key === 'system:welcomebot' || isVirtualSender;
+    const isAdminNotice = Boolean(msg.is_admin_notice) && !isQuizBotMsg && !isWelcomeBotMsg;
     const isGift = Boolean(msg.is_gift);
-    const isOwnerSender = msg.sender_role === 'site_owner' && !isQuizBotMsg && msg.sender_key !== 'system:official';
+    const isOwnerSender = msg.sender_role === 'site_owner' && !isQuizBotMsg && !isWelcomeBotMsg && msg.sender_key !== 'system:official';
     const rawContent = String(msg.content || '');
     const myName = String(state.user?.name || '').trim();
     const myUser = String(state.user?.username || '').trim();
@@ -2463,6 +2487,9 @@
     const legacyQuizMap = { royal: 'royal_gold', glass: 'glass_modern', classic: 'classic_compact' };
     const rawQuizStyle = String(msg.quiz_style || state.settings?.quiz_msg_style || 'royal_gold');
     const quizStyleKey = legacyQuizMap[rawQuizStyle] || rawQuizStyle;
+    const allowedWbotColors = new Set(['royal_gold', 'sky_blue', 'emerald_green', 'ruby_red', 'royal_purple']);
+    const rawWbotColor = String(state.settings?.welcome_bot_color || msg.bot_color || 'royal_gold');
+    const wbotColorKey = allowedWbotColors.has(rawWbotColor) ? rawWbotColor : 'royal_gold';
 
     let inlineTextHtml = '';
     let mediaBelowHtml = '';
@@ -2478,17 +2505,22 @@
       hasMention = rendered.hasMention;
       const prefix = isQuizBotMsg
         ? '<span class="quiz-bot-badge">مسابقة</span>'
-        : isAdminNotice
-          ? '<span class="admin-notice-prefix">إشعار الإدارة</span>'
-          : '';
+        : isWelcomeBotMsg
+          ? `<span class="welcome-bot-badge">${isVirtualSender ? 'تفاعل ذكي' : 'مساعد ذكي'}</span>`
+          : isAdminNotice
+            ? '<span class="admin-notice-prefix">إشعار الإدارة</span>'
+            : '';
       const rawTxtColor = String(msg.text_color || '').trim();
       const readableColor = isAdminNotice
         ? '#fecaca'
-        : (!rawTxtColor || !isReadableOnDarkBg(rawTxtColor) ? '#e2e8f0' : escapeHtml(rawTxtColor));
+        : isWelcomeBotMsg
+          ? ''
+          : (!rawTxtColor || !isReadableOnDarkBg(rawTxtColor) ? '#e2e8f0' : escapeHtml(rawTxtColor));
       const ff = `font-family:${resolveFontFamilyCss(msg.font_family || 'Cairo')};`;
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
       const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
-      inlineTextHtml = `<span class="msg-text-inline" style="color:${readableColor};font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
+      const colorCss = readableColor ? `color:${readableColor};` : '';
+      inlineTextHtml = `<span class="msg-text-inline" style="${colorCss}font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
 
     const useOwnerPortal = isOwnerSender && !isAdminNotice && isOwnerGalaxyVisualEnabled();
@@ -2497,7 +2529,7 @@
     const rankTierClass = isOwnerSender ? 'rank-tier-owner' : tierMeta.msgClass;
     const rankGlowColor = isOwnerSender ? 'rgba(251, 191, 36, 0.62)' : tierMeta.glowColor;
 
-    row.className = `cody-msg-row ${tierMeta.tierClass}${useGlassBubbles ? ` glass-bubble-msg ${rankTierClass}` : ''}${isQuizBotMsg ? ` quiz-bot-msg-card quiz-style-${escapeHtml(quizStyleKey)}` : ''}${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${useOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : (isOwnerSender && !isAdminNotice ? ' owner-gold-glass-fallback' : '')}`;
+    row.className = `cody-msg-row ${tierMeta.tierClass}${useGlassBubbles ? ` glass-bubble-msg ${rankTierClass}` : ''}${isQuizBotMsg ? ` quiz-bot-msg-card quiz-style-${escapeHtml(quizStyleKey)}` : ''}${isWelcomeBotMsg ? ` welcome-bot-msg-card wbot-color-${escapeHtml(wbotColorKey)}` : ''}${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${useOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : (isOwnerSender && !isAdminNotice ? ' owner-gold-glass-fallback' : '')}`;
     if (useGlassBubbles && !useOwnerPortal) {
       row.style.setProperty('--msg-rank-glow', rankGlowColor);
     }
@@ -2510,6 +2542,7 @@
       key: msg.sender_key,
       name: msg.sender_name,
       role: msg.sender_role,
+      isVirtual: isVirtualSender,
       avatarUrl: msg.avatar_url,
       avatarFrame: msg.avatar_frame,
       nameplateStyle: msg.nameplate_style,
@@ -2524,9 +2557,10 @@
       nameStyleMode: msg.name_style_mode || 'solid',
       nameGradient: msg.name_gradient || 'gold_royal'
     };
-    const canActOnTarget = !isMe && canManageTargetUser(targetObj);
+    const isBotTarget = isQuizBotMsg || isWelcomeBotMsg;
+    const canActOnTarget = !isMe && !isBotTarget && canManageTargetUser(targetObj);
     const canClearRoom = isOwner || state.isRoomManager || hasPerm('clear_room');
-    const canDelete = (isMe && Boolean(msg.id)) || (Boolean(msg.id) && canActOnTarget && (isOwner || state.isRoomManager || hasPerm('delete_msg') || hasPerm('clear_room')));
+    const canDelete = (isMe && Boolean(msg.id)) || (Boolean(msg.id) && (isOwner || (canActOnTarget && (state.isRoomManager || hasPerm('delete_msg') || hasPerm('clear_room')))));
     const canWarn = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('ban'));
     const canMute = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('mute'));
     const canKick = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('kick'));
@@ -2554,7 +2588,7 @@
                   <button type="button" class="btn-secondary btn-xs msg-dots-close-btn" style="padding:2px 8px;min-height:24px;">✕</button>
                 </div>
                 <button type="button" data-msg-act="mention"><i class="fa-solid fa-bullhorn"></i> نداء العضو</button>
-                ${!isMe ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
+                ${!isMe && !isBotTarget ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
                 <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
                 ${isOwner && msg.msg_type === 'text' ? '<button type="button" data-msg-act="pin"><i class="fa-solid fa-thumbtack"></i> تثبيت في الغرفة</button>' : ''}
                 ${canDelete ? '<button type="button" class="danger" data-msg-act="delete"><i class="fa-solid fa-trash"></i> حذف الرسالة</button>' : ''}
@@ -2949,7 +2983,12 @@
       u.isSupremeOwner ||
       String(u.email || '').toLowerCase() === 'a38125923@gmail.com';
     const isTargetOwnerGalaxy = isTargetOwner && isOwnerGalaxyVisualEnabled();
-    const allowedByImmunity = !isMe && !isTargetOwner && canManageTargetUser(u);
+    const isBotTarget =
+      Boolean(u.isVirtual) ||
+      u.key === 'system:welcomebot' ||
+      u.key === 'system:quizbot' ||
+      String(u.key || '').startsWith('virtual:');
+    const allowedByImmunity = !isMe && !isBotTarget && !isTargetOwner && canManageTargetUser(u);
     const canMod = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('clear_room') || hasPerm('set_rank') || hasPerm('access_panel'));
     const canBan = allowedByImmunity && (isOwner || hasPerm('ban'));
     const canKick = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('kick'));
@@ -2957,8 +2996,8 @@
     const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || hasPerm('set_rank'));
     const canGiveCoins = Boolean(targetUserId) && (isOwner || (allowedByImmunity && hasPerm('give_coins')));
     const showAdminTab = Boolean(allowedByImmunity && (canMod || canBan || canKick || canClearRoom || canRank || canGiveCoins || isOwner));
-    const canGift = !isMe && !state.user?.isGuest && isFeatureEnabled('feat_gifts') && isFeatureEnabled('feat_profile_gifts') && (isOwner || hasPerm('gifts'));
-    const canPmTarget = !isMe && u.allowPm !== false && isFeatureEnabled('feat_pm') && (isOwner || (passesSettingRankThreshold('min_rank_pm') && hasPerm('pm')));
+    const canGift = !isMe && !isBotTarget && !state.user?.isGuest && isFeatureEnabled('feat_gifts') && isFeatureEnabled('feat_profile_gifts') && (isOwner || hasPerm('gifts'));
+    const canPmTarget = !isMe && !isBotTarget && u.allowPm !== false && isFeatureEnabled('feat_pm') && (isOwner || (passesSettingRankThreshold('min_rank_pm') && hasPerm('pm')));
     const allowProfLikes = isFeatureEnabled('feat_profile_likes');
     const allowProfRating = isFeatureEnabled('feat_profile_rating');
     const allowProfMusic = isFeatureEnabled('feat_profile_music');
@@ -5370,6 +5409,7 @@
     if (t === 'ranks_matrix') return { tab: 'ranks_matrix', sub: subOverride || null };
     if (t === 'protection') return { tab: 'protection', sub: subOverride || null };
     if (t === 'quiz_bot') return { tab: 'quiz_bot', sub: subOverride || null };
+    if (t === 'welcome_bot') return { tab: 'welcome_bot', sub: subOverride || null };
     if (t === 'members_control') return { tab: 'members_control', sub: subOverride || null };
     if (t === 'audit_log') return { tab: 'audit_log', sub: subOverride || null };
     if (t === 'owner_tools') return { tab: 'owner_tools', sub: subOverride || null };
@@ -5400,6 +5440,7 @@
       state.editingRoomId = null;
     }
     if (tab !== 'ranks_matrix') state.editingRankKey = null;
+    state.welcomeBotDraft = null;
 
     document.querySelectorAll('.adm-tab').forEach((b) => b.classList.toggle('active', b.dataset.admTab === tab));
     $('adminModalBody').innerHTML = '<div class="muted">جاري تحميل بيانات لوحة القيادة...</div>';
@@ -5459,6 +5500,7 @@
     if (tab === 'ranks_matrix') return renderAdminRanksMatrixTab(body, ov, suite, isOwner);
     if (tab === 'protection') return renderAdminProtectionTab(body, ov, suite, isOwner);
     if (tab === 'quiz_bot') return renderAdminQuizBotTab(body, ov, suite, isOwner);
+    if (tab === 'welcome_bot') return renderAdminWelcomeBotTab(body, ov, suite, isOwner);
     if (tab === 'members_control') return renderAdminMembersControlTab(body, ov, suite, isOwner);
     if (tab === 'audit_log') return renderAdminAuditLogTab(body, ov, suite, isOwner);
     if (tab === 'owner_tools') return renderAdminOwnerToolsTab(body, ov, suite, isOwner);
@@ -6241,6 +6283,277 @@
         if (state.editingQuizQuestionId === b.dataset.qid) state.editingQuizQuestionId = null;
         runOwnerCmdAction({ action: 'quiz_delete_question', questionId: b.dataset.qid }, 'تم حذف السؤال.', 'quiz_bot');
       });
+    });
+  }
+
+  function renderAdminWelcomeBotTab(body, ov, suite, isOwner) {
+    if (!isOwner) {
+      body.innerHTML = '<div class="form-error">إدارة البوت الترحيبي الذكي والأعضاء الافتراضيين متاحة للمالك فقط.</div>';
+      return;
+    }
+    const wb = suite.welcomeBotSettings || state.settings || {};
+    const draft = state.welcomeBotDraft && state.welcomeBotDraft._hydrated
+      ? state.welcomeBotDraft
+      : {
+          _hydrated: true,
+          enabled: wb.welcome_bot_enabled !== 0,
+          mode: wb.welcome_bot_mode === 'virtual_members' ? 'virtual_members' : 'assistant',
+          name: String(wb.welcome_bot_name || 'مساعد الأصيل'),
+          avatar: String(wb.welcome_bot_avatar || ''),
+          greeting: String(wb.welcome_bot_greeting || 'أهلاً وسهلاً بك يا [الاسم] في [الغرفة]! نورتنا ويسعدنا تواجدك معنا 🌹'),
+          geminiKey: String(wb.welcome_bot_gemini_key || ''),
+          color: String(wb.welcome_bot_color || 'royal_gold'),
+          virtualMembers: Array.isArray(wb.virtual_members_list)
+            ? wb.virtual_members_list.map((v) => ({
+                id: String(v.id || `vm_${Math.random().toString(36).slice(2, 7)}`),
+                name: String(v.name || '').trim(),
+                avatarUrl: String(v.avatarUrl || ''),
+                role: String(v.role || 'member')
+              }))
+            : []
+        };
+    state.welcomeBotDraft = draft;
+
+    const colorOptions = [
+      { key: 'royal_gold', label: 'ذهبي ملكي', swatch: '#f59e0b' },
+      { key: 'sky_blue', label: 'أزرق سماوي', swatch: '#38bdf8' },
+      { key: 'emerald_green', label: 'أخضر زمردي', swatch: '#10b981' },
+      { key: 'ruby_red', label: 'أحمر ياقوتي', swatch: '#f43f5e' },
+      { key: 'royal_purple', label: 'بنفسجي', swatch: '#a855f7' }
+    ];
+    const vmRoleOptions = [
+      { key: 'member', label: 'عضو' },
+      { key: 'bronze_member', label: 'عضو برونزي' },
+      { key: 'silver_member', label: 'عضو فضي' },
+      { key: 'gold_member', label: 'عضو ذهبي' },
+      { key: 'royal_member', label: 'عضو ملكي' },
+      { key: 'vip', label: 'VIP' }
+    ];
+
+    body.innerHTML = `
+      <div class="owner-suite-section">
+        <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:#F59E0B;"></i> إعدادات البوت الترحيبي الذكي (مستقل عن بوت المسابقات)</h4>
+        <label class="switch-label">
+          <input type="checkbox" id="wbEnabledChk" ${draft.enabled ? 'checked' : ''} />
+          <span>تفعيل البوت الترحيبي والرد الذكي في الغرف</span>
+        </label>
+
+        <div class="form-grid-2" style="margin-top:8px;">
+          <div>
+            <label class="muted">وضع التشغيل</label>
+            <select id="wbModeSelect">
+              <option value="assistant" ${draft.mode === 'assistant' ? 'selected' : ''}>بوت مساعد ذكي (يرحب ويجيب عند المنشن)</option>
+              <option value="virtual_members" ${draft.mode === 'virtual_members' ? 'selected' : ''}>أعضاء افتراضيين متفاعلين (في قائمة المتواجدين)</option>
+            </select>
+          </div>
+          <div>
+            <label class="muted">اسم البوت الرئيسي</label>
+            <input type="text" id="wbNameInput" value="${escapeHtml(draft.name)}" placeholder="مثال: مساعد الأصيل" maxlength="40" />
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label class="muted">صورة البوت الرئيسي (رابط أو رفع من الجهاز)</label>
+          <div class="inline-row" style="gap:8px;align-items:center;flex-wrap:wrap;">
+            <img id="wbMainAvatarPreview" src="${escapeHtml(draft.avatar || '')}" alt="صورة البوت" class="wbot-avatar-preview ${draft.avatar ? '' : 'hidden'}" />
+            <input type="text" id="wbAvatarInput" value="${escapeHtml(draft.avatar)}" placeholder="رابط الصورة أو ارفع صورة..." style="flex:1;min-width:160px;" />
+            <label class="btn-secondary btn-xs" style="cursor:pointer;">
+              <i class="fa-solid fa-upload"></i> رفع صورة
+              <input type="file" id="wbAvatarFile" accept="image/*" style="display:none;" />
+            </label>
+            ${draft.avatar ? '<button type="button" id="wbClearAvatarBtn" class="btn-danger btn-xs">إزالة</button>' : ''}
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label class="muted">رسالة الترحيب المخصصة (استخدم [الاسم] لاسم العضو و [الغرفة] لاسم الغرفة)</label>
+          <textarea id="wbGreetingInput" rows="2" maxlength="300" placeholder="أهلاً وسهلاً بك يا [الاسم] في [الغرفة]! نورتنا 🌹">${escapeHtml(draft.greeting)}</textarea>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label class="muted">مفتاح Gemini API (محفوظ في السيرفر فقط — يفعّل الذكاء الاصطناعي عند منشن البوت مع مهلة 15ث لكل عضو)</label>
+          <div class="inline-row" style="gap:6px;">
+            <input type="password" id="wbGeminiKeyInput" value="${escapeHtml(draft.geminiKey)}" placeholder="AIzaSy... (اتركه فارغاً لاستخدام الردود الذكية البديلة)" autocomplete="off" style="flex:1;" />
+            <button type="button" id="wbToggleKeyVisBtn" class="btn-secondary btn-xs" title="إظهار / إخفاء"><i class="fa-solid fa-eye"></i></button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <label class="muted">لون رسائل البوت في الغرف (5 ألوان فاخرة — يطبق فوراً)</label>
+          <div class="wbot-color-grid" id="wbColorGrid">
+            ${colorOptions.map((c) => `
+              <button type="button" class="wbot-color-pill ${draft.color === c.key ? 'active' : ''}" data-wb-color="${c.key}">
+                <span class="wbot-swatch" style="background:${c.swatch};"></span>
+                <span>${c.label}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="owner-suite-section" style="margin-top:12px;">
+        <h4><i class="fa-solid fa-users" style="color:#38bdf8;"></i> الأعضاء الافتراضيين المتفاعلين (${draft.virtualMembers.length}/25)</h4>
+        <p class="muted" style="margin-top:0;font-size:12px;">عند تفعيل وضع "أعضاء افتراضيين"، يظهرون في قائمة المتواجدين بالغرف، يرحبون بالداخلين، ويتفاعلون تلقائياً وعند منشن أسمائهم.</p>
+        <div class="form-grid-2">
+          <div>
+            <label class="muted">اسم العضو الافتراضي</label>
+            <input type="text" id="wbNewVmName" placeholder="مثال: سارة، فهد..." maxlength="36" />
+          </div>
+          <div>
+            <label class="muted">الرتبة</label>
+            <select id="wbNewVmRole">
+              ${vmRoleOptions.map((r) => `<option value="${r.key}">${r.label}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="inline-row" style="gap:8px;margin-top:6px;flex-wrap:wrap;">
+          <input type="text" id="wbNewVmAvatar" placeholder="رابط الصورة الشخصية (اختياري)" style="flex:1;min-width:150px;" />
+          <label class="btn-secondary btn-xs" style="cursor:pointer;">
+            <i class="fa-solid fa-camera"></i> رفع صورة
+            <input type="file" id="wbNewVmFile" accept="image/*" style="display:none;" />
+          </label>
+          <button type="button" id="wbAddVmBtn" class="btn-primary btn-xs"><i class="fa-solid fa-plus"></i> إضافة عضو افتراضي</button>
+        </div>
+
+        <div class="news-feed-list" style="margin-top:10px;">
+          ${draft.virtualMembers.length ? draft.virtualMembers.map((vm, idx) => `
+            <div class="admin-list-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
+                ${vm.avatarUrl
+                  ? `<img src="${escapeHtml(vm.avatarUrl)}" alt="${escapeHtml(vm.name)}" class="wbot-avatar-preview" />`
+                  : `<span class="wbot-avatar-fallback">${escapeHtml((vm.name || 'ع').slice(0, 1))}</span>`}
+                <div style="min-width:0;">
+                  <strong>${escapeHtml(vm.name)}</strong>
+                  <div class="muted" style="font-size:11.5px;">${escapeHtml(vmRoleOptions.find((x) => x.key === vm.role)?.label || vm.role)}</div>
+                </div>
+              </div>
+              <button type="button" class="btn-danger btn-xs wb-del-vm-btn" data-vm-idx="${idx}"><i class="fa-solid fa-trash"></i> حذف</button>
+            </div>
+          `).join('') : '<div class="muted">لا يوجد أعضاء افتراضيين حالياً.</div>'}
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+        <button type="button" id="wbSaveAllBtn" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> حفظ وتطبيق إعدادات البوت الترحيبي</button>
+      </div>
+    `;
+
+    const syncInputsIntoDraft = () => {
+      draft.enabled = Boolean($('wbEnabledChk')?.checked);
+      draft.mode = $('wbModeSelect')?.value === 'virtual_members' ? 'virtual_members' : 'assistant';
+      draft.name = String($('wbNameInput')?.value || '').trim();
+      draft.avatar = String($('wbAvatarInput')?.value || '').trim();
+      draft.greeting = String($('wbGreetingInput')?.value || '').trim();
+      draft.geminiKey = String($('wbGeminiKeyInput')?.value || '').trim();
+    };
+
+    const uploadBotAvatarFile = async (file) => {
+      if (!file) return null;
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload/bot-avatar', {
+        method: 'POST',
+        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+        body: form
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || 'فشل رفع الصورة.');
+      return data.url;
+    };
+
+    $('wbToggleKeyVisBtn')?.addEventListener('click', () => {
+      const inp = $('wbGeminiKeyInput');
+      if (!inp) return;
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+
+    $('wbAvatarFile')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        syncInputsIntoDraft();
+        const url = await uploadBotAvatarFile(file);
+        if (url) {
+          draft.avatar = url;
+          renderAdminWelcomeBotTab(body, ov, suite, isOwner);
+          showToast('تم رفع صورة البوت بنجاح! اضغط حفظ لتثبيت التغييرات.');
+        }
+      } catch (err) {
+        showToast(err.message || 'تعذر رفع الصورة.', true);
+      }
+    });
+
+    $('wbClearAvatarBtn')?.addEventListener('click', () => {
+      syncInputsIntoDraft();
+      draft.avatar = '';
+      renderAdminWelcomeBotTab(body, ov, suite, isOwner);
+    });
+
+    $('wbNewVmFile')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const url = await uploadBotAvatarFile(file);
+        if (url && $('wbNewVmAvatar')) {
+          $('wbNewVmAvatar').value = url;
+          showToast('تم رفع صورة العضو الافتراضي!');
+        }
+      } catch (err) {
+        showToast(err.message || 'تعذر رفع الصورة.', true);
+      }
+    });
+
+    body.querySelectorAll('.wbot-color-pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        syncInputsIntoDraft();
+        draft.color = btn.dataset.wbColor || 'royal_gold';
+        body.querySelectorAll('.wbot-color-pill').forEach((x) => x.classList.toggle('active', x === btn));
+      });
+    });
+
+    $('wbAddVmBtn')?.addEventListener('click', () => {
+      syncInputsIntoDraft();
+      const vmName = String($('wbNewVmName')?.value || '').trim();
+      if (!vmName) return showToast('يرجى كتابة اسم العضو الافتراضي.', true);
+      if (draft.virtualMembers.length >= 25) return showToast('الحد الأقصى للأعضاء الافتراضيين 25 عضواً.', true);
+      draft.virtualMembers.push({
+        id: `vm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+        name: vmName,
+        avatarUrl: String($('wbNewVmAvatar')?.value || '').trim(),
+        role: String($('wbNewVmRole')?.value || 'member')
+      });
+      renderAdminWelcomeBotTab(body, ov, suite, isOwner);
+    });
+
+    body.querySelectorAll('.wb-del-vm-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        syncInputsIntoDraft();
+        const idx = Number(btn.dataset.vmIdx);
+        if (Number.isInteger(idx) && idx >= 0 && idx < draft.virtualMembers.length) {
+          draft.virtualMembers.splice(idx, 1);
+          renderAdminWelcomeBotTab(body, ov, suite, isOwner);
+        }
+      });
+    });
+
+    $('wbSaveAllBtn')?.addEventListener('click', async () => {
+      syncInputsIntoDraft();
+      state.welcomeBotDraft = null;
+      await runOwnerCmdAction(
+        {
+          action: 'welcome_bot_save',
+          welcome_bot_enabled: draft.enabled,
+          welcome_bot_mode: draft.mode,
+          welcome_bot_name: draft.name || 'مساعد الأصيل',
+          welcome_bot_avatar: draft.avatar,
+          welcome_bot_greeting: draft.greeting,
+          welcome_bot_gemini_key: draft.geminiKey,
+          welcome_bot_color: draft.color,
+          virtual_members_list: draft.virtualMembers
+        },
+        'تم حفظ وتطبيق إعدادات البوت الترحيبي بنجاح!',
+        'welcome_bot'
+      );
     });
   }
 

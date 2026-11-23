@@ -1067,6 +1067,10 @@ function getRoomUsersList(roomId) {
       });
     }
   }
+  const virtualUsers = getActiveVirtualMembersForRooms();
+  for (const vu of virtualUsers) {
+    if (vu.roomId === roomId) byKey.set(vu.key, vu);
+  }
   return [...byKey.values()].sort(
     (a, b) =>
       (b.role === 'site_owner' ? 1 : 0) - (a.role === 'site_owner' ? 1 : 0) ||
@@ -1116,6 +1120,10 @@ function buildGlobalOnlineUsers() {
       roomId: entry.roomId || null,
       roomName: rm ? rm.name : ''
     });
+  }
+  const virtualUsers = getActiveVirtualMembersForRooms();
+  for (const vu of virtualUsers) {
+    byKey.set(vu.key, vu);
   }
   return [...byKey.values()].sort(
     (a, b) =>
@@ -1249,11 +1257,15 @@ function buildPersistentMembersList() {
 
 function buildRoomsPayload() {
   const boost = Math.max(0, Number(db.getSiteSettings().online_boost) || 0);
+  const virtualUsers = getActiveVirtualMembersForRooms();
   return db.getAllRooms().map((r) => {
     const pub = db.sanitizeRoomForPublic(r);
     const activeKeys = new Set();
     for (const e of onlineSockets.values()) {
       if (e.roomId === r.id && !isStealthEntry(e)) activeKeys.add(e.key);
+    }
+    for (const vu of virtualUsers) {
+      if (vu.roomId === r.id) activeKeys.add(vu.key);
     }
     return {
       ...pub,
@@ -1703,7 +1715,7 @@ app.get('/api/emojis', (_req, res) => {
 });
 
 app.get('/api/settings/public', (_req, res) => {
-  res.json({ settings: db.getSiteSettings() });
+  res.json({ settings: db.getPublicSiteSettings() });
 });
 
 // ==========================================
@@ -1879,6 +1891,33 @@ app.post('/api/upload/news', requireRegistered, uploadNewsImg.single('file'), (r
   }
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الخبر.' });
   return res.json({ url: `/uploads/news/${req.file.filename}` });
+});
+
+app.post('/api/upload/bot-avatar', requireOwner, uploadAvatar.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة.' });
+  const fallbackUrl = `/uploads/avatars/${req.file.filename}`;
+  let finalUrl = fallbackUrl;
+  let savedInFirebase = false;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `bot_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/jpeg',
+        dataBase64: buf.toString('base64'),
+        kind: 'bot_avatar',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        savedInFirebase = true;
+      }
+    }
+  } catch {
+    // fallback to disk upload path
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, url: finalUrl, savedInFirebase });
 });
 
 // ==========================================
@@ -2846,7 +2885,7 @@ app.get('/api/admin/overview', requirePanelAccess, (req, res) => {
       myMaxAssignablePower: isOwner ? 15 : db.getMaxAssignablePower(req.authUser.role),
       canAccessBank
     },
-    settings: db.getSiteSettings(),
+    settings: db.getPublicSiteSettings(),
     ranks: db.getAllRanks(),
     rooms: buildRoomsPayload(),
     users,
@@ -2962,10 +3001,15 @@ app.put('/api/admin/settings', requirePanelAccess, async (req, res) => {
   if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'access_panel')) {
     return res.status(403).json({ error: 'صلاحية الإعدادات غير متوفرة.' });
   }
-  const settings = db.updateSiteSettings(req.body || {});
-  io.emit('site_settings_updated', settings);
+  const body = { ...(req.body || {}) };
+  if (req.authUser.role !== 'site_owner') {
+    delete body.welcome_bot_gemini_key;
+  }
+  db.updateSiteSettings(body);
+  const pubSettings = db.getPublicSiteSettings();
+  io.emit('site_settings_updated', pubSettings);
   await db.flushWrites();
-  return res.json({ settings });
+  return res.json({ settings: pubSettings });
 });
 
 app.post('/api/admin/ranks', requireOwner, async (req, res) => {
@@ -3734,6 +3778,389 @@ function checkQuizBotAnswer(entry, content) {
   bot.nextTimer = setTimeout(() => startRoomQuizRound(entry.roomId), 3500);
 }
 
+// ==========================================
+// SMART WELCOME BOT & VIRTUAL MEMBERS ENGINE
+// (100% Independent of Quiz Bot)
+// ==========================================
+const WELCOME_BOT_PALETTES = {
+  royal_gold: {
+    key: 'royal_gold',
+    label: 'ذهبي ملكي',
+    nameColor: '#fde68a',
+    textColor: '#fef3c7'
+  },
+  sky_blue: {
+    key: 'sky_blue',
+    label: 'أزرق سماوي',
+    nameColor: '#7dd3fc',
+    textColor: '#e0f2fe'
+  },
+  emerald_green: {
+    key: 'emerald_green',
+    label: 'أخضر زمردي',
+    nameColor: '#6ee7b7',
+    textColor: '#d1fae5'
+  },
+  ruby_red: {
+    key: 'ruby_red',
+    label: 'أحمر ياقوتي',
+    nameColor: '#fda4af',
+    textColor: '#ffe4e6'
+  },
+  royal_purple: {
+    key: 'royal_purple',
+    label: 'بنفسجي',
+    nameColor: '#d8b4fe',
+    textColor: '#f3e8ff'
+  }
+};
+
+const welcomeBotCooldownByUser = new Map();
+const welcomeBotLastRoomWelcome = new Map();
+const lastBotActivityByRoom = new Map();
+let virtualMembersLoopTimer = null;
+
+function getWelcomeBotPalette(colorKey) {
+  const k = String(colorKey || 'royal_gold').trim();
+  return WELCOME_BOT_PALETTES[k] || WELCOME_BOT_PALETTES.royal_gold;
+}
+
+function getActiveVirtualMembersForRooms() {
+  const s = db.getSiteSettings();
+  if (Number(s.welcome_bot_enabled ?? 1) === 0 || s.welcome_bot_mode !== 'virtual_members') return [];
+  const rawList = Array.isArray(s.virtual_members_list) ? s.virtual_members_list : [];
+  if (!rawList.length) return [];
+  const allRooms = db.getAllRooms();
+  if (!allRooms.length) return [];
+  const orderedRooms = allRooms.slice().sort((a, b) => (a.id === 'general' ? -1 : b.id === 'general' ? 1 : 0));
+  const palette = getWelcomeBotPalette(s.welcome_bot_color);
+
+  return rawList.map((vm, idx) => {
+    const rm = orderedRooms[idx % orderedRooms.length];
+    const role = String(vm.role || 'member');
+    const rankObj = db.getRankByKey(role);
+    const id = String(vm.id || `vm_${idx + 1}`);
+    const name = String(vm.name || `عضو ${idx + 1}`).trim();
+    return {
+      key: `virtual:${id}`,
+      virtualId: id,
+      userId: null,
+      isGuest: false,
+      isVirtual: true,
+      name,
+      displayName: name,
+      username: id,
+      role,
+      rank: rankObj,
+      level: Number(rankObj?.power || 4),
+      nameColor: palette.nameColor,
+      textColor: palette.textColor,
+      nameBgColor: '',
+      neonColor: '',
+      fontFamily: 'Cairo',
+      fontStyle: 'Normal',
+      fontSize: 14,
+      nameFontSize: 14,
+      nameStyleMode: 'solid',
+      nameGradient: 'gold_royal',
+      avatarUrl: String(vm.avatarUrl || ''),
+      coverUrl: '',
+      avatarFrame: 'none',
+      nameplateStyle: 'default',
+      nameShine: 'none',
+      nameAnim: 'none',
+      nameAnimSpeed: 'normal',
+      profileBgEffect: 'none',
+      vipWings: false,
+      profileMusic: '',
+      bio: 'عضو نشط في مجتمع شات الأصيل 🌹',
+      statusText: 'متفاعل ومستعد للدردشة والترحيب',
+      age: '',
+      gender: '',
+      country: '',
+      allowCalls: false,
+      allowPm: false,
+      likesCount: 12 + idx * 5,
+      ratingAvg: 5.0,
+      ratingCount: 3,
+      isGhosted: false,
+      isShadowMuted: false,
+      isFrozen: false,
+      coins: 0,
+      vipFamily: '',
+      activityPoints: 45 + idx * 15,
+      giftsReceived: 0,
+      giftsSent: 0,
+      roomId: rm.id,
+      roomName: rm.name
+    };
+  });
+}
+
+function emitWelcomeBotMessage(roomId, content, speaker = null) {
+  if (!roomId || !content) return null;
+  const s = db.getSiteSettings();
+  const palette = getWelcomeBotPalette(s.welcome_bot_color);
+  const senderKey = speaker?.key || 'system:welcomebot';
+  const senderName = String(speaker?.name || s.welcome_bot_name || 'مساعد الأصيل').trim() || 'مساعد الأصيل';
+  const senderRole = String(speaker?.role || 'vip');
+  const avatarUrl = String(speaker?.avatarUrl ?? s.welcome_bot_avatar ?? '');
+
+  const msg = db.addMessage({
+    roomId,
+    senderKey,
+    senderName,
+    senderRole,
+    nameColor: palette.nameColor,
+    textColor: palette.textColor,
+    fontFamily: 'Cairo',
+    fontStyle: 'Bold',
+    fontSize: 14,
+    nameFontSize: 14,
+    avatarUrl,
+    isAdminNotice: false,
+    isWelcomeBot: true,
+    botColor: palette.key,
+    msgType: 'text',
+    content: String(content).slice(0, 800)
+  });
+  lastBotActivityByRoom.set(roomId, Date.now());
+  io.to(`room:${roomId}`).emit('new_message', msg);
+  return msg;
+}
+
+function formatWelcomeGreeting(template, userName, roomName) {
+  const tpl = String(template || '').trim() || 'أهلاً وسهلاً بك يا [الاسم] في [الغرفة]! نورتنا ويسعدنا تواجدك معنا 🌹';
+  return tpl
+    .replace(/\[الاسم\]|\{name\}/g, userName)
+    .replace(/\[الغرفة\]|\{room\}/g, roomName);
+}
+
+function triggerWelcomeBotOnRoomJoin(entry, room) {
+  if (!entry || !room) return;
+  const s = db.getSiteSettings();
+  if (Number(s.welcome_bot_enabled ?? 1) === 0) return;
+  const dedupKey = `${entry.key}:${room.id}`;
+  const lastAt = welcomeBotLastRoomWelcome.get(dedupKey) || 0;
+  if (Date.now() - lastAt < 2 * 60 * 1000) return;
+  welcomeBotLastRoomWelcome.set(dedupKey, Date.now());
+
+  const targetRoomId = room.id;
+  const targetRoomName = room.name || 'الغرفة';
+  const targetUserName = entry.name || 'ضيفنا الكريم';
+  const targetEntryKey = entry.key;
+
+  setTimeout(() => {
+    const stillHere = [...onlineSockets.values()].some((e) => e.key === targetEntryKey && e.roomId === targetRoomId);
+    if (!stillHere) return;
+    const latestSettings = db.getSiteSettings();
+    if (Number(latestSettings.welcome_bot_enabled ?? 1) === 0) return;
+    let speaker = null;
+    if (latestSettings.welcome_bot_mode === 'virtual_members') {
+      const vms = getActiveVirtualMembersForRooms();
+      const inRoom = vms.filter((v) => v.roomId === targetRoomId);
+      const pool = inRoom.length ? inRoom : vms;
+      if (pool.length) speaker = pool[Math.floor(Math.random() * pool.length)];
+    }
+    const greeting = formatWelcomeGreeting(latestSettings.welcome_bot_greeting, targetUserName, targetRoomName);
+    emitWelcomeBotMessage(targetRoomId, greeting, speaker);
+  }, 900);
+}
+
+function generateSmartFallbackReply(question, userName, roomName, speakerName) {
+  const q = normalizeArabicText(question);
+  if (/^(اهلا|هلا|مرحبا|السلام|سلام|مساء|صباح|هاي|هلو)/.test(q) || q.includes('شلونك') || q.includes('كيف حالك') || q.includes('اخبارك')) {
+    return `يا هلا بك يا ${userName}! يسعدني تواجدك معنا في ${roomName}، كل شيء بخير بوجودك 🌹`;
+  }
+  if (q.includes('الساعة') || q.includes('الوقت') || q.includes('كم الساعة') || q.includes('التاريخ')) {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString('ar-SA');
+    return `الوقت الآن ${timeStr} • التاريخ ${dateStr} — أوقاتاً سعيدة يا ${userName}!`;
+  }
+  if (q.includes('رتب') || q.includes('ترقية') || q.includes('الصلاحيات')) {
+    return `يمكنك ترقية رتبتك تلقائياً عبر التفاعل المستمر في الدردشة وجمع النقاط، أو زيارة المتجر لترقية حسابك يا ${userName}.`;
+  }
+  if (q.includes('روبي') || q.includes('نقاط') || q.includes('متجر') || q.includes('هدايا')) {
+    return `تكسب الروبي ونقاط التفاعل عند كتابة رسائل حقيقية في الغرف أو الفوز في المسابقات، ويمكنك استبدالها في المتجر بالإطارات والرتب 💎`;
+  }
+  if (q.includes('مايك') || q.includes('صوت') || q.includes('راديو') || q.includes('يوتيوب')) {
+    return `المايكات الصوتية في أعلى الغرفة متاحة بالضغط على أي مايك فارغ، كما يمكنك فتح الراديو أو يوتيوب الغرفة من الأيقونات بالأعلى 🎙️`;
+  }
+  if (q.includes('قوانين') || q.includes('حظر') || q.includes('كتم')) {
+    return `نرجو من الجميع الالتزام بالاحترام المتبادل، وتجنب التكرار المفرط أو إرسال الروابط والكلمات المخالفة للحفاظ على أجواء ${roomName} الجميلة ✨`;
+  }
+  if (q.includes('نكتة') || q.includes('اضحك') || q.includes('طرفه')) {
+    const jokes = [
+      'مرة واحد سأل خويه: ليش تشرب القهوة بدون سكر؟ قال له: لأني أحليها بسواليفك 😄',
+      'واحد فتح الثلاجة لقى الجلي يرتجف، قال له: لا تخاف بشرب موية بس! 😂',
+      'واحد اشترى ساعة جديدة، شافها متأخرة دقيقة... راح ينتظرها عند البوابة! ⌚'
+    ];
+    return jokes[Math.floor(Math.random() * jokes.length)];
+  }
+  if (q.includes('حكمة') || q.includes('نصيحة') || q.includes('مقولة')) {
+    const quotes = [
+      'الكلمة الطيبة جواز سفر إلى القلوب — اترك أثراً جميلاً أينما حللت 🌟',
+      'الهدوء والابتسامة والاحترام تفتح لك أبواب المودة في كل مكان 🌹',
+      'لا تؤجل فرحة اليوم لظنون الغد؛ استمتع بوقتك مع أصدقائك الآن ✨'
+    ];
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  }
+  if (q.includes('من انت') || q.includes('اسمك') || q.includes('عرفني')) {
+    return `أنا ${speakerName}، يسعدني الترحيب بالأعضاء والإجابة عن استفساراتكم بكل ود في ${roomName} 💫`;
+  }
+  if (q.includes('شكر') || q.includes('يعطيك العافية') || q.includes('تسلم')) {
+    return `العفو يا ${userName}! بالخدمة دائماً وأهلاً بك في أي وقت 🌹`;
+  }
+  return `أهلاً بك يا ${userName} في ${roomName}! وصلتني رسالتك بكل سرور — كيف أستطيع مساعدتك الآن؟ ✨`;
+}
+
+async function callWelcomeBotGemini(apiKey, { question, userName, roomName, speakerName, isVirtual }) {
+  const key = String(apiKey || '').trim();
+  if (!key) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8500);
+  try {
+    const persona = isVirtual
+      ? `أنت عضو عربي ودود ومثقف اسمك "${speakerName}" تتواجد داخل غرفة الدردشة "${roomName}".`
+      : `أنت "${speakerName}"، المساعد الترحيبي الذكي لغرفة الدردشة العربية "${roomName}".`;
+    const sysPrompt = `${persona} أجب على رسالة "${userName}" باللغة العربية الفصحى السهلة أو الخليجية/العربية المهذبة، بأسلوب راقٍ ومحترم ومختصر جداً (سطر أو سطرين بحد أقصى، بدون إطالة أو تنسيق معقد). لا تستخدم أي عبارات غير لائقة.`;
+
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: sysPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: `${userName}: ${String(question || '').slice(0, 400)}` }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 160
+        }
+      })
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const text = String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) return null;
+    return text.slice(0, 420);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function findAddressedWelcomeBotSpeaker(content, roomId, s) {
+  const norm = normalizeArabicText(content);
+  if (!norm) return null;
+  const mainBotName = String(s.welcome_bot_name || 'مساعد الأصيل').trim();
+
+  if (s.welcome_bot_mode === 'virtual_members') {
+    const vms = getActiveVirtualMembersForRooms();
+    // Prefer virtual members assigned to this room first, then any active virtual member
+    const sorted = vms.slice().sort((a, b) => (a.roomId === roomId ? -1 : b.roomId === roomId ? 1 : 0));
+    for (const vm of sorted) {
+      if (textContainsMemberName(content, vm.name)) return vm;
+    }
+    if (mainBotName && textContainsMemberName(content, mainBotName)) {
+      const fallbackVm = sorted[0];
+      return fallbackVm || { key: 'system:welcomebot', name: mainBotName, avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
+    }
+    return null;
+  }
+
+  // Assistant mode: only respond when main bot name or explicit bot call ("يا بوت" / "يا مساعد" / "@بوت") is written
+  if (mainBotName && textContainsMemberName(content, mainBotName)) {
+    return { key: 'system:welcomebot', name: mainBotName, avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
+  }
+  const explicitCall =
+    /(^|\s)(يا\s*بوت|يا\s*مساعد|البوت|المساعد|@?bot)($|\s)/i.test(norm) ||
+    norm === 'بوت' ||
+    norm === 'مساعد';
+  if (explicitCall) {
+    return { key: 'system:welcomebot', name: mainBotName || 'مساعد الأصيل', avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
+  }
+  return null;
+}
+
+async function maybeHandleWelcomeBotMention(entry, roomId, content) {
+  if (!entry || !roomId || !content) return;
+  if (String(entry.key || '').startsWith('system:') || String(entry.key || '').startsWith('virtual:')) return;
+  const s = db.getSiteSettings();
+  if (Number(s.welcome_bot_enabled ?? 1) === 0) return;
+
+  const speaker = findAddressedWelcomeBotSpeaker(content, roomId, s);
+  if (!speaker) return;
+
+  // Enforce strict 15-second cooldown per user silently
+  const now = Date.now();
+  const prevAt = welcomeBotCooldownByUser.get(entry.key) || 0;
+  if (now - prevAt < 15000) return;
+  welcomeBotCooldownByUser.set(entry.key, now);
+
+  const room = db.getRoomById(roomId);
+  const roomName = room?.name || 'الغرفة';
+  const apiKey = String(s.welcome_bot_gemini_key || '').trim();
+
+  let reply = null;
+  if (apiKey) {
+    reply = await callWelcomeBotGemini(apiKey, {
+      question: content,
+      userName: entry.name,
+      roomName,
+      speakerName: speaker.name,
+      isVirtual: Boolean(speaker.isVirtual)
+    });
+  }
+  if (!reply) {
+    reply = generateSmartFallbackReply(content, entry.name, roomName, speaker.name);
+  }
+  // Ensure user is still inside the room before emitting
+  const stillOnline = [...onlineSockets.values()].some((e) => e.roomId === roomId);
+  if (!stillOnline) return;
+  emitWelcomeBotMessage(roomId, reply, speaker);
+}
+
+const VIRTUAL_MEMBER_CHAT_LINES = [
+  'مساء النور على الجميع في الغرفة 🌹 كيف أموركم اليوم؟',
+  'الأجواء اليوم رايقة جداً، حياكم الله جميعاً ☕✨',
+  'منورين الغرفة يا أبطال، شاركونا سواليفكم الحلوة 💬',
+  'صلوا على النبي محمد ﷺ — اللهم صل وسلم على نبينا محمد 🤍',
+  'أهلاً باللي انضموا معنا الآن، القهوة جاهزة والغرفة منورة بكم 🌟',
+  'مين صاحي معنا الآن ويسولف في الدردشة؟ 😄',
+  'الكلمة الطيبة تجمع القلوب دائماً — أوقاتاً ممتعة للجميع 🌹'
+];
+
+function runVirtualMembersTick() {
+  const s = db.getSiteSettings();
+  if (Number(s.welcome_bot_enabled ?? 1) === 0 || s.welcome_bot_mode !== 'virtual_members') return;
+  const vms = getActiveVirtualMembersForRooms();
+  if (!vms.length) return;
+  const now = Date.now();
+  const rooms = db.getAllRooms();
+  for (const r of rooms) {
+    if (getRoomHumanCount(r.id) <= 0) continue;
+    const lastAt = lastBotActivityByRoom.get(r.id) || 0;
+    if (now - lastAt < 65000) continue;
+    const roomVms = vms.filter((v) => v.roomId === r.id);
+    if (!roomVms.length) continue;
+    // Slight natural randomness so rooms don't all fire simultaneously
+    if (Math.random() > 0.55) continue;
+    const speaker = roomVms[Math.floor(Math.random() * roomVms.length)];
+    const line = VIRTUAL_MEMBER_CHAT_LINES[Math.floor(Math.random() * VIRTUAL_MEMBER_CHAT_LINES.length)];
+    emitWelcomeBotMessage(r.id, line, speaker);
+  }
+}
+
+function startVirtualMembersLoop() {
+  if (virtualMembersLoopTimer) clearInterval(virtualMembersLoopTimer);
+  virtualMembersLoopTimer = setInterval(runVirtualMembersTick, 65000);
+}
+
 app.get('/api/owner/suite', requireOwner, (_req, res) => {
   const liveSockets = [];
   const hiddenOnline = [];
@@ -3840,6 +4267,16 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       quiz_msg_style: settings.quiz_msg_style || 'royal_gold',
       quiz_custom_questions: Array.isArray(settings.quiz_custom_questions) ? settings.quiz_custom_questions : [],
       builtinCount: QUIZ_BANK.length
+    },
+    welcomeBotSettings: {
+      welcome_bot_enabled: settings.welcome_bot_enabled === 0 ? 0 : 1,
+      welcome_bot_mode: settings.welcome_bot_mode === 'virtual_members' ? 'virtual_members' : 'assistant',
+      welcome_bot_name: String(settings.welcome_bot_name || 'مساعد الأصيل'),
+      welcome_bot_avatar: String(settings.welcome_bot_avatar || ''),
+      welcome_bot_greeting: String(settings.welcome_bot_greeting || ''),
+      welcome_bot_gemini_key: String(settings.welcome_bot_gemini_key || ''),
+      welcome_bot_color: String(settings.welcome_bot_color || 'royal_gold'),
+      virtual_members_list: Array.isArray(settings.virtual_members_list) ? settings.virtual_members_list : []
     },
     protections: {
       lock_guest_images: Number(settings.lock_guest_images) || 0,
@@ -4180,10 +4617,11 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     for (const b of roomQuizBots.values()) {
       if (updated.quiz_reward_coins) b.rewardCoins = Number(updated.quiz_reward_coins) || 100;
     }
-    io.emit('site_settings_updated', updated);
+    const pubSettings = db.getPublicSiteSettings();
+    io.emit('site_settings_updated', pubSettings);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات بوت المسابقات', details: `${updated.quiz_interval_sec}ث / ${updated.quiz_reward_coins} روبي` });
     await db.flushWrites();
-    return res.json({ ok: true, settings: updated });
+    return res.json({ ok: true, settings: pubSettings });
   }
 
   if (action === 'quiz_add_question') {
@@ -4275,16 +4713,18 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   }
 
   if (action === 'update_protections') {
-    const updated = db.updateSiteSettings(protections || {});
-    io.emit('site_settings_updated', updated);
+    db.updateSiteSettings(protections || {});
+    const pubSettings = db.getPublicSiteSettings();
+    io.emit('site_settings_updated', pubSettings);
     broadcastRoomsList(io);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات الحماية والمميزات' });
     await db.flushWrites();
-    return res.json({ ok: true, settings: updated });
+    return res.json({ ok: true, settings: pubSettings });
   }
 
   if (action === 'update_master_matrix') {
-    const updatedSettings = protections ? db.updateSiteSettings(protections) : db.getSiteSettings();
+    if (protections) db.updateSiteSettings(protections);
+    const pubSettings = db.getPublicSiteSettings();
     let ranksChanged = false;
     if (rolePermissions && typeof rolePermissions === 'object') {
       for (const [rKey, perms] of Object.entries(rolePermissions)) {
@@ -4298,17 +4738,18 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         }
       }
     }
-    io.emit('site_settings_updated', updatedSettings);
+    io.emit('site_settings_updated', pubSettings);
     if (ranksChanged) io.emit('ranks_updated', db.getAllRanks());
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث مصفوفة الصلاحيات الشاملة' });
     await db.flushWrites();
-    return res.json({ ok: true, settings: updatedSettings, ranks: db.getAllRanks() });
+    return res.json({ ok: true, settings: pubSettings, ranks: db.getAllRanks() });
   }
 
   if (action === 'save_custom_drawer_sections') {
     const { sections } = req.body || {};
     const updated = db.updateSiteSettings({ custom_drawer_sections: Array.isArray(sections) ? sections : [] });
-    io.emit('site_settings_updated', updated);
+    const pubSettings = db.getPublicSiteSettings();
+    io.emit('site_settings_updated', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,
@@ -4317,7 +4758,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       details: `${(updated.custom_drawer_sections || []).length} قسم`
     });
     await db.flushWrites();
-    return res.json({ ok: true, settings: updated });
+    return res.json({ ok: true, settings: pubSettings });
   }
 
   if (action === 'save_profile_builder') {
@@ -4339,7 +4780,8 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       }
     }
     const updated = db.updateSiteSettings(patch);
-    io.emit('site_settings_updated', updated);
+    const pubSettings = db.getPublicSiteSettings();
+    io.emit('site_settings_updated', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,
@@ -4348,7 +4790,41 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       details: `${(updated.custom_profile_fields || []).length} حقل ديناميكي`
     });
     await db.flushWrites();
-    return res.json({ ok: true, settings: updated });
+    return res.json({ ok: true, settings: pubSettings });
+  }
+
+  if (action === 'welcome_bot_save') {
+    const body = req.body || {};
+    const patch = {};
+    if (body.welcome_bot_enabled !== undefined) patch.welcome_bot_enabled = body.welcome_bot_enabled ? 1 : 0;
+    if (body.welcome_bot_mode !== undefined) {
+      patch.welcome_bot_mode = body.welcome_bot_mode === 'virtual_members' ? 'virtual_members' : 'assistant';
+    }
+    if (body.welcome_bot_name !== undefined) patch.welcome_bot_name = String(body.welcome_bot_name || '');
+    if (body.welcome_bot_avatar !== undefined) patch.welcome_bot_avatar = String(body.welcome_bot_avatar || '');
+    if (body.welcome_bot_greeting !== undefined) patch.welcome_bot_greeting = String(body.welcome_bot_greeting || '');
+    if (body.welcome_bot_gemini_key !== undefined) patch.welcome_bot_gemini_key = String(body.welcome_bot_gemini_key || '');
+    if (body.welcome_bot_color !== undefined) patch.welcome_bot_color = String(body.welcome_bot_color || 'royal_gold');
+    if (Array.isArray(body.virtual_members_list)) patch.virtual_members_list = body.virtual_members_list;
+
+    const fullUpdated = db.updateSiteSettings(patch);
+    const pubSettings = db.getPublicSiteSettings();
+    io.emit('site_settings_updated', pubSettings);
+    broadcastRoomsList(io);
+    broadcastGlobalOnlineUsers(io);
+    for (const r of db.getAllRooms()) {
+      broadcastRoomUsers(io, r.id);
+    }
+    startVirtualMembersLoop();
+    db.addAdminLog({
+      actorKey: actor.key,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: 'تحديث إعدادات البوت الترحيبي الذكي',
+      details: `الوضع: ${fullUpdated.welcome_bot_mode === 'virtual_members' ? 'أعضاء افتراضيين' : 'بوت مساعد ذكي'} • اللون: ${fullUpdated.welcome_bot_color}`
+    });
+    await db.flushWrites();
+    return res.json({ ok: true, settings: pubSettings });
   }
 
   return res.status(400).json({ error: 'إجراء غير معروف.' });
@@ -4422,9 +4898,11 @@ app.post('/api/owner/restore', requireOwner, express.json({ limit: '80mb' }), as
     const result = await db.restoreFullBackup(dbPayload, { preserveSessionId: req.sessionId || '' });
     if (result?.error) return res.status(400).json({ error: result.error });
 
+    const pubSettings = db.getPublicSiteSettings();
     io.emit('ranks_updated', db.getAllRanks());
-    io.emit('site_settings_updated', db.getSiteSettings());
+    io.emit('site_settings_updated', pubSettings);
     broadcastRoomsList(io);
+    broadcastGlobalOnlineUsers(io);
     io.emit('emojis_updated', db.getAllCustomEmojis());
     io.emit('persistent_members', buildPersistentMembersList());
     for (const entry of onlineSockets.values()) {
@@ -4444,7 +4922,7 @@ app.post('/api/owner/restore', requireOwner, express.json({ limit: '80mb' }), as
       ok: true,
       counts: result.counts,
       storageStatus: db.getStorageStatus(),
-      settings: db.getSiteSettings(),
+      settings: pubSettings,
       ranks: db.getAllRanks()
     });
   } catch (err) {
@@ -4602,6 +5080,7 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
         vipWings: Boolean(entry.vipWings)
       }
     });
+    triggerWelcomeBotOnRoomJoin(entry, pubRoom);
   }
 }
 
@@ -4730,7 +5209,7 @@ io.on('connection', (socket) => {
   const initialActiveMute = db.getActiveMute(session.key, validRoom);
   socket.emit('init_state', {
     user: session.isGuest ? session : mapUserRow(db.findUserById(session.userId)),
-    settings: db.getSiteSettings(),
+    settings: db.getPublicSiteSettings(),
     ranks: db.getAllRanks(),
     emojis: db.getAllCustomEmojis(),
     rooms: buildRoomsPayload(),
@@ -5086,7 +5565,10 @@ io.on('connection', (socket) => {
         }
       }
 
-      if (msgType === 'text') checkQuizBotAnswer(entry, content);
+      if (msgType === 'text') {
+        checkQuizBotAnswer(entry, content);
+        maybeHandleWelcomeBotMention(entry, entry.roomId, content).catch(() => {});
+      }
 
       // Smart Mention (No @ required) & Recipient-Only Audio/Notification Ping
       if (msgType === 'text' && content) {
@@ -6234,8 +6716,10 @@ async function start() {
     onRoomsChanged: () => {
       broadcastRoomsList(io);
     },
-    onSettingsChanged: (settings) => {
-      io.emit('site_settings_updated', settings);
+    onSettingsChanged: (_settings) => {
+      io.emit('site_settings_updated', db.getPublicSiteSettings());
+      broadcastRoomsList(io);
+      broadcastGlobalOnlineUsers(io);
     },
     onEmojisChanged: (emojis) => {
       io.emit('emojis_updated', emojis);
@@ -6246,6 +6730,7 @@ async function start() {
   });
 
   // Anti-AFK Policy: passive 5-minute online presence reward removed; rewards occur exclusively on genuine text chat activity.
+  startVirtualMembersLoop();
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Arabic CodyChat Server listening on http://0.0.0.0:${PORT}`);

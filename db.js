@@ -476,6 +476,18 @@ const DEFAULT_SITE_SETTINGS = {
   quiz_reward_coins: 100,
   quiz_msg_style: 'royal_gold',
   quiz_custom_questions: [],
+  welcome_bot_enabled: 1,
+  welcome_bot_mode: 'assistant',
+  welcome_bot_name: 'مساعد الأصيل',
+  welcome_bot_avatar: '',
+  welcome_bot_greeting: 'أهلاً وسهلاً بك يا [الاسم] في [الغرفة]! نورتنا ويسعدنا تواجدك معنا 🌹',
+  welcome_bot_gemini_key: '',
+  welcome_bot_color: 'royal_gold',
+  virtual_members_list: [
+    { id: 'vm_sara', name: 'سارة', avatarUrl: '', role: 'royal_member' },
+    { id: 'vm_rashed', name: 'راشد', avatarUrl: '', role: 'vip' },
+    { id: 'vm_layan', name: 'ليان', avatarUrl: '', role: 'gold_member' }
+  ],
   fx_owner_galaxy_identity: 1,
   fx_glass_bubbles: 1,
   fx_mic_waves: 1,
@@ -1394,6 +1406,9 @@ function normalizeMessageDoc(docId, data) {
     name_anim_speed: String(data.name_anim_speed || 'normal'),
     vip_wings: data.vip_wings ? 1 : 0,
     is_admin_notice: Boolean(data.is_admin_notice),
+    quiz_style: String(data.quiz_style || ''),
+    is_welcome_bot: Boolean(data.is_welcome_bot),
+    bot_color: String(data.bot_color || ''),
     is_gift: Boolean(data.is_gift),
     is_ghost_only: Boolean(data.is_ghost_only),
     gift_data: data.gift_data || null,
@@ -2702,6 +2717,16 @@ function getSiteSettings() {
   return { ...DEFAULT_SITE_SETTINGS, ...store.siteSettings };
 }
 
+function getPublicSiteSettings() {
+  const s = getSiteSettings();
+  const hasKey = Boolean(String(s.welcome_bot_gemini_key || '').trim());
+  return {
+    ...s,
+    welcome_bot_gemini_key: '',
+    welcome_bot_has_gemini_key: hasKey
+  };
+}
+
 function updateSiteSettings(patch = {}) {
   const cur = getSiteSettings();
   const next = {
@@ -2809,6 +2834,57 @@ function updateSiteSettings(patch = {}) {
         : Array.isArray(cur.quiz_custom_questions)
           ? cur.quiz_custom_questions
           : [],
+    welcome_bot_enabled:
+      patch.welcome_bot_enabled !== undefined ? (patch.welcome_bot_enabled ? 1 : 0) : cur.welcome_bot_enabled !== 0 ? 1 : 0,
+    welcome_bot_mode:
+      patch.welcome_bot_mode !== undefined && ['assistant', 'virtual_members'].includes(String(patch.welcome_bot_mode))
+        ? String(patch.welcome_bot_mode)
+        : ['assistant', 'virtual_members'].includes(String(cur.welcome_bot_mode))
+          ? String(cur.welcome_bot_mode)
+          : 'assistant',
+    welcome_bot_name:
+      patch.welcome_bot_name !== undefined
+        ? String(patch.welcome_bot_name).trim().slice(0, 36) || 'مساعد الأصيل'
+        : String(cur.welcome_bot_name || 'مساعد الأصيل'),
+    welcome_bot_avatar:
+      patch.welcome_bot_avatar !== undefined
+        ? String(patch.welcome_bot_avatar).trim().slice(0, 400)
+        : String(cur.welcome_bot_avatar || ''),
+    welcome_bot_greeting:
+      patch.welcome_bot_greeting !== undefined
+        ? String(patch.welcome_bot_greeting).trim().slice(0, 320) || DEFAULT_SITE_SETTINGS.welcome_bot_greeting
+        : String(cur.welcome_bot_greeting || DEFAULT_SITE_SETTINGS.welcome_bot_greeting),
+    welcome_bot_gemini_key:
+      patch.welcome_bot_gemini_key !== undefined
+        ? String(patch.welcome_bot_gemini_key).trim().slice(0, 200)
+        : String(cur.welcome_bot_gemini_key || ''),
+    welcome_bot_color: (() => {
+      const allowed = ['royal_gold', 'sky_blue', 'emerald_green', 'ruby_red', 'royal_purple'];
+      const pick = patch.welcome_bot_color !== undefined
+        ? String(patch.welcome_bot_color)
+        : String(cur.welcome_bot_color || 'royal_gold');
+      return allowed.includes(pick) ? pick : 'royal_gold';
+    })(),
+    virtual_members_list:
+      patch.virtual_members_list !== undefined
+        ? (Array.isArray(patch.virtual_members_list) ? patch.virtual_members_list : [])
+            .map((vm, idx) => {
+              const name = String(vm?.name || '').trim().slice(0, 32);
+              if (!name) return null;
+              const allowedRoles = ['member', 'bronze_member', 'silver_member', 'gold_member', 'royal_member', 'vip'];
+              const role = allowedRoles.includes(String(vm?.role)) ? String(vm.role) : 'member';
+              return {
+                id: String(vm?.id || `vm_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || `vm_${idx}`,
+                name,
+                avatarUrl: String(vm?.avatarUrl || '').trim().slice(0, 400),
+                role
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 25)
+        : Array.isArray(cur.virtual_members_list)
+          ? cur.virtual_members_list
+          : DEFAULT_SITE_SETTINGS.virtual_members_list,
     fx_owner_galaxy_identity:
       patch.fx_owner_galaxy_identity !== undefined
         ? (patch.fx_owner_galaxy_identity ? 1 : 0)
@@ -4282,6 +4358,8 @@ function addMessage({
   vipWings,
   isAdminNotice,
   quizStyle,
+  isWelcomeBot,
+  botColor,
   isGift,
   isGhostOnly,
   giftData,
@@ -4322,6 +4400,8 @@ function addMessage({
     vip_wings: vipWings ? 1 : 0,
     is_admin_notice: Boolean(isAdminNotice),
     quiz_style: quizStyle ? String(quizStyle).slice(0, 32) : '',
+    is_welcome_bot: Boolean(isWelcomeBot),
+    bot_color: botColor ? String(botColor).slice(0, 32) : '',
     is_gift: Boolean(isGift),
     is_ghost_only: Boolean(isGhostOnly),
     gift_data: giftData || null,
@@ -5315,6 +5395,7 @@ module.exports = {
   getValidOwnedFramesData,
   isFrameOwnedAndValid,
   getSiteSettings,
+  getPublicSiteSettings,
   updateSiteSettings,
   getEffectiveName,
   getUserCount,
