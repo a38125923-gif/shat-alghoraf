@@ -1498,11 +1498,13 @@
 
   function normalizeCleanMentionText(str) {
     return String(str || '')
+      .replace(/[\u200e\u200f\u200b\u200c\u200d]/g, '')
       .replace(/^@+/, '')
       .replace(/[\u064B-\u065F\u0670]/g, '')
       .replace(/[أإآ]/g, 'ا')
       .replace(/ة/g, 'ه')
       .replace(/ى/g, 'ي')
+      .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
   }
@@ -1512,12 +1514,16 @@
     const target = normalizeCleanMentionText(cleanName);
     if (!val || !target) return false;
     const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(?:^|[\\s،,.!?:"'()\\-])${escaped}(?=$|[\\s،,.!?:"'()\\-])`, 'i');
+    const re = new RegExp(`(?:^|[\\s،,.!?؟؛:"'()\\-])${escaped}(?=$|[\\s،,.!?؟؛:"'()\\-])`, 'i');
     return re.test(val);
   }
 
   function insertMention(name, userId = null) {
-    const clean = String(name || '').replace(/^@+/, '').trim();
+    const clean = String(name || '')
+      .replace(/[\u200e\u200f\u200b\u200c\u200d]/g, '')
+      .replace(/^@+/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const input = $('messageInput');
     if (!clean || !input) return;
 
@@ -1532,21 +1538,28 @@
       }
     }
 
-    const prefix = input.value && !input.value.endsWith(' ') ? ' ' : '';
-    input.value = `${input.value}${prefix}${clean} `;
+    const currentVal = String(input.value || '');
+    const prefix = currentVal && !/\s$/.test(currentVal) ? ' ' : '';
+    input.value = `${currentVal}${prefix}${clean} `;
     state.mentionedUserId = resolvedId || null;
     state.mentionedUserName = resolvedId ? clean : '';
     input.focus();
+    try {
+      const endPos = input.value.length;
+      input.setSelectionRange(endPos, endPos);
+    } catch {
+      // ignore non-selectable input
+    }
   }
 
   function findKnownUserByMention(mentionText) {
-    const target = String(mentionText || '').trim().toLowerCase();
+    const target = normalizeCleanMentionText(mentionText);
     if (!target) return null;
     const pools = [state.roomUsers, state.onlineUsers, state.persistentMembers, state.user ? [state.user] : []];
     for (const pool of pools) {
       for (const u of pool || []) {
-        const n1 = String(u.name || u.displayName || '').trim().toLowerCase();
-        const n2 = String(u.username || '').trim().toLowerCase();
+        const n1 = normalizeCleanMentionText(u.name || u.displayName || '');
+        const n2 = normalizeCleanMentionText(u.username || '');
         if ((n1 && n1 === target) || (n2 && n2 === target)) return u;
       }
     }
@@ -1554,11 +1567,11 @@
   }
 
   function doesTextContainName(rawText, candidateName) {
-    const text = String(rawText || '').trim().toLowerCase();
-    const clean = String(candidateName || '').trim().toLowerCase();
+    const text = normalizeCleanMentionText(rawText);
+    const clean = normalizeCleanMentionText(candidateName);
     if (!text || clean.length < 2) return false;
     const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(^|[\\s،,.!?:"'()\\-])${escaped}(?=$|[\\s،,.!?:"'()\\-])`, 'i');
+    const re = new RegExp(`(?:^|[\\s،,.!?؟؛:"'()\\-])${escaped}(?=$|[\\s،,.!?؟؛:"'()\\-])`, 'i');
     return re.test(text);
   }
 
@@ -2696,8 +2709,14 @@
     `;
 
     const openTarget = () => openQuickUserModal(targetObj);
-    row.querySelector('.msg-avatar-trigger').addEventListener('click', openTarget);
-    row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(msg.sender_name, msg.sender_key));
+    row.querySelector('.msg-avatar-trigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openTarget();
+    });
+    row.querySelector('.msg-name-trigger').addEventListener('click', (e) => {
+      e.stopPropagation();
+      insertMention(msg.sender_name, msg.sender_key);
+    });
     row.querySelector('.msg-dismiss-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       row.remove();
@@ -2821,8 +2840,14 @@
           </div>
         </div>
       `;
-      row.querySelector('.msg-avatar-trigger').addEventListener('click', () => openQuickUserModal(u));
-      row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(u.name, u.key));
+      row.querySelector('.msg-avatar-trigger').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openQuickUserModal(u);
+      });
+      row.querySelector('.msg-name-trigger').addEventListener('click', (e) => {
+        e.stopPropagation();
+        insertMention(u.name, u.key);
+      });
       feed.appendChild(row);
       feed.scrollTop = feed.scrollHeight;
       return;
@@ -7732,12 +7757,12 @@
         deviceId: state.deviceId,
         fingerprint: state.fingerprint
       },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 6000,
-      timeout: 20000
+      timeout: 25000
     });
     state.socket = socket;
 
@@ -7758,7 +7783,7 @@
     });
 
     socket.io.on('reconnect_attempt', () => {
-      setReconnectBannerVisible(true);
+      if (state.wasDisconnected) setReconnectBannerVisible(true);
       socket.auth = {
         token: state.token,
         roomId: state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general',
@@ -7818,6 +7843,8 @@
     });
 
     socket.on('init_state', (data) => {
+      state.wasDisconnected = false;
+      setReconnectBannerVisible(false);
       state.user = data.user;
       if (state.user && state.token) persistSessionState(state.user, state.token);
       state.ranks = data.ranks || [];
@@ -8524,15 +8551,31 @@
         const action = btn.dataset.drawer;
         if (action === 'online') {
           $('drawerBodyContent').innerHTML = state.onlineUsers.map((u) => `
-            <button type="button" class="user-row-card" style="margin-bottom:6px;" data-uk="${escapeHtml(u.key)}">
-              ${formatAvatarHTML(u, 'sm')}
-              <div class="user-row-info"><div class="user-row-name">${formatNameHTML(u)}</div><div class="muted">${escapeHtml(u.roomName || '')}</div></div>
-            </button>
+            <div class="user-row-card" style="margin-bottom:6px;cursor:pointer;" data-uk="${escapeHtml(u.key)}">
+              <div class="user-row-avatar-btn" title="بطاقة العضو">${formatAvatarHTML(u, 'sm')}</div>
+              <div class="user-row-info">
+                <div class="user-row-name user-row-name-btn" title="اضغط لنداء العضو">${formatNameHTML(u)}</div>
+                <div class="muted">${escapeHtml(u.roomName || '')}</div>
+              </div>
+              <button type="button" class="user-mini-ping-btn" title="نداء العضو"><i class="fa-solid fa-bullhorn"></i></button>
+            </div>
           `).join('') || '<div class="muted">لا يوجد متصلون.</div>';
           $('drawerBodyContent').querySelectorAll('.user-row-card').forEach((c) => {
+            const found = state.onlineUsers.find((x) => x.key === c.dataset.uk);
+            if (!found) return;
+            c.querySelector('.user-row-name-btn')?.addEventListener('click', (e) => {
+              e.stopPropagation();
+              closeMainDrawer();
+              insertMention(found.name, found.key);
+            });
+            c.querySelector('.user-mini-ping-btn')?.addEventListener('click', (e) => {
+              e.stopPropagation();
+              closeMainDrawer();
+              insertMention(found.name, found.key);
+            });
             c.addEventListener('click', () => {
-              const found = state.onlineUsers.find((x) => x.key === c.dataset.uk);
-              if (found) { closeMainDrawer(); openQuickUserModal(found); }
+              closeMainDrawer();
+              openQuickUserModal(found);
             });
           });
           return;

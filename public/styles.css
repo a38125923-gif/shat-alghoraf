@@ -1196,11 +1196,20 @@ textarea:focus {
 }
 
 .msg-name-trigger {
+  position: relative;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   gap: 2px;
   vertical-align: middle;
   margin-inline-end: 5px;
+  cursor: pointer;
+}
+
+.user-row-name-btn {
+  position: relative;
+  z-index: 3;
+  cursor: pointer;
 }
 
 .msg-text-inline {

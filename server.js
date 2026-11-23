@@ -201,12 +201,24 @@ function ensureDarkReadableColor(hex, fallback = '#e2e8f0') {
 }
 
 function textContainsMemberName(text, memberName) {
-  const cleanText = String(text || '').toLowerCase();
-  const cleanName = String(memberName || '').trim().toLowerCase();
-  if (!cleanText || cleanName.length < 2) return false;
-  const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(?:^|[\\s،.!؟@:\\-\\(\\)\\[\\]\\"'/])${escaped}(?:$|[\\s،.!؟:\\-\\(\\)\\[\\]\\"'/])`, 'i');
-  return re.test(cleanText);
+  const cleanMarks = (val) =>
+    String(val || '')
+      .replace(/[\u200e\u200f\u200b\u200c\u200d]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const rawText = cleanMarks(text).toLowerCase();
+  const rawName = cleanMarks(memberName).replace(/^@+/, '').trim().toLowerCase();
+  if (!rawText || !rawName) return false;
+  const escapedRaw = rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rawRe = new RegExp(`(?:^|[\\s،,.!?؟؛@:\\-\\(\\)\\[\\]\\"'/])${escapedRaw}(?:$|[\\s،,.!?؟؛:\\-\\(\\)\\[\\]\\"'/])`, 'i');
+  if (rawRe.test(rawText)) return true;
+
+  const normText = normalizeArabicText(rawText);
+  const normName = normalizeArabicText(rawName);
+  if (!normText || !normName) return false;
+  const escapedNorm = normName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const normRe = new RegExp(`(?:^|[\\s،,.!?؟؛@:\\-\\(\\)\\[\\]\\"'/])${escapedNorm}(?:$|[\\s،,.!?؟؛:\\-\\(\\)\\[\\]\\"'/])`, 'i');
+  return normRe.test(normText);
 }
 
 const app = express();
@@ -215,7 +227,36 @@ app.use(express.json({ limit: '6mb' }));
 app.use('/uploads', express.static(UPLOAD_ROOT, { maxAge: '7d' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Global async safety wrapper for all Express routes so rejected promises never cause unhandledRejection
+for (const method of ['get', 'post', 'put', 'delete', 'patch']) {
+  const origMethod = app[method].bind(app);
+  app[method] = (pathArg, ...handlers) => {
+    if (method === 'get' && handlers.length === 0) return origMethod(pathArg);
+    const wrapped = handlers.map((fn) => {
+      if (typeof fn !== 'function' || fn.length === 4) return fn;
+      return function safeExpressHandler(req, res, next) {
+        try {
+          const maybePromise = fn.call(this, req, res, next);
+          if (maybePromise && typeof maybePromise.catch === 'function') {
+            return maybePromise.catch(next);
+          }
+          return maybePromise;
+        } catch (err) {
+          return next(err);
+        }
+      };
+    });
+    return origMethod(pathArg, ...wrapped);
+  };
+}
+
 app.get('/healthz', (_req, res) => {
+  res.json({ ok: true, storage: db.getStorageStatus() });
+});
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, storage: db.getStorageStatus() });
+});
+app.get('/api/health', (_req, res) => {
   res.json({ ok: true, storage: db.getStorageStatus() });
 });
 
@@ -1419,15 +1460,19 @@ let muteExpiryTimer = null;
 function startMuteExpiryMonitor() {
   if (muteExpiryTimer) clearInterval(muteExpiryTimer);
   muteExpiryTimer = setInterval(() => {
-    const activeRows = db.getAllActiveMutes();
-    const stillMuted = new Set(activeRows.map((m) => m.target_key));
-    for (const prevKey of [...activeMutedKeysTracker]) {
-      if (!stillMuted.has(prevKey)) {
-        activeMutedKeysTracker.delete(prevKey);
-        emitMuteStateToUser(prevKey, '*');
+    try {
+      const activeRows = db.getAllActiveMutes();
+      const stillMuted = new Set(activeRows.map((m) => m.target_key));
+      for (const prevKey of [...activeMutedKeysTracker]) {
+        if (!stillMuted.has(prevKey)) {
+          activeMutedKeysTracker.delete(prevKey);
+          emitMuteStateToUser(prevKey, '*');
+        }
       }
+      for (const k of stillMuted) activeMutedKeysTracker.add(k);
+    } catch (err) {
+      console.error('[MuteExpiryMonitor Error]', err?.message || err);
     }
-    for (const k of stillMuted) activeMutedKeysTracker.add(k);
   }, 8000);
 }
 
@@ -1689,10 +1734,8 @@ app.get('/api/me', async (req, res) => {
   if (!u) return res.status(401).json({ error: 'جلسة غير صالحة.' });
   if (u.banned) {
     return res.status(403).json({
-      error: `تم حظرك بواسطة ${u.bannedBy || 'الإدارة'} للسبب: ${u.reason || 'حظر من الإدارة'}`,
-      banned: true,
-      bannedBy: u.bannedBy || 'الإدارة',
-      reason: u.reason || 'حظر من الإدارة'
+      error: 'تم حظرك من الشات',
+      banned: true
     });
   }
   let nextToken = req._authRawToken || '';
@@ -3596,74 +3639,86 @@ function emitQuizBotState(roomId) {
 }
 
 function startRoomQuizRound(roomId) {
-  const bot = roomQuizBots.get(roomId);
-  if (!bot || !bot.active) return;
-  clearQuizBotTimers(bot);
+  try {
+    const bot = roomQuizBots.get(roomId);
+    if (!bot || !bot.active) return;
+    clearQuizBotTimers(bot);
 
-  if (getRoomHumanCount(roomId) === 0) {
-    bot.currentQ = null;
+    if (getRoomHumanCount(roomId) === 0) {
+      bot.currentQ = null;
+      bot.hintSent = false;
+      bot.pausedEmpty = true;
+      return;
+    }
+
+    const bank = getEffectiveQuizBank();
+    if (!bank.length) return;
+    const settings = db.getSiteSettings();
+    const intervalSec = Math.max(10, Math.min(120, Number(settings.quiz_interval_sec) || 25));
+    const hintSec = Math.max(5, Math.min(intervalSec - 3, Number(settings.quiz_hint_sec) || Math.floor(intervalSec * 0.48)));
+    const baseReward = Math.max(10, Math.min(5000, Number(bot.rewardCoins || settings.quiz_reward_coins) || 100));
+    const afterHintReward = Math.max(5, Math.round(baseReward * 0.5));
+    const lastSecReward = Math.max(5, Math.round(baseReward * 0.25));
+
+    bot.pausedEmpty = false;
+    const qObj = bank[bot.qIndex % bank.length];
+    bot.qIndex = (bot.qIndex + 1) % bank.length;
+    bot.currentQ = qObj;
+    bot.roundStartedAt = Date.now();
+    bot.roundIntervalSec = intervalSec;
+    bot.roundHintSec = hintSec;
+    bot.roundRewardCoins = baseReward;
     bot.hintSent = false;
-    bot.pausedEmpty = true;
-    return;
+
+    emitQuizBotMessage(
+      roomId,
+      `🎯 [${qObj.category}] ${qObj.q} (⏱️ ${intervalSec} ثانية | ${baseReward} روبي قبل التلميح)`
+    );
+    emitQuizBotState(roomId);
+
+    // Auto-send first letter + letter count hint
+    bot.hintTimer = setTimeout(() => {
+      try {
+        const curBot = roomQuizBots.get(roomId);
+        if (!curBot || !curBot.active || curBot.currentQ !== qObj) return;
+        curBot.hintSent = true;
+        const hintDesc = buildQuizHintText(qObj.displayAnswer || qObj.a[0]);
+        emitQuizBotMessage(
+          roomId,
+          `💡 تلميح: ${hintDesc} — الإجابة الآن بـ ${afterHintReward} ثم ${lastSecReward} في الثواني الأخيرة!`,
+          '#fde68a',
+          '#78350f'
+        );
+        emitQuizBotState(roomId);
+      } catch (err) {
+        console.error('[QuizBot Hint Error]', err?.message || err);
+      }
+    }, hintSec * 1000);
+
+    // End round -> reveal answer and advance to next question
+    bot.endTimer = setTimeout(() => {
+      try {
+        const curBot = roomQuizBots.get(roomId);
+        if (!curBot || !curBot.active || curBot.currentQ !== qObj) return;
+        clearQuizBotTimers(curBot);
+        curBot.currentQ = null;
+        curBot.hintSent = false;
+        const answerLabel = qObj.displayAnswer || qObj.a[0];
+        emitQuizBotMessage(
+          roomId,
+          `⏰ انتهى الوقت! الإجابة الصحيحة هي: "${answerLabel}" — جاري الانتقال للسؤال التالي...`,
+          '#fecaca',
+          '#7f1d1d'
+        );
+        emitQuizBotState(roomId);
+        curBot.nextTimer = setTimeout(() => startRoomQuizRound(roomId), 3500);
+      } catch (err) {
+        console.error('[QuizBot EndRound Error]', err?.message || err);
+      }
+    }, intervalSec * 1000);
+  } catch (err) {
+    console.error('[QuizBot startRoomQuizRound Error]', err?.message || err);
   }
-
-  const bank = getEffectiveQuizBank();
-  if (!bank.length) return;
-  const settings = db.getSiteSettings();
-  const intervalSec = Math.max(10, Math.min(120, Number(settings.quiz_interval_sec) || 25));
-  const hintSec = Math.max(5, Math.min(intervalSec - 3, Number(settings.quiz_hint_sec) || Math.floor(intervalSec * 0.48)));
-  const baseReward = Math.max(10, Math.min(5000, Number(bot.rewardCoins || settings.quiz_reward_coins) || 100));
-  const afterHintReward = Math.max(5, Math.round(baseReward * 0.5));
-  const lastSecReward = Math.max(5, Math.round(baseReward * 0.25));
-
-  bot.pausedEmpty = false;
-  const qObj = bank[bot.qIndex % bank.length];
-  bot.qIndex = (bot.qIndex + 1) % bank.length;
-  bot.currentQ = qObj;
-  bot.roundStartedAt = Date.now();
-  bot.roundIntervalSec = intervalSec;
-  bot.roundHintSec = hintSec;
-  bot.roundRewardCoins = baseReward;
-  bot.hintSent = false;
-
-  emitQuizBotMessage(
-    roomId,
-    `🎯 [${qObj.category}] ${qObj.q} (⏱️ ${intervalSec} ثانية | ${baseReward} روبي قبل التلميح)`
-  );
-  emitQuizBotState(roomId);
-
-  // Auto-send first letter + letter count hint
-  bot.hintTimer = setTimeout(() => {
-    const curBot = roomQuizBots.get(roomId);
-    if (!curBot || !curBot.active || curBot.currentQ !== qObj) return;
-    curBot.hintSent = true;
-    const hintDesc = buildQuizHintText(qObj.displayAnswer || qObj.a[0]);
-    emitQuizBotMessage(
-      roomId,
-      `💡 تلميح: ${hintDesc} — الإجابة الآن بـ ${afterHintReward} ثم ${lastSecReward} في الثواني الأخيرة!`,
-      '#fde68a',
-      '#78350f'
-    );
-    emitQuizBotState(roomId);
-  }, hintSec * 1000);
-
-  // End round -> reveal answer and advance to next question
-  bot.endTimer = setTimeout(() => {
-    const curBot = roomQuizBots.get(roomId);
-    if (!curBot || !curBot.active || curBot.currentQ !== qObj) return;
-    clearQuizBotTimers(curBot);
-    curBot.currentQ = null;
-    curBot.hintSent = false;
-    const answerLabel = qObj.displayAnswer || qObj.a[0];
-    emitQuizBotMessage(
-      roomId,
-      `⏰ انتهى الوقت! الإجابة الصحيحة هي: "${answerLabel}" — جاري الانتقال للسؤال التالي...`,
-      '#fecaca',
-      '#7f1d1d'
-    );
-    emitQuizBotState(roomId);
-    curBot.nextTimer = setTimeout(() => startRoomQuizRound(roomId), 3500);
-  }, intervalSec * 1000);
 }
 
 function startQuizBotInRoom(roomId, rewardCoins = null) {
@@ -3988,19 +4043,23 @@ function triggerWelcomeBotOnRoomJoin(entry, room) {
   const targetEntryKey = entry.key;
 
   setTimeout(() => {
-    const stillHere = [...onlineSockets.values()].some((e) => e.key === targetEntryKey && e.roomId === targetRoomId);
-    if (!stillHere) return;
-    const latestSettings = db.getSiteSettings();
-    if (Number(latestSettings.welcome_bot_enabled ?? 1) === 0) return;
-    let speaker = null;
-    if (latestSettings.welcome_bot_mode === 'virtual_members') {
-      const vms = getActiveVirtualMembersForRooms();
-      const inRoom = vms.filter((v) => v.roomId === targetRoomId);
-      const pool = inRoom.length ? inRoom : vms;
-      if (pool.length) speaker = pool[Math.floor(Math.random() * pool.length)];
+    try {
+      const stillHere = [...onlineSockets.values()].some((e) => e.key === targetEntryKey && e.roomId === targetRoomId);
+      if (!stillHere) return;
+      const latestSettings = db.getSiteSettings();
+      if (Number(latestSettings.welcome_bot_enabled ?? 1) === 0) return;
+      let speaker = null;
+      if (latestSettings.welcome_bot_mode === 'virtual_members') {
+        const vms = getActiveVirtualMembersForRooms();
+        const inRoom = vms.filter((v) => v.roomId === targetRoomId);
+        const pool = inRoom.length ? inRoom : vms;
+        if (pool.length) speaker = pool[Math.floor(Math.random() * pool.length)];
+      }
+      const greeting = formatWelcomeGreeting(latestSettings.welcome_bot_greeting, targetUserName, targetRoomName);
+      emitWelcomeBotMessage(targetRoomId, greeting, speaker);
+    } catch (err) {
+      console.error('[WelcomeBot RoomJoin Timer Error]', err?.message || err);
     }
-    const greeting = formatWelcomeGreeting(latestSettings.welcome_bot_greeting, targetUserName, targetRoomName);
-    emitWelcomeBotMessage(targetRoomId, greeting, speaker);
   }, 900);
 }
 
@@ -4057,46 +4116,50 @@ let lastWelcomeBotGeminiStatus = { ok: null, model: '', at: null, error: '' };
 let lastGeminiErrorNotifAt = 0;
 
 function reportWelcomeBotGeminiErrorToOwner(errorReason, userName = '') {
-  const cleanErr = String(errorReason || 'خطأ غير معروف في Gemini API').slice(0, 260);
-  lastWelcomeBotGeminiStatus = {
-    ok: false,
-    model: '',
-    at: new Date().toISOString(),
-    error: cleanErr
-  };
-  console.error('[WelcomeBot Gemini Error]', cleanErr);
-  db.addAdminLog({
-    actorKey: 'system:welcomebot',
-    actorName: '🤖 بوت الذكاء الاصطناعي (Gemini)',
-    actorRole: 'site_owner',
-    action: 'فشل اتصال Gemini API',
-    targetName: userName || 'استفسار عضو',
-    details: cleanErr
-  });
+  try {
+    const cleanErr = String(errorReason || 'خطأ غير معروف في Gemini API').slice(0, 260);
+    lastWelcomeBotGeminiStatus = {
+      ok: false,
+      model: '',
+      at: new Date().toISOString(),
+      error: cleanErr
+    };
+    console.error('[WelcomeBot Gemini Error]', cleanErr);
+    db.addAdminLog({
+      actorKey: 'system:welcomebot',
+      actorName: '🤖 بوت الذكاء الاصطناعي (Gemini)',
+      actorRole: 'site_owner',
+      action: 'فشل اتصال Gemini API',
+      targetName: userName || 'استفسار عضو',
+      details: cleanErr
+    });
 
-  const now = Date.now();
-  if (now - lastGeminiErrorNotifAt >= 20000) {
-    lastGeminiErrorNotifAt = now;
-    const ownerUsers = db
-      .getAllRegisteredUsers()
-      .filter((u) => u.role === 'site_owner' || db.isSupremeOwnerEmail(u.email));
-    for (const owner of ownerUsers) {
-      const ownerKey = `user:${owner.id}`;
-      const notif = db.addNotification({
-        targetKey: ownerKey,
-        title: '⚠️ خطأ في اتصال بوت الذكاء الاصطناعي (Gemini)',
-        body: `تعذر الرد عبر Gemini API — السبب: ${cleanErr}`,
-        category: 'security_alert'
-      });
-      emitNotificationToUser(io, ownerKey, notif);
-    }
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.role === 'site_owner' || db.isSupremeOwnerEmail(e.email)) {
-        io.to(sid).emit('error_toast', { message: `⚠️ خطأ Gemini API: ${cleanErr}` });
+    const now = Date.now();
+    if (now - lastGeminiErrorNotifAt >= 20000) {
+      lastGeminiErrorNotifAt = now;
+      const ownerUsers = db
+        .getAllRegisteredUsers()
+        .filter((u) => u.role === 'site_owner' || db.isSupremeOwnerEmail(u.email));
+      for (const owner of ownerUsers) {
+        const ownerKey = `user:${owner.id}`;
+        const notif = db.addNotification({
+          targetKey: ownerKey,
+          title: '⚠️ خطأ في اتصال بوت الذكاء الاصطناعي (Gemini)',
+          body: `تعذر الرد عبر Gemini API — السبب: ${cleanErr}`,
+          category: 'security_alert'
+        });
+        emitNotificationToUser(io, ownerKey, notif);
+      }
+      for (const [sid, e] of onlineSockets.entries()) {
+        if (e.role === 'site_owner' || db.isSupremeOwnerEmail(e.email)) {
+          io.to(sid).emit('error_toast', { message: `⚠️ خطأ Gemini API: ${cleanErr}` });
+        }
       }
     }
+    db.flushWrites().catch(() => {});
+  } catch (err) {
+    console.error('[reportWelcomeBotGeminiErrorToOwner Failed]', err?.message || err);
   }
-  db.flushWrites().catch(() => {});
 }
 
 function stripBotMentionFromQuestion(rawContent, speakerName, mainBotName) {
@@ -4117,9 +4180,17 @@ function stripBotMentionFromQuestion(rawContent, speakerName, mainBotName) {
 }
 
 async function callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userPrompt) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000);
+  let timeout = null;
   try {
+    if (typeof fetch !== 'function') {
+      return { text: null, errorReason: `${modelName}: fetch API غير متاحة في بيئة الخادم` };
+    }
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    if (controller) {
+      timeout = setTimeout(() => {
+        try { controller.abort(); } catch {}
+      }, 9000);
+    }
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(key)}`;
     const generationConfig = {
       temperature: 0.7,
@@ -4131,7 +4202,7 @@ async function callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userProm
     const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
+      ...(controller ? { signal: controller.signal } : {}),
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: sysPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
@@ -4165,35 +4236,43 @@ async function callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userProm
       : `${modelName}: ${err?.message || 'فشل الاتصال'}`;
     return { text: null, errorReason: errMsg };
   } finally {
-    clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
   }
 }
 
 async function callWelcomeBotGemini(apiKey, { question, userName, roomName, speakerName, mainBotName, isVirtual }) {
-  const key = String(apiKey || '').trim();
-  if (!key) return { text: null, errorReason: '' };
-  const cleanQuestion = stripBotMentionFromQuestion(question, speakerName, mainBotName);
-  const persona = isVirtual
-    ? `أنت عضو عربي مثقف وودود اسمك "${speakerName}" داخل غرفة الدردشة "${roomName}".`
-    : `أنت "${speakerName}"، المساعد الذكي لغرفة الدردشة العربية "${roomName}".`;
-  const sysPrompt = `${persona} المستخدم "${userName}" يوجه لك سؤالاً أو حديثاً مباشراً. أجب إجابة ذكية ومباشرة ومفيدة ومختصرة جداً باللغة العربية (سطر إلى ثلاثة أسطر كحد أقصى). ركّز على الإجابة الفعلية لسؤال المستخدم ولا ترد برسالة ترحيب عامة أو متكررة إذا كان هناك سؤال محدد.`;
-  const userPrompt = `رسالة ${userName}: ${cleanQuestion.slice(0, 500)}`;
+  try {
+    const key = String(apiKey || '').trim();
+    if (!key) return { text: null, errorReason: '' };
+    const cleanQuestion = stripBotMentionFromQuestion(question, speakerName, mainBotName);
+    const persona = isVirtual
+      ? `أنت عضو عربي مثقف وودود اسمك "${speakerName}" داخل غرفة الدردشة "${roomName}".`
+      : `أنت "${speakerName}"، المساعد الذكي لغرفة الدردشة العربية "${roomName}".`;
+    const sysPrompt = `${persona} المستخدم "${userName}" يوجه لك سؤالاً أو حديثاً مباشراً. أجب إجابة ذكية ومباشرة ومفيدة ومختصرة جداً باللغة العربية (سطر إلى ثلاثة أسطر كحد أقصى). ركّز على الإجابة الفعلية لسؤال المستخدم ولا ترد برسالة ترحيب عامة أو متكررة إذا كان هناك سؤال محدد.`;
+    const userPrompt = `رسالة ${userName}: ${cleanQuestion.slice(0, 500)}`;
 
-  const errors = [];
-  for (const modelName of GEMINI_MODEL_FALLBACKS) {
-    const res = await callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userPrompt);
-    if (res?.text) {
-      lastWelcomeBotGeminiStatus = {
-        ok: true,
-        model: res.model || modelName,
-        at: new Date().toISOString(),
-        error: ''
-      };
-      return res;
+    const errors = [];
+    for (const modelName of GEMINI_MODEL_FALLBACKS) {
+      try {
+        const res = await callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userPrompt);
+        if (res?.text) {
+          lastWelcomeBotGeminiStatus = {
+            ok: true,
+            model: res.model || modelName,
+            at: new Date().toISOString(),
+            error: ''
+          };
+          return res;
+        }
+        if (res?.errorReason) errors.push(res.errorReason);
+      } catch (innerErr) {
+        errors.push(`${modelName}: ${innerErr?.message || 'فشل غير متوقع'}`);
+      }
     }
-    if (res?.errorReason) errors.push(res.errorReason);
+    return { text: null, errorReason: errors.join(' | ') || 'فشلت جميع محاولات Gemini API' };
+  } catch (outerErr) {
+    return { text: null, errorReason: `Gemini Error: ${outerErr?.message || 'خطأ غير متوقع'}` };
   }
-  return { text: null, errorReason: errors.join(' | ') };
 }
 
 function textContainsNormalizedBotName(content, botName) {
@@ -4246,48 +4325,56 @@ function findAddressedWelcomeBotSpeaker(content, roomId, s, mentionedUserId = nu
 }
 
 async function maybeHandleWelcomeBotMention(entry, roomId, content, { mentionedUserId = null } = {}) {
-  if (!entry || !roomId || !content) return;
-  if (String(entry.key || '').startsWith('system:') || String(entry.key || '').startsWith('virtual:')) return;
-  const s = db.getSiteSettings();
-  if (Number(s.welcome_bot_enabled ?? 1) === 0) return;
+  try {
+    if (!entry || !roomId || !content) return;
+    if (String(entry.key || '').startsWith('system:') || String(entry.key || '').startsWith('virtual:')) return;
+    const s = db.getSiteSettings();
+    if (Number(s.welcome_bot_enabled ?? 1) === 0) return;
 
-  const speaker = findAddressedWelcomeBotSpeaker(content, roomId, s, mentionedUserId);
-  if (!speaker) return;
+    const speaker = findAddressedWelcomeBotSpeaker(content, roomId, s, mentionedUserId);
+    if (!speaker) return;
 
-  // Enforce strict 15-second cooldown per user silently
-  const now = Date.now();
-  const prevAt = welcomeBotCooldownByUser.get(entry.key) || 0;
-  if (now - prevAt < 15000) return;
-  welcomeBotCooldownByUser.set(entry.key, now);
+    // Enforce strict 15-second cooldown per user silently
+    const now = Date.now();
+    const prevAt = welcomeBotCooldownByUser.get(entry.key) || 0;
+    if (now - prevAt < 15000) return;
+    welcomeBotCooldownByUser.set(entry.key, now);
 
-  const room = db.getRoomById(roomId);
-  const roomName = room?.name || 'الغرفة';
-  const apiKey = String(s.welcome_bot_gemini_key || '').trim();
-  const mainBotName = String(s.welcome_bot_name || 'مساعد الأصيل').trim();
+    const room = db.getRoomById(roomId);
+    const roomName = room?.name || 'الغرفة';
+    const apiKey = String(s.welcome_bot_gemini_key || '').trim();
+    const mainBotName = String(s.welcome_bot_name || 'مساعد الأصيل').trim();
 
-  let reply = null;
-  if (apiKey) {
-    const gemRes = await callWelcomeBotGemini(apiKey, {
-      question: content,
-      userName: entry.name,
-      roomName,
-      speakerName: speaker.name,
-      mainBotName,
-      isVirtual: Boolean(speaker.isVirtual)
-    });
-    if (gemRes?.text) {
-      reply = gemRes.text;
-    } else if (gemRes?.errorReason) {
-      reportWelcomeBotGeminiErrorToOwner(gemRes.errorReason, entry.name);
+    let reply = null;
+    if (apiKey) {
+      try {
+        const gemRes = await callWelcomeBotGemini(apiKey, {
+          question: content,
+          userName: entry.name,
+          roomName,
+          speakerName: speaker.name,
+          mainBotName,
+          isVirtual: Boolean(speaker.isVirtual)
+        });
+        if (gemRes?.text) {
+          reply = gemRes.text;
+        } else if (gemRes?.errorReason) {
+          reportWelcomeBotGeminiErrorToOwner(gemRes.errorReason, entry.name);
+        }
+      } catch (gemErr) {
+        reportWelcomeBotGeminiErrorToOwner(gemErr?.message || 'استثناء غير متوقع في Gemini API', entry.name);
+      }
     }
+    if (!reply) {
+      const cleanQ = stripBotMentionFromQuestion(content, speaker.name, mainBotName);
+      reply = generateSmartFallbackReply(cleanQ, entry.name, roomName, speaker.name);
+    }
+    const stillOnline = [...onlineSockets.values()].some((e) => e.roomId === roomId);
+    if (!stillOnline) return;
+    emitWelcomeBotMessage(roomId, reply, speaker);
+  } catch (err) {
+    console.error('[WelcomeBot Mention Handler Error]', err?.message || err);
   }
-  if (!reply) {
-    const cleanQ = stripBotMentionFromQuestion(content, speaker.name, mainBotName);
-    reply = generateSmartFallbackReply(cleanQ, entry.name, roomName, speaker.name);
-  }
-  const stillOnline = [...onlineSockets.values()].some((e) => e.roomId === roomId);
-  if (!stillOnline) return;
-  emitWelcomeBotMessage(roomId, reply, speaker);
 }
 
 const VIRTUAL_MEMBER_CHAT_LINES = [
@@ -4301,23 +4388,27 @@ const VIRTUAL_MEMBER_CHAT_LINES = [
 ];
 
 function runVirtualMembersTick() {
-  const s = db.getSiteSettings();
-  if (Number(s.welcome_bot_enabled ?? 1) === 0 || s.welcome_bot_mode !== 'virtual_members') return;
-  const vms = getActiveVirtualMembersForRooms();
-  if (!vms.length) return;
-  const now = Date.now();
-  const rooms = db.getAllRooms();
-  for (const r of rooms) {
-    if (getRoomHumanCount(r.id) <= 0) continue;
-    const lastAt = lastBotActivityByRoom.get(r.id) || 0;
-    if (now - lastAt < 65000) continue;
-    const roomVms = vms.filter((v) => v.roomId === r.id);
-    if (!roomVms.length) continue;
-    // Slight natural randomness so rooms don't all fire simultaneously
-    if (Math.random() > 0.55) continue;
-    const speaker = roomVms[Math.floor(Math.random() * roomVms.length)];
-    const line = VIRTUAL_MEMBER_CHAT_LINES[Math.floor(Math.random() * VIRTUAL_MEMBER_CHAT_LINES.length)];
-    emitWelcomeBotMessage(r.id, line, speaker);
+  try {
+    const s = db.getSiteSettings();
+    if (Number(s.welcome_bot_enabled ?? 1) === 0 || s.welcome_bot_mode !== 'virtual_members') return;
+    const vms = getActiveVirtualMembersForRooms();
+    if (!vms.length) return;
+    const now = Date.now();
+    const rooms = db.getAllRooms();
+    for (const r of rooms) {
+      if (getRoomHumanCount(r.id) <= 0) continue;
+      const lastAt = lastBotActivityByRoom.get(r.id) || 0;
+      if (now - lastAt < 65000) continue;
+      const roomVms = vms.filter((v) => v.roomId === r.id);
+      if (!roomVms.length) continue;
+      // Slight natural randomness so rooms don't all fire simultaneously
+      if (Math.random() > 0.55) continue;
+      const speaker = roomVms[Math.floor(Math.random() * roomVms.length)];
+      const line = VIRTUAL_MEMBER_CHAT_LINES[Math.floor(Math.random() * VIRTUAL_MEMBER_CHAT_LINES.length)];
+      emitWelcomeBotMessage(r.id, line, speaker);
+    }
+  } catch (err) {
+    console.error('[VirtualMembersTick Error]', err?.message || err);
   }
 }
 
@@ -5102,16 +5193,28 @@ app.post('/api/owner/restore', requireOwner, express.json({ limit: '80mb' }), as
   }
 });
 
+app.use((err, _req, res, _next) => {
+  console.error('[Express Error]', err?.message || err);
+  if (res.headersSent) return;
+  const status = Number(err?.status || err?.statusCode) || (err?.name === 'MulterError' ? 400 : 500);
+  return res.status(status).json({ error: err?.message || 'حدث خطأ في الخادم.' });
+});
+
 // ==========================================
 // HTTP SERVER & SOCKET.IO SETUP
 // ==========================================
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*' },
+  connectTimeout: 25000,
   pingTimeout: 60000,
   pingInterval: 25000,
-  transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'],
   allowEIO3: true
+});
+
+io.engine.on('connection_error', (err) => {
+  console.warn('[Socket.IO Engine connection_error]', err?.code, err?.message);
 });
 
 function releaseUserMicsInRoom(socketOrKey, roomId) {
@@ -5334,6 +5437,25 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
+  const rawSocketOn = socket.on.bind(socket);
+  socket.on = (eventName, handler) => {
+    if (typeof handler !== 'function') return rawSocketOn(eventName, handler);
+    return rawSocketOn(eventName, async (...args) => {
+      try {
+        return await handler(...args);
+      } catch (err) {
+        console.error(`[Socket Error:${eventName}]`, err?.stack || err?.message || err);
+        const lastArg = args[args.length - 1];
+        if (typeof lastArg === 'function') {
+          try {
+            lastArg({ error: 'حدث خطأ مؤقت أثناء تنفيذ الطلب.' });
+          } catch {
+            // ignore ack error
+          }
+        }
+      }
+    });
+  };
   const session = socket.authSession;
 
   // Deduplicate stale socket for the exact same user + device without emitting disconnect churn
@@ -5559,11 +5681,13 @@ io.on('connection', (socket) => {
         let resolvedName = mentionedUserName;
         if (mentionedUserId === 'system:welcomebot') {
           resolvedName = String(siteSettings.welcome_bot_name || 'مساعد الأصيل').trim();
+        } else if (mentionedUserId === 'system:quizbot') {
+          resolvedName = '🤖 بوت المسابقات';
         } else if (mentionedUserId.startsWith('virtual:')) {
           const vm = getActiveVirtualMembersForRooms().find((v) => v.key === mentionedUserId);
           if (vm?.name) resolvedName = vm.name;
         } else if (mentionedUserId.startsWith('user:')) {
-          const u = db.getUserById(Number(mentionedUserId.slice(5)));
+          const u = db.findUserById(Number(mentionedUserId.slice(5)));
           if (u) resolvedName = db.getEffectiveName(u);
         } else {
           for (const o of onlineSockets.values()) {
@@ -5572,8 +5696,12 @@ io.on('connection', (socket) => {
               break;
             }
           }
+          if (!resolvedName && mentionedUserId.startsWith('guest:')) {
+            const g = db.findGuestByKey(mentionedUserId);
+            if (g?.name) resolvedName = g.name;
+          }
         }
-        const checkCandidate = resolvedName || mentionedUserName;
+        const checkCandidate = String(resolvedName || mentionedUserName || '').replace(/^@+/, '').trim();
         if (!checkCandidate || (!textContainsMemberName(content, checkCandidate) && !textContainsNormalizedBotName(content, checkCandidate))) {
           mentionedUserId = null;
           mentionedUserName = '';
@@ -6924,6 +7052,14 @@ async function gracefulShutdown(signal) {
   }
   process.exit(0);
 }
+process.on('unhandledRejection', (reason) => {
+  console.error('[UnhandledRejection Guard]', reason?.stack || reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[UncaughtException Guard]', err?.stack || err);
+});
+
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 

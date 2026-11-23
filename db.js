@@ -193,6 +193,36 @@ const LEGACY_ROLE_MIGRATION_MAP = {
   participant_1: 'bronze_member'
 };
 
+function isProtectedOwnerAccountKey(targetKey) {
+  if (!targetKey) return false;
+  if (isProtectedSupremeOwnerKey(targetKey)) return true;
+  if (String(targetKey).startsWith('user:')) {
+    const uid = Number(String(targetKey).replace('user:', ''));
+    const u = Number.isNaN(uid) ? null : store.usersById.get(uid);
+    if (u && (isSupremeOwnerEmail(u.email) || u.role === 'site_owner')) return true;
+  }
+  return false;
+}
+
+function purgeOwnerBansAndMutes() {
+  for (const [bk, b] of [...store.bansByKey.entries()]) {
+    const tKey = String(b?.target_key || bk || '');
+    if (isSupremeOwnerEmail(b?.email) || isProtectedOwnerAccountKey(tKey)) {
+      store.bansByKey.delete(bk);
+      enqueueDelete('banned_users', safeDocId(bk));
+      enqueueDelete('bans', safeDocId(bk));
+    }
+  }
+  for (const [mk, m] of [...store.mutesByKey.entries()]) {
+    const tKey = String(m?.target_key || '');
+    if (isProtectedOwnerAccountKey(tKey)) {
+      store.mutesByKey.delete(mk);
+      enqueueDelete('muted_users', safeDocId(mk));
+      enqueueDelete('mutes', safeDocId(mk));
+    }
+  }
+}
+
 function ensureSupremeOwnersInStore() {
   for (const u of store.usersById.values()) {
     if (isSupremeOwnerEmail(u.email)) {
@@ -209,6 +239,7 @@ function ensureSupremeOwnersInStore() {
       }
     }
   }
+  purgeOwnerBansAndMutes();
 }
 
 const DEFAULT_RANKS = [
@@ -639,6 +670,7 @@ const localEmittedMessageIds = new Set();
 const JSON_DATA_DIR = path.join(__dirname, 'data', 'json');
 let jsonSnapshotDirty = false;
 let jsonSnapshotTimer = null;
+let periodicJsonTimer = null;
 let jsonWritePromise = null;
 let lastJsonSavedAt = null;
 
@@ -728,23 +760,33 @@ function buildOrganizedJsonBuckets() {
 }
 
 async function writeAllOrganizedJsonFiles() {
-  if (jsonWritePromise) return jsonWritePromise;
+  if (jsonWritePromise) {
+    jsonSnapshotDirty = true;
+    return jsonWritePromise;
+  }
   jsonWritePromise = (async () => {
     try {
       ensureJsonDataDir();
-      const buckets = buildOrganizedJsonBuckets();
-      for (const [fname, payload] of Object.entries(buckets)) {
-        const target = path.join(JSON_DATA_DIR, fname);
-        const tmp = `${target}.${process.pid}.tmp`;
-        await fs.promises.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
-        await fs.promises.rename(tmp, target);
-      }
-      jsonSnapshotDirty = false;
-      lastJsonSavedAt = nowIso();
+      let pass = 0;
+      do {
+        jsonSnapshotDirty = false;
+        pass += 1;
+        const buckets = buildOrganizedJsonBuckets();
+        for (const [fname, payload] of Object.entries(buckets)) {
+          const target = path.join(JSON_DATA_DIR, fname);
+          const tmp = `${target}.${process.pid}.tmp`;
+          await fs.promises.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+          await fs.promises.rename(tmp, target);
+        }
+        lastJsonSavedAt = nowIso();
+      } while (jsonSnapshotDirty && pass < 5);
     } catch (err) {
       console.error('JSON persistence snapshot failed:', err.message);
     } finally {
       jsonWritePromise = null;
+      if (jsonSnapshotDirty && initialized) {
+        scheduleJsonSnapshot();
+      }
     }
   })();
   return jsonWritePromise;
@@ -761,7 +803,7 @@ function scheduleJsonSnapshot() {
   }, 400);
 }
 
-function hydrateMissingStoreFromOrganizedJson() {
+function hydrateMissingStoreFromOrganizedJson({ hasSiteSettings = false } = {}) {
   let hydratedCount = 0;
   const countersJson = readJsonFileSafe('counters.json');
   if (countersJson?.counters && typeof countersJson.counters === 'object') {
@@ -804,7 +846,7 @@ function hydrateMissingStoreFromOrganizedJson() {
   }
 
   const settingsJson = readJsonFileSafe('settings.json');
-  if (settingsJson?.siteSettings && store.siteSettings === DEFAULT_SITE_SETTINGS) {
+  if (settingsJson?.siteSettings && !hasSiteSettings) {
     store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...settingsJson.siteSettings, id: 1 };
   }
   if (Array.isArray(settingsJson?.customFrames) && store.customFramesById.size === 0) {
@@ -1150,20 +1192,29 @@ async function fsBatchDelete(colName, docIds) {
 function fsListen(colName, onChanges) {
   if (fsMode === 'sqlite') return () => {};
   const handleSnapshot = (snapshot) => {
-    const changes = snapshot.docChanges().map((ch) => ({
-      type: ch.type,
-      id: ch.doc.id,
-      data: ch.doc.data()
-    }));
-    onChanges(changes);
+    try {
+      const changes = snapshot.docChanges().map((ch) => ({
+        type: ch.type,
+        id: ch.doc.id,
+        data: ch.doc.data()
+      }));
+      onChanges(changes);
+    } catch (err) {
+      console.error(`Firestore snapshot processing error [${colName}]:`, err?.message || err);
+    }
   };
   const handleError = (err) => {
     console.error(`Firestore onSnapshot error [${colName}]:`, err.message);
   };
-  if (fsMode === 'admin') {
-    return fsAdminDb.collection(colName).onSnapshot(handleSnapshot, handleError);
+  try {
+    if (fsMode === 'admin') {
+      return fsAdminDb.collection(colName).onSnapshot(handleSnapshot, handleError);
+    }
+    return onSnapshot(collection(fsClientDb, colName), handleSnapshot, handleError);
+  } catch (err) {
+    console.error(`Firestore fsListen attach error [${colName}]:`, err?.message || err);
+    return () => {};
   }
-  return onSnapshot(collection(fsClientDb, colName), handleSnapshot, handleError);
 }
 
 function enqueueSet(colName, docId, data, merge = false) {
@@ -1738,7 +1789,14 @@ function attachRealtimeListeners() {
             if (safeDocId(k) === ch.id || k === d.target_key) store.bansByKey.delete(k);
           }
         } else if (d.target_key) {
-          store.bansByKey.set(String(d.target_key), d);
+          const tk = String(d.target_key);
+          if (isSupremeOwnerEmail(d.email) || isProtectedOwnerAccountKey(tk)) {
+            store.bansByKey.delete(tk);
+            enqueueDelete('banned_users', safeDocId(tk));
+            enqueueDelete('bans', safeDocId(tk));
+            continue;
+          }
+          store.bansByKey.set(tk, d);
         }
       }
     })
@@ -1887,6 +1945,15 @@ async function init(eventHooks = {}) {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
+    const withTimeout = (promise, ms, label) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+          if (typeof t.unref === 'function') t.unref();
+        })
+      ]);
+
     const fetchAllCollections = () =>
       Promise.all([
         fsGetAll('users'),
@@ -1914,14 +1981,14 @@ async function init(eventHooks = {}) {
     try {
       createFirestoreDriver();
       try {
-        loadedCollections = await fetchAllCollections();
+        loadedCollections = await withTimeout(fetchAllCollections(), 8000, 'Firestore initial fetch');
       } catch (firstErr) {
         console.warn('Firestore initial fetch retry after transient error:', firstErr.message);
-        await new Promise((r) => setTimeout(r, 600));
-        loadedCollections = await fetchAllCollections();
+        await new Promise((r) => setTimeout(r, 500));
+        loadedCollections = await withTimeout(fetchAllCollections(), 6000, 'Firestore retry fetch');
       }
     } catch (fsErr) {
-      console.warn('Cloud Firestore unavailable, falling back to local SQLite:', fsErr.message);
+      console.warn('Cloud Firestore unavailable or timed out, falling back to local SQLite/JSON:', fsErr.message);
       createSqliteFallbackDriver();
       loadedCollections = await fetchAllCollections();
     }
@@ -2256,12 +2323,20 @@ async function init(eventHooks = {}) {
 
     await fsSetDoc('counters', 'sequences', store.counters, true);
 
-    hydrateMissingStoreFromOrganizedJson();
+    hydrateMissingStoreFromOrganizedJson({ hasSiteSettings: hasSiteSettingsDoc });
     ensureSupremeOwnersInStore();
     await writeAllOrganizedJsonFiles();
 
     attachRealtimeListeners();
     initialized = true;
+    if (!periodicJsonTimer) {
+      periodicJsonTimer = setInterval(() => {
+        if (initialized && jsonSnapshotDirty) {
+          writeAllOrganizedJsonFiles().catch(() => {});
+        }
+      }, 15000);
+      if (typeof periodicJsonTimer.unref === 'function') periodicJsonTimer.unref();
+    }
     console.log(
       `Cloud Firestore connected (${fsMode} mode) -> project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID} | JSON dir=${JSON_DATA_DIR} | users=${store.usersById.size}, rooms=${store.roomsById.size}, messages=${store.messagesById.size}, ranks=${store.ranksByKey.size}`
     );
@@ -4606,7 +4681,7 @@ function banTarget({
   bannedBy,
   bannedByKey = ''
 }) {
-  if (isProtectedSupremeOwnerKey(targetKey) || isSupremeOwnerEmail(email)) {
+  if (isProtectedOwnerAccountKey(targetKey) || isSupremeOwnerEmail(email)) {
     return false;
   }
   const prev = store.bansByKey.get(targetKey) || {};
@@ -4676,7 +4751,7 @@ function isTargetBanned(input) {
   const deviceId = typeof input === 'object' ? input?.deviceId || '' : '';
   const fingerprint = typeof input === 'object' ? String(input?.fingerprint || '').trim() : '';
 
-  if (isSupremeOwnerEmail(email) || isProtectedSupremeOwnerKey(targetKey)) {
+  if (isSupremeOwnerEmail(email) || isProtectedOwnerAccountKey(targetKey)) {
     return null;
   }
 
@@ -5689,11 +5764,12 @@ module.exports = {
     if (Array.isArray(b.bans)) {
       store.bansByKey.clear();
       for (const bn of b.bans) {
-        if (bn?.target_key && !isProtectedSupremeOwnerKey(bn.target_key)) {
+        if (bn?.target_key && !isSupremeOwnerEmail(bn.email) && !isProtectedOwnerAccountKey(bn.target_key)) {
           store.bansByKey.set(String(bn.target_key), bn);
         }
       }
     }
+    ensureSupremeOwnersInStore();
 
     if (Array.isArray(b.mutes)) {
       store.mutesByKey.clear();
