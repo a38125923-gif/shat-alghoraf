@@ -433,6 +433,8 @@
     socket: null,
     heartbeatTimer: null,
     adminNoticeMode: false,
+    mentionedUserId: null,
+    mentionedUserName: '',
     ytLocalMuted: false,
     ytBarOpen: false,
     ytSearchTimer: null,
@@ -1494,12 +1496,46 @@
     return new Date(ms).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
   }
 
-  function insertMention(name) {
-    const clean = String(name || '').trim();
+  function normalizeCleanMentionText(str) {
+    return String(str || '')
+      .replace(/^@+/, '')
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .trim()
+      .toLowerCase();
+  }
+
+  function doesInputContainCleanName(inputValue, cleanName) {
+    const val = normalizeCleanMentionText(inputValue);
+    const target = normalizeCleanMentionText(cleanName);
+    if (!val || !target) return false;
+    const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?:^|[\\s،,.!?:"'()\\-])${escaped}(?=$|[\\s،,.!?:"'()\\-])`, 'i');
+    return re.test(val);
+  }
+
+  function insertMention(name, userId = null) {
+    const clean = String(name || '').replace(/^@+/, '').trim();
     const input = $('messageInput');
     if (!clean || !input) return;
+
+    let resolvedId = userId ? String(userId).trim() : '';
+    if (!resolvedId) {
+      const botName = String(state.settings?.welcome_bot_name || 'مساعد الأصيل').trim();
+      if (botName && normalizeCleanMentionText(clean) === normalizeCleanMentionText(botName)) {
+        resolvedId = 'system:welcomebot';
+      } else {
+        const matched = findKnownUserByMention(clean);
+        if (matched?.key) resolvedId = String(matched.key);
+      }
+    }
+
     const prefix = input.value && !input.value.endsWith(' ') ? ' ' : '';
     input.value = `${input.value}${prefix}${clean} `;
+    state.mentionedUserId = resolvedId || null;
+    state.mentionedUserName = resolvedId ? clean : '';
     input.focus();
   }
 
@@ -1541,6 +1577,14 @@
         }
       }
     }
+    const mainBotName = String(state.settings?.welcome_bot_name || 'مساعد الأصيل').trim();
+    if (mainBotName.length >= 2 && !seen.has(mainBotName.toLowerCase())) {
+      seen.add(mainBotName.toLowerCase());
+      knownNames.push({
+        name: mainBotName,
+        user: { key: 'system:welcomebot', name: mainBotName, nameBgColor: '#1e293b', nameColor: '#fbbf24' }
+      });
+    }
     knownNames.sort((a, b) => b.name.length - a.name.length);
     return knownNames;
   }
@@ -1558,9 +1602,17 @@
     return html;
   }
 
-  function renderMessageTextWithMentions(rawText) {
+  function renderMessageTextWithMentions(rawText, msg = null) {
     let html = renderContentWithEmojis(rawText);
     const knownNames = collectKnownUsersForMentions();
+    const explicitId = msg?.mentioned_user_id ? String(msg.mentioned_user_id).trim() : '';
+    const explicitName = msg?.mentioned_user_name ? String(msg.mentioned_user_name).replace(/^@+/, '').trim() : '';
+    if (explicitId && explicitName && !knownNames.some((x) => x.name.toLowerCase() === explicitName.toLowerCase())) {
+      knownNames.unshift({
+        name: explicitName,
+        user: { key: explicitId, name: explicitName, nameBgColor: '#1e293b', nameColor: '#fde047' }
+      });
+    }
     const tokens = [];
 
     for (const item of knownNames) {
@@ -1569,18 +1621,24 @@
       const fg = (item.user.nameBgColor || item.user.name_bg_color)
         ? (item.user.nameColor || item.user.name_color || '#ffffff')
         : '#ffffff';
+      const itemKey = String(item.user?.key || explicitId || '');
+      const isMeMention = Boolean(
+        state.user?.key &&
+        ((explicitId && explicitId === state.user.key && (!explicitName || normalizeCleanMentionText(item.name) === normalizeCleanMentionText(explicitName))) ||
+          (itemKey && itemKey === state.user.key))
+      );
       const re = new RegExp(`(^|\\s|>)@?${esc}(?=$|\\s|<|[،,.!?:"'()\\-])`, 'gi');
       html = html.replace(re, (match, lead) => {
         if (/<[^>]*$/.test(html.slice(0, html.indexOf(match)))) return match;
         const idx = tokens.length;
         tokens.push(
-          `<span class="mention-inline-badge" data-mention-name="${escapeHtml(item.name)}" style="background:${escapeHtml(bg)};color:${escapeHtml(fg)};">${escapeHtml(item.name)}</span>`
+          `<span class="mention-inline-badge${isMeMention ? ' mention-is-me' : ''}" data-mention-name="${escapeHtml(item.name)}" data-mention-key="${escapeHtml(itemKey)}" style="background:${escapeHtml(bg)};color:${escapeHtml(fg)};">${escapeHtml(item.name)}</span>`
         );
         return `${lead}\u0000MTOK${idx}\u0000`;
       });
     }
 
-    // Legacy @token fallback (clean display)
+    // Legacy @token fallback (clean display without @)
     html = html.replace(
       /(^|\s)@([^\s<>"'&\u0000]{2,30})/g,
       '$1<span class="mention-inline-badge" data-mention-name="$2" style="background:#18181b;color:#facc15;">$2</span>'
@@ -2508,7 +2566,9 @@
     const mentionsMe =
       msg.msg_type === 'text' &&
       msg.sender_key !== state.user?.key &&
-      (doesTextContainName(rawContent, myName) || doesTextContainName(rawContent, myUser));
+      ((msg.mentioned_user_id && state.user?.key && msg.mentioned_user_id === state.user.key) ||
+        doesTextContainName(rawContent, myName) ||
+        doesTextContainName(rawContent, myUser));
 
     const timeStr = formatTimeAgo(msg.created_at_ms || msg.created_at);
     const msgFontSize = Math.max(13, Math.min(17, Number(msg.font_size || msg.fontSize) || 14));
@@ -2530,7 +2590,7 @@
     } else if (msg.msg_type === 'sticker') {
       inlineTextHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
     } else {
-      const rendered = renderMessageTextWithMentions(msg.content);
+      const rendered = renderMessageTextWithMentions(msg.content, msg);
       hasMention = rendered.hasMention;
       const prefix = isQuizBotMsg
         ? '<span class="quiz-bot-badge">مسابقة</span>'
@@ -2637,7 +2697,7 @@
 
     const openTarget = () => openQuickUserModal(targetObj);
     row.querySelector('.msg-avatar-trigger').addEventListener('click', openTarget);
-    row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(msg.sender_name));
+    row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(msg.sender_name, msg.sender_key));
     row.querySelector('.msg-dismiss-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       row.remove();
@@ -2647,7 +2707,7 @@
         e.stopPropagation();
         const found = findKnownUserByMention(badge.dataset.mentionName);
         if (found) openQuickUserModal(found);
-        else insertMention(badge.dataset.mentionName);
+        else insertMention(badge.dataset.mentionName, badge.dataset.mentionKey || null);
       });
     });
 
@@ -2669,7 +2729,7 @@
         dotsMenu.classList.add('hidden');
         const act = actBtn.dataset.msgAct;
         if (act === 'mention') {
-          insertMention(msg.sender_name);
+          insertMention(msg.sender_name, msg.sender_key);
         } else if (act === 'pm') {
           openSlideSheetDrawer('pm', targetObj);
         } else if (act === 'profile') {
@@ -2762,7 +2822,7 @@
         </div>
       `;
       row.querySelector('.msg-avatar-trigger').addEventListener('click', () => openQuickUserModal(u));
-      row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(u.name));
+      row.querySelector('.msg-name-trigger').addEventListener('click', () => insertMention(u.name, u.key));
       feed.appendChild(row);
       feed.scrollTop = feed.scrollHeight;
       return;
@@ -2870,12 +2930,12 @@
       card.querySelector('.user-row-name-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
         $('usersSidePanel')?.classList.remove('open');
-        insertMention(u.name);
+        insertMention(u.name, u.key);
       });
       card.querySelector('.user-mini-ping-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
         $('usersSidePanel')?.classList.remove('open');
-        insertMention(u.name);
+        insertMention(u.name, u.key);
       });
     });
   }
@@ -2895,6 +2955,18 @@
     const u = state.user;
     const clientMsgId = `cm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const isAdminNotice = state.adminNoticeMode && (u.role === 'site_owner' || hasPerm('access_panel'));
+
+    const hasValidMention = Boolean(
+      state.mentionedUserId &&
+      state.mentionedUserName &&
+      doesInputContainCleanName(text, state.mentionedUserName)
+    );
+    const mentionedUserId = hasValidMention ? state.mentionedUserId : null;
+    const mentionedUserName = hasValidMention ? state.mentionedUserName : '';
+
+    // Reset mention ID immediately on send
+    state.mentionedUserId = null;
+    state.mentionedUserName = '';
 
     const optimistic = {
       client_msg_id: clientMsgId,
@@ -2922,6 +2994,8 @@
       is_admin_notice: isAdminNotice,
       msg_type: 'text',
       content: text,
+      mentioned_user_id: mentionedUserId,
+      mentioned_user_name: mentionedUserName,
       created_at: new Date().toISOString(),
       created_at_ms: Date.now()
     };
@@ -2935,7 +3009,7 @@
 
     state.socket.emit(
       'send_message',
-      { msgType: 'text', content: text, clientMsgId, isAdminNotice },
+      { msgType: 'text', content: text, clientMsgId, isAdminNotice, mentionedUserId, mentionedUserName },
       (res) => {
         if (res?.error) {
           showToast(res.error, true);
@@ -3318,7 +3392,7 @@
     });
 
     $('quMentionBtn')?.addEventListener('click', () => {
-      insertMention(u.name);
+      insertMention(u.name, u.key);
       closeModal('quickUserModal');
     });
 
@@ -6407,7 +6481,7 @@
         </div>
 
         <div style="margin-top:10px;">
-          <label class="muted">مفتاح Gemini API (محفوظ في السيرفر فقط — يفعّل الذكاء الاصطناعي عبر gemini-2.5-flash عند منشن البوت مع مهلة 15ث لكل عضو)</label>
+          <label class="muted">مفتاح Gemini API (محفوظ في السيرفر فقط — يجرّب تلقائياً: gemini-3.8-flash ثم gemini-2.5-flash ثم gemini-2.0-flash)</label>
           <div class="inline-row" style="gap:6px;">
             <input type="password" id="wbGeminiKeyInput" value="${escapeHtml(draft.geminiKey)}" placeholder="AIzaSy... (اتركه فارغاً لاستخدام الردود الذكية البديلة)" autocomplete="off" style="flex:1;" />
             <button type="button" id="wbToggleKeyVisBtn" class="btn-secondary btn-xs" title="إظهار / إخفاء"><i class="fa-solid fa-eye"></i></button>
@@ -6415,8 +6489,8 @@
           ${wb.lastGeminiStatus ? `
             <div style="margin-top:6px;padding:8px 10px;border-radius:10px;font-size:12px;border:1px solid ${wb.lastGeminiStatus.ok ? 'rgba(16,185,129,0.35)' : 'rgba(248,113,113,0.45)'};background:${wb.lastGeminiStatus.ok ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)'};color:${wb.lastGeminiStatus.ok ? '#6ee7b7' : '#fca5a5'};">
               <i class="fa-solid ${wb.lastGeminiStatus.ok ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
-              <strong>${wb.lastGeminiStatus.ok ? 'اتصال Gemini (gemini-2.5-flash) يعمل بنجاح' : 'آخر خطأ في اتصال Gemini'}:</strong>
-              ${escapeHtml(wb.lastGeminiStatus.message || '')}
+              <strong>${wb.lastGeminiStatus.ok ? `اتصال Gemini (${escapeHtml(wb.lastGeminiStatus.model || 'Gemini')}) يعمل بنجاح` : 'آخر خطأ في اتصال Gemini'}:</strong>
+              ${escapeHtml(wb.lastGeminiStatus.message || wb.lastGeminiStatus.error || '')}
               ${wb.lastGeminiStatus.at ? `<span class="muted" style="font-size:11px;margin-right:6px;">(${new Date(wb.lastGeminiStatus.at).toLocaleTimeString('ar-EG')})</span>` : ''}
             </div>
           ` : ''}
@@ -7990,8 +8064,7 @@
 
     socket.on('mention_alert', ({ fromName, content }) => {
       playNotificationChime('mention');
-      showToast(`🔔 نداء من ${fromName}: ${content}`);
-      dispatchWebPush(`🔔 نداء من ${fromName}`, content);
+      showToast(`🔔 نداء من ${fromName || 'عضو'}`);
     });
 
     socket.on('admin_warning', ({ byName, reason }) => {
@@ -8165,6 +8238,8 @@
       state.socket = null;
     }
     state.guestRegisterReturnToChat = false;
+    state.mentionedUserId = null;
+    state.mentionedUserName = '';
     $('authBackToChatBtn')?.classList.add('hidden');
     state.user = user;
     state.token = token;
@@ -8659,6 +8734,12 @@
       }
     });
     $('messageInput').addEventListener('input', () => {
+      if (state.mentionedUserId && state.mentionedUserName) {
+        if (!doesInputContainCleanName($('messageInput').value, state.mentionedUserName)) {
+          state.mentionedUserId = null;
+          state.mentionedUserName = '';
+        }
+      }
       if (!state.socket) return;
       state.socket.emit('typing', { isTyping: true });
       clearTimeout(state.typingTimeout);

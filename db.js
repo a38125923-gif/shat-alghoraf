@@ -4366,6 +4366,8 @@ function addMessage({
   msgType,
   content,
   mediaUrl,
+  mentionedUserId,
+  mentionedUserName,
   clientMsgId,
   createdAt,
   createdAtMs
@@ -4374,6 +4376,8 @@ function addMessage({
   const tsMs = Number(createdAtMs) || Date.now();
   const iso = createdAt || new Date(tsMs).toISOString();
   const persistedMsgType = ['text', 'image', 'audio', 'sticker'].includes(msgType) ? msgType : 'text';
+  const cleanMentionId = mentionedUserId ? String(mentionedUserId).trim().slice(0, 80) : null;
+  const cleanMentionName = mentionedUserName ? String(mentionedUserName).trim().slice(0, 60) : '';
   const msg = {
     id,
     doc_id: String(id),
@@ -4408,6 +4412,8 @@ function addMessage({
     msg_type: persistedMsgType,
     content: content || '',
     media_url: mediaUrl || '',
+    mentioned_user_id: cleanMentionId,
+    mentioned_user_name: cleanMentionName,
     client_msg_id: String(clientMsgId || ''),
     created_at: iso,
     created_at_ms: tsMs

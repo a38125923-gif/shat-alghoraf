@@ -4052,13 +4052,15 @@ function generateSmartFallbackReply(question, userName, roomName, speakerName) {
   return `أهلاً بك يا ${userName} في ${roomName}! وصلتني رسالتك بكل سرور — كيف أستطيع مساعدتك الآن؟ ✨`;
 }
 
-let lastWelcomeBotGeminiStatus = { ok: null, at: null, error: '' };
+const GEMINI_MODEL_FALLBACKS = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+let lastWelcomeBotGeminiStatus = { ok: null, model: '', at: null, error: '' };
 let lastGeminiErrorNotifAt = 0;
 
 function reportWelcomeBotGeminiErrorToOwner(errorReason, userName = '') {
   const cleanErr = String(errorReason || 'خطأ غير معروف في Gemini API').slice(0, 260);
   lastWelcomeBotGeminiStatus = {
     ok: false,
+    model: '',
     at: new Date().toISOString(),
     error: cleanErr
   };
@@ -4114,46 +4116,35 @@ function stripBotMentionFromQuestion(rawContent, speakerName, mainBotName) {
   return q || String(rawContent || '').trim();
 }
 
-async function callWelcomeBotGemini(apiKey, { question, userName, roomName, speakerName, mainBotName, isVirtual }) {
-  const key = String(apiKey || '').trim();
-  if (!key) return { text: null, errorReason: '' };
+async function callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userPrompt) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), 9000);
   try {
-    const cleanQuestion = stripBotMentionFromQuestion(question, speakerName, mainBotName);
-    const persona = isVirtual
-      ? `أنت عضو عربي مثقف وودود اسمك "${speakerName}" داخل غرفة الدردشة "${roomName}".`
-      : `أنت "${speakerName}"، المساعد الذكي لغرفة الدردشة العربية "${roomName}".`;
-    const sysPrompt = `${persona} المستخدم "${userName}" يوجه لك سؤالاً أو حديثاً مباشراً. أجب إجابة ذكية ومباشرة ومفيدة ومختصرة جداً باللغة العربية (سطر إلى ثلاثة أسطر كحد أقصى). ركّز على الإجابة الفعلية لسؤال المستخدم ولا ترد برسالة ترحيب عامة أو متكررة إذا كان هناك سؤال محدد.`;
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(key)}`;
+    const generationConfig = {
+      temperature: 0.7,
+      maxOutputTokens: 320
+    };
+    if (modelName !== 'gemini-2.0-flash') {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
     const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: sysPrompt }] },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: `رسالة ${userName}: ${cleanQuestion.slice(0, 500)}` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 320,
-          thinkingConfig: { thinkingBudget: 0 }
-        }
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig
       })
     });
-
     const data = await resp.json().catch(() => null);
     if (!resp.ok) {
       const apiMsg = data?.error?.message || resp.statusText || `HTTP ${resp.status}`;
-      return { text: null, errorReason: `(${resp.status}) ${apiMsg}` };
+      return { text: null, errorReason: `${modelName}: (${resp.status}) ${apiMsg}` };
     }
     if (data?.promptFeedback?.blockReason) {
-      return { text: null, errorReason: `تم حجب الرد من Gemini (${data.promptFeedback.blockReason})` };
+      return { text: null, errorReason: `${modelName}: حجب (${data.promptFeedback.blockReason})` };
     }
     const candidate = data?.candidates?.[0];
     const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
@@ -4165,18 +4156,44 @@ async function callWelcomeBotGemini(apiKey, { question, userName, roomName, spea
       .trim();
     if (!text) {
       const finish = candidate?.finishReason || 'EMPTY_RESPONSE';
-      return { text: null, errorReason: `استجابة فارغة من Gemini (${finish})` };
+      return { text: null, errorReason: `${modelName}: استجابة فارغة (${finish})` };
     }
-    lastWelcomeBotGeminiStatus = { ok: true, at: new Date().toISOString(), error: '' };
-    return { text: text.slice(0, 480), errorReason: '' };
+    return { text: text.slice(0, 480), errorReason: '', model: modelName };
   } catch (err) {
     const errMsg = err?.name === 'AbortError'
-      ? 'انتهت مهلة الاتصال بخادم Gemini (Timeout 12s)'
-      : (err?.message || 'فشل الاتصال بالشبكة');
+      ? `${modelName}: انتهت المهلة (9s)`
+      : `${modelName}: ${err?.message || 'فشل الاتصال'}`;
     return { text: null, errorReason: errMsg };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function callWelcomeBotGemini(apiKey, { question, userName, roomName, speakerName, mainBotName, isVirtual }) {
+  const key = String(apiKey || '').trim();
+  if (!key) return { text: null, errorReason: '' };
+  const cleanQuestion = stripBotMentionFromQuestion(question, speakerName, mainBotName);
+  const persona = isVirtual
+    ? `أنت عضو عربي مثقف وودود اسمك "${speakerName}" داخل غرفة الدردشة "${roomName}".`
+    : `أنت "${speakerName}"، المساعد الذكي لغرفة الدردشة العربية "${roomName}".`;
+  const sysPrompt = `${persona} المستخدم "${userName}" يوجه لك سؤالاً أو حديثاً مباشراً. أجب إجابة ذكية ومباشرة ومفيدة ومختصرة جداً باللغة العربية (سطر إلى ثلاثة أسطر كحد أقصى). ركّز على الإجابة الفعلية لسؤال المستخدم ولا ترد برسالة ترحيب عامة أو متكررة إذا كان هناك سؤال محدد.`;
+  const userPrompt = `رسالة ${userName}: ${cleanQuestion.slice(0, 500)}`;
+
+  const errors = [];
+  for (const modelName of GEMINI_MODEL_FALLBACKS) {
+    const res = await callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userPrompt);
+    if (res?.text) {
+      lastWelcomeBotGeminiStatus = {
+        ok: true,
+        model: res.model || modelName,
+        at: new Date().toISOString(),
+        error: ''
+      };
+      return res;
+    }
+    if (res?.errorReason) errors.push(res.errorReason);
+  }
+  return { text: null, errorReason: errors.join(' | ') };
 }
 
 function textContainsNormalizedBotName(content, botName) {
@@ -4189,24 +4206,32 @@ function textContainsNormalizedBotName(content, botName) {
   return re.test(normText);
 }
 
-function findAddressedWelcomeBotSpeaker(content, roomId, s) {
+function findAddressedWelcomeBotSpeaker(content, roomId, s, mentionedUserId = null) {
   const norm = normalizeArabicText(content);
   if (!norm) return null;
   const mainBotName = String(s.welcome_bot_name || 'مساعد الأصيل').trim();
+  const targetMentionId = String(mentionedUserId || '').trim();
 
   if (s.welcome_bot_mode === 'virtual_members') {
     const vms = getActiveVirtualMembersForRooms();
     const sorted = vms.slice().sort((a, b) => (a.roomId === roomId ? -1 : b.roomId === roomId ? 1 : 0));
+    if (targetMentionId.startsWith('virtual:')) {
+      const byId = sorted.find((v) => v.key === targetMentionId);
+      if (byId && textContainsNormalizedBotName(content, byId.name)) return byId;
+    }
     for (const vm of sorted) {
       if (textContainsNormalizedBotName(content, vm.name)) return vm;
     }
-    if (mainBotName && textContainsNormalizedBotName(content, mainBotName)) {
+    if (targetMentionId === 'system:welcomebot' || (mainBotName && textContainsNormalizedBotName(content, mainBotName))) {
       const fallbackVm = sorted[0];
       return fallbackVm || { key: 'system:welcomebot', name: mainBotName, avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
     }
     return null;
   }
 
+  if (targetMentionId === 'system:welcomebot') {
+    return { key: 'system:welcomebot', name: mainBotName || 'مساعد الأصيل', avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
+  }
   if (mainBotName && textContainsNormalizedBotName(content, mainBotName)) {
     return { key: 'system:welcomebot', name: mainBotName, avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
   }
@@ -4220,13 +4245,13 @@ function findAddressedWelcomeBotSpeaker(content, roomId, s) {
   return null;
 }
 
-async function maybeHandleWelcomeBotMention(entry, roomId, content) {
+async function maybeHandleWelcomeBotMention(entry, roomId, content, { mentionedUserId = null } = {}) {
   if (!entry || !roomId || !content) return;
   if (String(entry.key || '').startsWith('system:') || String(entry.key || '').startsWith('virtual:')) return;
   const s = db.getSiteSettings();
   if (Number(s.welcome_bot_enabled ?? 1) === 0) return;
 
-  const speaker = findAddressedWelcomeBotSpeaker(content, roomId, s);
+  const speaker = findAddressedWelcomeBotSpeaker(content, roomId, s, mentionedUserId);
   if (!speaker) return;
 
   // Enforce strict 15-second cooldown per user silently
@@ -5495,6 +5520,8 @@ io.on('connection', (socket) => {
       let content = String(payload.content || '').trim().slice(0, 1000);
       const mediaUrl = String(payload.mediaUrl || '').trim().slice(0, 300);
       const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
+      let mentionedUserId = payload.mentionedUserId ? String(payload.mentionedUserId).trim().slice(0, 80) : null;
+      let mentionedUserName = String(payload.mentionedUserName || '').replace(/^@+/, '').trim().slice(0, 60);
       const isAdminNotice =
         Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
 
@@ -5523,6 +5550,36 @@ io.on('connection', (socket) => {
       if (msgType === 'text' && entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(content)) {
         if (typeof cb === 'function') cb({ error: 'إرسال الروابط غير مسموح لرتبتك الحالية.' });
         return;
+      }
+
+      if (msgType !== 'text') {
+        mentionedUserId = null;
+        mentionedUserName = '';
+      } else if (mentionedUserId) {
+        let resolvedName = mentionedUserName;
+        if (mentionedUserId === 'system:welcomebot') {
+          resolvedName = String(siteSettings.welcome_bot_name || 'مساعد الأصيل').trim();
+        } else if (mentionedUserId.startsWith('virtual:')) {
+          const vm = getActiveVirtualMembersForRooms().find((v) => v.key === mentionedUserId);
+          if (vm?.name) resolvedName = vm.name;
+        } else if (mentionedUserId.startsWith('user:')) {
+          const u = db.getUserById(Number(mentionedUserId.slice(5)));
+          if (u) resolvedName = db.getEffectiveName(u);
+        } else {
+          for (const o of onlineSockets.values()) {
+            if (o.key === mentionedUserId) {
+              resolvedName = o.name;
+              break;
+            }
+          }
+        }
+        const checkCandidate = resolvedName || mentionedUserName;
+        if (!checkCandidate || (!textContainsMemberName(content, checkCandidate) && !textContainsNormalizedBotName(content, checkCandidate))) {
+          mentionedUserId = null;
+          mentionedUserName = '';
+        } else {
+          mentionedUserName = checkCandidate;
+        }
       }
 
       let matchedBannedWord = null;
@@ -5574,6 +5631,8 @@ io.on('connection', (socket) => {
         msgType,
         content,
         mediaUrl,
+        mentionedUserId,
+        mentionedUserName,
         clientMsgId
       });
 
@@ -5673,28 +5732,30 @@ io.on('connection', (socket) => {
 
       if (msgType === 'text') {
         checkQuizBotAnswer(entry, content);
-        maybeHandleWelcomeBotMention(entry, entry.roomId, content).catch(() => {});
+        maybeHandleWelcomeBotMention(entry, entry.roomId, content, { mentionedUserId }).catch(() => {});
       }
 
-      // Smart Mention (No @ required) & Recipient-Only Audio/Notification Ping
+      // Clean Mention (No @, Recipient-Only Alert Chime, NO Notifications Drawer Auto-Open or Notification Log)
       if (msgType === 'text' && content) {
         const mentionedKeys = new Set();
-        for (const other of onlineSockets.values()) {
-          if (other.key === entry.key || isStealthEntry(other)) continue;
-          const n1 = String(other.name || '').trim();
-          const n2 = String(other.username || '').trim();
-          if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
-            mentionedKeys.add(other.key);
+        if (
+          mentionedUserId &&
+          mentionedUserId !== entry.key &&
+          !mentionedUserId.startsWith('system:') &&
+          !mentionedUserId.startsWith('virtual:')
+        ) {
+          mentionedKeys.add(mentionedUserId);
+        } else if (!mentionedUserId) {
+          for (const other of onlineSockets.values()) {
+            if (other.key === entry.key || isStealthEntry(other)) continue;
+            const n1 = String(other.name || '').trim();
+            const n2 = String(other.username || '').trim();
+            if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
+              mentionedKeys.add(other.key);
+            }
           }
         }
         for (const tKey of mentionedKeys) {
-          const notif = db.addNotification({
-            targetKey: tKey,
-            title: `🔔 نداء من ${entry.name}`,
-            body: content.slice(0, 120),
-            category: 'mention'
-          });
-          emitNotificationToUser(io, tKey, notif);
           for (const [sid, o] of onlineSockets.entries()) {
             if (o.key === tKey) {
               io.to(sid).emit('mention_alert', {
@@ -5704,6 +5765,7 @@ io.on('connection', (socket) => {
                 fromRole: entry.role || 'member',
                 roomId: entry.roomId,
                 msgId: msg.id,
+                mentionedUserId: tKey,
                 content: content.slice(0, 120)
               });
             }
