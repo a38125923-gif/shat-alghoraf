@@ -713,10 +713,8 @@ function requireAuth(req, res, next) {
   if (!u) return res.status(401).json({ error: 'يرجى تسجيل الدخول أولاً.' });
   if (u.banned) {
     return res.status(403).json({
-      error: `تم حظرك بواسطة ${u.bannedBy || 'الإدارة'} للسبب: ${u.reason || 'حظر من الإدارة'}`,
-      banned: true,
-      bannedBy: u.bannedBy || 'الإدارة',
-      reason: u.reason || 'حظر من الإدارة'
+      error: 'تم حظرك من الشات',
+      banned: true
     });
   }
   req.authUser = u;
@@ -728,10 +726,8 @@ function requireRegistered(req, res, next) {
   if (!u) return res.status(401).json({ error: 'يرجى تسجيل الدخول أولاً.' });
   if (u.banned) {
     return res.status(403).json({
-      error: `تم حظرك بواسطة ${u.bannedBy || 'الإدارة'} للسبب: ${u.reason || 'حظر من الإدارة'}`,
-      banned: true,
-      bannedBy: u.bannedBy || 'الإدارة',
-      reason: u.reason || 'حظر من الإدارة'
+      error: 'تم حظرك من الشات',
+      banned: true
     });
   }
   if (u.isGuest) return res.status(401).json({ error: 'هذه الميزة متاحة للأعضاء المسجلين فقط.' });
@@ -1372,30 +1368,67 @@ function emitNotificationToUser(io, targetKey, notifObj) {
   }
 }
 
+function formatMuteDurationArabic(mins) {
+  const m = Math.max(1, Math.round(Number(mins) || 1));
+  if (m === 1) return 'دقيقة واحدة';
+  if (m === 2) return 'دقيقتين';
+  if (m >= 3 && m <= 10) return `${m} دقائق`;
+  return `${m} دقيقة`;
+}
+
+function buildSanitizedMutePayload(active, fallbackRoomId = '*') {
+  if (!active) {
+    return {
+      muted: false,
+      roomId: fallbackRoomId || '*',
+      expiresAt: 0
+    };
+  }
+  return {
+    muted: true,
+    roomId: active.room_id || fallbackRoomId || '*',
+    expiresAt: Number(active.expires_at) || 0
+  };
+}
+
+function notifyUserMutedNotification(targetKey, mins) {
+  if (!targetKey) return;
+  const durLabel = formatMuteDurationArabic(mins);
+  const notif = db.addNotification({
+    targetKey,
+    title: '🔇 تنبيه كتم مؤقت',
+    body: `تم كتمك مؤقتاً لمدة: ${durLabel}`,
+    category: 'system'
+  });
+  emitNotificationToUser(io, targetKey, notif);
+}
+
 function emitMuteStateToUser(targetKey, roomId) {
   const active = db.getActiveMute(targetKey, roomId);
-  const payload = active
-    ? {
-        muted: true,
-        roomId: active.room_id || roomId || '*',
-        reason: active.reason || 'كتم مؤقت من الإدارة',
-        expiresAt: Number(active.expires_at) || 0,
-        mutedBy: active.muted_by || 'الإدارة',
-        violatingWord: active.violating_word || ''
-      }
-    : {
-        muted: false,
-        roomId: roomId || '*',
-        reason: '',
-        expiresAt: 0,
-        mutedBy: '',
-        violatingWord: ''
-      };
+  const payload = buildSanitizedMutePayload(active, roomId);
   for (const [sid, entry] of onlineSockets.entries()) {
     if (entry.key === targetKey && (!roomId || roomId === '*' || !entry.roomId || entry.roomId === roomId || active?.room_id === '*')) {
       io.to(sid).emit('mute_state', payload);
     }
   }
+}
+
+const activeMutedKeysTracker = new Set();
+let muteExpiryTimer = null;
+
+function startMuteExpiryMonitor() {
+  if (muteExpiryTimer) clearInterval(muteExpiryTimer);
+  muteExpiryTimer = setInterval(() => {
+    const activeRows = db.getAllActiveMutes();
+    const stillMuted = new Set(activeRows.map((m) => m.target_key));
+    for (const prevKey of [...activeMutedKeysTracker]) {
+      if (!stillMuted.has(prevKey)) {
+        activeMutedKeysTracker.delete(prevKey);
+        emitMuteStateToUser(prevKey, '*');
+      }
+    }
+    for (const k of stillMuted) activeMutedKeysTracker.add(k);
+  }, 8000);
 }
 
 function notifyOwnersModerationEvent({
@@ -1410,21 +1443,25 @@ function notifyOwnersModerationEvent({
   violatingWord = ''
 }) {
   const roomObj = roomId ? db.getRoomById(roomId) : null;
-  const roomName = roomObj ? roomObj.name : roomId || 'غرفة عامة';
+  const roomName = roomObj ? roomObj.name : roomId || 'الشات';
+  const cleanReason = String(reason || '').trim() || 'بدون سبب محدد';
   let title = '🛡️ تنبيه رقابي فوري للمالك';
   let body = '';
   if (actionType === 'banned_word_mute') {
     title = `🚫 كتم تلقائي: كلمة محظورة من "${targetName}"`;
-    body = `تم كتم "${targetName}" تلقائياً في (${roomName}) لمدة ${durationMins} د — الكلمة المخالفة: "${violatingWord}"`;
+    body = `تم كتم "${targetName}" تلقائياً في (${roomName}) لمدة ${durationMins} د — السبب: ${cleanReason} • الكلمة: "${violatingWord}" • المنفّذ: ${actorName}`;
   } else if (actionType === 'antiflood_mute') {
     title = `⚡ كتم تلقائي (Anti-Flood): "${targetName}"`;
-    body = `تم كتم "${targetName}" تلقائياً في (${roomName}) لمدة ${durationMins} د بسبب التكرار السريع للرسائل.`;
+    body = `تم كتم "${targetName}" تلقائياً في (${roomName}) لمدة ${durationMins} د — السبب: ${cleanReason} • المنفّذ: ${actorName}`;
   } else if (actionType === 'kick') {
-    title = `🚪 إشعار طرد من إداري (${actorName})`;
-    body = `قام "${actorName}" بطرد "${targetName}" من (${roomName})${reason ? ` — السبب: ${reason}` : ''}`;
+    title = `🚪 إشعار طرد من (${actorName})`;
+    body = `قام "${actorName}" بطرد "${targetName}" من (${roomName}) — السبب: ${cleanReason}`;
+  } else if (actionType === 'ban' || actionType === 'xban') {
+    title = `🚫 إشعار حظر${actionType === 'xban' ? ' X-Ban' : ''} من (${actorName})`;
+    body = `قام "${actorName}" بحظر "${targetName}" نهائياً — السبب: ${cleanReason}`;
   } else {
-    title = `🔇 إشعار كتم من إداري (${actorName})`;
-    body = `قام "${actorName}" بكتم "${targetName}" لمدة ${durationMins || '؟'} د في (${roomName})${reason ? ` — السبب: ${reason}` : ''}`;
+    title = `🔇 إشعار كتم من (${actorName})`;
+    body = `قام "${actorName}" بكتم "${targetName}" لمدة ${durationMins || '؟'} د في (${roomName}) — السبب: ${cleanReason}`;
   }
 
   const ownerUsers = db
@@ -1447,7 +1484,7 @@ function notifyOwnersModerationEvent({
     actorKey,
     targetName,
     targetKey,
-    reason,
+    reason: cleanReason,
     durationMins,
     roomId,
     roomName,
@@ -1516,10 +1553,8 @@ app.post('/api/register', async (req, res) => {
       const ipBan = db.isTargetBanned({ email: cleanEmail, ipAddress: ip, deviceId, fingerprint });
       if (ipBan) {
         return res.status(403).json({
-          error: `تم حظرك بواسطة ${ipBan.banned_by || 'الإدارة'} للسبب: ${ipBan.reason || 'حظر من الإدارة'}`,
-          banned: true,
-          bannedBy: ipBan.banned_by || 'الإدارة',
-          reason: ipBan.reason || 'حظر من الإدارة'
+          error: 'تم حظرك من الشات',
+          banned: true
         });
       }
     }
@@ -1599,10 +1634,8 @@ app.post('/api/login', async (req, res) => {
       });
       if (ban) {
         return res.status(403).json({
-          error: `تم حظرك بواسطة ${ban.banned_by || 'الإدارة'} للسبب: ${ban.reason || 'حظر من الإدارة'}`,
-          banned: true,
-          bannedBy: ban.banned_by || 'الإدارة',
-          reason: ban.reason || 'حظر من الإدارة'
+          error: 'تم حظرك من الشات',
+          banned: true
         });
       }
     }
@@ -1633,10 +1666,8 @@ app.post('/api/guest', async (req, res) => {
   const ban = db.isTargetBanned({ targetKey: key, ipAddress: ip, deviceId, fingerprint });
   if (ban) {
     return res.status(403).json({
-      error: `تم حظرك بواسطة ${ban.banned_by || 'الإدارة'} للسبب: ${ban.reason || 'حظر من الإدارة'}`,
-      banned: true,
-      bannedBy: ban.banned_by || 'الإدارة',
-      reason: ban.reason || 'حظر من الإدارة'
+      error: 'تم حظرك من الشات',
+      banned: true
     });
   }
 
@@ -3349,14 +3380,20 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
     targetName,
     details: effectiveReason
   });
+  notifyOwnersModerationEvent({
+    actorName: req.authUser.name,
+    actorKey: req.authUser.key,
+    targetName,
+    targetKey,
+    actionType: banType === 'xban' ? 'xban' : 'ban',
+    reason: effectiveReason
+  });
 
   for (const [sid, entry] of onlineSockets.entries()) {
     if (entry.key === targetKey) {
       io.to(sid).emit('kicked', {
-        reason: `تم حظرك بواسطة ${req.authUser.name} للسبب: ${effectiveReason}`,
-        banned: true,
-        bannedBy: req.authUser.name,
-        banReason: effectiveReason
+        reason: 'تم حظرك من الشات',
+        banned: true
       });
       const s = io.sockets.sockets.get(sid);
       if (s) s.disconnect(true);
@@ -4015,16 +4052,79 @@ function generateSmartFallbackReply(question, userName, roomName, speakerName) {
   return `أهلاً بك يا ${userName} في ${roomName}! وصلتني رسالتك بكل سرور — كيف أستطيع مساعدتك الآن؟ ✨`;
 }
 
-async function callWelcomeBotGemini(apiKey, { question, userName, roomName, speakerName, isVirtual }) {
+let lastWelcomeBotGeminiStatus = { ok: null, at: null, error: '' };
+let lastGeminiErrorNotifAt = 0;
+
+function reportWelcomeBotGeminiErrorToOwner(errorReason, userName = '') {
+  const cleanErr = String(errorReason || 'خطأ غير معروف في Gemini API').slice(0, 260);
+  lastWelcomeBotGeminiStatus = {
+    ok: false,
+    at: new Date().toISOString(),
+    error: cleanErr
+  };
+  console.error('[WelcomeBot Gemini Error]', cleanErr);
+  db.addAdminLog({
+    actorKey: 'system:welcomebot',
+    actorName: '🤖 بوت الذكاء الاصطناعي (Gemini)',
+    actorRole: 'site_owner',
+    action: 'فشل اتصال Gemini API',
+    targetName: userName || 'استفسار عضو',
+    details: cleanErr
+  });
+
+  const now = Date.now();
+  if (now - lastGeminiErrorNotifAt >= 20000) {
+    lastGeminiErrorNotifAt = now;
+    const ownerUsers = db
+      .getAllRegisteredUsers()
+      .filter((u) => u.role === 'site_owner' || db.isSupremeOwnerEmail(u.email));
+    for (const owner of ownerUsers) {
+      const ownerKey = `user:${owner.id}`;
+      const notif = db.addNotification({
+        targetKey: ownerKey,
+        title: '⚠️ خطأ في اتصال بوت الذكاء الاصطناعي (Gemini)',
+        body: `تعذر الرد عبر Gemini API — السبب: ${cleanErr}`,
+        category: 'security_alert'
+      });
+      emitNotificationToUser(io, ownerKey, notif);
+    }
+    for (const [sid, e] of onlineSockets.entries()) {
+      if (e.role === 'site_owner' || db.isSupremeOwnerEmail(e.email)) {
+        io.to(sid).emit('error_toast', { message: `⚠️ خطأ Gemini API: ${cleanErr}` });
+      }
+    }
+  }
+  db.flushWrites().catch(() => {});
+}
+
+function stripBotMentionFromQuestion(rawContent, speakerName, mainBotName) {
+  let q = String(rawContent || '').trim();
+  const names = [speakerName, mainBotName]
+    .map((n) => String(n || '').trim())
+    .filter((n) => n.length >= 2);
+  for (const nm of names) {
+    const escaped = nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    q = q.replace(new RegExp(`@?${escaped}`, 'gi'), ' ');
+  }
+  q = q
+    .replace(/(?:^|\s)(?:يا\s*بوت|يا\s*مساعد|البوت|المساعد|@?bot)(?=$|\s|[،.!؟:])/gi, ' ')
+    .replace(/^[\s،.!؟:\-]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return q || String(rawContent || '').trim();
+}
+
+async function callWelcomeBotGemini(apiKey, { question, userName, roomName, speakerName, mainBotName, isVirtual }) {
   const key = String(apiKey || '').trim();
-  if (!key) return null;
+  if (!key) return { text: null, errorReason: '' };
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8500);
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
+    const cleanQuestion = stripBotMentionFromQuestion(question, speakerName, mainBotName);
     const persona = isVirtual
-      ? `أنت عضو عربي ودود ومثقف اسمك "${speakerName}" تتواجد داخل غرفة الدردشة "${roomName}".`
-      : `أنت "${speakerName}"، المساعد الترحيبي الذكي لغرفة الدردشة العربية "${roomName}".`;
-    const sysPrompt = `${persona} أجب على رسالة "${userName}" باللغة العربية الفصحى السهلة أو الخليجية/العربية المهذبة، بأسلوب راقٍ ومحترم ومختصر جداً (سطر أو سطرين بحد أقصى، بدون إطالة أو تنسيق معقد). لا تستخدم أي عبارات غير لائقة.`;
+      ? `أنت عضو عربي مثقف وودود اسمك "${speakerName}" داخل غرفة الدردشة "${roomName}".`
+      : `أنت "${speakerName}"، المساعد الذكي لغرفة الدردشة العربية "${roomName}".`;
+    const sysPrompt = `${persona} المستخدم "${userName}" يوجه لك سؤالاً أو حديثاً مباشراً. أجب إجابة ذكية ومباشرة ومفيدة ومختصرة جداً باللغة العربية (سطر إلى ثلاثة أسطر كحد أقصى). ركّز على الإجابة الفعلية لسؤال المستخدم ولا ترد برسالة ترحيب عامة أو متكررة إذا كان هناك سؤال محدد.`;
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
     const resp = await fetch(endpoint, {
@@ -4033,25 +4133,60 @@ async function callWelcomeBotGemini(apiKey, { question, userName, roomName, spea
       signal: controller.signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: sysPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: `${userName}: ${String(question || '').slice(0, 400)}` }] }],
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `رسالة ${userName}: ${cleanQuestion.slice(0, 500)}` }]
+          }
+        ],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 160
+          maxOutputTokens: 320,
+          thinkingConfig: { thinkingBudget: 0 }
         }
       })
     });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const text = String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '')
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      const apiMsg = data?.error?.message || resp.statusText || `HTTP ${resp.status}`;
+      return { text: null, errorReason: `(${resp.status}) ${apiMsg}` };
+    }
+    if (data?.promptFeedback?.blockReason) {
+      return { text: null, errorReason: `تم حجب الرد من Gemini (${data.promptFeedback.blockReason})` };
+    }
+    const candidate = data?.candidates?.[0];
+    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    const text = parts
+      .filter((p) => typeof p?.text === 'string' && !p.thought)
+      .map((p) => p.text)
+      .join(' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (!text) return null;
-    return text.slice(0, 420);
-  } catch {
-    return null;
+    if (!text) {
+      const finish = candidate?.finishReason || 'EMPTY_RESPONSE';
+      return { text: null, errorReason: `استجابة فارغة من Gemini (${finish})` };
+    }
+    lastWelcomeBotGeminiStatus = { ok: true, at: new Date().toISOString(), error: '' };
+    return { text: text.slice(0, 480), errorReason: '' };
+  } catch (err) {
+    const errMsg = err?.name === 'AbortError'
+      ? 'انتهت مهلة الاتصال بخادم Gemini (Timeout 12s)'
+      : (err?.message || 'فشل الاتصال بالشبكة');
+    return { text: null, errorReason: errMsg };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function textContainsNormalizedBotName(content, botName) {
+  if (textContainsMemberName(content, botName)) return true;
+  const normText = normalizeArabicText(content);
+  const normName = normalizeArabicText(botName);
+  if (!normText || normName.length < 2) return false;
+  const escaped = normName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:^|[\\s،.!؟@:\\-\\(\\)\\[\\]\\"'/])${escaped}(?:$|[\\s،.!؟:\\-\\(\\)\\[\\]\\"'/])`, 'i');
+  return re.test(normText);
 }
 
 function findAddressedWelcomeBotSpeaker(content, roomId, s) {
@@ -4061,24 +4196,22 @@ function findAddressedWelcomeBotSpeaker(content, roomId, s) {
 
   if (s.welcome_bot_mode === 'virtual_members') {
     const vms = getActiveVirtualMembersForRooms();
-    // Prefer virtual members assigned to this room first, then any active virtual member
     const sorted = vms.slice().sort((a, b) => (a.roomId === roomId ? -1 : b.roomId === roomId ? 1 : 0));
     for (const vm of sorted) {
-      if (textContainsMemberName(content, vm.name)) return vm;
+      if (textContainsNormalizedBotName(content, vm.name)) return vm;
     }
-    if (mainBotName && textContainsMemberName(content, mainBotName)) {
+    if (mainBotName && textContainsNormalizedBotName(content, mainBotName)) {
       const fallbackVm = sorted[0];
       return fallbackVm || { key: 'system:welcomebot', name: mainBotName, avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
     }
     return null;
   }
 
-  // Assistant mode: only respond when main bot name or explicit bot call ("يا بوت" / "يا مساعد" / "@بوت") is written
-  if (mainBotName && textContainsMemberName(content, mainBotName)) {
+  if (mainBotName && textContainsNormalizedBotName(content, mainBotName)) {
     return { key: 'system:welcomebot', name: mainBotName, avatarUrl: s.welcome_bot_avatar || '', role: 'vip', isVirtual: false };
   }
   const explicitCall =
-    /(^|\s)(يا\s*بوت|يا\s*مساعد|البوت|المساعد|@?bot)($|\s)/i.test(norm) ||
+    /(^|\s)(يا\s*بوت|يا\s*مساعد|البوت|المساعد|@?bot|@?مساعد)($|\s)/i.test(norm) ||
     norm === 'بوت' ||
     norm === 'مساعد';
   if (explicitCall) {
@@ -4105,21 +4238,28 @@ async function maybeHandleWelcomeBotMention(entry, roomId, content) {
   const room = db.getRoomById(roomId);
   const roomName = room?.name || 'الغرفة';
   const apiKey = String(s.welcome_bot_gemini_key || '').trim();
+  const mainBotName = String(s.welcome_bot_name || 'مساعد الأصيل').trim();
 
   let reply = null;
   if (apiKey) {
-    reply = await callWelcomeBotGemini(apiKey, {
+    const gemRes = await callWelcomeBotGemini(apiKey, {
       question: content,
       userName: entry.name,
       roomName,
       speakerName: speaker.name,
+      mainBotName,
       isVirtual: Boolean(speaker.isVirtual)
     });
+    if (gemRes?.text) {
+      reply = gemRes.text;
+    } else if (gemRes?.errorReason) {
+      reportWelcomeBotGeminiErrorToOwner(gemRes.errorReason, entry.name);
+    }
   }
   if (!reply) {
-    reply = generateSmartFallbackReply(content, entry.name, roomName, speaker.name);
+    const cleanQ = stripBotMentionFromQuestion(content, speaker.name, mainBotName);
+    reply = generateSmartFallbackReply(cleanQ, entry.name, roomName, speaker.name);
   }
-  // Ensure user is still inside the room before emitting
   const stillOnline = [...onlineSockets.values()].some((e) => e.roomId === roomId);
   if (!stillOnline) return;
   emitWelcomeBotMessage(roomId, reply, speaker);
@@ -4276,7 +4416,8 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       welcome_bot_greeting: String(settings.welcome_bot_greeting || ''),
       welcome_bot_gemini_key: String(settings.welcome_bot_gemini_key || ''),
       welcome_bot_color: String(settings.welcome_bot_color || 'royal_gold'),
-      virtual_members_list: Array.isArray(settings.virtual_members_list) ? settings.virtual_members_list : []
+      virtual_members_list: Array.isArray(settings.virtual_members_list) ? settings.virtual_members_list : [],
+      lastGeminiStatus: lastWelcomeBotGeminiStatus
     },
     protections: {
       lock_guest_images: Number(settings.lock_guest_images) || 0,
@@ -4698,16 +4839,22 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       if ((ipAddress && e.ipAddress === ipAddress) || (deviceId && e.deviceId === deviceId) || (targetKey && e.key === targetKey)) {
         if (e.role !== 'site_owner') {
           io.to(sid).emit('kicked', {
-            reason: `تم حظرك بواسطة ${actor.name} للسبب: ${banReasonText}`,
-            banned: true,
-            bannedBy: actor.name,
-            banReason: banReasonText
+            reason: 'تم حظرك من الشات',
+            banned: true
           });
           io.sockets.sockets.get(sid)?.disconnect(true);
         }
       }
     }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'حظر IP/جهاز', targetKey: bKey, details: banReasonText });
+    notifyOwnersModerationEvent({
+      actorName: actor.name,
+      actorKey: actor.key,
+      targetName: ipAddress || deviceId || bKey,
+      targetKey: bKey,
+      actionType: 'xban',
+      reason: banReasonText
+    });
     await db.flushWrites();
     return res.json({ ok: true });
   }
@@ -5000,15 +5147,8 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
     mics: getPublicMicSlots(targetRoomId),
     users: getRoomUsersList(targetRoomId),
     roomKingKey: computeRoomKingKey(targetRoomId),
-    activeMute: activeMuteRow
-      ? {
-          muted: true,
-          roomId: activeMuteRow.room_id || targetRoomId,
-          reason: activeMuteRow.reason || 'كتم مؤقت من الإدارة',
-          expiresAt: Number(activeMuteRow.expires_at) || 0,
-          mutedBy: activeMuteRow.muted_by || 'الإدارة',
-          violatingWord: activeMuteRow.violating_word || ''
-        }
+    activeMute: buildSanitizedMutePayload(activeMuteRow, targetRoomId).muted
+      ? buildSanitizedMutePayload(activeMuteRow, targetRoomId)
       : null,
     quizBot: {
       active: Boolean(qBot && qBot.active),
@@ -5101,14 +5241,7 @@ io.use((socket, next) => {
       }
       const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId, fingerprint });
       if (ban) {
-        return next(
-          new Error(
-            `BANNED_INFO:${JSON.stringify({
-              bannedBy: ban.banned_by || 'الإدارة',
-              reason: ban.reason || 'حظر من الإدارة'
-            })}`
-          )
-        );
+        return next(new Error('BANNED:تم حظرك من الشات'));
       }
       const persistedGuest = db.upsertGuest({
         key: payload.key,
@@ -5148,14 +5281,7 @@ io.use((socket, next) => {
       }
       const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip, deviceId, fingerprint });
       if (ban) {
-        return next(
-          new Error(
-            `BANNED_INFO:${JSON.stringify({
-              bannedBy: ban.banned_by || 'الإدارة',
-              reason: ban.reason || 'حظر من الإدارة'
-            })}`
-          )
-        );
+        return next(new Error('BANNED:تم حظرك من الشات'));
       }
     }
 
@@ -5219,16 +5345,7 @@ io.on('connection', (socket) => {
     news: db.getAllNews(),
     giftsCatalog: db.GIFT_CATALOG,
     framesCatalog: getEffectiveFramesCatalog(),
-    activeMute: initialActiveMute
-      ? {
-          muted: true,
-          roomId: initialActiveMute.room_id || validRoom,
-          reason: initialActiveMute.reason || 'كتم مؤقت من الإدارة',
-          expiresAt: Number(initialActiveMute.expires_at) || 0,
-          mutedBy: initialActiveMute.muted_by || 'الإدارة',
-          violatingWord: initialActiveMute.violating_word || ''
-        }
-      : null
+    activeMute: initialActiveMute ? buildSanitizedMutePayload(initialActiveMute, validRoom) : null
   });
 
   moveSocketToRoom(socket, validRoom, wasGraceReconnect);
@@ -5305,15 +5422,8 @@ io.on('connection', (socket) => {
       const mute = db.getActiveMute(entry.key, entry.roomId);
       if (mute) {
         const mins = Math.max(1, Math.ceil((mute.expires_at - Date.now()) / 60000));
-        socket.emit('mute_state', {
-          muted: true,
-          roomId: mute.room_id || entry.roomId,
-          reason: mute.reason || 'كتم مؤقت من الإدارة',
-          expiresAt: Number(mute.expires_at) || 0,
-          mutedBy: mute.muted_by || 'الإدارة',
-          violatingWord: mute.violating_word || ''
-        });
-        const errMsg = `أنت مكتوم حالياً (${mins} د) — السبب: ${mute.reason || 'كتم مؤقت'}`;
+        socket.emit('mute_state', buildSanitizedMutePayload(mute, entry.roomId));
+        const errMsg = `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}`;
         if (typeof cb === 'function') cb({ error: errMsg });
         else socket.emit('error_toast', { message: errMsg });
         return;
@@ -5337,8 +5447,10 @@ io.on('connection', (socket) => {
               targetName: entry.name,
               mutedByKey: 'system:antiflood'
             });
+            activeMutedKeysTracker.add(entry.key);
             releaseUserMicsInRoom(entry.key, entry.roomId);
             emitMuteStateToUser(entry.key, entry.roomId);
+            notifyUserMutedNotification(entry.key, muteMins);
             db.addAdminLog({
               actorKey: 'system:antiflood',
               actorName: '🛡️ نظام الحماية Anti-Flood',
@@ -5358,12 +5470,8 @@ io.on('connection', (socket) => {
               durationMins: muteMins,
               roomId: entry.roomId
             });
-            io.to(`room:${entry.roomId}`).emit('room_notice', {
-              roomId: entry.roomId,
-              text: `🛡️ نظام الحماية: تم كتم "${entry.name}" تلقائياً لمدة ${muteMins} دقيقة بسبب التكرار المفرط (Anti-Flood).`
-            });
             db.flushWrites().catch(() => {});
-            const errMsg = `تم كتمك تلقائياً لمدة ${muteMins} دقيقة بسبب الإرسال السريع المتكرر (Anti-Flood).`;
+            const errMsg = `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(muteMins)}`;
             if (typeof cb === 'function') cb({ error: errMsg });
             else socket.emit('error_toast', { message: errMsg });
             return;
@@ -5488,8 +5596,10 @@ io.on('connection', (socket) => {
           mutedByKey: 'system:wordfilter',
           violatingWord: matchedBannedWord
         });
+        activeMutedKeysTracker.add(entry.key);
         releaseUserMicsInRoom(entry.key, entry.roomId);
         emitMuteStateToUser(entry.key, entry.roomId);
+        notifyUserMutedNotification(entry.key, banWordMuteMins);
         db.addAdminLog({
           actorKey: 'system:wordfilter',
           actorName: '🛡️ فلتر الكلمات المحظورة',
@@ -5510,11 +5620,7 @@ io.on('connection', (socket) => {
           roomId: entry.roomId,
           violatingWord: matchedBannedWord
         });
-        io.to(`room:${entry.roomId}`).emit('room_notice', {
-          roomId: entry.roomId,
-          text: `🛡️ تم استبدال كلمة محظورة بـ (***) وكتم "${entry.name}" تلقائياً لمدة ${banWordMuteMins} دقيقة.`
-        });
-        socket.emit('error_toast', { message: `تم تشفير كلمتك وكتمك لمدة ${banWordMuteMins} دقيقة بسبب استخدام كلمة محظورة.` });
+        socket.emit('error_toast', { message: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(banWordMuteMins)}` });
         db.flushWrites().catch(() => {});
         if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg, autoMuted: true });
         return;
@@ -5994,6 +6100,12 @@ io.on('connection', (socket) => {
       if (typeof cb === 'function') cb({ error: 'أنت مجمد حالياً ولا يمكنك إرسال رسائل خاصة.' });
       return;
     }
+    const pmMute = entry.role !== 'site_owner' ? db.getActiveMute(entry.key, entry.roomId || '*') : null;
+    if (pmMute) {
+      const mins = Math.max(1, Math.ceil((pmMute.expires_at - Date.now()) / 60000));
+      if (typeof cb === 'function') cb({ error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}` });
+      return;
+    }
     if (entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(clean)) {
       if (typeof cb === 'function') cb({ error: 'إرسال الروابط في الرسائل الخاصة غير مسموح لرتبتك.' });
       return;
@@ -6228,12 +6340,10 @@ io.on('connection', (socket) => {
       targetName: check.info.targetName,
       mutedByKey: entry.key
     });
+    activeMutedKeysTracker.add(targetKey);
     releaseUserMicsInRoom(targetKey, entry.roomId);
     emitMuteStateToUser(targetKey, entry.roomId);
-    io.to(`room:${entry.roomId}`).emit('room_notice', {
-      roomId: entry.roomId,
-      text: `🔇 قام "${entry.name}" بكتم "${check.info.targetName}" لمدة ${mins} دقيقة${cleanReason ? ` — السبب: ${cleanReason}` : ''}`
-    });
+    notifyUserMutedNotification(targetKey, mins);
     db.addAdminLog({
       actorKey: entry.key,
       actorName: entry.name,
@@ -6243,18 +6353,16 @@ io.on('connection', (socket) => {
       targetName: check.info.targetName,
       details: `${mins} دقيقة • السبب: ${effectiveReason}`
     });
-    if (!isOwner) {
-      notifyOwnersModerationEvent({
-        actorName: entry.name,
-        actorKey: entry.key,
-        targetName: check.info.targetName,
-        targetKey,
-        actionType: 'mute',
-        reason: effectiveReason,
-        durationMins: mins,
-        roomId: entry.roomId
-      });
-    }
+    notifyOwnersModerationEvent({
+      actorName: entry.name,
+      actorKey: entry.key,
+      targetName: check.info.targetName,
+      targetKey,
+      actionType: 'mute',
+      reason: effectiveReason,
+      durationMins: mins,
+      roomId: entry.roomId
+    });
     await db.flushWrites();
     if (typeof cb === 'function') cb({ ok: true });
   });
@@ -6299,17 +6407,15 @@ io.on('connection', (socket) => {
         if (s) s.disconnect(true);
       }
     }
-    if (!isOwner) {
-      notifyOwnersModerationEvent({
-        actorName: entry.name,
-        actorKey: entry.key,
-        targetName: check.info.targetName,
-        targetKey,
-        actionType: 'kick',
-        reason: effectiveReason,
-        roomId: entry.roomId
-      });
-    }
+    notifyOwnersModerationEvent({
+      actorName: entry.name,
+      actorKey: entry.key,
+      targetName: check.info.targetName,
+      targetKey,
+      actionType: 'kick',
+      reason: effectiveReason,
+      roomId: entry.roomId
+    });
     io.to(`room:${entry.roomId}`).emit('room_notice', {
       roomId: entry.roomId,
       text: `🚪 قام "${entry.name}" بطرد "${check.info.targetName}" من الغرفة${cleanReason ? ` — السبب: ${cleanReason}` : ''}`
@@ -6362,13 +6468,19 @@ io.on('connection', (socket) => {
       targetName,
       details: effectiveReason
     });
+    notifyOwnersModerationEvent({
+      actorName: entry.name,
+      actorKey: entry.key,
+      targetName,
+      targetKey,
+      actionType: banType === 'xban' ? 'xban' : 'ban',
+      reason: effectiveReason
+    });
     for (const [sid, o] of onlineSockets.entries()) {
       if (o.key === targetKey) {
         io.to(sid).emit('kicked', {
-          reason: `تم حظرك بواسطة ${entry.name} للسبب: ${effectiveReason}`,
-          banned: true,
-          bannedBy: entry.name,
-          banReason: effectiveReason
+          reason: 'تم حظرك من الشات',
+          banned: true
         });
         const s = io.sockets.sockets.get(sid);
         if (s) s.disconnect(true);
@@ -6731,6 +6843,7 @@ async function start() {
 
   // Anti-AFK Policy: passive 5-minute online presence reward removed; rewards occur exclusively on genuine text chat activity.
   startVirtualMembersLoop();
+  startMuteExpiryMonitor();
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Arabic CodyChat Server listening on http://0.0.0.0:${PORT}`);

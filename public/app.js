@@ -701,14 +701,14 @@
       err.bannedBy = data.bannedBy || '';
       err.banReason = data.reason || '';
       if (err.banned) {
-        showBanBlockedScreen({ bannedBy: err.bannedBy, reason: err.banReason });
+        showBanBlockedScreen();
       }
       throw err;
     }
     return data;
   }
 
-  function showBanBlockedScreen({ bannedBy = 'الإدارة', reason = 'مخالفة القوانين' } = {}) {
+  function showBanBlockedScreen() {
     stopProfileMusic();
     stopRadioStream();
     stopLocalMicStream();
@@ -716,7 +716,7 @@
     const overlay = $('bannedOverlay');
     const txtEl = $('bannedOverlayReasonText');
     if (txtEl) {
-      txtEl.textContent = `تم حظرك بواسطة ${bannedBy || 'الإدارة'} للسبب: ${reason || 'مخالفة القوانين'}`;
+      txtEl.textContent = 'تم حظرك من الشات';
     }
     overlay?.classList.remove('hidden');
   }
@@ -762,7 +762,7 @@
         banner.innerHTML = `
           <div class="muted-alert-main">
             <i class="fa-solid fa-volume-xmark"></i>
-            <span>تم كتمك مؤقتاً بواسطة <strong>${escapeHtml(state.activeMute.mutedBy || 'النظام')}</strong> • السبب: ${escapeHtml(state.activeMute.reason || 'مخالفة')}</span>
+            <span>تم كتمك مؤقتاً — لا يمكنك الإرسال حتى انتهاء المدة</span>
           </div>
           <span class="muted-countdown-pill"><i class="fa-regular fa-clock"></i> ${formatRemainingMmSs(rem)}</span>
         `;
@@ -786,6 +786,13 @@
       else input.placeholder = 'اكتب هنا...';
     }
     if (sendBtn) sendBtn.disabled = locked;
+    const pmInput = $('pmComposeInput');
+    const pmBtn = $('pmComposeSendBtn');
+    if (pmInput) {
+      pmInput.disabled = locked;
+      pmInput.placeholder = isMuted ? 'أنت مكتوم مؤقتاً — لا يمكنك الإرسال...' : 'اكتب رسالتك الخاصة...';
+    }
+    if (pmBtn) pmBtn.disabled = locked;
   }
 
   function showOwnerModAlert(payload) {
@@ -1090,6 +1097,7 @@
               <button type="button" class="adm-tab" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> بوت المسابقات الذكي</button>
               ${isOwner ? '<button type="button" class="adm-tab" id="welcomeBotAdmTab" data-adm-tab="welcome_bot"><i class="fa-solid fa-wand-magic-sparkles"></i> البوت الترحيبي</button>' : ''}
               <button type="button" class="adm-tab" data-adm-tab="members_control"><i class="fa-solid fa-users-gear"></i> الأعضاء والرقابة</button>
+              ${isOwner ? '<button type="button" class="adm-tab" id="bansMutesAdmTab" data-adm-tab="bans_mutes"><i class="fa-solid fa-user-lock"></i> المحظورين والمكتومين</button>' : ''}
               <button type="button" class="adm-tab" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل الرقابي</button>
               ${isOwner ? '<button type="button" class="adm-tab" id="ownerToolsAdmTab" data-adm-tab="owner_tools"><i class="fa-solid fa-toolbox"></i> الباك أب والأقسام</button>' : ''}
             </div>
@@ -1126,6 +1134,27 @@
             }
           } else if (!isOwner) {
             $('welcomeBotAdmTab')?.remove();
+          }
+
+          if (isOwner && !$('bansMutesAdmTab')) {
+            const bmBtn = document.createElement('button');
+            bmBtn.type = 'button';
+            bmBtn.className = 'adm-tab';
+            bmBtn.id = 'bansMutesAdmTab';
+            bmBtn.dataset.admTab = 'bans_mutes';
+            bmBtn.innerHTML = '<i class="fa-solid fa-user-lock"></i> المحظورين والمكتومين';
+            bmBtn.addEventListener('click', () => {
+              tabsBar.querySelectorAll('.adm-tab').forEach((x) => x.classList.toggle('active', x === bmBtn));
+              renderAdminTab('bans_mutes');
+            });
+            const memBtn = tabsBar.querySelector('[data-adm-tab="members_control"]');
+            if (memBtn && memBtn.nextSibling) {
+              tabsBar.insertBefore(bmBtn, memBtn.nextSibling);
+            } else {
+              tabsBar.appendChild(bmBtn);
+            }
+          } else if (!isOwner) {
+            $('bansMutesAdmTab')?.remove();
           }
 
           if (isOwner && !$('ownerToolsAdmTab')) {
@@ -5131,7 +5160,11 @@
         const submitPm = () => {
           const val = $('pmComposeInput')?.value.trim();
           if (!val) return;
-          state.socket.emit('send_pm', { toKey: targetArg.key, toName: targetArg.name, content: val }, () => {
+          state.socket.emit('send_pm', { toKey: targetArg.key, toName: targetArg.name, content: val }, (res) => {
+            if (res?.error) {
+              showToast(res.error, true);
+              return;
+            }
             openSlideSheetDrawer('pm', targetArg);
           });
         };
@@ -5139,6 +5172,7 @@
         $('pmComposeInput')?.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') { e.preventDefault(); submitPm(); }
         });
+        syncChatComposerLockState();
       } else {
         titleEl.innerHTML = '<i class="fa-solid fa-envelope"></i> الرسائل الخاصة';
         const partners = new Map();
@@ -5411,6 +5445,7 @@
     if (t === 'quiz_bot') return { tab: 'quiz_bot', sub: subOverride || null };
     if (t === 'welcome_bot') return { tab: 'welcome_bot', sub: subOverride || null };
     if (t === 'members_control') return { tab: 'members_control', sub: subOverride || null };
+    if (t === 'bans_mutes') return { tab: 'bans_mutes', sub: subOverride || null };
     if (t === 'audit_log') return { tab: 'audit_log', sub: subOverride || null };
     if (t === 'owner_tools') return { tab: 'owner_tools', sub: subOverride || null };
     if (t === 'ranks') return { tab: 'ranks_matrix', sub: subOverride || 'creator' };
@@ -5502,6 +5537,7 @@
     if (tab === 'quiz_bot') return renderAdminQuizBotTab(body, ov, suite, isOwner);
     if (tab === 'welcome_bot') return renderAdminWelcomeBotTab(body, ov, suite, isOwner);
     if (tab === 'members_control') return renderAdminMembersControlTab(body, ov, suite, isOwner);
+    if (tab === 'bans_mutes') return renderAdminBansMutesTab(body, ov, suite, isOwner);
     if (tab === 'audit_log') return renderAdminAuditLogTab(body, ov, suite, isOwner);
     if (tab === 'owner_tools') return renderAdminOwnerToolsTab(body, ov, suite, isOwner);
   }
@@ -6002,7 +6038,7 @@
                 <div class="muted">
                   بواسطة: ${escapeHtml(m.muted_by || 'الإدارة')} • السبب: ${escapeHtml(m.reason || 'بدون سبب')}
                   ${m.violating_word ? ` • <span style="color:#f87171;font-weight:700;">الكلمة: ${escapeHtml(m.violating_word)}</span>` : ''}
-                  • المتبقي: ${formatRemainingMmSs(m.remainingMs || Math.max(0, (m.expires_at_ms || 0) - Date.now()))}
+                  • المتبقي: ${formatRemainingMmSs(m.remaining_ms ?? m.remainingMs ?? Math.max(0, Number(m.expires_at || m.expires_at_ms || 0) - Date.now()))}
                 </div>
               </div>
               <button type="button" class="btn-primary btn-xs unmute-admin-btn" data-mk="${escapeHtml(m.target_key)}"><i class="fa-solid fa-volume-high"></i> فك الكتم</button>
@@ -6371,11 +6407,19 @@
         </div>
 
         <div style="margin-top:10px;">
-          <label class="muted">مفتاح Gemini API (محفوظ في السيرفر فقط — يفعّل الذكاء الاصطناعي عند منشن البوت مع مهلة 15ث لكل عضو)</label>
+          <label class="muted">مفتاح Gemini API (محفوظ في السيرفر فقط — يفعّل الذكاء الاصطناعي عبر gemini-2.5-flash عند منشن البوت مع مهلة 15ث لكل عضو)</label>
           <div class="inline-row" style="gap:6px;">
             <input type="password" id="wbGeminiKeyInput" value="${escapeHtml(draft.geminiKey)}" placeholder="AIzaSy... (اتركه فارغاً لاستخدام الردود الذكية البديلة)" autocomplete="off" style="flex:1;" />
             <button type="button" id="wbToggleKeyVisBtn" class="btn-secondary btn-xs" title="إظهار / إخفاء"><i class="fa-solid fa-eye"></i></button>
           </div>
+          ${wb.lastGeminiStatus ? `
+            <div style="margin-top:6px;padding:8px 10px;border-radius:10px;font-size:12px;border:1px solid ${wb.lastGeminiStatus.ok ? 'rgba(16,185,129,0.35)' : 'rgba(248,113,113,0.45)'};background:${wb.lastGeminiStatus.ok ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)'};color:${wb.lastGeminiStatus.ok ? '#6ee7b7' : '#fca5a5'};">
+              <i class="fa-solid ${wb.lastGeminiStatus.ok ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+              <strong>${wb.lastGeminiStatus.ok ? 'اتصال Gemini (gemini-2.5-flash) يعمل بنجاح' : 'آخر خطأ في اتصال Gemini'}:</strong>
+              ${escapeHtml(wb.lastGeminiStatus.message || '')}
+              ${wb.lastGeminiStatus.at ? `<span class="muted" style="font-size:11px;margin-right:6px;">(${new Date(wb.lastGeminiStatus.at).toLocaleTimeString('ar-EG')})</span>` : ''}
+            </div>
+          ` : ''}
         </div>
 
         <div style="margin-top:12px;">
@@ -7088,6 +7132,101 @@
     }, 'تم حفظ إعدادات التنشيط!', 'members_control', 'engagement'));
   }
 
+  function renderAdminBansMutesTab(body, ov, suite, isOwner) {
+    if (!isOwner) {
+      body.innerHTML = '<div class="form-error">تبويب المحظورين والمكتومين مخصص للمالك فقط.</div>';
+      return;
+    }
+    const bans = Array.isArray(suite.bans) ? suite.bans : (Array.isArray(ov.bans) ? ov.bans : []);
+    const mutes = Array.isArray(suite.mutes) ? suite.mutes : (Array.isArray(ov.mutes) ? ov.mutes : []);
+    body.innerHTML = `
+      <div class="owner-suite-section">
+        <h4><i class="fa-solid fa-ban" style="color:#f87171;"></i> قائمة المحظورين نهائياً (${bans.length})</h4>
+        <div class="news-feed-list">
+          ${bans.length ? bans.map((b) => `
+            <div class="admin-list-card">
+              <div style="min-width:0;flex:1;">
+                <div>
+                  <strong>${escapeHtml(b.target_name || b.target_key)}</strong>
+                  ${b.ban_type === 'xban'
+                    ? '<span class="lvl-pill-mini" style="background:#991b1b;color:#fff;margin-right:6px;">X-Ban</span>'
+                    : '<span class="lvl-pill-mini" style="background:rgba(239,68,68,0.22);color:#fca5a5;margin-right:6px;">حظر نهائي</span>'}
+                </div>
+                <div class="muted" style="margin-top:4px;">
+                  <strong>المنفّذ:</strong> ${escapeHtml(b.banned_by || 'الإدارة')}
+                  • <strong>السبب:</strong> ${escapeHtml(b.reason || 'بدون سبب')}
+                </div>
+                ${(b.ip_address || b.created_at) ? `
+                  <div class="muted" style="font-size:11px;margin-top:2px;">
+                    ${b.ip_address ? `IP: ${escapeHtml(b.ip_address)}` : ''}
+                    ${b.created_at ? `${b.ip_address ? ' • ' : ''}تاريخ الحظر: ${new Date(b.created_at).toLocaleString('ar-EG')}` : ''}
+                  </div>
+                ` : ''}
+              </div>
+              <button type="button" class="btn-secondary btn-xs owner-unban-tab-btn" data-bk="${escapeHtml(b.target_key)}">
+                <i class="fa-solid fa-unlock"></i> فك الحظر
+              </button>
+            </div>
+          `).join('') : '<div class="muted">لا يوجد محظورون حالياً.</div>'}
+        </div>
+      </div>
+
+      <div class="owner-suite-section" style="margin-top:12px;">
+        <h4><i class="fa-solid fa-volume-xmark" style="color:#fbbf24;"></i> قائمة المكتومين مؤقتاً (${mutes.length})</h4>
+        <div class="news-feed-list">
+          ${mutes.length ? mutes.map((m) => {
+            const remMs = Number(m.remaining_ms ?? m.remainingMs ?? Math.max(0, Number(m.expires_at || m.expires_at_ms || 0) - Date.now()));
+            return `
+              <div class="admin-list-card">
+                <div style="min-width:0;flex:1;">
+                  <div>
+                    <strong>${escapeHtml(m.target_name || m.target_key)}</strong>
+                    ${m.room_name ? `<span class="lvl-pill-mini" style="background:rgba(245,158,11,0.18);color:#fde68a;margin-right:6px;">${escapeHtml(m.room_name)}</span>` : ''}
+                  </div>
+                  <div class="muted" style="margin-top:4px;">
+                    <strong>المنفّذ:</strong> ${escapeHtml(m.muted_by || 'الإدارة')}
+                    • <strong>السبب:</strong> ${escapeHtml(m.reason || 'بدون سبب')}
+                    ${m.violating_word ? ` • <span style="color:#f87171;font-weight:700;">الكلمة: ${escapeHtml(m.violating_word)}</span>` : ''}
+                  </div>
+                  <div class="muted" style="font-size:11px;margin-top:2px;color:#fcd34d;">
+                    <i class="fa-regular fa-clock"></i> المدة المتبقية: ${formatRemainingMmSs(remMs)}
+                  </div>
+                </div>
+                <button type="button" class="btn-primary btn-xs owner-unmute-tab-btn" data-mk="${escapeHtml(m.target_key)}">
+                  <i class="fa-solid fa-volume-high"></i> فك الكتم
+                </button>
+              </div>
+            `;
+          }).join('') : '<div class="muted">لا يوجد مكتومون حالياً.</div>'}
+        </div>
+      </div>
+    `;
+
+    body.querySelectorAll('.owner-unban-tab-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api(`/api/admin/ban/${encodeURIComponent(btn.dataset.bk)}`, { method: 'DELETE' });
+          showToast('تم فك الحظر بنجاح!');
+          openAdminPanel('bans_mutes');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+
+    body.querySelectorAll('.owner-unmute-tab-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/api/admin/unmute', { method: 'POST', body: { targetKey: btn.dataset.mk } });
+          showToast('تم فك الكتم بنجاح!');
+          openAdminPanel('bans_mutes');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+  }
+
   function renderAdminAuditLogTab(body, _ov, suite, isOwner) {
     const logs = Array.isArray(suite.adminLogs) ? suite.adminLogs : [];
     const pmAlerts = Array.isArray(suite.pmLinkAlerts) ? suite.pmLinkAlerts : [];
@@ -7590,23 +7729,14 @@
 
     socket.on('connect_error', (err) => {
       const msg = String(err?.message || '');
-      if (msg.startsWith('BANNED_INFO:')) {
-        try {
-          const info = JSON.parse(msg.slice('BANNED_INFO:'.length));
-          showBanBlockedScreen(info);
-        } catch {
-          showBanBlockedScreen({ bannedBy: 'الإدارة', reason: 'تم حظرك من دخول الشات' });
-        }
-        logoutUser({ keepBanOverlay: true });
-        return;
-      }
-      if (msg.startsWith('BANNED:') || msg === 'AUTH_REQUIRED') {
-        if (msg.startsWith('BANNED:')) {
-          showBanBlockedScreen({ bannedBy: 'الإدارة', reason: msg.slice(7).trim() });
+      if (msg.startsWith('BANNED_INFO:') || msg.startsWith('BANNED:') || msg === 'AUTH_REQUIRED') {
+        const isBanned = msg.startsWith('BANNED_INFO:') || msg.startsWith('BANNED:');
+        if (isBanned) {
+          showBanBlockedScreen();
         } else {
           showToast(msg, true);
         }
-        logoutUser({ keepBanOverlay: msg.startsWith('BANNED:') });
+        logoutUser({ keepBanOverlay: isBanned });
         return;
       }
       state.wasDisconnected = true;
@@ -7955,9 +8085,9 @@
       renderTypingAvatarsBar();
     });
 
-    socket.on('kicked', ({ reason, banned, bannedBy, banReason }) => {
+    socket.on('kicked', ({ reason, banned }) => {
       if (banned) {
-        showBanBlockedScreen({ bannedBy: bannedBy || 'الإدارة', reason: banReason || reason });
+        showBanBlockedScreen();
         logoutUser({ keepBanOverlay: true });
         return;
       }
@@ -7973,7 +8103,7 @@
     socket.on('mute_state', (payload) => {
       updateMutedStateUI(payload || null);
       if (payload?.muted) {
-        showToast(`🔇 تم كتمك مؤقتاً (${payload.reason || 'مخالفة'})`, true);
+        showToast('🔇 تم كتمك مؤقتاً', true);
       } else {
         showToast('🔊 تم فك الكتم عنك، يمكنك الكتابة الآن.');
       }
@@ -8236,9 +8366,6 @@
         $('appView')?.classList.remove('hidden');
         state.guestRegisterReturnToChat = false;
       }
-    });
-    $('bannedSwitchAccountBtn')?.addEventListener('click', () => {
-      hideBanBlockedScreen();
     });
     $('guestRegisterBottomBtn')?.addEventListener('click', openAuthRegisterForGuest);
     $('dropGuestRegisterBtn')?.addEventListener('click', openAuthRegisterForGuest);
