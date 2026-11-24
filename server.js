@@ -3,7 +3,6 @@ const fs = require('node:fs');
 const http = require('node:http');
 const crypto = require('node:crypto');
 const express = require('express');
-const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const db = require('./db');
@@ -689,9 +688,10 @@ function mapGuestRow(g, fallbackKey = '', fallbackName = 'زائر') {
   };
 }
 
-function resolveAuthFromRequest(req) {
+function resolveAuthFromRequest(req, tokenOverride = '') {
   const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  const token = String(tokenOverride || bearer || '').trim();
   const payload = verifyToken(token);
   if (!payload) return null;
 
@@ -699,15 +699,13 @@ function resolveAuthFromRequest(req) {
   const { ip, deviceId, fingerprint } = telemetry;
 
   if (payload.isGuest) {
-    if (!validateAndTouchSession(payload, { role: 'guest', telemetry })) return null;
     const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId, fingerprint });
     if (ban) {
       return {
-        banned: true,
-        bannedBy: ban.banned_by || 'الإدارة',
-        reason: ban.reason || 'حظر من الإدارة'
+        banned: true
       };
     }
+    if (!validateAndTouchSession(payload, { role: 'guest', telemetry })) return null;
     const saved = db.findGuestByKey(payload.key);
     const guestObj = saved || db.upsertGuest({ key: payload.key, name: payload.name || 'زائر' });
     req._authTokenPayload = payload;
@@ -723,9 +721,6 @@ function resolveAuthFromRequest(req) {
     }
     const freshRow = db.findUserById(row.id);
     if (!freshRow) return null;
-    if (!validateAndTouchSession(payload, { role: freshRow.role, telemetry, userRow: freshRow })) {
-      return null;
-    }
     if (!db.isSupremeOwnerEmail(freshRow.email) && freshRow.role !== 'site_owner') {
       const ban = db.isTargetBanned({
         targetKey: `user:${freshRow.id}`,
@@ -734,13 +729,14 @@ function resolveAuthFromRequest(req) {
         deviceId,
         fingerprint
       });
-      if (ban) {
+      if (ban || freshRow.isBanned === true || freshRow.is_banned === 1) {
         return {
-          banned: true,
-          bannedBy: ban.banned_by || 'الإدارة',
-          reason: ban.reason || 'حظر من الإدارة'
+          banned: true
         };
       }
+    }
+    if (!validateAndTouchSession(payload, { role: freshRow.role, telemetry, userRow: freshRow })) {
+      return null;
     }
     req._authTokenPayload = payload;
     req._authRawToken = token;
@@ -778,13 +774,32 @@ function requireRegistered(req, res, next) {
 
 function requirePanelAccess(req, res, next) {
   const u = resolveAuthFromRequest(req);
-  if (!u || u.isGuest) return res.status(403).json({ error: 'صلاحية الإدارة مطلوبة.' });
+  if (!u || u.isGuest || u.banned) return res.status(403).json({ error: 'صلاحية الإدارة مطلوبة.' });
   if (u.role !== 'site_owner' && !canDo(u.role, 'access_panel')) {
     return res.status(403).json({ error: 'ليست لديك صلاحية دخول لوحة التحكم.' });
   }
   req.authUser = u;
   return next();
 }
+
+function requirePanelAccessForScript(req, res, next) {
+  const qToken = typeof req.query?.token === 'string' ? req.query.token.trim() : '';
+  const u = resolveAuthFromRequest(req, qToken);
+  if (!u || u.isGuest || u.banned || (u.role !== 'site_owner' && !canDo(u.role, 'access_panel'))) {
+    return res.status(403).type('application/javascript; charset=utf-8').send('/* 403 Forbidden: Admin Access Required */\n');
+  }
+  req.authUser = u;
+  return next();
+}
+
+app.get('/admin', (_req, res) => {
+  return res.sendFile(path.join(__dirname, 'private_admin', 'admin.html'));
+});
+
+app.get('/admin-panel.js', requirePanelAccessForScript, (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  return res.sendFile(path.join(__dirname, 'private_admin', 'admin-panel.js'));
+});
 
 function requireOwner(req, res, next) {
   const u = resolveAuthFromRequest(req);
@@ -856,9 +871,9 @@ const uploadNewsImg = makeUploader('news', 'image/', 12 * 1024 * 1024);
 const uploadFrame = makeUploader('frames', 'image/', 12 * 1024 * 1024);
 
 // ==========================================
-// REAL-TIME STATE MAPS
+// REAL-TIME PRESENCE & ROOM STATE MAPS (FIRESTORE-BACKED, ZERO SOCKET.IO)
 // ==========================================
-const onlineSockets = new Map(); // socketId -> user session entry
+const onlinePresenceMap = new Map(); // userKey -> presence entry
 const roomMics = new Map(); // roomId -> [slot1..slot5]
 const pendingGrace = new Map(); // key -> { timeout, lastRoomId }
 const recentRoomPresence = new Map(); // key -> { roomId, at }
@@ -1015,7 +1030,8 @@ function ensureRoomMicSlots(roomId) {
         holderAvatar: null,
         isSelfMuted: false,
         isAdminMuted: false,
-        isSpeaking: false
+        isSpeaking: false,
+        speakingLevel: 0
       }))
     );
   }
@@ -1024,6 +1040,11 @@ function ensureRoomMicSlots(roomId) {
 
 function getPublicMicSlots(roomId) {
   return ensureRoomMicSlots(roomId).map((s) => ({ ...s }));
+}
+
+function syncRoomMicsToFirestore(roomId) {
+  if (!roomId) return;
+  db.syncRoomMicsDoc(roomId, getPublicMicSlots(roomId));
 }
 
 function isStealthEntry(entry) {
@@ -1037,7 +1058,7 @@ function isStealthEntry(entry) {
 function computeRoomKingKey(roomId) {
   let topKey = null;
   let topPoints = 0;
-  for (const entry of onlineSockets.values()) {
+  for (const entry of onlinePresenceMap.values()) {
     if (entry.roomId !== roomId || isStealthEntry(entry) || entry.isGuest) continue;
     const pts = Number(entry.activityPoints) || 0;
     if (pts > topPoints) {
@@ -1050,7 +1071,7 @@ function computeRoomKingKey(roomId) {
 
 function getRoomUsersList(roomId) {
   const byKey = new Map();
-  for (const entry of onlineSockets.values()) {
+  for (const entry of onlinePresenceMap.values()) {
     if (entry.roomId === roomId && !isStealthEntry(entry)) {
       const rankObj = db.getRankByKey(entry.role);
       byKey.set(entry.key, {
@@ -1118,7 +1139,7 @@ function getRoomUsersList(roomId) {
 
 function buildGlobalOnlineUsers() {
   const byKey = new Map();
-  for (const entry of onlineSockets.values()) {
+  for (const entry of onlinePresenceMap.values()) {
     if (isStealthEntry(entry)) continue;
     const rm = entry.roomId ? db.getRoomById(entry.roomId) : null;
     byKey.set(entry.key, {
@@ -1172,7 +1193,7 @@ function buildGlobalOnlineUsers() {
 
 function buildPersistentMembersList() {
   const onlineByKey = new Map();
-  for (const entry of onlineSockets.values()) {
+  for (const entry of onlinePresenceMap.values()) {
     if (!isStealthEntry(entry)) onlineByKey.set(entry.key, entry);
   }
   const registered = db.getAllRegisteredUsers().map((u) => {
@@ -1298,7 +1319,7 @@ function buildRoomsPayload() {
   return db.getAllRooms().map((r) => {
     const pub = db.sanitizeRoomForPublic(r);
     const activeKeys = new Set();
-    for (const e of onlineSockets.values()) {
+    for (const e of onlinePresenceMap.values()) {
       if (e.roomId === r.id && !isStealthEntry(e)) activeKeys.add(e.key);
     }
     for (const vu of virtualUsers) {
@@ -1312,100 +1333,144 @@ function buildRoomsPayload() {
   });
 }
 
-function broadcastRoomUsers(io, roomId) {
-  if (!roomId) return;
-  io.to(`room:${roomId}`).emit('room_users', {
-    roomId,
-    users: getRoomUsersList(roomId),
-    roomKingKey: computeRoomKingKey(roomId)
-  });
+function buildPublicPresenceDoc(entry) {
+  if (!entry) return null;
+  const rm = entry.roomId ? db.getRoomById(entry.roomId) : null;
+  const rankObj = db.getRankByKey(entry.role);
+  return {
+    key: entry.key,
+    userId: entry.userId || null,
+    firebaseUid: entry.firebaseUid || '',
+    isGuest: Boolean(entry.isGuest),
+    isVirtual: Boolean(entry.isVirtual),
+    name: entry.name,
+    displayName: entry.displayName || entry.name,
+    username: entry.username || entry.name,
+    role: entry.role || (entry.isGuest ? 'guest' : 'member'),
+    rank: rankObj,
+    level: Number(rankObj?.power || (entry.isGuest ? 1 : 2)),
+    nameColor: entry.nameColor || '#f8fafc',
+    textColor: entry.textColor || '#e2e8f0',
+    nameBgColor: entry.nameBgColor || '',
+    neonColor: entry.neonColor || '',
+    fontFamily: normalizeProfileFont(entry.fontFamily),
+    fontStyle: entry.fontStyle || 'Normal',
+    fontSize: Math.max(13, Math.min(17, Number(entry.fontSize) || 14)),
+    nameFontSize: Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)),
+    nameStyleMode: entry.nameStyleMode || 'solid',
+    nameGradient: entry.nameGradient || 'gold_royal',
+    avatarUrl: entry.avatarUrl || '',
+    coverUrl: entry.coverUrl || '',
+    avatarFrame: entry.avatarFrame || 'none',
+    nameplateStyle: entry.nameplateStyle || 'default',
+    nameShine: entry.nameShine || 'none',
+    nameAnim: entry.nameAnim || 'none',
+    nameAnimSpeed: entry.nameAnimSpeed || 'normal',
+    profileBgEffect: entry.profileBgEffect || 'none',
+    vipWings: Boolean(entry.vipWings),
+    profileMusic: entry.profileMusic || '',
+    bio: entry.bio || '',
+    statusText: entry.statusText || '',
+    age: entry.age || '',
+    gender: entry.gender || '',
+    country: entry.country || '',
+    allowCalls: entry.allowCalls !== false,
+    allowPm: entry.allowPm !== false,
+    likesCount: Number(entry.likesCount) || 0,
+    ratingAvg: Number(entry.ratingAvg) || 5.0,
+    ratingCount: Number(entry.ratingCount) || 0,
+    isStealth: isStealthEntry(entry),
+    isGhosted: Boolean(entry.isGhosted),
+    isShadowMuted: Boolean(entry.isShadowMuted || guestShadowMutedKeys.has(entry.key)),
+    isFrozen: Boolean(entry.isFrozen || guestFrozenKeys.has(entry.key)),
+    coins: Number(entry.coins) || 0,
+    vipFamily: entry.vipFamily || '',
+    activityPoints: Number(entry.activityPoints) || 0,
+    giftsReceived: Number(entry.giftsReceived) || 0,
+    giftsSent: Number(entry.giftsSent) || 0,
+    roomId: entry.roomId || null,
+    roomName: rm ? rm.name : '',
+    typingInRoom: entry.typingInRoom || '',
+    typingAt: Number(entry.typingAt) || 0,
+    lastSeenMs: Number(entry.lastSeenMs) || Date.now()
+  };
 }
 
-function broadcastGlobalOnlineUsers(io) {
-  io.emit('online_users_global', buildGlobalOnlineUsers());
+function upsertOnlinePresence(authUser, telemetry = {}, roomId = null, extra = {}) {
+  if (!authUser || !authUser.key) return null;
+  const existing = onlinePresenceMap.get(authUser.key) || {};
+  const nextRoomId = roomId !== undefined && roomId !== null ? roomId : (existing.roomId || 'general');
+  const resolvedFuid = String(
+    extra.firebaseUid ||
+    authUser.firebaseUid ||
+    existing.firebaseUid ||
+    (authUser.userId ? db.findUserById(authUser.userId)?.firebase_uid || '' : '')
+  ).trim();
+  const entry = {
+    ...existing,
+    ...authUser,
+    firebaseUid: resolvedFuid,
+    roomId: nextRoomId,
+    ipAddress: telemetry.ip || existing.ipAddress || '',
+    deviceId: telemetry.deviceId || existing.deviceId || '',
+    fingerprint: telemetry.fingerprint || existing.fingerprint || '',
+    userAgent: telemetry.userAgent || existing.userAgent || '',
+    country: telemetry.country || authUser.country || existing.country || '',
+    isShadowMuted: authUser.isGuest ? guestShadowMutedKeys.has(authUser.key) : Boolean(authUser.isShadowMuted),
+    isFrozen: authUser.isGuest ? guestFrozenKeys.has(authUser.key) : Boolean(authUser.isFrozen),
+    lastSeenMs: Date.now(),
+    lastHeartbeat: Date.now(),
+    ...extra
+  };
+  onlinePresenceMap.set(authUser.key, entry);
+  db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+  if (!entry.isGuest && entry.userId) {
+    const row = db.findUserById(entry.userId);
+    if (row) db.syncUserStateDoc(row);
+  }
+  return entry;
 }
 
-function broadcastRoomsList(io) {
-  io.emit('rooms_list', buildRoomsPayload());
+function removeOnlinePresence(targetKey) {
+  const key = String(targetKey || '').trim();
+  if (!key) return;
+  const existing = onlinePresenceMap.get(key);
+  onlinePresenceMap.delete(key);
+  recentRoomPresence.delete(key);
+  db.removeOnlinePresenceDoc(key);
+  if (existing?.roomId) {
+    releaseUserMicsInRoom(key, existing.roomId);
+    pauseQuizBotIfRoomEmpty(existing.roomId);
+  }
 }
 
-function syncUserAcrossSockets(io, userId) {
+function broadcastRoomUsers() {}
+function broadcastGlobalOnlineUsers() {}
+function broadcastRoomsList() {}
+
+function syncUserPresence(userId) {
   const row = db.findUserById(userId);
   if (!row) return;
+  db.syncUserStateDoc(row);
   const mapped = mapUserRow(row);
-  const affectedRooms = new Set();
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.userId === Number(userId)) {
-      Object.assign(entry, {
-        name: mapped.name,
-        displayName: mapped.displayName,
-        username: mapped.username,
-        role: mapped.role,
-        level: mapped.level,
-        nameColor: mapped.nameColor,
-        textColor: mapped.textColor,
-        nameBgColor: mapped.nameBgColor,
-        neonColor: mapped.neonColor,
-        fontFamily: mapped.fontFamily,
-        fontStyle: mapped.fontStyle,
-        fontSize: mapped.fontSize,
-        nameFontSize: mapped.nameFontSize,
-        nameStyleMode: mapped.nameStyleMode,
-        nameGradient: mapped.nameGradient,
-        avatarUrl: mapped.avatarUrl,
-        coverUrl: mapped.coverUrl,
-        avatarFrame: mapped.avatarFrame,
-        ownedFrames: mapped.ownedFrames,
-        ownedFramesMeta: mapped.ownedFramesMeta,
-        nameplateStyle: mapped.nameplateStyle,
-        nameShine: mapped.nameShine,
-        nameAnim: mapped.nameAnim,
-        nameAnimSpeed: mapped.nameAnimSpeed,
-        profileBgEffect: mapped.profileBgEffect,
-        vipWings: mapped.vipWings,
-        profileMusic: mapped.profileMusic,
-        bio: mapped.bio,
-        statusText: mapped.statusText,
-        age: mapped.age,
-        gender: mapped.gender,
-        country: mapped.country,
-        allowCalls: mapped.allowCalls,
-        allowPm: mapped.allowPm,
-        likesCount: mapped.likesCount,
-        ratingAvg: mapped.ratingAvg,
-        ratingCount: mapped.ratingCount,
-        isGhosted: mapped.isGhosted,
-        isShadowMuted: mapped.isShadowMuted,
-        isFrozen: mapped.isFrozen,
-        lastLuckyBoxAt: mapped.lastLuckyBoxAt,
-        invitesCount: mapped.invitesCount,
-        coins: mapped.coins,
-        vipFamily: mapped.vipFamily,
-        isStealth: mapped.isStealth,
-        activityPoints: mapped.activityPoints,
-        quizPoints: mapped.quizPoints,
-        giftsReceived: mapped.giftsReceived,
-        giftsSent: mapped.giftsSent
-      });
-      io.to(sid).emit('session_updated', { user: mapped });
-      if (entry.roomId) affectedRooms.add(entry.roomId);
-    }
+  const existing = onlinePresenceMap.get(mapped.key);
+  if (existing) {
+    Object.assign(existing, mapped, { firebaseUid: row.firebase_uid || existing.firebaseUid || '' });
+    db.syncOnlinePresenceDoc(buildPublicPresenceDoc(existing));
   }
-  for (const rid of affectedRooms) {
-    broadcastRoomUsers(io, rid);
-  }
-  broadcastGlobalOnlineUsers(io);
-  io.emit('persistent_members', buildPersistentMembersList());
 }
 
-function emitNotificationToUser(io, targetKey, notifObj) {
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (targetKey === '*' || entry.key === targetKey) {
-      io.to(sid).emit('new_notification', {
-        ...notifObj,
-        unreadCount: db.getUnreadNotificationCount(entry.key)
-      });
-    }
+function syncUserAcrossSockets(_ioUnused, userId) {
+  syncUserPresence(userId);
+}
+
+function emitNotificationToUser(_ioUnused, targetKey, notifObj) {
+  if (!targetKey || !notifObj) return;
+  if (targetKey !== '*') {
+    db.patchUserStateDoc(targetKey, {
+      lastNotifAt: Date.now(),
+      unreadNotifCount: db.getUnreadNotificationCount(targetKey)
+    });
   }
 }
 
@@ -1441,17 +1506,23 @@ function notifyUserMutedNotification(targetKey, mins) {
     body: `تم كتمك مؤقتاً لمدة: ${durLabel}`,
     category: 'system'
   });
-  emitNotificationToUser(io, targetKey, notif);
+  emitNotificationToUser(null, targetKey, notif);
 }
 
 function emitMuteStateToUser(targetKey, roomId) {
   const active = db.getActiveMute(targetKey, roomId);
   const payload = buildSanitizedMutePayload(active, roomId);
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === targetKey && (!roomId || roomId === '*' || !entry.roomId || entry.roomId === roomId || active?.room_id === '*')) {
-      io.to(sid).emit('mute_state', payload);
-    }
-  }
+  db.patchUserStateDoc(targetKey, { activeMute: payload });
+}
+
+function kickTargetFromPresence(targetKey, { reason = 'تم طردك من الغرفة', banned = false } = {}) {
+  if (!targetKey) return;
+  db.patchUserStateDoc(targetKey, {
+    kickedAt: Date.now(),
+    kickedReason: banned ? 'تم حظرك من الشات' : String(reason || 'تم طردك من الغرفة'),
+    isBanned: Boolean(banned)
+  });
+  removeOnlinePresence(targetKey);
 }
 
 const activeMutedKeysTracker = new Set();
@@ -1520,29 +1591,12 @@ function notifyOwnersModerationEvent({
       body,
       category: 'security_alert'
     });
-    emitNotificationToUser(io, ownerKey, notif);
-  }
-
-  const alertPayload = {
-    actionType,
-    actorName,
-    actorKey,
-    targetName,
-    targetKey,
-    reason: cleanReason,
-    durationMins,
-    roomId,
-    roomName,
-    violatingWord: violatingWord || '',
-    title,
-    body,
-    createdAt: new Date().toISOString()
-  };
-
-  for (const [sid, e] of onlineSockets.entries()) {
-    if (e.role === 'site_owner' || db.isSupremeOwnerEmail(e.email)) {
-      io.to(sid).emit('owner_mod_alert', alertPayload);
-    }
+    emitNotificationToUser(null, ownerKey, notif);
+    db.patchUserStateDoc(ownerKey, {
+      lastModAlertAt: Date.now(),
+      lastModAlertTitle: title,
+      lastModAlertBody: body
+    });
   }
 }
 
@@ -1571,14 +1625,117 @@ function extractYouTubeId(rawInput) {
 }
 
 // ==========================================
-// AUTH ROUTES
+// AUTH ROUTES (LOCAL + FIREBASE AUTH GOOGLE/EMAIL SYNC)
 // ==========================================
+function decodeJwtPayloadUnsafe(jwt) {
+  try {
+    const parts = String(jwt || '').split('.');
+    if (parts.length < 2) return null;
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+app.post('/api/auth/firebase', async (req, res) => {
+  try {
+    const { idToken, firebaseUid, email, displayName, avatarUrl, invitedBy } = req.body || {};
+    const tokenClaims = idToken ? decodeJwtPayloadUnsafe(idToken) : null;
+    const fuid = String(tokenClaims?.user_id || tokenClaims?.sub || firebaseUid || '').trim().slice(0, 128);
+    const cleanEmail = String(tokenClaims?.email || email || '').trim().toLowerCase();
+    const rawName = String(tokenClaims?.name || displayName || cleanEmail.split('@')[0] || 'عضو').trim().slice(0, 24);
+    const pic = String(tokenClaims?.picture || avatarUrl || '').trim().slice(0, 500);
+
+    if (!fuid && !cleanEmail) {
+      return res.status(400).json({ error: 'بيانات مصادقة Firebase غير مكتملة.' });
+    }
+
+    const { ip, deviceId, fingerprint, userAgent, country } = getClientTelemetry(req);
+    let row = (fuid && db.findUserByFirebaseUid(fuid)) || (cleanEmail ? db.findUserByIdentifier(cleanEmail) : null);
+
+    if (!db.isSupremeOwnerEmail(cleanEmail)) {
+      if (Number(db.getSiteSettings().block_vpn) === 1 && isVpnOrProxyRequest(req)) {
+        return res.status(403).json({ error: 'الدخول عبر VPN أو Proxy محظور حالياً.' });
+      }
+      const ban = db.isTargetBanned({
+        targetKey: row ? `user:${row.id}` : '',
+        email: cleanEmail || row?.email || '',
+        ipAddress: ip,
+        deviceId,
+        fingerprint
+      });
+      if (ban || (row && (row.isBanned === true || row.is_banned === 1))) {
+        return res.status(403).json({ error: 'تم حظرك من الشات', banned: true });
+      }
+    }
+
+    if (!row) {
+      if (!cleanEmail) {
+        return res.status(400).json({ error: 'البريد الإلكتروني مطلوب لإنشاء الحساب عبر Firebase.' });
+      }
+      const baseUsername = rawName.length >= 2 ? rawName : `عضو_${Math.floor(100 + Math.random() * 900)}`;
+      let candidateName = baseUsername;
+      if (db.findUserByIdentifier(candidateName)) {
+        candidateName = `${baseUsername.slice(0, 18)}_${Math.floor(100 + Math.random() * 900)}`;
+      }
+      const randomPassHash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
+      const regRes = db.registerUser({
+        username: candidateName,
+        email: cleanEmail,
+        passwordHash: randomPassHash,
+        ipAddress: ip,
+        deviceId,
+        fingerprint,
+        userAgent,
+        country,
+        firebaseUid: fuid
+      });
+      if (regRes.error) return res.status(409).json({ error: regRes.error });
+      row = regRes.user;
+      if (pic && row?.id) {
+        db.updateUserCustomization(row.id, { avatarUrl: pic });
+      }
+      if (invitedBy) {
+        const refRes = db.recordReferralInvite(invitedBy, row.id);
+        if (refRes) {
+          db.addNotification({
+            targetKey: `user:${refRes.inviter.id}`,
+            title: '🤝 مكافأة دعوة صديق!',
+            body: `انضم "${candidateName}" عبر رابط دعوتك وحصلت على +${refRes.bonus} روبي!`,
+            category: 'system'
+          });
+          syncUserPresence(refRes.inviter.id);
+        }
+      }
+    } else {
+      if (fuid) db.linkUserFirebaseUid(row.id, fuid);
+      if (db.isSupremeOwnerEmail(row.email)) db.ensureSupremeOwnerAccount(row.id);
+      db.updateUserIp(row.id, ip, deviceId, { fingerprint, userAgent, country });
+    }
+
+    const freshRow = db.findUserById(row.id);
+    db.syncUserStateDoc(freshRow);
+    const mapped = mapUserRow(freshRow);
+    const token = issuePersistentSessionToken({
+      user: mapped,
+      isGuest: false,
+      telemetry: { ip, deviceId, fingerprint, userAgent }
+    });
+    await db.flushWrites();
+    return res.json({ token, user: mapped });
+  } catch (err) {
+    console.error('Firebase Auth error:', err);
+    return res.status(500).json({ error: 'تعذر إتمام المصادقة عبر Firebase.' });
+  }
+});
+
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, email, password, invitedBy } = req.body || {};
+    const { username, email, password, invitedBy, firebaseUid } = req.body || {};
     const cleanUser = String(username || '').trim();
     const cleanEmail = String(email || '').trim().toLowerCase();
     const cleanPass = String(password || '');
+    const cleanFuid = String(firebaseUid || req.headers['x-firebase-uid'] || '').trim().slice(0, 128);
 
     if (cleanUser.length < 2 || cleanUser.length > 24) {
       return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون بين 2 و 24 حرفاً.' });
@@ -1613,7 +1770,8 @@ app.post('/api/register', async (req, res) => {
       deviceId,
       fingerprint,
       userAgent,
-      country
+      country,
+      firebaseUid: cleanFuid
     });
     if (result.error) return res.status(409).json({ error: result.error });
 
@@ -1626,12 +1784,13 @@ app.post('/api/register', async (req, res) => {
           body: `انضم "${cleanUser}" عبر رابط دعوتك وحصلت على +${refRes.bonus} عملة!`,
           category: 'system'
         });
-        emitNotificationToUser(io, `user:${refRes.inviter.id}`, notif);
-        syncUserAcrossSockets(io, refRes.inviter.id);
+        emitNotificationToUser(null, `user:${refRes.inviter.id}`, notif);
+        syncUserPresence(refRes.inviter.id);
       }
     }
 
     const finalUser = db.findUserById(result.user.id);
+    db.syncUserStateDoc(finalUser);
     const mapped = mapUserRow(finalUser);
     const token = issuePersistentSessionToken({
       user: mapped,
@@ -1639,7 +1798,6 @@ app.post('/api/register', async (req, res) => {
       telemetry: { ip, deviceId, fingerprint, userAgent }
     });
     await db.flushWrites();
-    io.emit('persistent_members', buildPersistentMembersList());
     return res.json({ token, user: mapped });
   } catch (err) {
     console.error('Register error:', err);
@@ -1649,9 +1807,10 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   try {
-    const { identifier, password } = req.body || {};
+    const { identifier, password, firebaseUid } = req.body || {};
     const cleanId = String(identifier || '').trim();
     const cleanPass = String(password || '');
+    const cleanFuid = String(firebaseUid || req.headers['x-firebase-uid'] || '').trim().slice(0, 128);
     if (!cleanId || !cleanPass) {
       return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني وكلمة المرور.' });
     }
@@ -1677,7 +1836,7 @@ app.post('/api/login', async (req, res) => {
         deviceId,
         fingerprint
       });
-      if (ban) {
+      if (ban || row.isBanned === true || row.is_banned === 1) {
         return res.status(403).json({
           error: 'تم حظرك من الشات',
           banned: true
@@ -1685,8 +1844,10 @@ app.post('/api/login', async (req, res) => {
       }
     }
 
+    if (cleanFuid) db.linkUserFirebaseUid(row.id, cleanFuid);
     db.updateUserIp(row.id, ip, deviceId, { fingerprint, userAgent, country });
     const freshRow = db.findUserById(row.id);
+    db.syncUserStateDoc(freshRow);
     const mapped = mapUserRow(freshRow);
     const token = issuePersistentSessionToken({
       user: mapped,
@@ -1706,6 +1867,7 @@ app.post('/api/guest', async (req, res) => {
   const name = rawName.length >= 2 ? rawName : `زائر_${Math.floor(100 + Math.random() * 900)}`;
   const { ip, deviceId, fingerprint, userAgent, country } = getClientTelemetry(req);
   const requestedGuestKey = String(req.body?.guestKey || '').trim();
+  const cleanFuid = String(req.body?.firebaseUid || req.headers['x-firebase-uid'] || '').trim().slice(0, 128);
   const isValidExistingGuestKey = /^guest:[a-f0-9]{8,32}$/i.test(requestedGuestKey);
   const key = isValidExistingGuestKey ? requestedGuestKey : `guest:${crypto.randomBytes(6).toString('hex')}`;
   const ban = db.isTargetBanned({ targetKey: key, ipAddress: ip, deviceId, fingerprint });
@@ -1716,7 +1878,7 @@ app.post('/api/guest', async (req, res) => {
     });
   }
 
-  const guestRow = db.upsertGuest({ key, name, ipAddress: ip, deviceId, fingerprint, userAgent, country });
+  const guestRow = db.upsertGuest({ key, name, ipAddress: ip, deviceId, fingerprint, userAgent, country, firebaseUid: cleanFuid });
   const user = mapGuestRow(guestRow, key, name);
   const token = issuePersistentSessionToken({
     isGuest: true,
@@ -1725,7 +1887,6 @@ app.post('/api/guest', async (req, res) => {
     telemetry: { ip, deviceId, fingerprint, userAgent }
   });
   await db.flushWrites();
-  io.emit('persistent_members', buildPersistentMembersList());
   return res.json({ token, user });
 });
 
@@ -1737,6 +1898,10 @@ app.get('/api/me', async (req, res) => {
       error: 'تم حظرك من الشات',
       banned: true
     });
+  }
+  const cleanFuid = String(req.headers['x-firebase-uid'] || req.query?.firebaseUid || '').trim().slice(0, 128);
+  if (cleanFuid && !u.isGuest && u.userId) {
+    db.linkUserFirebaseUid(u.userId, cleanFuid);
   }
   let nextToken = req._authRawToken || '';
   const payload = req._authTokenPayload;
@@ -1772,8 +1937,12 @@ app.post('/api/logout', async (req, res) => {
   const payload = verifyToken(token);
   if (payload?.sid) {
     db.revokeUserSession(payload.sid);
-    await db.flushWrites();
   }
+  const uKey = payload?.isGuest ? payload?.key : (payload?.userId ? `user:${payload.userId}` : '');
+  if (uKey) {
+    removeOnlinePresence(uKey);
+  }
+  await db.flushWrites();
   res.json({ ok: true });
 });
 
@@ -1789,7 +1958,20 @@ app.get('/api/emojis', (_req, res) => {
 });
 
 app.get('/api/settings/public', (_req, res) => {
-  res.json({ settings: db.getPublicSiteSettings() });
+  const webApiKey = String(process.env.FIREBASE_WEB_API_KEY || process.env.FIREBASE_API_KEY || '').trim();
+  const firebaseWebConfig = webApiKey
+    ? {
+        apiKey: webApiKey,
+        authDomain: String(process.env.FIREBASE_AUTH_DOMAIN || `${db.FIREBASE_PROJECT_ID}.firebaseapp.com`),
+        projectId: db.FIREBASE_PROJECT_ID,
+        firestoreDatabaseId: db.FIRESTORE_DATABASE_ID,
+        appId: String(process.env.FIREBASE_WEB_APP_ID || '')
+      }
+    : {
+        projectId: db.FIREBASE_PROJECT_ID,
+        firestoreDatabaseId: db.FIRESTORE_DATABASE_ID
+      };
+  res.json({ settings: db.getPublicSiteSettings(), firebaseWebConfig });
 });
 
 // ==========================================
@@ -2347,7 +2529,7 @@ app.get('/api/shop/items', (_req, res) => {
     rankBadgeStyles: RANK_BADGE_STYLES,
     musicPresets: PROFILE_MUSIC_PRESETS,
     radioStations: RADIO_STATIONS,
-    gifts: db.GIFT_CATALOG
+    gifts: db.getGiftsCatalog()
   });
 });
 
@@ -2364,10 +2546,7 @@ app.post('/api/shop/buy', requireRegistered, async (req, res) => {
     if (!targetRank) return res.status(400).json({ error: 'هذه الرتبة غير متوفرة للشراء.' });
     const result = db.purchaseRankWithRuby(req.authUser.userId, targetRank.key, targetRank.price);
     if (result?.error) return res.status(400).json({ error: result.error });
-    syncUserAcrossSockets(io, req.authUser.userId);
-    broadcastGlobalOnlineUsers(io);
-    for (const r of db.getAllRooms()) broadcastRoomUsers(io, r.id);
-    io.emit('persistent_members', buildPersistentMembersList());
+    syncUserPresence(req.authUser.userId);
     await db.flushWrites();
     return res.json({ user: mapUserRow(result.user), purchased: true, rank: targetRank });
   }
@@ -2387,8 +2566,7 @@ app.post('/api/shop/buy', requireRegistered, async (req, res) => {
     found.durationType || 'permanent'
   );
   if (result?.error) return res.status(400).json({ error: result.error });
-  syncUserAcrossSockets(io, req.authUser.userId);
-  io.emit('persistent_members', buildPersistentMembersList());
+  syncUserPresence(req.authUser.userId);
   await db.flushWrites();
   return res.json({ user: mapUserRow(result.user), purchased: !result.alreadyOwned, frame: found });
 });
@@ -2414,8 +2592,7 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
       return res.status(403).json({ error: 'المتجر مقفل: يجب شراء الإطار بالروبي أولاً (أو انتهت مدة صلاحيته).' });
     }
     const updated = db.updateUserCustomization(req.authUser.userId, { avatarFrame: found.id });
-    syncUserAcrossSockets(io, req.authUser.userId);
-    io.emit('persistent_members', buildPersistentMembersList());
+    syncUserPresence(req.authUser.userId);
     await db.flushWrites();
     return res.json({ user: mapUserRow(updated) });
   }
@@ -2456,7 +2633,7 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
   }
 
   const updated = db.updateUserCustomization(req.authUser.userId, patch);
-  syncUserAcrossSockets(io, req.authUser.userId);
+  syncUserPresence(req.authUser.userId);
   await db.flushWrites();
   return res.json({ user: mapUserRow(updated) });
 });
@@ -2465,7 +2642,7 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
 // GIFTS SYSTEM
 // ==========================================
 app.get('/api/gifts/catalog', (_req, res) => {
-  res.json({ gifts: db.GIFT_CATALOG });
+  res.json({ gifts: db.getGiftsCatalog() });
 });
 
 app.get('/api/gifts/user/:key', (req, res) => {
@@ -2508,13 +2685,13 @@ app.post('/api/gifts/send', requireRegistered, async (req, res) => {
       return res.status(400).json({ error: result.error });
     }
 
-    syncUserAcrossSockets(io, req.authUser.userId);
+    syncUserPresence(req.authUser.userId);
     if (result.receiver) {
-      syncUserAcrossSockets(io, result.receiver.id);
+      syncUserPresence(result.receiver.id);
     }
 
     if (roomId && db.getRoomById(roomId)) {
-      const msg = db.addMessage({
+      db.addMessage({
         roomId,
         senderKey: req.authUser.key,
         senderName: req.authUser.name,
@@ -2535,9 +2712,6 @@ app.post('/api/gifts/send', requireRegistered, async (req, res) => {
         msgType: 'text',
         content: `🎁 تم إرسال هدية (${result.gift.emoji} ${result.gift.name}) من "${req.authUser.name}" إلى "${resolvedToName}"!`
       });
-      io.to(`room:${roomId}`).emit('new_message', msg);
-      io.to(`room:${roomId}`).emit('gift_celebration', result.tx);
-      broadcastRoomsList(io);
     }
 
     const notif = db.addNotification({
@@ -2546,13 +2720,13 @@ app.post('/api/gifts/send', requireRegistered, async (req, res) => {
       body: `أرسل لك "${req.authUser.name}" هدية (${result.gift.name}) +${result.gift.reward} عملة!`,
       category: 'gift'
     });
-    emitNotificationToUser(io, toKey, notif);
-
-    for (const [sid, entry] of onlineSockets.entries()) {
-      if (entry.key === toKey) {
-        io.to(sid).emit('gift_received', { tx: result.tx, gift: result.gift });
-      }
-    }
+    emitNotificationToUser(null, toKey, notif);
+    db.patchUserStateDoc(toKey, {
+      lastGiftAt: Date.now(),
+      lastGiftTx: result.tx,
+      lastGiftEmoji: result.gift.emoji,
+      lastGiftName: result.gift.name
+    });
 
     await db.flushWrites();
     return res.json({
@@ -2594,8 +2768,7 @@ app.post('/api/news', requireRegistered, async (req, res) => {
     body: result.news.content.slice(0, 140),
     category: 'news'
   });
-  io.emit('news_added', result.news);
-  emitNotificationToUser(io, '*', notif);
+  emitNotificationToUser(null, '*', notif);
   await db.flushWrites();
   return res.json({ news: result.news });
 });
@@ -2610,7 +2783,6 @@ app.delete('/api/news/:id', requireRegistered, async (req, res) => {
   }
   const ok = db.deleteNewsPost(req.params.id);
   if (!ok) return res.status(404).json({ error: 'الخبر غير موجود.' });
-  io.emit('news_deleted', { id: Number(req.params.id) });
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -2620,9 +2792,12 @@ app.delete('/api/news/:id', requireRegistered, async (req, res) => {
 // ==========================================
 app.get('/api/social/state', requireAuth, (req, res) => {
   const key = req.authUser.key;
+  const pms = db.getPrivateMessagesForUser(key);
+  const unreadPmCount = pms.filter((m) => m.to_key === key && Number(m.is_read) === 0).length;
   return res.json({
     friends: db.getFriendsForUser(key),
-    privateMessages: db.getPrivateMessagesForUser(key),
+    privateMessages: pms,
+    unreadPmCount,
     wallPosts: db.getWallPosts(),
     notifications: db.getNotificationsForUser(key),
     unreadNotifCount: db.getUnreadNotificationCount(key),
@@ -2634,6 +2809,7 @@ app.get('/api/social/state', requireAuth, (req, res) => {
 
 app.post('/api/notifications/read', requireAuth, async (req, res) => {
   db.markNotificationsRead(req.authUser.key);
+  db.patchUserStateDoc(req.authUser.key, { unreadNotifCount: 0 });
   await db.flushWrites();
   return res.json({ ok: true, unreadNotifCount: 0 });
 });
@@ -2656,12 +2832,7 @@ app.post('/api/friends/request', requireRegistered, async (req, res) => {
     body: `أرسل لك "${req.authUser.name}" طلب صداقة.`,
     category: 'friend'
   });
-  emitNotificationToUser(io, toKey, notif);
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === toKey || entry.key === req.authUser.key) {
-      io.to(sid).emit('social_updated');
-    }
-  }
+  emitNotificationToUser(null, toKey, notif);
   await db.flushWrites();
   return res.json(result);
 });
@@ -2677,12 +2848,7 @@ app.post('/api/friends/respond', requireRegistered, async (req, res) => {
       body: `قبل "${req.authUser.name}" طلب الصداقة!`,
       category: 'friend'
     });
-    emitNotificationToUser(io, friendKey, notif);
-  }
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === friendKey || entry.key === req.authUser.key) {
-      io.to(sid).emit('social_updated');
-    }
+    emitNotificationToUser(null, friendKey, notif);
   }
   await db.flushWrites();
   return res.json({ ok: true });
@@ -2730,17 +2896,16 @@ app.post('/api/wall', requireRegistered, async (req, res) => {
   });
   db.incrementActivityPoints({ userId: req.authUser.userId, roomId: null, userDelta: 3, roomDelta: 0 });
   const promo = db.checkAndApplyAutoPromotion(req.authUser.userId);
-  syncUserAcrossSockets(io, req.authUser.userId);
+  syncUserPresence(req.authUser.userId);
   if (promo?.promoted) {
     const notif = db.addNotification({
       targetKey: req.authUser.key,
       title: `🎖️ ترقية تلقائية إلى ${promo.rank?.label || promo.newRole}!`,
-      body: `مبارك! وصلت نقاط تفاعلك إلى الحد المطلوب وتمت ترقيتك تلقائياً إلى رتبة "${promo.rank?.label || promo.newRole}".`,
+      body: `مبارك! وصلت نقاط تفاعلك إلى الحد المطلوب وتمت ترقيتك تلقائياً إلى "${promo.rank?.label || promo.newRole}".`,
       category: 'system'
     });
-    emitNotificationToUser(io, req.authUser.key, notif);
+    emitNotificationToUser(null, req.authUser.key, notif);
   }
-  io.emit('wall_updated', { post });
   await db.flushWrites();
   return res.json({ post });
 });
@@ -2748,7 +2913,6 @@ app.post('/api/wall', requireRegistered, async (req, res) => {
 app.post('/api/wall/:id/like', requireAuth, async (req, res) => {
   const post = db.likeWallPost(req.params.id);
   if (!post) return res.status(404).json({ error: 'المنشور غير موجود.' });
-  io.emit('wall_updated', { post });
   await db.flushWrites();
   return res.json({ post });
 });
@@ -2757,7 +2921,6 @@ app.post('/api/wall/:id/react', requireAuth, async (req, res) => {
   const type = String(req.body?.type || 'like');
   const post = db.reactWallPost(req.params.id, type);
   if (!post) return res.status(404).json({ error: 'المنشور غير موجود.' });
-  io.emit('wall_updated', { post });
   await db.flushWrites();
   return res.json({ post });
 });
@@ -2786,9 +2949,8 @@ app.post('/api/wall/:id/comment', requireAuth, async (req, res) => {
       body: content.slice(0, 100),
       category: 'wall'
     });
-    emitNotificationToUser(io, post.author_key, notif);
+    emitNotificationToUser(null, post.author_key, notif);
   }
-  io.emit('wall_updated', { post });
   await db.flushWrites();
   return res.json({ post });
 });
@@ -2805,7 +2967,6 @@ app.delete('/api/wall/:id', requireAuth, async (req, res) => {
     canDo(req.authUser.role, 'access_panel');
   if (!canDelete) return res.status(403).json({ error: 'لا تملك صلاحية حذف هذا المنشور.' });
   db.deleteWallPost(req.params.id);
-  io.emit('wall_deleted', { id: Number(req.params.id) });
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -2822,11 +2983,6 @@ app.post('/api/reports', requireAuth, async (req, res) => {
     reason,
     roomId
   });
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.role === 'site_owner' || canDo(entry.role, 'access_panel')) {
-      io.to(sid).emit('new_report', report);
-    }
-  }
   await db.flushWrites();
   return res.json({ report });
 });
@@ -2834,7 +2990,7 @@ app.post('/api/reports', requireAuth, async (req, res) => {
 app.get('/api/leaderboards', (_req, res) => {
   const all = db.getAllRegisteredUsers();
   const onlineKeys = new Set();
-  for (const e of onlineSockets.values()) {
+  for (const e of onlinePresenceMap.values()) {
     if (!isStealthEntry(e)) onlineKeys.add(e.key);
   }
   const adminActionCounts = new Map();
@@ -2931,22 +3087,20 @@ app.get('/api/rooms/:id/messages', requireAuth, (req, res) => {
   return res.json({ roomId, messages });
 });
 
-// ==========================================
-// ADMIN PANEL / CMS API
-// ==========================================
-app.get('/api/admin/overview', requirePanelAccess, (req, res) => {
-  const isOwner = req.authUser.role === 'site_owner';
-  const canAccessBank = isOwner || req.authUser.role === 'co_owner' || db.getRankPower(req.authUser.role) >= 14;
+function buildAdminOverviewPayload(reqUser) {
+  const isOwner = reqUser.role === 'site_owner';
+  const canAccessBank = isOwner || reqUser.role === 'co_owner' || db.getRankPower(reqUser.role) >= 14;
   const onlineCount = buildGlobalOnlineUsers().length;
   const users = db.getAllRegisteredUsers().map((u) => ({
     ...u,
     displayName: db.getEffectiveName(u),
     rank: db.getRankByKey(u.role),
+    isBanned: Boolean(u.isBanned || u.is_banned === 1),
     isSupremeOwner: db.isSupremeOwnerEmail(u.email)
   }));
   const allBans = db.getAllBans();
   const allMutes = db.getAllActiveMutes();
-  res.json({
+  return {
     stats: {
       onlineCount,
       registeredCount: users.length,
@@ -2956,10 +3110,10 @@ app.get('/api/admin/overview', requirePanelAccess, (req, res) => {
       mutesCount: allMutes.length,
       reportsCount: db.getReports().length,
       newsCount: db.getAllNews().length,
-      myMaxAssignablePower: isOwner ? 15 : db.getMaxAssignablePower(req.authUser.role),
+      myMaxAssignablePower: isOwner ? 15 : db.getMaxAssignablePower(reqUser.role),
       canAccessBank
     },
-    settings: db.getPublicSiteSettings(),
+    settings: isOwner ? db.getSiteSettings() : db.getPublicSiteSettings(),
     ranks: db.getAllRanks(),
     rooms: buildRoomsPayload(),
     users,
@@ -2968,15 +3122,68 @@ app.get('/api/admin/overview', requirePanelAccess, (req, res) => {
     reports: db.getReports(),
     emojis: db.getAllCustomEmojis(),
     news: db.getAllNews(),
+    giftsCatalog: db.getGiftsCatalog(),
     customFrames: db.getAllCustomFrames(),
     framesCatalog: getEffectiveFramesCatalog(),
-    adminLogs: db.getAdminLogs(120)
-  });
+    adminLogs: db.getAdminLogs(120),
+    pmLinkAlerts: isOwner ? db.getPmLinkAlerts(60) : []
+  };
+}
+
+app.get('/api/admin/overview', requirePanelAccess, (req, res) => {
+  return res.json(buildAdminOverviewPayload(req.authUser));
+});
+
+app.get('/api/admin/bootstrap', requirePanelAccess, (req, res) => {
+  return res.json(buildAdminOverviewPayload(req.authUser));
 });
 
 app.get('/api/admin/logs', requirePanelAccess, (req, res) => {
   const limit = Math.max(10, Math.min(300, Number(req.query?.limit) || 120));
   return res.json({ logs: db.getAdminLogs(limit) });
+});
+
+app.put('/api/admin/gifts', requireOwner, async (req, res) => {
+  const list = Array.isArray(req.body?.gifts) ? req.body.gifts : [];
+  if (!list.length) return res.status(400).json({ error: 'قائمة الهدايا لا يمكن أن تكون فارغة.' });
+  const updated = db.updateGiftsCatalog(list);
+  db.addAdminLog({
+    actorKey: req.authUser.key,
+    actorName: req.authUser.name,
+    actorRole: req.authUser.role,
+    action: 'تحديث قائمة الهدايا',
+    details: `${updated.length} هدية`
+  });
+  await db.flushWrites();
+  return res.json({ ok: true, gifts: updated });
+});
+
+app.delete('/api/admin/reports/:id', requirePanelAccess, async (req, res) => {
+  const ok = db.deleteReportById(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'البلاغ غير موجود.' });
+  db.addAdminLog({
+    actorKey: req.authUser.key,
+    actorName: req.authUser.name,
+    actorRole: req.authUser.role,
+    action: 'إغلاق وحذف بلاغ',
+    targetKey: String(req.params.id)
+  });
+  await db.flushWrites();
+  return res.json({ ok: true, reports: db.getReports() });
+});
+
+app.post('/api/admin/reports/:id/resolve', requirePanelAccess, async (req, res) => {
+  const ok = db.deleteReportById(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'البلاغ غير موجود.' });
+  db.addAdminLog({
+    actorKey: req.authUser.key,
+    actorName: req.authUser.name,
+    actorRole: req.authUser.role,
+    action: 'معالجة بلاغ',
+    targetKey: String(req.params.id)
+  });
+  await db.flushWrites();
+  return res.json({ ok: true, reports: db.getReports() });
 });
 
 app.get('/api/owner/bank/search', requireBankAccess, (req, res) => {
@@ -3004,6 +3211,7 @@ app.get('/api/owner/bank/search', requireBankAccess, (req, res) => {
       rank: db.getRankByKey(u.role),
       coins: Number(u.coins) || 0,
       activityPoints: Number(u.activity_points) || 0,
+      isBanned: Boolean(u.isBanned || u.is_banned === 1),
       isSupremeOwner: db.isSupremeOwnerEmail(u.email)
     }));
   return res.json({ users: list });
@@ -3028,8 +3236,7 @@ app.post('/api/owner/bank/adjust', requireBankAccess, async (req, res) => {
   if (aDelta > 0) {
     promo = db.checkAndApplyAutoPromotion(uid);
   }
-  syncUserAcrossSockets(io, uid);
-  io.emit('persistent_members', buildPersistentMembersList());
+  syncUserPresence(uid);
 
   const finalUser = promo?.user || updated;
   const targetDisplay = db.getEffectiveName(finalUser);
@@ -3051,7 +3258,7 @@ app.post('/api/owner/bank/adjust', requireBankAccess, async (req, res) => {
       body: `وصل رصيد تفاعلك إلى الحد المطلوب وتمت ترقيتك إلى "${promo.rank?.label || promo.newRole}"!`,
       category: 'system'
     });
-    emitNotificationToUser(io, `user:${uid}`, notif);
+    emitNotificationToUser(null, `user:${uid}`, notif);
   }
 
   await db.flushWrites();
@@ -3081,7 +3288,6 @@ app.put('/api/admin/settings', requirePanelAccess, async (req, res) => {
   }
   db.updateSiteSettings(body);
   const pubSettings = db.getPublicSiteSettings();
-  io.emit('site_settings_updated', pubSettings);
   await db.flushWrites();
   return res.json({ settings: pubSettings });
 });
@@ -3089,7 +3295,6 @@ app.put('/api/admin/settings', requirePanelAccess, async (req, res) => {
 app.post('/api/admin/ranks', requireOwner, async (req, res) => {
   const result = db.createRank(req.body || {});
   if (result.error) return res.status(400).json({ error: result.error });
-  io.emit('ranks_updated', db.getAllRanks());
   await db.flushWrites();
   return res.json({ rank: result.rank });
 });
@@ -3097,10 +3302,9 @@ app.post('/api/admin/ranks', requireOwner, async (req, res) => {
 app.put('/api/admin/ranks/:key', requireOwner, async (req, res) => {
   const result = db.updateRank(req.params.key, req.body || {});
   if (result.error) return res.status(400).json({ error: result.error });
-  io.emit('ranks_updated', db.getAllRanks());
-  for (const entry of onlineSockets.values()) {
+  for (const entry of onlinePresenceMap.values()) {
     if (entry.role === req.params.key && entry.userId) {
-      syncUserAcrossSockets(io, entry.userId);
+      syncUserPresence(entry.userId);
     }
   }
   await db.flushWrites();
@@ -3110,9 +3314,8 @@ app.put('/api/admin/ranks/:key', requireOwner, async (req, res) => {
 app.delete('/api/admin/ranks/:key', requireOwner, async (req, res) => {
   const result = db.deleteRank(req.params.key);
   if (result.error) return res.status(400).json({ error: result.error });
-  io.emit('ranks_updated', db.getAllRanks());
   for (const uid of result.affectedUserIds || []) {
-    syncUserAcrossSockets(io, uid);
+    syncUserPresence(uid);
   }
   await db.flushWrites();
   return res.json({ ok: true });
@@ -3125,14 +3328,12 @@ app.post('/api/admin/emojis', requirePanelAccess, async (req, res) => {
     createdBy: req.authUser.name
   });
   if (result.error) return res.status(400).json({ error: result.error });
-  io.emit('emojis_updated', db.getAllCustomEmojis());
   await db.flushWrites();
   return res.json({ emoji: result.emoji });
 });
 
 app.delete('/api/admin/emojis/:id', requirePanelAccess, async (req, res) => {
   db.deleteCustomEmoji(req.params.id);
-  io.emit('emojis_updated', db.getAllCustomEmojis());
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -3148,7 +3349,6 @@ app.post('/api/admin/store/frames', requireOwner, async (req, res) => {
   });
   if (result.error) return res.status(400).json({ error: result.error });
   const catalog = getEffectiveFramesCatalog();
-  io.emit('store_catalog_updated', { frames: catalog });
   await db.flushWrites();
   return res.json({ frame: result.frame, framesCatalog: catalog });
 });
@@ -3156,10 +3356,9 @@ app.post('/api/admin/store/frames', requireOwner, async (req, res) => {
 app.delete('/api/admin/store/frames/:id', requireOwner, async (req, res) => {
   const resDel = db.deleteCustomFrame(req.params.id);
   for (const uid of resDel.affectedUserIds || []) {
-    syncUserAcrossSockets(io, uid);
+    syncUserPresence(uid);
   }
   const catalog = getEffectiveFramesCatalog();
-  io.emit('store_catalog_updated', { frames: catalog });
   await db.flushWrites();
   return res.json({ ok: true, framesCatalog: catalog });
 });
@@ -3174,14 +3373,14 @@ app.post('/api/admin/store/grant', requireOwner, async (req, res) => {
     grantedBy: req.authUser.name
   });
   if (grantRes?.error) return res.status(400).json({ error: grantRes.error });
-  syncUserAcrossSockets(io, grantRes.user.id);
+  syncUserPresence(grantRes.user.id);
   const notif = db.addNotification({
     targetKey: `user:${grantRes.user.id}`,
     title: '🎁 هدية إطار من المالك!',
     body: `منحك المالك "${req.authUser.name}" إطار "${found.label}" (${chosenDuration === 'monthly' ? 'لمدة 30 يوماً' : 'دائم'})!`,
     category: 'gift'
   });
-  emitNotificationToUser(io, `user:${grantRes.user.id}`, notif);
+  emitNotificationToUser(null, `user:${grantRes.user.id}`, notif);
   await db.flushWrites();
   return res.json({ ok: true, user: mapUserRow(grantRes.user) });
 });
@@ -3225,7 +3424,6 @@ app.post('/api/admin/rooms', requirePanelAccess, async (req, res) => {
     ownerUserId,
     createdBy: req.authUser.name
   });
-  broadcastRoomsList(io);
   await db.flushWrites();
   return res.json({ room: db.sanitizeRoomForPublic(room) });
 });
@@ -3237,8 +3435,6 @@ app.put('/api/admin/rooms/:id', requireRegistered, async (req, res) => {
     return res.status(403).json({ error: 'لا تملك صلاحية تعديل هذه الغرفة.' });
   }
   const updated = db.updateRoom(rm.id, req.body || {});
-  io.to(`room:${rm.id}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
-  broadcastRoomsList(io);
   await db.flushWrites();
   return res.json({ room: db.sanitizeRoomForPublic(updated) });
 });
@@ -3252,14 +3448,14 @@ app.delete('/api/admin/rooms/:id', requirePanelAccess, async (req, res) => {
   }
   const rm = db.getRoomById(req.params.id);
   if (!rm) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-  for (const [sid, entry] of onlineSockets.entries()) {
+  for (const entry of onlinePresenceMap.values()) {
     if (entry.roomId === rm.id) {
-      const sock = io.sockets.sockets.get(sid);
-      if (sock) moveSocketToRoom(sock, 'general', true);
+      entry.roomId = 'general';
+      db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+      db.patchUserStateDoc(entry.key, { forceRoomId: 'general', forceRoomAt: Date.now() });
     }
   }
   db.deleteRoom(rm.id);
-  broadcastRoomsList(io);
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -3270,7 +3466,6 @@ app.post('/api/admin/rooms/:id/staff', requirePanelAccess, async (req, res) => {
   }
   const staff = db.addRoomStaff(req.params.id, req.body?.userId, req.body?.staffRole, req.authUser.name);
   if (!staff) return res.status(400).json({ error: 'تعذر إضافة مشرف الغرفة.' });
-  broadcastRoomsList(io);
   await db.flushWrites();
   return res.json({ staff });
 });
@@ -3280,7 +3475,6 @@ app.delete('/api/admin/rooms/:id/staff/:userId', requirePanelAccess, async (req,
     return res.status(403).json({ error: 'صلاحية غير كافية.' });
   }
   const staff = db.removeRoomStaff(req.params.id, req.params.userId);
-  broadcastRoomsList(io);
   await db.flushWrites();
   return res.json({ staff });
 });
@@ -3308,8 +3502,8 @@ app.post('/api/admin/users', requirePanelAccess, async (req, res) => {
     role: targetRole
   });
   if (result.error) return res.status(400).json({ error: result.error });
+  db.syncUserStateDoc(result.user);
   await db.flushWrites();
-  io.emit('persistent_members', buildPersistentMembersList());
   return res.json({ user: mapUserRow(result.user) });
 });
 
@@ -3319,14 +3513,19 @@ app.put('/api/admin/users/:id', requirePanelAccess, async (req, res) => {
   const myPower = db.getRankPower(req.authUser.role);
   const targetCurPower = db.getRankPower(target.role);
 
-  if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(req.authUser.email)) {
-    return res.status(403).json({ error: 'حساب صاحب الموقع محمي ولا يمكن تعديله.' });
+  const { displayName, username, email, password, role, isBanned, coins } = req.body || {};
+  if (db.isSupremeOwnerEmail(target.email)) {
+    if (!db.isSupremeOwnerEmail(req.authUser.email)) {
+      return res.status(403).json({ error: 'حساب صاحب الموقع محمي ولا يمكن تعديله.' });
+    }
+    if (isBanned === true || (role && role !== 'site_owner')) {
+      return res.status(403).json({ error: 'حساب صاحب الموقع محمي ولا يمكن حظره أو تخفيض رتبته.' });
+    }
   }
   if (req.authUser.role !== 'site_owner' && targetCurPower >= myPower && target.id !== req.authUser.userId) {
     return res.status(403).json({ error: 'لا يمكنك تعديل عضو مساوٍ لك أو أعلى منك في القوة.' });
   }
 
-  const { displayName, username, email, password, role } = req.body || {};
   if (role && role !== target.role) {
     if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'set_rank')) {
       return res.status(403).json({ error: 'لا تملك صلاحية تعديل الرتب.' });
@@ -3347,9 +3546,38 @@ app.put('/api/admin/users/:id', requirePanelAccess, async (req, res) => {
     role
   });
   if (result.error) return res.status(400).json({ error: result.error });
-  syncUserAcrossSockets(io, target.id);
+  if (coins !== undefined && Number.isFinite(Number(coins))) {
+    if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'give_coins')) {
+      return res.status(403).json({ error: 'لا تملك صلاحية تعديل رصيد الروبي.' });
+    }
+    const nextCoins = Math.max(0, Math.min(100000000, Math.floor(Number(coins))));
+    const curCoins = Number(result.user.coins) || 0;
+    if (nextCoins !== curCoins) {
+      db.adjustUserCoins(target.id, nextCoins - curCoins);
+    }
+  }
+  if (typeof isBanned === 'boolean' && !db.isSupremeOwnerEmail(target.email)) {
+    const tKey = `user:${target.id}`;
+    if (isBanned) {
+      db.banTarget({
+        targetKey: tKey,
+        targetName: db.getEffectiveName(result.user),
+        email: result.user.email,
+        banType: 'ban',
+        reason: 'تحديث حالة الحظر من لوحة التحكم',
+        bannedBy: req.authUser.name,
+        bannedByKey: req.authUser.key
+      });
+      kickTargetFromPresence(tKey, { reason: 'تم حظرك من الشات', banned: true });
+    } else {
+      db.unbanTarget(tKey);
+    }
+  }
+  const refreshedTarget = db.findUserById(target.id) || result.user;
+  db.syncUserStateDoc(refreshedTarget);
+  syncUserPresence(target.id);
   await db.flushWrites();
-  return res.json({ user: mapUserRow(result.user) });
+  return res.json({ user: mapUserRow(refreshedTarget) });
 });
 
 app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
@@ -3393,14 +3621,12 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
       targetFingerprint = g.last_fingerprint || '';
     }
   }
-  for (const e of onlineSockets.values()) {
-    if (e.key === targetKey) {
-      targetName = e.name || targetName;
-      targetIp = e.ipAddress || targetIp;
-      targetDevice = e.deviceId || targetDevice;
-      targetFingerprint = e.fingerprint || targetFingerprint;
-      break;
-    }
+  const live = onlinePresenceMap.get(targetKey);
+  if (live) {
+    targetName = live.name || targetName;
+    targetIp = live.ipAddress || targetIp;
+    targetDevice = live.deviceId || targetDevice;
+    targetFingerprint = live.fingerprint || targetFingerprint;
   }
   db.banTarget({
     targetKey,
@@ -3432,16 +3658,7 @@ app.post('/api/admin/ban', requirePanelAccess, async (req, res) => {
     reason: effectiveReason
   });
 
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.key === targetKey) {
-      io.to(sid).emit('kicked', {
-        reason: 'تم حظرك من الشات',
-        banned: true
-      });
-      const s = io.sockets.sockets.get(sid);
-      if (s) s.disconnect(true);
-    }
-  }
+  kickTargetFromPresence(targetKey, { reason: 'تم حظرك من الشات', banned: true });
   await db.flushWrites();
   return res.json({ ok: true, bans: db.getAllBans() });
 });
@@ -3471,7 +3688,7 @@ app.post('/api/admin/ghost', requirePanelAccess, async (req, res) => {
     targetKey: `user:${targetRow.id}`,
     targetName: db.getEffectiveName(targetRow)
   });
-  syncUserAcrossSockets(io, userId);
+  syncUserPresence(userId);
   await db.flushWrites();
   return res.json({ ok: true, user: mapUserRow(result.user) });
 });
@@ -3480,16 +3697,7 @@ app.delete('/api/admin/users/:id', requireOwner, async (req, res) => {
   const uid = Number(req.params.id);
   const result = db.deleteUserAccountPermanently(uid);
   if (result.error) return res.status(400).json({ error: result.error });
-  for (const [sid, entry] of onlineSockets.entries()) {
-    if (entry.userId === uid) {
-      io.to(sid).emit('kicked', { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.' });
-      const s = io.sockets.sockets.get(sid);
-      if (s) s.disconnect(true);
-    }
-  }
-  broadcastRoomsList(io);
-  broadcastGlobalOnlineUsers(io);
-  io.emit('persistent_members', buildPersistentMembersList());
+  kickTargetFromPresence(`user:${uid}`, { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.', banned: true });
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -3524,10 +3732,7 @@ app.post('/api/admin/unmute', requirePanelAccess, async (req, res) => {
   db.removeMute(targetKey, roomId);
   emitMuteStateToUser(targetKey, roomId);
   if (roomId && roomId !== '*') {
-    io.to(`room:${roomId}`).emit('room_notice', {
-      roomId,
-      text: `🔊 قام "${req.authUser.name}" بفك الكتم عن العضو.`
-    });
+    emitRoomNoticeMessage(roomId, `🔊 قام "${req.authUser.name}" بفك الكتم عن العضو.`);
   }
   db.addAdminLog({
     actorKey: req.authUser.key,
@@ -3548,7 +3753,7 @@ app.post('/api/admin/unmute', requirePanelAccess, async (req, res) => {
 app.post('/api/lucky-box/claim', requireRegistered, async (req, res) => {
   const result = db.claimLuckyBox(req.authUser.userId);
   if (result.error) return res.status(400).json({ error: result.error });
-  syncUserAcrossSockets(io, req.authUser.userId);
+  syncUserPresence(req.authUser.userId);
   await db.flushWrites();
   return res.json({ ok: true, prize: result.prize, user: mapUserRow(result.user) });
 });
@@ -3561,9 +3766,29 @@ function clearQuizBotTimers(bot) {
   if (bot.nextTimer) { clearTimeout(bot.nextTimer); bot.nextTimer = null; }
 }
 
+function emitRoomNoticeMessage(roomId, content, extra = {}) {
+  if (!roomId || !content) return null;
+  const msg = db.addMessage({
+    roomId,
+    senderKey: extra.senderKey || 'system:notice',
+    senderName: extra.senderName || 'النظام',
+    senderRole: extra.senderRole || 'site_owner',
+    nameColor: extra.nameColor || '#fbbf24',
+    textColor: extra.textColor || '#fef3c7',
+    nameBgColor: extra.nameBgColor || '#1e293b',
+    avatarUrl: extra.avatarUrl || '',
+    avatarFrame: extra.avatarFrame || 'none',
+    isAdminNotice: true,
+    msgType: 'text',
+    clientMsgId: extra.clientMsgId || '',
+    content: String(content).slice(0, 800)
+  });
+  return msg;
+}
+
 function getRoomHumanCount(roomId) {
   let count = 0;
-  for (const e of onlineSockets.values()) {
+  for (const e of onlinePresenceMap.values()) {
     if (e.roomId === roomId) count += 1;
   }
   return count;
@@ -3605,7 +3830,7 @@ function getQuizStylePalette(styleKey) {
 function emitQuizBotMessage(roomId, content, textColor = '', nameBgColor = '') {
   const settings = db.getSiteSettings();
   const palette = getQuizStylePalette(settings.quiz_msg_style);
-  const msg = db.addMessage({
+  db.addMessage({
     roomId,
     senderKey: 'system:quizbot',
     senderName: '🤖 بوت المسابقات',
@@ -3618,24 +3843,21 @@ function emitQuizBotMessage(roomId, content, textColor = '', nameBgColor = '') {
     msgType: 'text',
     content
   });
-  io.to(`room:${roomId}`).emit('new_message', msg);
+  db.flushWrites().catch(() => {});
 }
 
 function emitQuizBotState(roomId) {
   const bot = roomQuizBots.get(roomId);
   const settings = db.getSiteSettings();
   const palette = getQuizStylePalette(settings.quiz_msg_style);
-  io.to(`room:${roomId}`).emit('quiz_bot_state', {
-    roomId,
-    active: Boolean(bot && bot.active),
-    hintSent: Boolean(bot && bot.hintSent),
-    pausedEmpty: Boolean(bot && bot.pausedEmpty),
-    enabledSetting: Number(settings.quiz_bot_enabled) !== 0,
-    intervalSec: Number(settings.quiz_interval_sec) || 25,
-    hintSec: Number(settings.quiz_hint_sec) || 12,
-    rewardCoins: Number(settings.quiz_reward_coins) || 100,
-    msgStyle: palette.key
-  });
+  const room = db.getRoomById(roomId);
+  if (room) {
+    db.updateRoom(roomId, {
+      quiz_bot_active: Boolean(bot && bot.active),
+      quiz_hint_sent: Boolean(bot && bot.hintSent),
+      quiz_style: palette.key
+    });
+  }
 }
 
 function startRoomQuizRound(roomId) {
@@ -3755,10 +3977,7 @@ function stopQuizBotInRoom(roomId, silent = false) {
     db.updateSiteSettings({ quiz_bot_enabled: 0 });
   }
   if (!silent) {
-    io.to(`room:${roomId}`).emit('room_notice', {
-      roomId,
-      text: '🛑 تم إيقاف بوت المسابقات التلقائي في هذه الغرفة.'
-    });
+    emitRoomNoticeMessage(roomId, '🛑 تم إيقاف بوت المسابقات التلقائي في هذه الغرفة.');
   }
   emitQuizBotState(roomId);
 }
@@ -3855,7 +4074,7 @@ function checkQuizBotAnswer(entry, content) {
   if (entry.userId) {
     db.adjustUserCoins(entry.userId, earnedPoints);
     db.incrementQuizPoints(entry.userId, earnedPoints);
-    syncUserAcrossSockets(io, entry.userId);
+    syncUserPresence(entry.userId);
     db.flushWrites().catch(() => {});
   }
 
@@ -3998,7 +4217,7 @@ function emitWelcomeBotMessage(roomId, content, speaker = null) {
   const senderRole = String(speaker?.role || 'vip');
   const avatarUrl = String(speaker?.avatarUrl ?? s.welcome_bot_avatar ?? '');
 
-  const msg = db.addMessage({
+  db.addMessage({
     roomId,
     senderKey,
     senderName,
@@ -4017,8 +4236,8 @@ function emitWelcomeBotMessage(roomId, content, speaker = null) {
     content: String(content).slice(0, 800)
   });
   lastBotActivityByRoom.set(roomId, Date.now());
-  io.to(`room:${roomId}`).emit('new_message', msg);
-  return msg;
+  db.flushWrites().catch(() => {});
+  return true;
 }
 
 function formatWelcomeGreeting(template, userName, roomName) {
@@ -4044,7 +4263,7 @@ function triggerWelcomeBotOnRoomJoin(entry, room) {
 
   setTimeout(() => {
     try {
-      const stillHere = [...onlineSockets.values()].some((e) => e.key === targetEntryKey && e.roomId === targetRoomId);
+      const stillHere = [...onlinePresenceMap.values()].some((e) => e.key === targetEntryKey && e.roomId === targetRoomId);
       if (!stillHere) return;
       const latestSettings = db.getSiteSettings();
       if (Number(latestSettings.welcome_bot_enabled ?? 1) === 0) return;
@@ -4111,55 +4330,18 @@ function generateSmartFallbackReply(question, userName, roomName, speakerName) {
   return `أهلاً بك يا ${userName} في ${roomName}! وصلتني رسالتك بكل سرور — كيف أستطيع مساعدتك الآن؟ ✨`;
 }
 
-const GEMINI_MODEL_FALLBACKS = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+const GEMINI_DIRECT_MODEL = 'gemini-3.8-flash';
 let lastWelcomeBotGeminiStatus = { ok: null, model: '', at: null, error: '' };
-let lastGeminiErrorNotifAt = 0;
 
-function reportWelcomeBotGeminiErrorToOwner(errorReason, userName = '') {
-  try {
-    const cleanErr = String(errorReason || 'خطأ غير معروف في Gemini API').slice(0, 260);
-    lastWelcomeBotGeminiStatus = {
-      ok: false,
-      model: '',
-      at: new Date().toISOString(),
-      error: cleanErr
-    };
-    console.error('[WelcomeBot Gemini Error]', cleanErr);
-    db.addAdminLog({
-      actorKey: 'system:welcomebot',
-      actorName: '🤖 بوت الذكاء الاصطناعي (Gemini)',
-      actorRole: 'site_owner',
-      action: 'فشل اتصال Gemini API',
-      targetName: userName || 'استفسار عضو',
-      details: cleanErr
-    });
-
-    const now = Date.now();
-    if (now - lastGeminiErrorNotifAt >= 20000) {
-      lastGeminiErrorNotifAt = now;
-      const ownerUsers = db
-        .getAllRegisteredUsers()
-        .filter((u) => u.role === 'site_owner' || db.isSupremeOwnerEmail(u.email));
-      for (const owner of ownerUsers) {
-        const ownerKey = `user:${owner.id}`;
-        const notif = db.addNotification({
-          targetKey: ownerKey,
-          title: '⚠️ خطأ في اتصال بوت الذكاء الاصطناعي (Gemini)',
-          body: `تعذر الرد عبر Gemini API — السبب: ${cleanErr}`,
-          category: 'security_alert'
-        });
-        emitNotificationToUser(io, ownerKey, notif);
-      }
-      for (const [sid, e] of onlineSockets.entries()) {
-        if (e.role === 'site_owner' || db.isSupremeOwnerEmail(e.email)) {
-          io.to(sid).emit('error_toast', { message: `⚠️ خطأ Gemini API: ${cleanErr}` });
-        }
-      }
-    }
-    db.flushWrites().catch(() => {});
-  } catch (err) {
-    console.error('[reportWelcomeBotGeminiErrorToOwner Failed]', err?.message || err);
-  }
+function recordWelcomeBotGeminiFailureSilent(errorReason) {
+  const cleanErr = String(errorReason || 'تعذر الاتصال').slice(0, 260);
+  lastWelcomeBotGeminiStatus = {
+    ok: false,
+    model: GEMINI_DIRECT_MODEL,
+    at: new Date().toISOString(),
+    error: cleanErr
+  };
+  console.error('[WelcomeBot Gemini]', cleanErr);
 }
 
 function stripBotMentionFromQuestion(rawContent, speakerName, mainBotName) {
@@ -4251,25 +4433,17 @@ async function callWelcomeBotGemini(apiKey, { question, userName, roomName, spea
     const sysPrompt = `${persona} المستخدم "${userName}" يوجه لك سؤالاً أو حديثاً مباشراً. أجب إجابة ذكية ومباشرة ومفيدة ومختصرة جداً باللغة العربية (سطر إلى ثلاثة أسطر كحد أقصى). ركّز على الإجابة الفعلية لسؤال المستخدم ولا ترد برسالة ترحيب عامة أو متكررة إذا كان هناك سؤال محدد.`;
     const userPrompt = `رسالة ${userName}: ${cleanQuestion.slice(0, 500)}`;
 
-    const errors = [];
-    for (const modelName of GEMINI_MODEL_FALLBACKS) {
-      try {
-        const res = await callWelcomeBotGeminiWithModel(key, modelName, sysPrompt, userPrompt);
-        if (res?.text) {
-          lastWelcomeBotGeminiStatus = {
-            ok: true,
-            model: res.model || modelName,
-            at: new Date().toISOString(),
-            error: ''
-          };
-          return res;
-        }
-        if (res?.errorReason) errors.push(res.errorReason);
-      } catch (innerErr) {
-        errors.push(`${modelName}: ${innerErr?.message || 'فشل غير متوقع'}`);
-      }
+    const res = await callWelcomeBotGeminiWithModel(key, GEMINI_DIRECT_MODEL, sysPrompt, userPrompt);
+    if (res?.text) {
+      lastWelcomeBotGeminiStatus = {
+        ok: true,
+        model: res.model || GEMINI_DIRECT_MODEL,
+        at: new Date().toISOString(),
+        error: ''
+      };
+      return res;
     }
-    return { text: null, errorReason: errors.join(' | ') || 'فشلت جميع محاولات Gemini API' };
+    return { text: null, errorReason: res?.errorReason || 'تعذر الاتصال بنموذج gemini-3.8-flash' };
   } catch (outerErr) {
     return { text: null, errorReason: `Gemini Error: ${outerErr?.message || 'خطأ غير متوقع'}` };
   }
@@ -4359,17 +4533,17 @@ async function maybeHandleWelcomeBotMention(entry, roomId, content, { mentionedU
         if (gemRes?.text) {
           reply = gemRes.text;
         } else if (gemRes?.errorReason) {
-          reportWelcomeBotGeminiErrorToOwner(gemRes.errorReason, entry.name);
+          recordWelcomeBotGeminiFailureSilent(gemRes.errorReason);
         }
       } catch (gemErr) {
-        reportWelcomeBotGeminiErrorToOwner(gemErr?.message || 'استثناء غير متوقع في Gemini API', entry.name);
+        recordWelcomeBotGeminiFailureSilent(gemErr?.message || 'تعذر الاتصال');
       }
     }
     if (!reply) {
       const cleanQ = stripBotMentionFromQuestion(content, speaker.name, mainBotName);
       reply = generateSmartFallbackReply(cleanQ, entry.name, roomName, speaker.name);
     }
-    const stillOnline = [...onlineSockets.values()].some((e) => e.roomId === roomId);
+    const stillOnline = [...onlinePresenceMap.values()].some((e) => e.roomId === roomId);
     if (!stillOnline) return;
     emitWelcomeBotMessage(roomId, reply, speaker);
   } catch (err) {
@@ -4420,10 +4594,10 @@ function startVirtualMembersLoop() {
 app.get('/api/owner/suite', requireOwner, (_req, res) => {
   const liveSockets = [];
   const hiddenOnline = [];
-  for (const e of onlineSockets.values()) {
+  for (const e of onlinePresenceMap.values()) {
     const rm = e.roomId ? db.getRoomById(e.roomId) : null;
     const item = {
-      socketId: e.socketId,
+      clientId: e.key,
       key: e.key,
       userId: e.userId,
       isGuest: e.isGuest,
@@ -4610,8 +4784,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     const updated = db.adjustUserRubyAndActivity(uid, { rubyDelta: rDelta, activityDelta: aDelta });
     if (!updated) return res.status(404).json({ error: 'العضو غير موجود.' });
     const promo = aDelta > 0 ? db.checkAndApplyAutoPromotion(uid) : null;
-    syncUserAcrossSockets(io, uid);
-    io.emit('persistent_members', buildPersistentMembersList());
+    syncUserPresence(uid);
     const finalUser = promo?.user || updated;
     db.addAdminLog({
       actorKey: actor.key,
@@ -4634,13 +4807,16 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       const uid = Number(String(targetKey).replace('user:', ''));
       const r = db.setUserShadowMuted(uid, Boolean(enabled));
       if (r?.error) return res.status(400).json({ error: r.error });
-      syncUserAcrossSockets(io, uid);
+      syncUserPresence(uid);
     } else {
       if (enabled) guestShadowMutedKeys.add(targetKey);
       else guestShadowMutedKeys.delete(targetKey);
-      for (const e of onlineSockets.values()) {
-        if (e.key === targetKey) e.isShadowMuted = Boolean(enabled);
+      const liveEntry = onlinePresenceMap.get(targetKey);
+      if (liveEntry) {
+        liveEntry.isShadowMuted = Boolean(enabled);
+        db.syncOnlinePresenceDoc(buildPublicPresenceDoc(liveEntry));
       }
+      db.patchUserStateDoc(targetKey, { isShadowMuted: Boolean(enabled) });
     }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'كتم صامت' : 'إلغاء كتم صامت', targetKey, targetName: targetKey });
     await db.flushWrites();
@@ -4655,17 +4831,17 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       const uid = Number(String(targetKey).replace('user:', ''));
       const r = db.setUserFrozen(uid, Boolean(enabled));
       if (r?.error) return res.status(400).json({ error: r.error });
-      syncUserAcrossSockets(io, uid);
+      syncUserPresence(uid);
     } else {
       if (enabled) guestFrozenKeys.add(targetKey);
       else guestFrozenKeys.delete(targetKey);
     }
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.key === targetKey) {
-        e.isFrozen = Boolean(enabled);
-        io.to(sid).emit('user_frozen_state', { isFrozen: Boolean(enabled) });
-      }
+    const liveEntry = onlinePresenceMap.get(targetKey);
+    if (liveEntry) {
+      liveEntry.isFrozen = Boolean(enabled);
+      db.syncOnlinePresenceDoc(buildPublicPresenceDoc(liveEntry));
     }
+    db.patchUserStateDoc(targetKey, { isFrozen: Boolean(enabled) });
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'تجميد عضو' : 'فك تجميد عضو', targetKey, targetName: targetKey });
     await db.flushWrites();
     return res.json({ ok: true });
@@ -4675,15 +4851,15 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     const destRoom = db.getRoomById(toRoomId);
     if (!targetKey || !destRoom) return res.status(400).json({ error: 'الهدف أو الغرفة غير صالحة.' });
     let moved = 0;
-    for (const [sid, e] of onlineSockets.entries()) {
-      if (e.key === targetKey) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          moveSocketToRoom(s, toRoomId, false);
-          io.to(sid).emit('error_toast', { message: `تم سحبك ونقلك إلى غرفة "${destRoom.name}" بواسطة المالك.` });
-          moved += 1;
-        }
-      }
+    const liveEntry = onlinePresenceMap.get(targetKey);
+    if (liveEntry) {
+      movePresenceToRoom(liveEntry, toRoomId, {}, false);
+      db.patchUserStateDoc(targetKey, {
+        forceRoomId: toRoomId,
+        forceRoomNotice: `تم سحبك ونقلك إلى غرفة "${destRoom.name}" بواسطة المالك.`,
+        forceRoomAt: Date.now()
+      });
+      moved = 1;
     }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'سحب ونقل عضو', targetKey, details: `إلى ${destRoom.name} (${moved})` });
     await db.flushWrites();
@@ -4693,12 +4869,10 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'freeze_room') {
     const updated = db.setRoomFrozen(roomId, Boolean(enabled));
     if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-    io.to(`room:${roomId}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
-    io.to(`room:${roomId}`).emit('room_notice', {
+    emitRoomNoticeMessage(
       roomId,
-      text: enabled ? `❄️ تم تجميد الغرفة (للقراءة فقط) بواسطة ${actor.name}.` : `🔥 تم فك تجميد الغرفة بواسطة ${actor.name}.`
-    });
-    broadcastRoomsList(io);
+      enabled ? `❄️ تم تجميد الغرفة (للقراءة فقط) بواسطة ${actor.name}.` : `🔥 تم فك تجميد الغرفة بواسطة ${actor.name}.`
+    );
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'تجميد غرفة' : 'فك تجميد غرفة', targetKey: roomId, targetName: updated.name });
     await db.flushWrites();
     return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
@@ -4707,7 +4881,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'clear_room') {
     if (!roomId || !db.getRoomById(roomId)) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
     db.clearRoomMessages(roomId);
-    io.to(`room:${roomId}`).emit('room_cleared', { roomId, byName: actor.name });
+    emitRoomNoticeMessage(roomId, `🧹 تم تنظيف الغرفة بواسطة ${actor.name}.`, { clientMsgId: `room_cleared:${Date.now()}` });
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تنظيف غرفة', targetKey: roomId });
     await db.flushWrites();
     return res.json({ ok: true });
@@ -4720,11 +4894,11 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       if (sl.holderKey && sl.holderRole !== 'site_owner') {
         sl.isAdminMuted = true;
         sl.isSpeaking = false;
-        if (sl.holderSocketId) io.to(sl.holderSocketId).emit('mic_force_mute', { muted: true });
+        db.patchUserStateDoc(sl.holderKey, { micForceMuteAt: Date.now(), micForceMuted: true });
       }
     }
-    io.to(`room:${roomId}`).emit('mic_state', { roomId, slots: getPublicMicSlots(roomId) });
-    io.to(`room:${roomId}`).emit('room_notice', { roomId, text: `🔇 تم كتم جميع المايكات في الغرفة بأمر المالك.` });
+    syncRoomMicsToFirestore(roomId);
+    emitRoomNoticeMessage(roomId, '🔇 تم كتم جميع المايكات في الغرفة بأمر المالك.');
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'كتم كل المايكات', targetKey: roomId });
     await db.flushWrites();
     return res.json({ ok: true });
@@ -4733,7 +4907,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'pin_message') {
     const updated = db.setRoomPinnedMessage(roomId, message || '', actor.name);
     if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
-    io.to(`room:${roomId}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: message ? 'تثبيت رسالة ملكية' : 'إزالة الرسالة المثبتة', targetKey: roomId, details: String(message || '').slice(0, 80) });
     await db.flushWrites();
     return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
@@ -4774,7 +4947,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       }
     }
     const msg = db.addMessage({ roomId, ...senderObj, msgType: 'text', content: clean });
-    io.to(`room:${roomId}`).emit('new_message', msg);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: asMode === 'user' ? 'إرسال نيابة عن عضو' : 'إرسال باسم النظام', targetKey: roomId, details: clean.slice(0, 80) });
     await db.flushWrites();
     return res.json({ ok: true, msg });
@@ -4784,9 +4956,11 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     const clean = String(content || '').trim().slice(0, 500);
     if (!clean) return res.status(400).json({ error: 'أدخل نص الإعلان العام.' });
     const cleanTitle = String(title || '📢 إعلان إداري عاجل').trim().slice(0, 80);
-    io.emit('global_urgent_broadcast', { title: cleanTitle, content: clean, byName: actor.name, ts: Date.now() });
+    db.updateSiteSettings({
+      last_global_broadcast: { title: cleanTitle, content: clean, byName: actor.name, ts: Date.now() }
+    });
     for (const r of db.getAllRooms()) {
-      const msg = db.addMessage({
+      db.addMessage({
         roomId: r.id,
         senderKey: actor.key,
         senderName: actor.name,
@@ -4800,7 +4974,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         msgType: 'text',
         content: `📢 ${cleanTitle}: ${clean}`
       });
-      io.to(`room:${r.id}`).emit('new_message', msg);
     }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'إعلان عام لكل الغرف', details: clean.slice(0, 80) });
     await db.flushWrites();
@@ -4811,21 +4984,24 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     const amt = Math.max(10, Math.min(10000, Number(amountPerUser) || 100));
     const targetRoomId = roomId || 'general';
     const recipientIds = new Set();
-    for (const e of onlineSockets.values()) {
+    for (const e of onlinePresenceMap.values()) {
       if (e.userId && (targetRoomId === 'all' || e.roomId === targetRoomId) && !isStealthEntry(e)) {
         recipientIds.add(e.userId);
       }
     }
     for (const uid of recipientIds) {
       db.adjustUserCoins(uid, amt);
-      syncUserAcrossSockets(io, uid);
+      syncUserPresence(uid);
+      db.patchUserStateDoc(`user:${uid}`, {
+        goldenRainAt: Date.now(),
+        goldenRainAmount: amt,
+        goldenRainBy: actor.name
+      });
     }
-    const emitTarget = targetRoomId === 'all' ? io : io.to(`room:${targetRoomId}`);
-    emitTarget.emit('golden_rain_event', { amount: amt, byName: actor.name, count: recipientIds.size });
     const roomsToAnnounce = targetRoomId === 'all' ? db.getAllRooms().map((r) => r.id) : [targetRoomId];
     for (const rid of roomsToAnnounce) {
       if (!db.getRoomById(rid)) continue;
-      const msg = db.addMessage({
+      db.addMessage({
         roomId: rid,
         senderKey: actor.key,
         senderName: actor.name,
@@ -4839,7 +5015,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         msgType: 'text',
         content: `🪙✨ أمطر المالك "${actor.name}" الغرفة بـ +${amt} عملة ذهبية لكل عضو (${recipientIds.size} مستفيد)!`
       });
-      io.to(`room:${rid}`).emit('new_message', msg);
     }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'مطر ذهبي للعملات', targetKey: targetRoomId, details: `+${amt} × ${recipientIds.size}` });
     await db.flushWrites();
@@ -4875,7 +5050,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       if (updated.quiz_reward_coins) b.rewardCoins = Number(updated.quiz_reward_coins) || 100;
     }
     const pubSettings = db.getPublicSiteSettings();
-    io.emit('site_settings_updated', pubSettings);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات بوت المسابقات', details: `${updated.quiz_interval_sec}ث / ${updated.quiz_reward_coins} روبي` });
     await db.flushWrites();
     return res.json({ ok: true, settings: pubSettings });
@@ -4951,14 +5125,10 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       bannedBy: actor.name,
       bannedByKey: actor.key
     });
-    for (const [sid, e] of onlineSockets.entries()) {
+    for (const e of [...onlinePresenceMap.values()]) {
       if ((ipAddress && e.ipAddress === ipAddress) || (deviceId && e.deviceId === deviceId) || (targetKey && e.key === targetKey)) {
         if (e.role !== 'site_owner') {
-          io.to(sid).emit('kicked', {
-            reason: 'تم حظرك من الشات',
-            banned: true
-          });
-          io.sockets.sockets.get(sid)?.disconnect(true);
+          kickTargetFromPresence(e.key, { reason: 'تم حظرك من الشات', banned: true });
         }
       }
     }
@@ -4978,8 +5148,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'update_protections') {
     db.updateSiteSettings(protections || {});
     const pubSettings = db.getPublicSiteSettings();
-    io.emit('site_settings_updated', pubSettings);
-    broadcastRoomsList(io);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات الحماية والمميزات' });
     await db.flushWrites();
     return res.json({ ok: true, settings: pubSettings });
@@ -4988,21 +5156,17 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'update_master_matrix') {
     if (protections) db.updateSiteSettings(protections);
     const pubSettings = db.getPublicSiteSettings();
-    let ranksChanged = false;
     if (rolePermissions && typeof rolePermissions === 'object') {
       for (const [rKey, perms] of Object.entries(rolePermissions)) {
         if (rKey === 'site_owner' || rKey === 'guest') continue;
         const r = db.updateRank(rKey, { permissions: perms });
         if (r && !r.error) {
-          ranksChanged = true;
-          for (const entry of onlineSockets.values()) {
-            if (entry.role === rKey && entry.userId) syncUserAcrossSockets(io, entry.userId);
+          for (const entry of onlinePresenceMap.values()) {
+            if (entry.role === rKey && entry.userId) syncUserPresence(entry.userId);
           }
         }
       }
     }
-    io.emit('site_settings_updated', pubSettings);
-    if (ranksChanged) io.emit('ranks_updated', db.getAllRanks());
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث مصفوفة الصلاحيات الشاملة' });
     await db.flushWrites();
     return res.json({ ok: true, settings: pubSettings, ranks: db.getAllRanks() });
@@ -5012,7 +5176,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     const { sections } = req.body || {};
     const updated = db.updateSiteSettings({ custom_drawer_sections: Array.isArray(sections) ? sections : [] });
     const pubSettings = db.getPublicSiteSettings();
-    io.emit('site_settings_updated', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,
@@ -5044,7 +5207,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     }
     const updated = db.updateSiteSettings(patch);
     const pubSettings = db.getPublicSiteSettings();
-    io.emit('site_settings_updated', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,
@@ -5072,12 +5234,6 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
 
     const fullUpdated = db.updateSiteSettings(patch);
     const pubSettings = db.getPublicSiteSettings();
-    io.emit('site_settings_updated', pubSettings);
-    broadcastRoomsList(io);
-    broadcastGlobalOnlineUsers(io);
-    for (const r of db.getAllRooms()) {
-      broadcastRoomUsers(io, r.id);
-    }
     startVirtualMembersLoop();
     db.addAdminLog({
       actorKey: actor.key,
@@ -5162,14 +5318,8 @@ app.post('/api/owner/restore', requireOwner, express.json({ limit: '80mb' }), as
     if (result?.error) return res.status(400).json({ error: result.error });
 
     const pubSettings = db.getPublicSiteSettings();
-    io.emit('ranks_updated', db.getAllRanks());
-    io.emit('site_settings_updated', pubSettings);
-    broadcastRoomsList(io);
-    broadcastGlobalOnlineUsers(io);
-    io.emit('emojis_updated', db.getAllCustomEmojis());
-    io.emit('persistent_members', buildPersistentMembersList());
-    for (const entry of onlineSockets.values()) {
-      if (entry.userId) syncUserAcrossSockets(io, entry.userId);
+    for (const entry of onlinePresenceMap.values()) {
+      if (entry.userId) syncUserPresence(entry.userId);
     }
 
     db.addAdminLog({
@@ -5193,37 +5343,44 @@ app.post('/api/owner/restore', requireOwner, express.json({ limit: '80mb' }), as
   }
 });
 
-app.use((err, _req, res, _next) => {
-  console.error('[Express Error]', err?.message || err);
-  if (res.headersSent) return;
-  const status = Number(err?.status || err?.statusCode) || (err?.name === 'MulterError' ? 400 : 500);
-  return res.status(status).json({ error: err?.message || 'حدث خطأ في الخادم.' });
-});
-
 // ==========================================
-// HTTP SERVER & SOCKET.IO SETUP
+// PRESENCE, ROOMS, MICS & REST REAL-TIME API (FIRESTORE-BACKED, ZERO SOCKET.IO)
 // ==========================================
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' },
-  connectTimeout: 25000,
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  transports: ['polling', 'websocket'],
-  allowEIO3: true
-});
+function resolveOnlineSessionFromRequest(req, roomIdHint = null) {
+  const telemetry = getClientTelemetry(req);
+  let entry = onlinePresenceMap.get(req.authUser.key);
+  if (!entry) {
+    const fallbackRoom =
+      roomIdHint && db.getRoomById(roomIdHint)
+        ? roomIdHint
+        : req.headers['x-room-id'] && db.getRoomById(String(req.headers['x-room-id']))
+          ? String(req.headers['x-room-id'])
+          : db.getAllRooms()[0]?.id || 'general';
+    entry = upsertOnlinePresence(req.authUser, telemetry, fallbackRoom);
+  } else {
+    Object.assign(entry, req.authUser, {
+      ipAddress: telemetry.ip || entry.ipAddress || '',
+      deviceId: telemetry.deviceId || entry.deviceId || '',
+      fingerprint: telemetry.fingerprint || entry.fingerprint || '',
+      userAgent: telemetry.userAgent || entry.userAgent || '',
+      country: telemetry.country || req.authUser.country || entry.country || '',
+      lastSeenMs: Date.now(),
+      lastHeartbeat: Date.now()
+    });
+    if (roomIdHint && !entry.roomId && db.getRoomById(roomIdHint)) {
+      entry.roomId = roomIdHint;
+    }
+    db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+  }
+  return entry;
+}
 
-io.engine.on('connection_error', (err) => {
-  console.warn('[Socket.IO Engine connection_error]', err?.code, err?.message);
-});
-
-function releaseUserMicsInRoom(socketOrKey, roomId) {
-  if (!roomId) return;
+function releaseUserMicsInRoom(userKey, roomId) {
+  if (!roomId || !userKey) return;
   const slots = ensureRoomMicSlots(roomId);
-  const key = typeof socketOrKey === 'string' ? socketOrKey : onlineSockets.get(socketOrKey.id)?.key;
   let changed = false;
   for (const slot of slots) {
-    if (slot.holderKey === key) {
+    if (slot.holderKey === userKey) {
       slot.holderKey = null;
       slot.holderSocketId = null;
       slot.holderName = null;
@@ -5232,65 +5389,42 @@ function releaseUserMicsInRoom(socketOrKey, roomId) {
       slot.isSelfMuted = false;
       slot.isAdminMuted = false;
       slot.isSpeaking = false;
+      slot.speakingLevel = 0;
       changed = true;
     }
   }
   if (changed) {
-    io.to(`room:${roomId}`).emit('mic_state', { roomId, slots: getPublicMicSlots(roomId) });
+    syncRoomMicsToFirestore(roomId);
   }
 }
 
-function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
-  const entry = onlineSockets.get(socket.id);
-  if (!entry) return;
+function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconnect = false) {
+  if (!entry) return { error: 'جلسة غير صالحة.' };
   const room = db.getRoomById(targetRoomId);
-  if (!room) {
-    socket.emit('error_toast', { message: 'الغرفة غير موجودة.' });
-    return;
-  }
+  if (!room) return { error: 'الغرفة غير موجودة.' };
 
   const oldRoomId = entry.roomId;
   if (oldRoomId && oldRoomId !== targetRoomId) {
     releaseUserMicsInRoom(entry.key, oldRoomId);
-    socket.leave(`room:${oldRoomId}`);
     entry.roomId = null;
-    broadcastRoomUsers(io, oldRoomId);
     pauseQuizBotIfRoomEmpty(oldRoomId);
   }
 
   entry.roomId = targetRoomId;
-  socket.join(`room:${targetRoomId}`);
+  entry.lastSeenMs = Date.now();
+  entry.lastHeartbeat = Date.now();
+  if (telemetry.ip) entry.ipAddress = telemetry.ip;
+  if (telemetry.deviceId) entry.deviceId = telemetry.deviceId;
+  if (telemetry.fingerprint) entry.fingerprint = telemetry.fingerprint;
+  db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
 
   ensureCompetitionsQuizBotRunning(targetRoomId);
   const qBot = roomQuizBots.get(targetRoomId);
   const messages = db.getRoomMessages(targetRoomId, 100, entry.key);
   const pubRoom = db.sanitizeRoomForPublic(room);
   const isManager = db.isRoomManager(targetRoomId, entry.userId, entry.role);
-
   const activeMuteRow = db.getActiveMute(entry.key, targetRoomId);
-  socket.emit('room_joined', {
-    room: pubRoom,
-    isRoomManager: isManager,
-    messages,
-    mics: getPublicMicSlots(targetRoomId),
-    users: getRoomUsersList(targetRoomId),
-    roomKingKey: computeRoomKingKey(targetRoomId),
-    activeMute: buildSanitizedMutePayload(activeMuteRow, targetRoomId).muted
-      ? buildSanitizedMutePayload(activeMuteRow, targetRoomId)
-      : null,
-    quizBot: {
-      active: Boolean(qBot && qBot.active),
-      hintSent: Boolean(qBot && qBot.hintSent),
-      enabledSetting: Number(db.getSiteSettings().quiz_bot_enabled) !== 0
-    }
-  });
 
-  broadcastRoomUsers(io, targetRoomId);
-  broadcastRoomsList(io);
-  broadcastGlobalOnlineUsers(io);
-  io.emit('persistent_members', buildPersistentMembersList());
-
-  // Suppress redundant join notice on silent reconnect, grace recovery, or recent presence in same room
   const pending = pendingGrace.get(entry.key);
   const rejoiningSameRoom = pending && pending.lastRoomId === targetRoomId;
   if (pending) {
@@ -5304,6 +5438,7 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
   );
   recentRoomPresence.set(entry.key, { roomId: targetRoomId, at: Date.now() });
 
+  let royalEntrance = null;
   if (!isSilentReconnect && !rejoiningSameRoom && !recentlyInSameRoom && oldRoomId !== targetRoomId && !isStealthEntry(entry)) {
     const rank = db.getRankByKey(entry.role);
     const isOwnerJoin = entry.role === 'site_owner';
@@ -5315,1728 +5450,1396 @@ function moveSocketToRoom(socket, targetRoomId, isSilentReconnect = false) {
           ? customJoinTpl.replace(/\{name\}/g, entry.name)
           : `${customJoinTpl} • ${entry.name}`
       : `انضم إلى الغرفه مؤسس ومالك الشات ${entry.name} • أهلاً بك`;
+
     if (isOwnerJoin) {
-      io.to(`room:${targetRoomId}`).emit('royal_entrance', {
+      royalEntrance = {
         roomId: targetRoomId,
         name: entry.name,
         avatarUrl: entry.avatarUrl || '',
         rankLabel: rank.label,
         joinMessage: ownerJoinText
-      });
+      };
     }
-    io.to(`room:${targetRoomId}`).emit('room_notice', {
-      roomId: targetRoomId,
-      kind: isOwnerJoin ? 'royal_join' : 'join',
-      text: isOwnerJoin ? ownerJoinText : `✓ هذا المستخدم انضم للغرفة`,
-      user: {
-        key: entry.key,
-        name: entry.name,
-        role: entry.role,
-        rankIcon: rank.icon,
-        rankLabel: rank.label,
+    emitRoomNoticeMessage(
+      targetRoomId,
+      isOwnerJoin ? ownerJoinText : `✓ انضم "${entry.name}" إلى الغرفة`,
+      {
+        senderKey: isOwnerJoin ? 'system:royal_join' : 'system:join',
+        senderName: entry.name,
+        senderRole: entry.role,
         avatarUrl: entry.avatarUrl || '',
         avatarFrame: entry.avatarFrame || 'none',
-        nameColor: entry.nameColor || '#0f172a',
-        nameBgColor: entry.nameBgColor || '',
-        neonColor: entry.neonColor || '',
-        fontFamily: entry.fontFamily || 'Normal',
-        fontStyle: entry.fontStyle || 'Normal',
-        nameplateStyle: entry.nameplateStyle || 'default',
-        nameShine: entry.nameShine || 'none',
-        nameAnim: entry.nameAnim || 'none',
-        nameAnimSpeed: entry.nameAnimSpeed || 'normal',
-        vipWings: Boolean(entry.vipWings)
+        nameColor: entry.nameColor || '#fbbf24',
+        textColor: isOwnerJoin ? '#fde68a' : '#cbd5e1',
+        clientMsgId: isOwnerJoin ? `royal_join:${entry.key}:${Date.now()}` : `join:${entry.key}:${Date.now()}`
       }
-    });
+    );
     triggerWelcomeBotOnRoomJoin(entry, pubRoom);
   }
+
+  return {
+    room: pubRoom,
+    isRoomManager: isManager,
+    messages,
+    mics: getPublicMicSlots(targetRoomId),
+    users: getRoomUsersList(targetRoomId),
+    roomKingKey: computeRoomKingKey(targetRoomId),
+    activeMute: buildSanitizedMutePayload(activeMuteRow, targetRoomId).muted
+      ? buildSanitizedMutePayload(activeMuteRow, targetRoomId)
+      : null,
+    royalEntrance,
+    quizBot: {
+      active: Boolean(qBot && qBot.active),
+      hintSent: Boolean(qBot && qBot.hintSent),
+      enabledSetting: Number(db.getSiteSettings().quiz_bot_enabled) !== 0
+    }
+  };
 }
 
-io.use((socket, next) => {
-  try {
-    const token = socket.handshake.auth?.token;
-    const payload = verifyToken(token);
-    if (!payload) return next(new Error('AUTH_REQUIRED'));
-
-    const telemetry = getClientTelemetry(socket);
-    const { ip, deviceId, fingerprint, userAgent, country } = telemetry;
-    if (payload.isGuest) {
-      if (!validateAndTouchSession(payload, { role: 'guest', telemetry })) {
-        return next(new Error('AUTH_REQUIRED'));
-      }
-      if (Number(db.getSiteSettings().block_vpn) === 1 && isVpnOrProxyRequest(socket)) {
-        return next(new Error('BANNED:تم حظر الدخول عبر VPN أو Proxy.'));
-      }
-      const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId, fingerprint });
-      if (ban) {
-        return next(new Error('BANNED:تم حظرك من الشات'));
-      }
-      const persistedGuest = db.upsertGuest({
-        key: payload.key,
-        name: payload.name || 'زائر',
-        ipAddress: ip,
-        deviceId,
-        fingerprint,
-        userAgent,
-        country
-      });
-      const mappedGuest = mapGuestRow(persistedGuest, payload.key, payload.name || 'زائر');
-      socket.authSession = {
-        socketId: socket.id,
-        ...mappedGuest,
-        email: '',
-        isGhosted: false,
-        isShadowMuted: guestShadowMutedKeys.has(payload.key),
-        isFrozen: guestFrozenKeys.has(payload.key),
-        ipAddress: ip,
-        deviceId,
-        fingerprint,
-        userAgent,
-        country: country || mappedGuest.country || '',
-        roomId: null,
-        lastHeartbeat: Date.now()
-      };
-      return next();
-    }
-
-    const row = db.findUserById(payload.userId);
-    if (!row) return next(new Error('AUTH_REQUIRED'));
-    if (db.isSupremeOwnerEmail(row.email)) {
-      db.ensureSupremeOwnerAccount(row.id);
-    } else {
-      if (Number(db.getSiteSettings().block_vpn) === 1 && row.role !== 'site_owner' && isVpnOrProxyRequest(socket)) {
-        return next(new Error('BANNED:تم حظر الدخول عبر VPN أو Proxy.'));
-      }
-      const ban = db.isTargetBanned({ targetKey: `user:${row.id}`, email: row.email, ipAddress: ip, deviceId, fingerprint });
-      if (ban) {
-        return next(new Error('BANNED:تم حظرك من الشات'));
-      }
-    }
-
-    db.updateUserIp(row.id, ip, deviceId, { fingerprint, userAgent, country });
-    const freshRow = db.findUserById(row.id);
-    if (!validateAndTouchSession(payload, { role: freshRow.role, telemetry, userRow: freshRow })) {
-      return next(new Error('AUTH_REQUIRED'));
-    }
-    const mapped = mapUserRow(freshRow);
-    socket.authSession = {
-      socketId: socket.id,
-      ...mapped,
-      ipAddress: ip,
-      deviceId,
-      fingerprint,
-      userAgent,
-      country: country || mapped.country || '',
-      roomId: null,
-      lastHeartbeat: Date.now()
-    };
-    return next();
-  } catch (err) {
-    return next(new Error('AUTH_FAILED'));
-  }
-});
-
-io.on('connection', (socket) => {
-  const rawSocketOn = socket.on.bind(socket);
-  socket.on = (eventName, handler) => {
-    if (typeof handler !== 'function') return rawSocketOn(eventName, handler);
-    return rawSocketOn(eventName, async (...args) => {
-      try {
-        return await handler(...args);
-      } catch (err) {
-        console.error(`[Socket Error:${eventName}]`, err?.stack || err?.message || err);
-        const lastArg = args[args.length - 1];
-        if (typeof lastArg === 'function') {
-          try {
-            lastArg({ error: 'حدث خطأ مؤقت أثناء تنفيذ الطلب.' });
-          } catch {
-            // ignore ack error
-          }
+let presenceSweepTimer = null;
+function startPresenceSweeper() {
+  if (presenceSweepTimer) clearInterval(presenceSweepTimer);
+  presenceSweepTimer = setInterval(() => {
+    try {
+      const now = Date.now();
+      for (const [key, entry] of [...onlinePresenceMap.entries()]) {
+        const lastSeen = Number(entry.lastSeenMs || entry.lastHeartbeat || 0);
+        if (lastSeen && now - lastSeen > 75000) {
+          removeOnlinePresence(key);
         }
       }
-    });
-  };
-  const session = socket.authSession;
-
-  // Deduplicate stale socket for the exact same user + device without emitting disconnect churn
-  let replacedSameDevice = false;
-  for (const [oldSid, oldEntry] of [...onlineSockets.entries()]) {
-    if (oldSid !== socket.id && oldEntry.key === session.key && (!session.deviceId || oldEntry.deviceId === session.deviceId)) {
-      replacedSameDevice = true;
-      onlineSockets.delete(oldSid);
-      const oldSock = io.sockets.sockets.get(oldSid);
-      if (oldSock) {
-        oldSock._replacedByNewSocket = true;
-        oldSock.disconnect(true);
-      }
+    } catch (err) {
+      console.error('[PresenceSweeper Error]', err?.message || err);
     }
-  }
+  }, 20000);
+}
 
-  onlineSockets.set(socket.id, session);
+app.get('/api/chat/bootstrap', requireAuth, async (req, res) => {
+  const telemetry = getClientTelemetry(req);
+  const requestedRoom = String(req.query?.roomId || '').trim();
+  const initialRoomId = requestedRoom && db.getRoomById(requestedRoom)
+    ? requestedRoom
+    : (db.getAllRooms()[0]?.id || 'general');
+  const existingEntry = onlinePresenceMap.get(req.authUser.key);
+  const entry = upsertOnlinePresence(req.authUser, telemetry, existingEntry?.roomId || initialRoomId);
+  const joined = movePresenceToRoom(entry, entry.roomId || initialRoomId, telemetry, Boolean(existingEntry));
+  await db.flushWrites();
 
-  const pending = pendingGrace.get(session.key);
-  const wasGraceReconnect = Boolean(pending) || replacedSameDevice;
-  const initialRoomId = socket.handshake.auth?.roomId || (pending && pending.lastRoomId) || 'general';
-  const validRoom = db.getRoomById(initialRoomId) ? initialRoomId : db.getAllRooms()[0]?.id || 'general';
+  const freshUser = req.authUser.isGuest
+    ? req.authUser
+    : mapUserRow(db.findUserById(req.authUser.userId)) || req.authUser;
+  const activeMute = db.getActiveMute(entry.key, joined.room?.id || initialRoomId);
 
-  const initialActiveMute = db.getActiveMute(session.key, validRoom);
-  socket.emit('init_state', {
-    user: session.isGuest ? session : mapUserRow(db.findUserById(session.userId)),
+  return res.json({
+    user: freshUser,
     settings: db.getPublicSiteSettings(),
     ranks: db.getAllRanks(),
     emojis: db.getAllCustomEmojis(),
     rooms: buildRoomsPayload(),
     onlineUsers: buildGlobalOnlineUsers(),
     persistentMembers: buildPersistentMembersList(),
-    unreadNotifCount: db.getUnreadNotificationCount(session.key),
+    unreadNotifCount: db.getUnreadNotificationCount(entry.key),
     news: db.getAllNews(),
-    giftsCatalog: db.GIFT_CATALOG,
+    giftsCatalog: db.getGiftsCatalog(),
     framesCatalog: getEffectiveFramesCatalog(),
-    activeMute: initialActiveMute ? buildSanitizedMutePayload(initialActiveMute, validRoom) : null
+    activeMute: activeMute ? buildSanitizedMutePayload(activeMute, joined.room?.id || initialRoomId) : null,
+    roomState: joined
   });
+});
 
-  moveSocketToRoom(socket, validRoom, wasGraceReconnect);
+app.post('/api/chat/heartbeat', requireAuth, (req, res) => {
+  const telemetry = getClientTelemetry(req);
+  const reqRoomId = String(req.body?.roomId || '').trim();
+  const entry = resolveOnlineSessionFromRequest(req, reqRoomId || null);
+  if (reqRoomId && db.getRoomById(reqRoomId) && entry.roomId !== reqRoomId) {
+    entry.roomId = reqRoomId;
+    db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+  }
+  if (entry.roomId) recentRoomPresence.set(entry.key, { roomId: entry.roomId, at: Date.now() });
 
-  socket.on('heartbeat', (_data, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (entry) {
-      entry.lastHeartbeat = Date.now();
-      if (entry.roomId) recentRoomPresence.set(entry.key, { roomId: entry.roomId, at: Date.now() });
+  const roomId = entry.roomId || 'general';
+  const activeMute = db.getActiveMute(entry.key, roomId);
+  const qBot = roomQuizBots.get(roomId);
+
+  return res.json({
+    ok: true,
+    ts: Date.now(),
+    roomId,
+    rooms: buildRoomsPayload(),
+    onlineUsers: buildGlobalOnlineUsers(),
+    roomUsers: getRoomUsersList(roomId),
+    mics: getPublicMicSlots(roomId),
+    messages: req.body?.includeMessages ? db.getRoomMessages(roomId, 80, entry.key) : undefined,
+    activeMute: buildSanitizedMutePayload(activeMute, roomId),
+    unreadNotifCount: db.getUnreadNotificationCount(entry.key),
+    quizBot: {
+      active: Boolean(qBot && qBot.active),
+      hintSent: Boolean(qBot && qBot.hintSent),
+      enabledSetting: Number(db.getSiteSettings().quiz_bot_enabled) !== 0
     }
-    if (typeof cb === 'function') cb({ ok: true, ts: Date.now() });
   });
+});
 
-  socket.on('explicit_logout', () => {
-    socket._explicitLogout = true;
-    const entry = onlineSockets.get(socket.id);
-    if (entry) recentRoomPresence.delete(entry.key);
-  });
+app.post('/api/chat/logout', requireAuth, async (req, res) => {
+  removeOnlinePresence(req.authUser.key);
+  if (req._authTokenPayload?.sid) {
+    db.revokeUserSession(req._authTokenPayload.sid);
+  }
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
 
-  socket.on('join_room', ({ roomId, password, silent }, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry) return;
+app.post('/api/chat/rooms/:roomId/join', requireAuth, async (req, res) => {
+  const telemetry = getClientTelemetry(req);
+  const entry = resolveOnlineSessionFromRequest(req);
+  if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+    return res.status(403).json({ error: 'حسابك مجمد مؤقتاً من قبل المالك ولا يمكنك التنقل بين الغرف.' });
+  }
+  const roomId = String(req.params.roomId || '').trim();
+  const room = db.getRoomById(roomId);
+  if (!room) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+
+  const isOwnerOrMod = entry.role === 'site_owner' || canDo(entry.role, 'manage_rooms');
+  if (!isOwnerOrMod && (Number(room.min_rank_power) || 0) > db.getRankPower(entry.role)) {
+    return res.status(403).json({ error: `الدخول لهذه الغرفة يتطلب رتبة بقوة ${room.min_rank_power} فأعلى.` });
+  }
+  if (!isOwnerOrMod && room.room_password && room.room_password.trim()) {
+    if (String(req.body?.password || '').trim() !== room.room_password.trim()) {
+      return res.status(403).json({ error: 'كلمة مرور الغرفة غير صحيحة.', requiresPassword: true });
+    }
+  }
+  const roomState = movePresenceToRoom(entry, roomId, telemetry, Boolean(req.body?.silent));
+  await db.flushWrites();
+  return res.json({ ok: true, ...roomState, rooms: buildRoomsPayload(), onlineUsers: buildGlobalOnlineUsers() });
+});
+
+app.post('/api/chat/messages', requireAuth, async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const entry = resolveOnlineSessionFromRequest(req, payload.roomId || null);
+    const targetRoomId = String(payload.roomId || entry.roomId || '').trim();
+    if (!targetRoomId || !db.getRoomById(targetRoomId)) {
+      return res.status(400).json({ error: 'لست داخل غرفة.' });
+    }
+    entry.roomId = targetRoomId;
+
     if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
-      const errMsg = 'حسابك مجمد مؤقتاً من قبل المالك ولا يمكنك التنقل بين الغرف.';
-      if (typeof cb === 'function') cb({ error: errMsg });
-      return;
+      return res.status(403).json({ error: 'أنت مجمد حالياً بأمر المالك ولا يمكنك الإرسال.' });
     }
-    const room = db.getRoomById(roomId);
-    if (!room) {
-      if (typeof cb === 'function') cb({ error: 'الغرفة غير موجودة.' });
-      return;
+    const currentRm = db.getRoomById(targetRoomId);
+    if (currentRm && Number(currentRm.is_frozen) === 1 && !db.isRoomManager(targetRoomId, entry.userId, entry.role)) {
+      return res.status(403).json({ error: 'الغرفة مجمدة مؤقتاً للقراءة فقط.' });
     }
 
-    const isOwnerOrMod = entry.role === 'site_owner' || canDo(entry.role, 'manage_rooms');
-    if (!isOwnerOrMod && (Number(room.min_rank_power) || 0) > db.getRankPower(entry.role)) {
-      const errMsg = `الدخول لهذه الغرفة يتطلب رتبة بقوة ${room.min_rank_power} فأعلى.`;
-      if (typeof cb === 'function') cb({ error: errMsg });
-      else socket.emit('error_toast', { message: errMsg });
-      return;
+    const mute = db.getActiveMute(entry.key, targetRoomId);
+    if (mute) {
+      const mins = Math.max(1, Math.ceil((mute.expires_at - Date.now()) / 60000));
+      return res.status(403).json({
+        error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}`,
+        activeMute: buildSanitizedMutePayload(mute, targetRoomId)
+      });
     }
 
-    if (!isOwnerOrMod && room.room_password && room.room_password.trim()) {
-      if (String(password || '').trim() !== room.room_password.trim()) {
-        const errMsg = 'كلمة مرور الغرفة غير صحيحة.';
-        if (typeof cb === 'function') cb({ error: errMsg, requiresPassword: true });
-        else socket.emit('error_toast', { message: errMsg });
-        return;
+    const siteSettings = db.getSiteSettings();
+    if (entry.role !== 'site_owner') {
+      const now = Date.now();
+      if (Number(siteSettings.antiflood_enabled ?? 1) !== 0 && !canDo(entry.role, 'immune')) {
+        const maxMsgs = Math.max(2, Number(siteSettings.antiflood_max_msgs) || 6);
+        const windowMs = Math.max(3, Number(siteSettings.antiflood_window_sec) || 10) * 1000;
+        const muteMins = Math.max(1, Number(siteSettings.antiflood_mute_mins) || 5);
+        const prevTimes = (floodTimestampsByKey.get(entry.key) || []).filter((ts) => now - ts <= windowMs);
+        prevTimes.push(now);
+        floodTimestampsByKey.set(entry.key, prevTimes);
+        if (prevTimes.length > maxMsgs) {
+          floodTimestampsByKey.set(entry.key, []);
+          const floodReason = 'التكرار المفرط (Anti-Flood)';
+          db.setMute(entry.key, targetRoomId, muteMins * 60 * 1000, 'نظام الحماية Anti-Flood', floodReason, {
+            targetName: entry.name,
+            mutedByKey: 'system:antiflood'
+          });
+          activeMutedKeysTracker.add(entry.key);
+          releaseUserMicsInRoom(entry.key, targetRoomId);
+          emitMuteStateToUser(entry.key, targetRoomId);
+          notifyUserMutedNotification(entry.key, muteMins);
+          db.addAdminLog({
+            actorKey: 'system:antiflood',
+            actorName: '🛡️ نظام الحماية Anti-Flood',
+            actorRole: 'site_owner',
+            action: 'كتم تلقائي (Anti-Flood)',
+            targetKey: entry.key,
+            targetName: entry.name,
+            details: `كتم ${muteMins} دقيقة لتجاوز ${maxMsgs} رسائل خلال ${Math.round(windowMs / 1000)} ثوانٍ`
+          });
+          notifyOwnersModerationEvent({
+            actorName: '🛡️ نظام الحماية Anti-Flood',
+            actorKey: 'system:antiflood',
+            targetName: entry.name,
+            targetKey: entry.key,
+            actionType: 'antiflood_mute',
+            reason: floodReason,
+            durationMins: muteMins,
+            roomId: targetRoomId
+          });
+          await db.flushWrites();
+          return res.status(429).json({ error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(muteMins)}` });
+        }
+      }
+      const spam = roomActivitySpam.get(entry.key) || { count: 0, resetAt: now + 5000 };
+      if (now > spam.resetAt) {
+        spam.count = 0;
+        spam.resetAt = now + 5000;
+      }
+      spam.count += 1;
+      roomActivitySpam.set(entry.key, spam);
+      if (spam.count > 8) {
+        return res.status(429).json({ error: 'يرجى التمهل قليلاً قبل إرسال رسالة أخرى.' });
       }
     }
 
-    moveSocketToRoom(socket, roomId, Boolean(silent));
-    if (typeof cb === 'function') cb({ ok: true });
-  });
+    const msgType = ['text', 'image', 'audio', 'sticker'].includes(payload.msgType) ? payload.msgType : 'text';
+    let content = String(payload.content || '').trim().slice(0, 1000);
+    const mediaUrl = String(payload.mediaUrl || '').trim().slice(0, 300);
+    const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
+    let mentionedUserId = payload.mentionedUserId ? String(payload.mentionedUserId).trim().slice(0, 80) : null;
+    let mentionedUserName = String(payload.mentionedUserName || '').replace(/^@+/, '').trim().slice(0, 60);
+    const isAdminNotice =
+      Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
 
-  socket.on('send_message', (payload = {}, cb) => {
-    try {
-      const entry = onlineSockets.get(socket.id);
-      if (!entry || !entry.roomId) {
-        if (typeof cb === 'function') cb({ error: 'لست داخل غرفة.' });
-        return;
+    if (entry.isGuest && Number(siteSettings.guest_can_chat) === 0) {
+      return res.status(403).json({ error: 'الكتابة في الغرف العامة مقيّدة حالياً للأعضاء المسجلين فقط.' });
+    }
+    if (msgType === 'image' && entry.isGuest && Number(siteSettings.lock_guest_images) === 1) {
+      return res.status(403).json({ error: 'تم إقفال إرسال الصور للزوار من قبل المالك.' });
+    }
+    if (msgType === 'image' || msgType === 'sticker' || msgType === 'audio') {
+      if (entry.role !== 'site_owner' && !canDo(entry.role, 'chat_media')) {
+        return res.status(403).json({ error: 'إرسال الصور والملصقات والصوتيات غير متاح لرتبتك الحالية.' });
       }
-
-      if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
-        if (typeof cb === 'function') cb({ error: 'أنت مجمد حالياً بأمر المالك ولا يمكنك الإرسال.' });
-        return;
+      if (!canPassSettingThreshold(entry, 'min_rank_chat_media', 'member')) {
+        return res.status(403).json({ error: 'إرسال الصور والملصقات والصوتيات مقيّد لرتبة أعلى من رتبتك.' });
       }
+    }
+    if (msgType === 'text' && !content) {
+      return res.status(400).json({ error: 'الرسالة فارغة.' });
+    }
+    if (msgType === 'text' && entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(content)) {
+      return res.status(403).json({ error: 'إرسال الروابط غير مسموح لرتبتك الحالية.' });
+    }
 
-      const currentRm = db.getRoomById(entry.roomId);
-      if (currentRm && Number(currentRm.is_frozen) === 1 && !db.isRoomManager(entry.roomId, entry.userId, entry.role)) {
-        if (typeof cb === 'function') cb({ error: 'الغرفة مجمدة مؤقتاً للقراءة فقط.' });
-        return;
-      }
-
-      const mute = db.getActiveMute(entry.key, entry.roomId);
-      if (mute) {
-        const mins = Math.max(1, Math.ceil((mute.expires_at - Date.now()) / 60000));
-        socket.emit('mute_state', buildSanitizedMutePayload(mute, entry.roomId));
-        const errMsg = `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}`;
-        if (typeof cb === 'function') cb({ error: errMsg });
-        else socket.emit('error_toast', { message: errMsg });
-        return;
-      }
-
-      const siteSettings = db.getSiteSettings();
-      // Configurable Anti-Flood guard (owner & immune exempt)
-      if (entry.role !== 'site_owner') {
-        const now = Date.now();
-        if (Number(siteSettings.antiflood_enabled ?? 1) !== 0 && !canDo(entry.role, 'immune')) {
-          const maxMsgs = Math.max(2, Number(siteSettings.antiflood_max_msgs) || 6);
-          const windowMs = Math.max(3, Number(siteSettings.antiflood_window_sec) || 10) * 1000;
-          const muteMins = Math.max(1, Number(siteSettings.antiflood_mute_mins) || 5);
-          const prevTimes = (floodTimestampsByKey.get(entry.key) || []).filter((ts) => now - ts <= windowMs);
-          prevTimes.push(now);
-          floodTimestampsByKey.set(entry.key, prevTimes);
-          if (prevTimes.length > maxMsgs) {
-            floodTimestampsByKey.set(entry.key, []);
-            const floodReason = 'التكرار المفرط (Anti-Flood)';
-            db.setMute(entry.key, entry.roomId, muteMins * 60 * 1000, 'نظام الحماية Anti-Flood', floodReason, {
-              targetName: entry.name,
-              mutedByKey: 'system:antiflood'
-            });
-            activeMutedKeysTracker.add(entry.key);
-            releaseUserMicsInRoom(entry.key, entry.roomId);
-            emitMuteStateToUser(entry.key, entry.roomId);
-            notifyUserMutedNotification(entry.key, muteMins);
-            db.addAdminLog({
-              actorKey: 'system:antiflood',
-              actorName: '🛡️ نظام الحماية Anti-Flood',
-              actorRole: 'site_owner',
-              action: 'كتم تلقائي (Anti-Flood)',
-              targetKey: entry.key,
-              targetName: entry.name,
-              details: `كتم ${muteMins} دقيقة لتجاوز ${maxMsgs} رسائل خلال ${Math.round(windowMs / 1000)} ثوانٍ`
-            });
-            notifyOwnersModerationEvent({
-              actorName: '🛡️ نظام الحماية Anti-Flood',
-              actorKey: 'system:antiflood',
-              targetName: entry.name,
-              targetKey: entry.key,
-              actionType: 'antiflood_mute',
-              reason: floodReason,
-              durationMins: muteMins,
-              roomId: entry.roomId
-            });
-            db.flushWrites().catch(() => {});
-            const errMsg = `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(muteMins)}`;
-            if (typeof cb === 'function') cb({ error: errMsg });
-            else socket.emit('error_toast', { message: errMsg });
-            return;
-          }
-        }
-        const spam = roomActivitySpam.get(entry.key) || { count: 0, resetAt: now + 5000 };
-        if (now > spam.resetAt) {
-          spam.count = 0;
-          spam.resetAt = now + 5000;
-        }
-        spam.count += 1;
-        roomActivitySpam.set(entry.key, spam);
-        if (spam.count > 8) {
-          const errMsg = 'يرجى التمهل قليلاً قبل إرسال رسالة أخرى.';
-          if (typeof cb === 'function') cb({ error: errMsg });
-          return;
+    if (msgType !== 'text') {
+      mentionedUserId = null;
+      mentionedUserName = '';
+    } else if (mentionedUserId) {
+      let resolvedName = mentionedUserName;
+      if (mentionedUserId === 'system:welcomebot') {
+        resolvedName = String(siteSettings.welcome_bot_name || 'مساعد الأصيل').trim();
+      } else if (mentionedUserId === 'system:quizbot') {
+        resolvedName = '🤖 بوت المسابقات';
+      } else if (mentionedUserId.startsWith('virtual:')) {
+        const vm = getActiveVirtualMembersForRooms().find((v) => v.key === mentionedUserId);
+        if (vm?.name) resolvedName = vm.name;
+      } else if (mentionedUserId.startsWith('user:')) {
+        const u = db.findUserById(Number(mentionedUserId.slice(5)));
+        if (u) resolvedName = db.getEffectiveName(u);
+      } else {
+        const o = onlinePresenceMap.get(mentionedUserId);
+        if (o?.name) resolvedName = o.name;
+        if (!resolvedName && mentionedUserId.startsWith('guest:')) {
+          const g = db.findGuestByKey(mentionedUserId);
+          if (g?.name) resolvedName = g.name;
         }
       }
-
-      const msgType = ['text', 'image', 'audio', 'sticker'].includes(payload.msgType) ? payload.msgType : 'text';
-      let content = String(payload.content || '').trim().slice(0, 1000);
-      const mediaUrl = String(payload.mediaUrl || '').trim().slice(0, 300);
-      const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
-      let mentionedUserId = payload.mentionedUserId ? String(payload.mentionedUserId).trim().slice(0, 80) : null;
-      let mentionedUserName = String(payload.mentionedUserName || '').replace(/^@+/, '').trim().slice(0, 60);
-      const isAdminNotice =
-        Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
-
-      if (entry.isGuest && Number(siteSettings.guest_can_chat) === 0) {
-        if (typeof cb === 'function') cb({ error: 'الكتابة في الغرف العامة مقيّدة حالياً للأعضاء المسجلين فقط.' });
-        return;
-      }
-      if (msgType === 'image' && entry.isGuest && Number(siteSettings.lock_guest_images) === 1) {
-        if (typeof cb === 'function') cb({ error: 'تم إقفال إرسال الصور للزوار من قبل المالك.' });
-        return;
-      }
-      if (msgType === 'image' || msgType === 'sticker' || msgType === 'audio') {
-        if (entry.role !== 'site_owner' && !canDo(entry.role, 'chat_media')) {
-          if (typeof cb === 'function') cb({ error: 'إرسال الصور والملصقات والصوتيات غير متاح لرتبتك الحالية.' });
-          return;
-        }
-        if (!canPassSettingThreshold(entry, 'min_rank_chat_media', 'member')) {
-          if (typeof cb === 'function') cb({ error: 'إرسال الصور والملصقات والصوتيات مقيّد لرتبة أعلى من رتبتك.' });
-          return;
-        }
-      }
-      if (msgType === 'text' && !content) {
-        if (typeof cb === 'function') cb({ error: 'الرسالة فارغة.' });
-        return;
-      }
-      if (msgType === 'text' && entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(content)) {
-        if (typeof cb === 'function') cb({ error: 'إرسال الروابط غير مسموح لرتبتك الحالية.' });
-        return;
-      }
-
-      if (msgType !== 'text') {
+      const checkCandidate = String(resolvedName || mentionedUserName || '').replace(/^@+/, '').trim();
+      if (!checkCandidate || (!textContainsMemberName(content, checkCandidate) && !textContainsNormalizedBotName(content, checkCandidate))) {
         mentionedUserId = null;
         mentionedUserName = '';
-      } else if (mentionedUserId) {
-        let resolvedName = mentionedUserName;
-        if (mentionedUserId === 'system:welcomebot') {
-          resolvedName = String(siteSettings.welcome_bot_name || 'مساعد الأصيل').trim();
-        } else if (mentionedUserId === 'system:quizbot') {
-          resolvedName = '🤖 بوت المسابقات';
-        } else if (mentionedUserId.startsWith('virtual:')) {
-          const vm = getActiveVirtualMembersForRooms().find((v) => v.key === mentionedUserId);
-          if (vm?.name) resolvedName = vm.name;
-        } else if (mentionedUserId.startsWith('user:')) {
-          const u = db.findUserById(Number(mentionedUserId.slice(5)));
-          if (u) resolvedName = db.getEffectiveName(u);
-        } else {
-          for (const o of onlineSockets.values()) {
-            if (o.key === mentionedUserId) {
-              resolvedName = o.name;
-              break;
-            }
-          }
-          if (!resolvedName && mentionedUserId.startsWith('guest:')) {
-            const g = db.findGuestByKey(mentionedUserId);
-            if (g?.name) resolvedName = g.name;
-          }
-        }
-        const checkCandidate = String(resolvedName || mentionedUserName || '').replace(/^@+/, '').trim();
-        if (!checkCandidate || (!textContainsMemberName(content, checkCandidate) && !textContainsNormalizedBotName(content, checkCandidate))) {
-          mentionedUserId = null;
-          mentionedUserName = '';
-        } else {
-          mentionedUserName = checkCandidate;
-        }
-      }
-
-      let matchedBannedWord = null;
-      if (msgType === 'text' && entry.role !== 'site_owner') {
-        const maskedRes = maskBannedWords(content);
-        if (maskedRes.matchedWord) {
-          matchedBannedWord = maskedRes.matchedWord;
-          content = maskedRes.maskedText.trim() || '***';
-        }
-      }
-      if ((msgType === 'image' || msgType === 'audio') && !mediaUrl) {
-        if (typeof cb === 'function') cb({ error: 'الملف غير موجود.' });
-        return;
-      }
-      if (msgType === 'sticker' && !content && !mediaUrl) {
-        if (typeof cb === 'function') cb({ error: 'الملصق فارغ.' });
-        return;
-      }
-
-      const allowNameStyle = canPassSettingThreshold(entry, 'min_rank_name_style', 'member');
-      const allowMsgStyle = canPassSettingThreshold(entry, 'min_rank_msg_style', 'member');
-      const isGhostOnly =
-        entry.role !== 'site_owner' &&
-        (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
-      const msg = db.addMessage({
-        roomId: entry.roomId,
-        senderKey: entry.key,
-        senderName: entry.name,
-        senderRole: entry.role,
-        nameColor: allowNameStyle ? (entry.nameBgColor ? entry.nameColor : ensureDarkReadableColor(entry.nameColor, '#f8fafc')) : '#f8fafc',
-        textColor: allowMsgStyle ? ensureDarkReadableColor(entry.textColor, '#e2e8f0') : '#e2e8f0',
-        nameBgColor: allowNameStyle ? entry.nameBgColor : '',
-        neonColor: allowNameStyle ? entry.neonColor : '',
-        fontFamily: allowMsgStyle ? normalizeProfileFont(entry.fontFamily) : 'Cairo',
-        fontStyle: allowMsgStyle ? entry.fontStyle : 'Normal',
-        fontSize: allowMsgStyle ? Math.max(13, Math.min(17, Number(entry.fontSize) || 14)) : 14,
-        nameFontSize: allowNameStyle ? Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)) : 14,
-        nameStyleMode: allowNameStyle ? entry.nameStyleMode || 'solid' : 'solid',
-        nameGradient: allowNameStyle ? entry.nameGradient || 'gold_royal' : 'gold_royal',
-        avatarUrl: entry.avatarUrl,
-        avatarFrame: entry.avatarFrame,
-        nameplateStyle: entry.nameplateStyle,
-        nameShine: entry.nameShine,
-        nameAnim: entry.nameAnim || 'none',
-        nameAnimSpeed: entry.nameAnimSpeed || 'normal',
-        vipWings: entry.vipWings,
-        isAdminNotice,
-        isGhostOnly,
-        msgType,
-        content,
-        mediaUrl,
-        mentionedUserId,
-        mentionedUserName,
-        clientMsgId
-      });
-
-      if (isGhostOnly) {
-        // Ghosted/shadow-muted users see their own messages locally without reaching anyone else
-        socket.emit('new_message', msg);
-        if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg });
-        return;
-      }
-
-      io.to(`room:${entry.roomId}`).emit('new_message', msg);
-      broadcastRoomsList(io);
-
-      // Immediate auto-mute & log on banned word (after masking message to ***)
-      if (matchedBannedWord) {
-        const banWordMuteMins = Math.max(1, Number(siteSettings.banned_word_mute_mins) || 10);
-        const wordReason = `استخدام كلمة محظورة (${matchedBannedWord})`;
-        db.setMute(entry.key, entry.roomId, banWordMuteMins * 60 * 1000, 'نظام الحماية التلقائي', wordReason, {
-          targetName: entry.name,
-          mutedByKey: 'system:wordfilter',
-          violatingWord: matchedBannedWord
-        });
-        activeMutedKeysTracker.add(entry.key);
-        releaseUserMicsInRoom(entry.key, entry.roomId);
-        emitMuteStateToUser(entry.key, entry.roomId);
-        notifyUserMutedNotification(entry.key, banWordMuteMins);
-        db.addAdminLog({
-          actorKey: 'system:wordfilter',
-          actorName: '🛡️ فلتر الكلمات المحظورة',
-          actorRole: 'site_owner',
-          action: 'تشفير كلمة محظورة + كتم تلقائي',
-          targetKey: entry.key,
-          targetName: entry.name,
-          details: `كتم ${banWordMuteMins} دقيقة • الكلمة: "${matchedBannedWord}" • الغرفة: ${entry.roomId}`
-        });
-        notifyOwnersModerationEvent({
-          actorName: '🛡️ فلتر الكلمات المحظورة',
-          actorKey: 'system:wordfilter',
-          targetName: entry.name,
-          targetKey: entry.key,
-          actionType: 'banned_word_mute',
-          reason: wordReason,
-          durationMins: banWordMuteMins,
-          roomId: entry.roomId,
-          violatingWord: matchedBannedWord
-        });
-        socket.emit('error_toast', { message: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(banWordMuteMins)}` });
-        db.flushWrites().catch(() => {});
-        if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg, autoMuted: true });
-        return;
-      }
-
-      // Anti-AFK Economy: reward ONLY on genuine, non-duplicate text messages with cooldown
-      if (msgType === 'text' && entry.userId) {
-        const nowTs = Date.now();
-        const normBody = normalizeArabicText(content);
-        const rewardKey = String(entry.userId);
-        const prevReward = lastMessageRewardByUser.get(rewardKey);
-        const isDuplicateMsg = prevReward && prevReward.text === normBody;
-        const tooFast = prevReward && nowTs - prevReward.at < 4000;
-        if (normBody.length > 0 && !isDuplicateMsg && !tooFast) {
-          lastMessageRewardByUser.set(rewardKey, { text: normBody, at: nowTs });
-          db.incrementActivityPoints({
-            userId: entry.userId,
-            roomId: entry.roomId,
-            userDelta: 2,
-            roomDelta: 2
-          });
-          entry.activityPoints = (Number(entry.activityPoints) || 0) + 2;
-          const rubyEarned = computeRubyGainWithMultiplier(entry.userId, entry.role, 1);
-          if (rubyEarned > 0) db.adjustUserCoins(entry.userId, rubyEarned);
-
-          const promo = db.checkAndApplyAutoPromotion(entry.userId);
-          if (promo?.promoted) {
-            entry.role = promo.newRole;
-            const pRank = promo.rank || db.getRankByKey(promo.newRole);
-            io.to(`room:${entry.roomId}`).emit('room_notice', {
-              roomId: entry.roomId,
-              text: `🎖️ تهانينا! تمت ترقية "${entry.name}" تلقائياً إلى رتبة (${pRank.icon} ${pRank.label}) لتفاعله النشط!`
-            });
-            const promoNotif = db.addNotification({
-              targetKey: entry.key,
-              title: `🎖️ ترقية تلقائية إلى ${pRank.label}!`,
-              body: `مبارك! وصلت نقاط تفاعلك إلى ${entry.activityPoints} وتمت ترقيتك تلقائياً إلى "${pRank.label}".`,
-              category: 'system'
-            });
-            emitNotificationToUser(io, entry.key, promoNotif);
-            io.to(socket.id).emit('user_promoted', { newRole: promo.newRole, rank: pRank });
-            broadcastRoomUsers(io, entry.roomId);
-            broadcastGlobalOnlineUsers(io);
-            io.emit('persistent_members', buildPersistentMembersList());
-          }
-          syncUserAcrossSockets(io, entry.userId);
-          db.flushWrites().catch(() => {});
-        }
-      }
-
-      if (msgType === 'text') {
-        checkQuizBotAnswer(entry, content);
-        maybeHandleWelcomeBotMention(entry, entry.roomId, content, { mentionedUserId }).catch(() => {});
-      }
-
-      // Clean Mention (No @, Recipient-Only Alert Chime, NO Notifications Drawer Auto-Open or Notification Log)
-      if (msgType === 'text' && content) {
-        const mentionedKeys = new Set();
-        if (
-          mentionedUserId &&
-          mentionedUserId !== entry.key &&
-          !mentionedUserId.startsWith('system:') &&
-          !mentionedUserId.startsWith('virtual:')
-        ) {
-          mentionedKeys.add(mentionedUserId);
-        } else if (!mentionedUserId) {
-          for (const other of onlineSockets.values()) {
-            if (other.key === entry.key || isStealthEntry(other)) continue;
-            const n1 = String(other.name || '').trim();
-            const n2 = String(other.username || '').trim();
-            if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
-              mentionedKeys.add(other.key);
-            }
-          }
-        }
-        for (const tKey of mentionedKeys) {
-          for (const [sid, o] of onlineSockets.entries()) {
-            if (o.key === tKey) {
-              io.to(sid).emit('mention_alert', {
-                fromKey: entry.key,
-                fromName: entry.name,
-                fromAvatar: entry.avatarUrl || '',
-                fromRole: entry.role || 'member',
-                roomId: entry.roomId,
-                msgId: msg.id,
-                mentionedUserId: tKey,
-                content: content.slice(0, 120)
-              });
-            }
-          }
-        }
-      }
-
-      if (typeof cb === 'function') cb({ ok: true, id: msg.id, message: msg });
-    } catch (err) {
-      console.error('send_message error:', err);
-      if (typeof cb === 'function') cb({ error: 'فشل إرسال الرسالة.' });
-    }
-  });
-
-  socket.on('typing', ({ isTyping } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId || isStealthEntry(entry)) return;
-    socket.to(`room:${entry.roomId}`).emit('user_typing', {
-      roomId: entry.roomId,
-      userKey: entry.key,
-      name: entry.name,
-      role: entry.role,
-      avatarUrl: entry.avatarUrl || '',
-      avatarFrame: entry.avatarFrame || 'none',
-      isTyping: Boolean(isTyping)
-    });
-  });
-
-  socket.on('toggle_stealth', async ({ enabled } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !db.isSupremeOwnerEmail(entry.email) && !canDo(entry.role, 'stealth'))) {
-      if (typeof cb === 'function') cb({ error: 'وضع التخفي غير متاح لرتبتك الحالية.' });
-      return;
-    }
-    const resStealth = db.setUserStealth(entry.userId, Boolean(enabled));
-    if (resStealth && !resStealth.error) {
-      syncUserAcrossSockets(io, entry.userId);
-      broadcastRoomsList(io);
-      for (const r of db.getAllRooms()) broadcastRoomUsers(io, r.id);
-      await db.flushWrites();
-      if (typeof cb === 'function') cb({ ok: true, isStealth: Boolean(enabled) });
-    }
-  });
-
-  // ==========================================
-  // MICS 1..5 + REAL WEBRTC AUDIO SIGNALING
-  // ==========================================
-  socket.on('mic_take', ({ slot } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    if (Number(db.getSiteSettings().feat_mics) === 0 && entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'نظام المايكات الصوتية متوقف مؤقتاً من قبل المالك.' });
-      return;
-    }
-    if (entry.role !== 'site_owner' && !canDo(entry.role, 'mic')) {
-      if (typeof cb === 'function') cb({ error: 'صعود المايكات غير متاح لرتبتك الحالية.' });
-      return;
-    }
-    if (!canPassSettingThreshold(entry, 'min_rank_mic', 'guest')) {
-      if (typeof cb === 'function') cb({ error: 'صعود المايكات مقيّد حالياً لرتبة أعلى من رتبتك.' });
-      return;
-    }
-    if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'حسابك مجمد حالياً ولا يمكنك صعود المايك.' });
-      return;
-    }
-    const rm = db.getRoomById(entry.roomId);
-    if (!rm || rm.mics_enabled === 0) {
-      if (typeof cb === 'function') cb({ error: 'المايكات معطلة في هذه الغرفة.' });
-      return;
-    }
-    if (Number(rm.is_frozen) === 1 && !db.isRoomManager(entry.roomId, entry.userId, entry.role)) {
-      if (typeof cb === 'function') cb({ error: 'الغرفة مجمدة مؤقتاً.' });
-      return;
-    }
-    const slotNum = Number(slot);
-    if (slotNum < 1 || slotNum > 5) return;
-
-    const slots = ensureRoomMicSlots(entry.roomId);
-    const targetSlot = slots.find((s) => s.slot === slotNum);
-    if (!targetSlot) return;
-    if (targetSlot.holderKey && targetSlot.holderKey !== entry.key) {
-      if (typeof cb === 'function') cb({ error: 'هذا المايك محجوز حالياً.' });
-      return;
-    }
-
-    for (const s of slots) {
-      if (s.holderKey === entry.key && s.slot !== slotNum) {
-        s.holderKey = null;
-        s.holderSocketId = null;
-        s.holderName = null;
-        s.holderRole = null;
-        s.holderAvatar = null;
-        s.isSelfMuted = false;
-        s.isAdminMuted = false;
-        s.isSpeaking = false;
+      } else {
+        mentionedUserName = checkCandidate;
       }
     }
 
-    targetSlot.holderKey = entry.key;
-    targetSlot.holderSocketId = socket.id;
-    targetSlot.holderName = entry.name;
-    targetSlot.holderRole = entry.role;
-    targetSlot.holderAvatar = entry.avatarUrl || '';
-    targetSlot.isSelfMuted = false;
-    targetSlot.isAdminMuted = false;
-    targetSlot.isSpeaking = true;
-
-    io.to(`room:${entry.roomId}`).emit('mic_state', {
-      roomId: entry.roomId,
-      slots: getPublicMicSlots(entry.roomId)
-    });
-    if (typeof cb === 'function') cb({ ok: true, slot: slotNum });
-  });
-
-  socket.on('mic_leave', () => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    releaseUserMicsInRoom(entry.key, entry.roomId);
-  });
-
-  socket.on('mic_toggle_self_mute', ({ muted } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const slots = ensureRoomMicSlots(entry.roomId);
-    let changed = false;
-    for (const s of slots) {
-      if (s.holderKey === entry.key) {
-        s.isSelfMuted = Boolean(muted);
-        s.isSpeaking = !s.isSelfMuted && !s.isAdminMuted;
-        changed = true;
+    let matchedBannedWord = null;
+    if (msgType === 'text' && entry.role !== 'site_owner') {
+      const maskedRes = maskBannedWords(content);
+      if (maskedRes.matchedWord) {
+        matchedBannedWord = maskedRes.matchedWord;
+        content = maskedRes.maskedText.trim() || '***';
       }
     }
-    if (changed) {
-      io.to(`room:${entry.roomId}`).emit('mic_state', {
-        roomId: entry.roomId,
-        slots: getPublicMicSlots(entry.roomId)
-      });
+    if ((msgType === 'image' || msgType === 'audio') && !mediaUrl) {
+      return res.status(400).json({ error: 'الملف غير موجود.' });
     }
-  });
-
-  socket.on('mic_admin_mute_slot', ({ slot, muted } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const isMgr =
-      db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
-    if (!isMgr) return;
-    const slots = ensureRoomMicSlots(entry.roomId);
-    const targetSlot = slots.find((s) => s.slot === Number(slot));
-    if (!targetSlot || !targetSlot.holderKey) return;
-    if (targetSlot.holderKey !== entry.key) {
-      const check = canModerateWithImmunity(entry, targetSlot.holderKey, { checkImmunePerm: true });
-      if (!check.allowed) {
-        socket.emit('error_toast', { message: check.reason });
-        return;
-      }
-    }
-    targetSlot.isAdminMuted = Boolean(muted);
-    targetSlot.isSpeaking = !targetSlot.isSelfMuted && !targetSlot.isAdminMuted;
-    if (targetSlot.holderSocketId) {
-      io.to(targetSlot.holderSocketId).emit('mic_force_mute', { muted: targetSlot.isAdminMuted });
-    }
-    db.addAdminLog({
-      actorKey: entry.key,
-      actorName: entry.name,
-      actorRole: entry.role,
-      action: targetSlot.isAdminMuted ? 'كتم مايك' : 'فتح مايك',
-      targetKey: targetSlot.holderKey,
-      targetName: targetSlot.holderName || targetSlot.holderKey,
-      details: `مايك #${targetSlot.slot} (${entry.roomId})`
-    });
-    io.to(`room:${entry.roomId}`).emit('mic_state', {
-      roomId: entry.roomId,
-      slots: getPublicMicSlots(entry.roomId)
-    });
-  });
-
-  socket.on('mic_kick_slot', ({ slot } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const isMgr =
-      db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
-    if (!isMgr) return;
-    const slots = ensureRoomMicSlots(entry.roomId);
-    const targetSlot = slots.find((s) => s.slot === Number(slot));
-    if (!targetSlot || !targetSlot.holderKey) return;
-    if (targetSlot.holderKey !== entry.key) {
-      const check = canModerateWithImmunity(entry, targetSlot.holderKey, { checkImmunePerm: true });
-      if (!check.allowed) {
-        socket.emit('error_toast', { message: check.reason });
-        return;
-      }
-    }
-    const kickedSid = targetSlot.holderSocketId;
-    const kickedKey = targetSlot.holderKey;
-    const kickedName = targetSlot.holderName || kickedKey;
-    targetSlot.holderKey = null;
-    targetSlot.holderSocketId = null;
-    targetSlot.holderName = null;
-    targetSlot.holderRole = null;
-    targetSlot.holderAvatar = null;
-    targetSlot.isSelfMuted = false;
-    targetSlot.isAdminMuted = false;
-    targetSlot.isSpeaking = false;
-    if (kickedSid) {
-      io.to(kickedSid).emit('mic_kicked', { byName: entry.name });
-    }
-    db.addAdminLog({
-      actorKey: entry.key,
-      actorName: entry.name,
-      actorRole: entry.role,
-      action: 'إنزال من المايك',
-      targetKey: kickedKey,
-      targetName: kickedName,
-      details: `مايك #${targetSlot.slot} (${entry.roomId})`
-    });
-    io.to(`room:${entry.roomId}`).emit('mic_state', {
-      roomId: entry.roomId,
-      slots: getPublicMicSlots(entry.roomId)
-    });
-  });
-
-  socket.on('mic_speaking_level', ({ slot, level } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const clamped = Math.max(0, Math.min(1, Number(level) || 0));
-    socket.to(`room:${entry.roomId}`).emit('mic_speaking_level', {
-      roomId: entry.roomId,
-      slot: Number(slot) || 0,
-      userKey: entry.key,
-      level: clamped
-    });
-  });
-
-  socket.on('mic_webrtc_ready', ({ slot } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    socket.to(`room:${entry.roomId}`).emit('mic_webrtc_peer_ready', {
-      roomId: entry.roomId,
-      slot: Number(slot) || 1,
-      fromSocketId: socket.id,
-      fromKey: entry.key,
-      fromName: entry.name
-    });
-  });
-
-  socket.on('mic_webrtc_offer', ({ toSocketId, sdp, slot } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !toSocketId || !sdp) return;
-    io.to(toSocketId).emit('mic_webrtc_offer', {
-      fromSocketId: socket.id,
-      fromKey: entry.key,
-      fromName: entry.name,
-      slot: Number(slot) || 1,
-      sdp
-    });
-  });
-
-  socket.on('mic_webrtc_answer', ({ toSocketId, sdp } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !toSocketId || !sdp) return;
-    io.to(toSocketId).emit('mic_webrtc_answer', {
-      fromSocketId: socket.id,
-      fromKey: entry.key,
-      sdp
-    });
-  });
-
-  socket.on('mic_webrtc_ice', ({ toSocketId, candidate } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !toSocketId || !candidate) return;
-    io.to(toSocketId).emit('mic_webrtc_ice', {
-      fromSocketId: socket.id,
-      candidate
-    });
-  });
-
-  // ==========================================
-  // SYNCHRONIZED ROOM YOUTUBE PLAYER + MIC MINI AUDIO BAR
-  // ==========================================
-  socket.on('room_youtube_set', async ({ roomId, url, title, isPlaying, miniMode } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    const targetRoomId = roomId || entry?.roomId;
-    if (!entry || !targetRoomId) return;
-    if (Number(db.getSiteSettings().feat_youtube) === 0 && entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'ميزة اليوتيوب متوقفة مؤقتاً من قبل المالك.' });
-      return;
+    if (msgType === 'sticker' && !content && !mediaUrl) {
+      return res.status(400).json({ error: 'الملصق فارغ.' });
     }
 
-    const currentRoom = db.getRoomById(targetRoomId);
-    if (!currentRoom) return;
-
-    const isMgr = db.isRoomManager(targetRoomId, entry.userId, entry.role);
-    if (!isMgr && entry.role !== 'site_owner' && !canDo(entry.role, 'youtube')) {
-      if (typeof cb === 'function') cb({ error: 'تشغيل ومشاركة يوتيوب غير متاحة لرتبتك الحالية.' });
-      return;
-    }
-    const slots = ensureRoomMicSlots(targetRoomId);
-    const isOnMic = slots.some((s) => s.holderKey === entry.key);
-    const isFrozen = (entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner';
-    const isMuted = Boolean(db.getActiveMute(entry.key, targetRoomId));
-
-    if (!isMgr && (isFrozen || isMuted)) {
-      if (typeof cb === 'function') cb({ error: 'لا يمكنك تشغيل أو تعديل يوتيوب أثناء التجميد أو الكتم.' });
-      return;
-    }
-
-    const rawUrl = String(url || '').trim();
-    const videoId = rawUrl === '' ? '' : extractYouTubeId(rawUrl);
-    if (rawUrl !== '' && !videoId) {
-      if (typeof cb === 'function') cb({ error: 'رابط يوتيوب غير صالح. استخدم البحث بالاسم أو رابط فيديو صحيح.' });
-      return;
-    }
-
-    if (videoId === '' && !isMgr && !isOnMic && currentRoom.youtube_by_key !== entry.key) {
-      if (typeof cb === 'function') cb({ error: 'يمكن لمن شغّل المقطع أو المتحدث على المايك أو الإدارة فقط إيقاف التشغيل.' });
-      return;
-    }
-
-    const resolvedMiniMode = miniMode !== undefined ? Boolean(miniMode) : isOnMic;
-    const cleanTitle = String(title || (videoId ? 'مقطع يوتيوب الغرفة' : '')).slice(0, 120);
-    const updated = db.setRoomYoutube(targetRoomId, {
-      videoId,
-      title: cleanTitle,
-      isPlaying: Boolean(videoId && isPlaying !== false),
-      miniMode: Boolean(videoId && resolvedMiniMode),
-      startedByKey: entry.key,
-      startedByName: entry.name
-    });
-    if (!updated) return;
-
-    const pub = db.sanitizeRoomForPublic(updated);
-    io.to(`room:${targetRoomId}`).emit('room_youtube_updated', {
+    const allowNameStyle = canPassSettingThreshold(entry, 'min_rank_name_style', 'member');
+    const allowMsgStyle = canPassSettingThreshold(entry, 'min_rank_msg_style', 'member');
+    const isGhostOnly =
+      entry.role !== 'site_owner' &&
+      (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
+    const msg = db.addMessage({
       roomId: targetRoomId,
-      youtubeVideoId: pub.youtube_video_id,
-      youtubeTitle: pub.youtube_title,
-      youtubeIsPlaying: Boolean(pub.youtube_is_playing),
-      youtubeMiniMode: Boolean(pub.youtube_mini_mode),
-      youtubeByKey: pub.youtube_by_key,
-      youtubeByName: pub.youtube_by_name,
-      byName: entry.name
+      senderKey: entry.key,
+      senderName: entry.name,
+      senderRole: entry.role,
+      nameColor: allowNameStyle ? (entry.nameBgColor ? entry.nameColor : ensureDarkReadableColor(entry.nameColor, '#f8fafc')) : '#f8fafc',
+      textColor: allowMsgStyle ? ensureDarkReadableColor(entry.textColor, '#e2e8f0') : '#e2e8f0',
+      nameBgColor: allowNameStyle ? entry.nameBgColor : '',
+      neonColor: allowNameStyle ? entry.neonColor : '',
+      fontFamily: allowMsgStyle ? normalizeProfileFont(entry.fontFamily) : 'Cairo',
+      fontStyle: allowMsgStyle ? entry.fontStyle : 'Normal',
+      fontSize: allowMsgStyle ? Math.max(13, Math.min(17, Number(entry.fontSize) || 14)) : 14,
+      nameFontSize: allowNameStyle ? Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)) : 14,
+      nameStyleMode: allowNameStyle ? entry.nameStyleMode || 'solid' : 'solid',
+      nameGradient: allowNameStyle ? entry.nameGradient || 'gold_royal' : 'gold_royal',
+      avatarUrl: entry.avatarUrl,
+      avatarFrame: entry.avatarFrame,
+      nameplateStyle: entry.nameplateStyle,
+      nameShine: entry.nameShine,
+      nameAnim: entry.nameAnim || 'none',
+      nameAnimSpeed: entry.nameAnimSpeed || 'normal',
+      vipWings: entry.vipWings,
+      isAdminNotice,
+      isGhostOnly,
+      msgType,
+      content,
+      mediaUrl,
+      mentionedUserId,
+      mentionedUserName,
+      clientMsgId
     });
-    if (videoId) {
-      io.to(`room:${targetRoomId}`).emit('room_notice', {
+
+    if (isGhostOnly) {
+      await db.flushWrites();
+      return res.json({ ok: true, id: msg.id, message: msg });
+    }
+
+    if (matchedBannedWord) {
+      const banWordMuteMins = Math.max(1, Number(siteSettings.banned_word_mute_mins) || 10);
+      const wordReason = `استخدام كلمة محظورة (${matchedBannedWord})`;
+      db.setMute(entry.key, targetRoomId, banWordMuteMins * 60 * 1000, 'نظام الحماية التلقائي', wordReason, {
+        targetName: entry.name,
+        mutedByKey: 'system:wordfilter',
+        violatingWord: matchedBannedWord
+      });
+      activeMutedKeysTracker.add(entry.key);
+      releaseUserMicsInRoom(entry.key, targetRoomId);
+      emitMuteStateToUser(entry.key, targetRoomId);
+      notifyUserMutedNotification(entry.key, banWordMuteMins);
+      db.addAdminLog({
+        actorKey: 'system:wordfilter',
+        actorName: '🛡️ فلتر الكلمات المحظورة',
+        actorRole: 'site_owner',
+        action: 'تشفير كلمة محظورة + كتم تلقائي',
+        targetKey: entry.key,
+        targetName: entry.name,
+        details: `كتم ${banWordMuteMins} دقيقة • الكلمة: "${matchedBannedWord}" • الغرفة: ${targetRoomId}`
+      });
+      notifyOwnersModerationEvent({
+        actorName: '🛡️ فلتر الكلمات المحظورة',
+        actorKey: 'system:wordfilter',
+        targetName: entry.name,
+        targetKey: entry.key,
+        actionType: 'banned_word_mute',
+        reason: wordReason,
+        durationMins: banWordMuteMins,
         roomId: targetRoomId,
-        text: `🎵 شارك "${entry.name}" مقطع يوتيوب: ${cleanTitle}${resolvedMiniMode ? ' (شريط صوتي تحت المايك)' : ''}`
+        violatingWord: matchedBannedWord
       });
-    }
-    broadcastRoomsList(io);
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true, room: pub });
-  });
-
-  socket.on('quiz_bot_toggle', async ({ roomId, enabled } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'هذا الخيار متاح لصاحب الموقع فقط.' });
-      return;
-    }
-    const targetRoomId = roomId || entry.roomId || 'competitions';
-    if (!db.getRoomById(targetRoomId)) {
-      if (typeof cb === 'function') cb({ error: 'الغرفة غير موجودة.' });
-      return;
-    }
-    if (enabled) {
-      startQuizBotInRoom(targetRoomId, 100);
-    } else {
-      stopQuizBotInRoom(targetRoomId);
-    }
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true, active: Boolean(enabled) });
-  });
-
-  // ==========================================
-  // PRIVATE MESSAGES
-  // ==========================================
-  socket.on('send_pm', async ({ toKey, toName, content } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    const clean = String(content || '').trim().slice(0, 800);
-    if (!entry || !toKey || !clean) return;
-    if (Number(db.getSiteSettings().feat_pm) === 0 && entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'الرسائل الخاصة متوقفة مؤقتاً من قبل المالك.' });
-      return;
-    }
-    if (entry.role !== 'site_owner' && !canDo(entry.role, 'pm')) {
-      if (typeof cb === 'function') cb({ error: 'إرسال الرسائل الخاصة غير متاح لرتبتك الحالية.' });
-      return;
-    }
-    if (!canPassSettingThreshold(entry, 'min_rank_pm', 'member')) {
-      if (typeof cb === 'function') cb({ error: 'إرسال الرسائل الخاصة مقيّد حالياً لرتبة أعلى من رتبتك.' });
-      return;
-    }
-    if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'أنت مجمد حالياً ولا يمكنك إرسال رسائل خاصة.' });
-      return;
-    }
-    const pmMute = entry.role !== 'site_owner' ? db.getActiveMute(entry.key, entry.roomId || '*') : null;
-    if (pmMute) {
-      const mins = Math.max(1, Math.ceil((pmMute.expires_at - Date.now()) / 60000));
-      if (typeof cb === 'function') cb({ error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}` });
-      return;
-    }
-    if (entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(clean)) {
-      if (typeof cb === 'function') cb({ error: 'إرسال الروابط في الرسائل الخاصة غير مسموح لرتبتك.' });
-      return;
-    }
-    if (entry.role !== 'site_owner' && containsBannedWord(clean)) {
-      if (typeof cb === 'function') cb({ error: 'تحتوي الرسالة على كلمة محظورة.' });
-      return;
+      await db.flushWrites();
+      return res.json({ ok: true, id: msg.id, message: msg, autoMuted: true, muteMins: banWordMuteMins });
     }
 
-    // PM Link Radar -> alerts Owner in real-time and persists alert
-    if (entry.role !== 'site_owner' && containsUrl(clean)) {
-      const linkAlert = db.addPmLinkAlert({
-        fromKey: entry.key,
-        fromName: entry.name,
-        toKey,
-        toName: toName || 'عضو',
-        content: clean
-      });
-      for (const [sid, o] of onlineSockets.entries()) {
-        if (o.role === 'site_owner' || db.isSupremeOwnerEmail(o.email)) {
-          io.to(sid).emit('owner_pm_link_alert', linkAlert);
+    // Registered Members Auto-Ruby & Activity Engine:
+    // +10 Ruby every 50 genuine text messages (reset counter), ONLY if >= 3 min since lastRewardAt
+    let rubyRewardResult = null;
+    if (msgType === 'text' && !entry.isGuest && entry.userId) {
+      const nowTs = Date.now();
+      const normBody = normalizeArabicText(content);
+      const rewardKey = String(entry.userId);
+      const prevReward = lastMessageRewardByUser.get(rewardKey);
+      const isDuplicateMsg = prevReward && prevReward.text === normBody;
+      const tooFast = prevReward && nowTs - prevReward.at < 3000;
+      if (normBody.length > 0 && !isDuplicateMsg && !tooFast) {
+        lastMessageRewardByUser.set(rewardKey, { text: normBody, at: nowTs });
+        db.incrementActivityPoints({
+          userId: entry.userId,
+          roomId: targetRoomId,
+          userDelta: 2,
+          roomDelta: 2
+        });
+        entry.activityPoints = (Number(entry.activityPoints) || 0) + 2;
+        rubyRewardResult = db.processMessageAutoRubyReward(entry.userId, nowTs);
+        if (rubyRewardResult?.awarded) {
+          entry.coins = rubyRewardResult.coins;
         }
+
+        const promo = db.checkAndApplyAutoPromotion(entry.userId);
+        if (promo?.promoted) {
+          entry.role = promo.newRole;
+          const pRank = promo.rank || db.getRankByKey(promo.newRole);
+          emitRoomNoticeMessage(
+            targetRoomId,
+            `🎖️ تهانينا! تمت ترقية "${entry.name}" تلقائياً إلى رتبة (${pRank.icon} ${pRank.label}) لتفاعله النشط!`
+          );
+          const promoNotif = db.addNotification({
+            targetKey: entry.key,
+            title: `🎖️ ترقية تلقائية إلى ${pRank.label}!`,
+            body: `مبارك! وصلت نقاط تفاعلك إلى ${entry.activityPoints} وتمت ترقيتك تلقائياً إلى "${pRank.label}".`,
+            category: 'system'
+          });
+          emitNotificationToUser(null, entry.key, promoNotif);
+        }
+        syncUserPresence(entry.userId);
       }
     }
 
-    const pm = db.addPrivateMessage({
+    if (msgType === 'text') {
+      checkQuizBotAnswer(entry, content);
+      maybeHandleWelcomeBotMention(entry, targetRoomId, content, { mentionedUserId }).catch(() => {});
+    }
+
+    // Recipient-Only Mention Chime (never writes into general notifications)
+    if (msgType === 'text' && content) {
+      const mentionedKeys = new Set();
+      if (
+        mentionedUserId &&
+        mentionedUserId !== entry.key &&
+        !mentionedUserId.startsWith('system:') &&
+        !mentionedUserId.startsWith('virtual:')
+      ) {
+        mentionedKeys.add(mentionedUserId);
+      } else if (!mentionedUserId) {
+        for (const other of onlinePresenceMap.values()) {
+          if (other.key === entry.key || isStealthEntry(other)) continue;
+          const n1 = String(other.name || '').trim();
+          const n2 = String(other.username || '').trim();
+          if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
+            mentionedKeys.add(other.key);
+          }
+        }
+      }
+      for (const tKey of mentionedKeys) {
+        db.patchUserStateDoc(tKey, {
+          lastMentionAt: Date.now(),
+          lastMentionData: {
+            fromKey: entry.key,
+            fromName: entry.name,
+            fromAvatar: entry.avatarUrl || '',
+            fromRole: entry.role || 'member',
+            roomId: targetRoomId,
+            msgId: msg.id,
+            mentionedUserId: tKey,
+            content: content.slice(0, 120)
+          }
+        });
+      }
+    }
+
+    await db.flushWrites();
+    return res.json({
+      ok: true,
+      id: msg.id,
+      message: msg,
+      rubyReward: rubyRewardResult,
+      user: !entry.isGuest && entry.userId ? mapUserRow(db.findUserById(entry.userId)) : undefined
+    });
+  } catch (err) {
+    console.error('POST /api/chat/messages error:', err);
+    return res.status(500).json({ error: 'فشل إرسال الرسالة.' });
+  }
+});
+
+app.delete('/api/chat/messages/:id', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req);
+  const msgId = String(req.params.id || '').trim();
+  const roomId = String(req.query?.roomId || entry.roomId || '').trim();
+  if (!roomId || !msgId) return res.status(400).json({ error: 'بيانات ناقصة.' });
+
+  const isMgr =
+    db.isRoomManager(roomId, entry.userId, entry.role) ||
+    canDo(entry.role, 'delete_msg') ||
+    canDo(entry.role, 'clear_room');
+  const roomMsgs = db.getRoomMessages(roomId, 200);
+  const target = roomMsgs.find((m) => String(m.id) === msgId || String(m.doc_id) === msgId);
+  if (!target) return res.status(404).json({ error: 'الرسالة غير موجودة.' });
+  if (!isMgr && target.sender_key !== entry.key) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية حذف هذه الرسالة.' });
+  }
+  if (target.sender_key !== entry.key && entry.role !== 'site_owner') {
+    const check = canModerateWithImmunity(entry, target.sender_key);
+    if (!check.allowed) return res.status(403).json({ error: check.reason });
+  }
+  db.deleteMessageById(msgId);
+  if (target.sender_key !== entry.key) {
+    db.addAdminLog({
+      actorKey: entry.key,
+      actorName: entry.name,
+      actorRole: entry.role,
+      action: 'حذف رسالة',
+      targetKey: target.sender_key,
+      targetName: target.sender_name || target.sender_key,
+      details: roomId
+    });
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, msgId });
+});
+
+app.post('/api/chat/typing', requireAuth, (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  if (!entry || !entry.roomId || isStealthEntry(entry)) return res.json({ ok: true });
+  const isTyping = Boolean(req.body?.isTyping);
+  entry.typingInRoom = isTyping ? entry.roomId : '';
+  entry.typingAt = isTyping ? Date.now() : 0;
+  db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+  return res.json({ ok: true });
+});
+
+app.post('/api/chat/stealth', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req);
+  if (entry.role !== 'site_owner' && !db.isSupremeOwnerEmail(entry.email) && !canDo(entry.role, 'stealth')) {
+    return res.status(403).json({ error: 'وضع التخفي غير متاح لرتبتك الحالية.' });
+  }
+  const resStealth = db.setUserStealth(entry.userId, Boolean(req.body?.enabled));
+  if (resStealth?.error) return res.status(400).json({ error: resStealth.error });
+  syncUserPresence(entry.userId);
+  await db.flushWrites();
+  return res.json({ ok: true, isStealth: Boolean(req.body?.enabled) });
+});
+
+app.post('/api/chat/mics/take', requireAuth, (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const roomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (!roomId) return res.status(400).json({ error: 'الغرفة مطلوبة.' });
+  if (Number(db.getSiteSettings().feat_mics) === 0 && entry.role !== 'site_owner') {
+    return res.status(403).json({ error: 'نظام المايكات الصوتية متوقف مؤقتاً من قبل المالك.' });
+  }
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'mic')) {
+    return res.status(403).json({ error: 'صعود المايكات غير متاح لرتبتك الحالية.' });
+  }
+  if (!canPassSettingThreshold(entry, 'min_rank_mic', 'guest')) {
+    return res.status(403).json({ error: 'صعود المايكات مقيّد حالياً لرتبة أعلى من رتبتك.' });
+  }
+  if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+    return res.status(403).json({ error: 'حسابك مجمد حالياً ولا يمكنك صعود المايك.' });
+  }
+  const rm = db.getRoomById(roomId);
+  if (!rm || rm.mics_enabled === 0) return res.status(403).json({ error: 'المايكات معطلة في هذه الغرفة.' });
+  if (Number(rm.is_frozen) === 1 && !db.isRoomManager(roomId, entry.userId, entry.role)) {
+    return res.status(403).json({ error: 'الغرفة مجمدة مؤقتاً.' });
+  }
+  const slotNum = Number(req.body?.slot);
+  if (slotNum < 1 || slotNum > 5) return res.status(400).json({ error: 'رقم مايك غير صالح.' });
+
+  const slots = ensureRoomMicSlots(roomId);
+  const targetSlot = slots.find((s) => s.slot === slotNum);
+  if (!targetSlot) return res.status(404).json({ error: 'المايك غير موجود.' });
+  if (targetSlot.holderKey && targetSlot.holderKey !== entry.key) {
+    return res.status(409).json({ error: 'هذا المايك محجوز حالياً.' });
+  }
+  for (const s of slots) {
+    if (s.holderKey === entry.key && s.slot !== slotNum) {
+      s.holderKey = null;
+      s.holderSocketId = null;
+      s.holderName = null;
+      s.holderRole = null;
+      s.holderAvatar = null;
+      s.isSelfMuted = false;
+      s.isAdminMuted = false;
+      s.isSpeaking = false;
+      s.speakingLevel = 0;
+    }
+  }
+  targetSlot.holderKey = entry.key;
+  targetSlot.holderSocketId = entry.key;
+  targetSlot.holderName = entry.name;
+  targetSlot.holderRole = entry.role;
+  targetSlot.holderAvatar = entry.avatarUrl || '';
+  targetSlot.isSelfMuted = false;
+  targetSlot.isAdminMuted = false;
+  targetSlot.isSpeaking = true;
+  targetSlot.speakingLevel = 0;
+  syncRoomMicsToFirestore(roomId);
+  return res.json({ ok: true, slot: slotNum, slots: getPublicMicSlots(roomId) });
+});
+
+app.post('/api/chat/mics/leave', requireAuth, (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const roomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (roomId) releaseUserMicsInRoom(entry.key, roomId);
+  return res.json({ ok: true, slots: roomId ? getPublicMicSlots(roomId) : [] });
+});
+
+app.post('/api/chat/mics/self-mute', requireAuth, (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const roomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (!roomId) return res.status(400).json({ error: 'الغرفة مطلوبة.' });
+  const slots = ensureRoomMicSlots(roomId);
+  let changed = false;
+  for (const s of slots) {
+    if (s.holderKey === entry.key) {
+      s.isSelfMuted = Boolean(req.body?.muted);
+      s.isSpeaking = !s.isSelfMuted && !s.isAdminMuted;
+      changed = true;
+    }
+  }
+  if (changed) syncRoomMicsToFirestore(roomId);
+  return res.json({ ok: true, slots: getPublicMicSlots(roomId) });
+});
+
+app.post('/api/chat/mics/admin-mute', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const roomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (!roomId) return res.status(400).json({ error: 'الغرفة مطلوبة.' });
+  const isMgr = db.isRoomManager(roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
+  if (!isMgr) return res.status(403).json({ error: 'صلاحية غير كافية.' });
+  const slots = ensureRoomMicSlots(roomId);
+  const targetSlot = slots.find((s) => s.slot === Number(req.body?.slot));
+  if (!targetSlot || !targetSlot.holderKey) return res.status(404).json({ error: 'المايك فارغ.' });
+  if (targetSlot.holderKey !== entry.key) {
+    const check = canModerateWithImmunity(entry, targetSlot.holderKey, { checkImmunePerm: true });
+    if (!check.allowed) return res.status(403).json({ error: check.reason });
+  }
+  targetSlot.isAdminMuted = Boolean(req.body?.muted);
+  targetSlot.isSpeaking = !targetSlot.isSelfMuted && !targetSlot.isAdminMuted;
+  db.patchUserStateDoc(targetSlot.holderKey, { micForceMuteAt: Date.now(), micForceMuted: targetSlot.isAdminMuted });
+  syncRoomMicsToFirestore(roomId);
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: targetSlot.isAdminMuted ? 'كتم مايك' : 'فتح مايك',
+    targetKey: targetSlot.holderKey,
+    targetName: targetSlot.holderName || targetSlot.holderKey,
+    details: `مايك #${targetSlot.slot} (${roomId})`
+  });
+  await db.flushWrites();
+  return res.json({ ok: true, slots: getPublicMicSlots(roomId) });
+});
+
+app.post('/api/chat/mics/kick', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const roomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (!roomId) return res.status(400).json({ error: 'الغرفة مطلوبة.' });
+  const isMgr = db.isRoomManager(roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
+  if (!isMgr) return res.status(403).json({ error: 'صلاحية غير كافية.' });
+  const slots = ensureRoomMicSlots(roomId);
+  const targetSlot = slots.find((s) => s.slot === Number(req.body?.slot));
+  if (!targetSlot || !targetSlot.holderKey) return res.status(404).json({ error: 'المايك فارغ.' });
+  if (targetSlot.holderKey !== entry.key) {
+    const check = canModerateWithImmunity(entry, targetSlot.holderKey, { checkImmunePerm: true });
+    if (!check.allowed) return res.status(403).json({ error: check.reason });
+  }
+  const kickedKey = targetSlot.holderKey;
+  const kickedName = targetSlot.holderName || kickedKey;
+  targetSlot.holderKey = null;
+  targetSlot.holderSocketId = null;
+  targetSlot.holderName = null;
+  targetSlot.holderRole = null;
+  targetSlot.holderAvatar = null;
+  targetSlot.isSelfMuted = false;
+  targetSlot.isAdminMuted = false;
+  targetSlot.isSpeaking = false;
+  targetSlot.speakingLevel = 0;
+  db.patchUserStateDoc(kickedKey, { micKickedAt: Date.now(), micKickedBy: entry.name });
+  syncRoomMicsToFirestore(roomId);
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: 'إنزال من المايك',
+    targetKey: kickedKey,
+    targetName: kickedName,
+    details: `مايك #${targetSlot.slot} (${roomId})`
+  });
+  await db.flushWrites();
+  return res.json({ ok: true, slots: getPublicMicSlots(roomId) });
+});
+
+app.post('/api/chat/mics/speaking', requireAuth, (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const roomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (!roomId) return res.json({ ok: true });
+  const slotNum = Number(req.body?.slot) || 0;
+  const level = Math.max(0, Math.min(1, Number(req.body?.level) || 0));
+  const slots = ensureRoomMicSlots(roomId);
+  const target = slots.find((s) => s.slot === slotNum && s.holderKey === entry.key);
+  if (target) {
+    target.speakingLevel = level;
+    syncRoomMicsToFirestore(roomId);
+  }
+  return res.json({ ok: true });
+});
+
+app.post('/api/chat/webrtc/signal', requireAuth, (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const { type, toKey, slot, sdp, candidate, roomId } = req.body || {};
+  const cleanType = ['ready', 'offer', 'answer', 'ice'].includes(type) ? type : '';
+  if (!cleanType) return res.status(400).json({ error: 'نوع إشارة غير صالح.' });
+  const signalId = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+  db.pushWebRtcSignalDoc(signalId, {
+    id: signalId,
+    type: cleanType,
+    roomId: String(roomId || entry.roomId || 'general'),
+    fromKey: entry.key,
+    fromName: entry.name,
+    toKey: String(toKey || ''),
+    slot: Number(slot) || 1,
+    sdp: sdp || null,
+    candidate: candidate || null,
+    createdAtMs: Date.now()
+  });
+  setTimeout(() => {
+    db.deleteWebRtcSignalDoc(signalId);
+  }, 45000);
+  return res.json({ ok: true, id: signalId });
+});
+
+app.post('/api/chat/youtube', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const targetRoomId = String(req.body?.roomId || entry.roomId || '').trim();
+  if (!targetRoomId) return res.status(400).json({ error: 'الغرفة مطلوبة.' });
+  if (Number(db.getSiteSettings().feat_youtube) === 0 && entry.role !== 'site_owner') {
+    return res.status(403).json({ error: 'ميزة اليوتيوب متوقفة مؤقتاً من قبل المالك.' });
+  }
+  const currentRoom = db.getRoomById(targetRoomId);
+  if (!currentRoom) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+
+  const isMgr = db.isRoomManager(targetRoomId, entry.userId, entry.role);
+  if (!isMgr && entry.role !== 'site_owner' && !canDo(entry.role, 'youtube')) {
+    return res.status(403).json({ error: 'تشغيل ومشاركة يوتيوب غير متاحة لرتبتك الحالية.' });
+  }
+  const slots = ensureRoomMicSlots(targetRoomId);
+  const isOnMic = slots.some((s) => s.holderKey === entry.key);
+  const isFrozen = (entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner';
+  const isMuted = Boolean(db.getActiveMute(entry.key, targetRoomId));
+  if (!isMgr && (isFrozen || isMuted)) {
+    return res.status(403).json({ error: 'لا يمكنك تشغيل أو تعديل يوتيوب أثناء التجميد أو الكتم.' });
+  }
+
+  const rawUrl = String(req.body?.url || '').trim();
+  const videoId = rawUrl === '' ? '' : extractYouTubeId(rawUrl);
+  if (rawUrl !== '' && !videoId) {
+    return res.status(400).json({ error: 'رابط يوتيوب غير صالح. استخدم البحث بالاسم أو رابط فيديو صحيح.' });
+  }
+  if (videoId === '' && !isMgr && !isOnMic && currentRoom.youtube_by_key !== entry.key) {
+    return res.status(403).json({ error: 'يمكن لمن شغّل المقطع أو المتحدث على المايك أو الإدارة فقط إيقاف التشغيل.' });
+  }
+
+  const resolvedMiniMode = req.body?.miniMode !== undefined ? Boolean(req.body?.miniMode) : isOnMic;
+  const cleanTitle = String(req.body?.title || (videoId ? 'مقطع يوتيوب الغرفة' : '')).slice(0, 120);
+  const updated = db.setRoomYoutube(targetRoomId, {
+    videoId,
+    title: cleanTitle,
+    isPlaying: Boolean(videoId && req.body?.isPlaying !== false),
+    miniMode: Boolean(videoId && resolvedMiniMode),
+    startedByKey: entry.key,
+    startedByName: entry.name
+  });
+  if (!updated) return res.status(500).json({ error: 'تعذر تحديث يوتيوب.' });
+  const pub = db.sanitizeRoomForPublic(updated);
+  if (videoId) {
+    emitRoomNoticeMessage(
+      targetRoomId,
+      `🎵 شارك "${entry.name}" مقطع يوتيوب: ${cleanTitle}${resolvedMiniMode ? ' (شريط صوتي تحت المايك)' : ''}`
+    );
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, room: pub });
+});
+
+app.post('/api/chat/quiz/toggle', requireOwner, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req, req.body?.roomId || null);
+  const targetRoomId = String(req.body?.roomId || entry.roomId || 'competitions').trim();
+  if (!db.getRoomById(targetRoomId)) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+  const enabled = Boolean(req.body?.enabled);
+  if (enabled) startQuizBotInRoom(targetRoomId, 100);
+  else stopQuizBotInRoom(targetRoomId);
+  await db.flushWrites();
+  return res.json({ ok: true, active: enabled });
+});
+
+// ==========================================
+// PRIVATE MESSAGES (ISOLATED FROM GENERAL NOTIFICATIONS)
+// ==========================================
+app.post('/api/pm/send', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req);
+  const { toKey, toName, content } = req.body || {};
+  const clean = String(content || '').trim().slice(0, 800);
+  if (!toKey || !clean) return res.status(400).json({ error: 'الرسالة أو المستلم مفقود.' });
+  if (Number(db.getSiteSettings().feat_pm) === 0 && entry.role !== 'site_owner') {
+    return res.status(403).json({ error: 'الرسائل الخاصة متوقفة مؤقتاً من قبل المالك.' });
+  }
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'pm')) {
+    return res.status(403).json({ error: 'إرسال الرسائل الخاصة غير متاح لرتبتك الحالية.' });
+  }
+  if (!canPassSettingThreshold(entry, 'min_rank_pm', 'member')) {
+    return res.status(403).json({ error: 'إرسال الرسائل الخاصة مقيّد حالياً لرتبة أعلى من رتبتك.' });
+  }
+  if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+    return res.status(403).json({ error: 'أنت مجمد حالياً ولا يمكنك إرسال رسائل خاصة.' });
+  }
+  const pmMute = entry.role !== 'site_owner' ? db.getActiveMute(entry.key, entry.roomId || '*') : null;
+  if (pmMute) {
+    const mins = Math.max(1, Math.ceil((pmMute.expires_at - Date.now()) / 60000));
+    return res.status(403).json({ error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}` });
+  }
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(clean)) {
+    return res.status(403).json({ error: 'إرسال الروابط في الرسائل الخاصة غير مسموح لرتبتك.' });
+  }
+  if (entry.role !== 'site_owner' && containsBannedWord(clean)) {
+    return res.status(400).json({ error: 'تحتوي الرسالة على كلمة محظورة.' });
+  }
+
+  // PM Link Radar -> alerts Owner only (never general notification for recipients)
+  if (entry.role !== 'site_owner' && containsUrl(clean)) {
+    const linkAlert = db.addPmLinkAlert({
       fromKey: entry.key,
       fromName: entry.name,
-      fromRole: entry.role,
-      fromAvatar: entry.avatarUrl,
       toKey,
       toName: toName || 'عضو',
       content: clean
     });
-    const notif = db.addNotification({
-      targetKey: toKey,
-      title: `✉️ رسالة خاصة من ${entry.name}`,
-      body: clean.slice(0, 120),
-      category: 'pm'
-    });
-    emitNotificationToUser(io, toKey, notif);
-
-    for (const [sid, o] of onlineSockets.entries()) {
-      if (o.key === toKey || o.key === entry.key) {
-        io.to(sid).emit('new_pm', pm);
-      }
+    const ownerUsers = db.getAllRegisteredUsers().filter((u) => u.role === 'site_owner' || db.isSupremeOwnerEmail(u.email));
+    for (const owner of ownerUsers) {
+      db.patchUserStateDoc(`user:${owner.id}`, {
+        lastPmLinkAlertAt: Date.now(),
+        lastPmLinkAlert: linkAlert
+      });
     }
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true, pm });
-  });
-
-  socket.on('mark_pm_read', async ({ partnerKey } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !partnerKey) return;
-    db.markPrivateMessagesRead(entry.key, partnerKey);
-    await db.flushWrites();
-  });
-
-  // ==========================================
-  // MODERATION SOCKET ACTIONS (WITH HIERARCHICAL IMMUNITY)
-  // ==========================================
-  function resolveTargetInfo(targetKey) {
-    let targetName = targetKey || 'عضو';
-    let targetRole = 'guest';
-    let targetEmail = '';
-    let targetIp = '';
-    let targetDevice = '';
-    let targetFingerprint = '';
-    if (String(targetKey || '').startsWith('user:')) {
-      const uid = Number(String(targetKey).replace('user:', ''));
-      const row = Number.isNaN(uid) ? null : db.findUserById(uid);
-      if (row) {
-        targetName = db.getEffectiveName(row);
-        targetRole = row.role || 'member';
-        targetEmail = row.email || '';
-        targetIp = row.last_ip || '';
-        targetDevice = row.last_device_id || '';
-        targetFingerprint = row.last_fingerprint || '';
-      }
-    } else if (String(targetKey || '').startsWith('guest:')) {
-      const g = db.findGuestByKey(targetKey);
-      if (g) {
-        targetName = g.name || targetName;
-        targetIp = g.last_ip || '';
-        targetDevice = g.last_device_id || '';
-        targetFingerprint = g.last_fingerprint || '';
-      }
-    }
-    for (const o of onlineSockets.values()) {
-      if (o.key === targetKey) {
-        targetName = o.name || targetName;
-        targetRole = o.role || targetRole;
-        targetEmail = o.email || targetEmail;
-        targetIp = o.ipAddress || targetIp;
-        targetDevice = o.deviceId || targetDevice;
-        targetFingerprint = o.fingerprint || targetFingerprint;
-        break;
-      }
-    }
-    return { targetName, targetRole, targetEmail, targetIp, targetDevice, targetFingerprint };
   }
 
-  function canModerateWithImmunity(actorEntry, targetKey, { checkImmunePerm = false } = {}) {
-    if (!actorEntry || !targetKey) return { allowed: false, reason: 'هدف غير صالح.' };
-    if (targetKey === actorEntry.key) return { allowed: false, reason: 'لا يمكنك تنفيذ هذا الإجراء على نفسك.' };
-    if (db.isProtectedSupremeOwnerKey(targetKey)) {
-      return { allowed: false, reason: 'حساب صاحب الموقع محمي بالكامل.' };
-    }
-    const info = resolveTargetInfo(targetKey);
-    if (info.targetRole === 'site_owner' && actorEntry.role !== 'site_owner') {
-      return { allowed: false, reason: 'لا يمكنك التحكم بصاحب الموقع.' };
-    }
-    if (actorEntry.role !== 'site_owner') {
-      const myPower = db.getRankPower(actorEntry.role);
-      const targetPower = db.getRankPower(info.targetRole);
-      if (targetPower >= myPower) {
-        return { allowed: false, reason: 'الحصانة المتدرجة: لا يمكنك التحكم بعضو أعلى منك أو مساوٍ لك في الرتبة.' };
-      }
-      if (checkImmunePerm && db.hasPermission(info.targetRole, 'immune')) {
-        return { allowed: false, reason: 'هذا العضو يمتلك حصانة إدارية ضد الكتم والطرد.' };
-      }
-    }
-    return { allowed: true, info };
-  }
-
-  socket.on('admin_warn', async ({ targetKey, reason = 'مخالفة قوانين الغرفة' } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const isMgr =
-      entry.role === 'site_owner' ||
-      db.isRoomManager(entry.roomId, entry.userId, entry.role) ||
-      canDo(entry.role, 'mute') ||
-      canDo(entry.role, 'kick') ||
-      canDo(entry.role, 'ban');
-    if (!isMgr) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية توجيه التحذيرات.' });
-      return;
-    }
-    const check = canModerateWithImmunity(entry, targetKey);
-    if (!check.allowed) {
-      socket.emit('error_toast', { message: check.reason });
-      if (typeof cb === 'function') cb({ error: check.reason });
-      return;
-    }
-    const cleanReason = String(reason || '').trim().slice(0, 240);
-    if (cleanReason.length < 2) {
-      const msgErr = 'يجب كتابة سبب التحذير (حرفان على الأقل).';
-      if (typeof cb === 'function') cb({ error: msgErr });
-      return;
-    }
-    db.addAdminLog({
-      actorKey: entry.key,
-      actorName: entry.name,
-      actorRole: entry.role,
-      action: 'تحذير إداري',
-      targetKey,
-      targetName: check.info.targetName,
-      details: cleanReason
-    });
-    const notif = db.addNotification({
-      targetKey,
-      title: `⚠️ تحذير إداري من ${entry.name}`,
-      body: cleanReason,
-      category: 'warning'
-    });
-    emitNotificationToUser(io, targetKey, notif);
-    for (const [sid, o] of onlineSockets.entries()) {
-      if (o.key === targetKey) {
-        io.to(sid).emit('admin_warning', {
-          byName: entry.name,
-          byRole: entry.role,
-          reason: cleanReason,
-          roomId: entry.roomId
-        });
-      }
-    }
-    io.to(`room:${entry.roomId}`).emit('room_notice', {
-      roomId: entry.roomId,
-      text: `⚠️ وجّه "${entry.name}" تحذيراً إدارياً إلى "${check.info.targetName}": ${cleanReason}`
-    });
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
+  // addPrivateMessage isolates notifications to user_states.lastPmAt — NEVER inserts into notifications bell!
+  const pm = db.addPrivateMessage({
+    fromKey: entry.key,
+    fromName: entry.name,
+    fromRole: entry.role,
+    fromAvatar: entry.avatarUrl,
+    toKey,
+    toName: toName || 'عضو',
+    content: clean
   });
-
-  socket.on('admin_mute', async ({ targetKey, minutes, reason = '', unmute = false } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const isOwner = entry.role === 'site_owner';
-    const isMgr = isOwner || db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
-    if (!isMgr) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية الكتم.' });
-      return;
-    }
-    const check = canModerateWithImmunity(entry, targetKey, { checkImmunePerm: true });
-    if (!check.allowed) {
-      socket.emit('error_toast', { message: check.reason });
-      if (typeof cb === 'function') cb({ error: check.reason });
-      return;
-    }
-
-    if (unmute) {
-      db.removeMute(targetKey, entry.roomId);
-      emitMuteStateToUser(targetKey, entry.roomId);
-      io.to(`room:${entry.roomId}`).emit('room_notice', {
-        roomId: entry.roomId,
-        text: `🔊 قام "${entry.name}" بفك الكتم عن "${check.info.targetName}".`
-      });
-      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'فك كتم', targetKey, targetName: check.info.targetName, details: entry.roomId });
-      await db.flushWrites();
-      if (typeof cb === 'function') cb({ ok: true });
-      return;
-    }
-
-    const minsNum = Number(minutes);
-    const cleanReason = String(reason || '').trim().slice(0, 240);
-    if (!Number.isFinite(minsNum) || minsNum < 1) {
-      const errMsg = 'يجب تحديد مدة الكتم بالدقائق (دقيقة واحدة على الأقل).';
-      socket.emit('error_toast', { message: errMsg });
-      if (typeof cb === 'function') cb({ error: errMsg });
-      return;
-    }
-    if (!isOwner && cleanReason.length < 2) {
-      const errMsg = 'يجب كتابة سبب الكتم (حرفان على الأقل).';
-      socket.emit('error_toast', { message: errMsg });
-      if (typeof cb === 'function') cb({ error: errMsg });
-      return;
-    }
-    const effectiveReason = cleanReason || 'بقرار من المالك';
-
-    const mins = Math.min(1440, Math.floor(minsNum));
-    db.setMute(targetKey, entry.roomId, mins * 60 * 1000, entry.name, effectiveReason, {
-      targetName: check.info.targetName,
-      mutedByKey: entry.key
-    });
-    activeMutedKeysTracker.add(targetKey);
-    releaseUserMicsInRoom(targetKey, entry.roomId);
-    emitMuteStateToUser(targetKey, entry.roomId);
-    notifyUserMutedNotification(targetKey, mins);
-    db.addAdminLog({
-      actorKey: entry.key,
-      actorName: entry.name,
-      actorRole: entry.role,
-      action: 'كتم عضو',
-      targetKey,
-      targetName: check.info.targetName,
-      details: `${mins} دقيقة • السبب: ${effectiveReason}`
-    });
-    notifyOwnersModerationEvent({
-      actorName: entry.name,
-      actorKey: entry.key,
-      targetName: check.info.targetName,
-      targetKey,
-      actionType: 'mute',
-      reason: effectiveReason,
-      durationMins: mins,
-      roomId: entry.roomId
-    });
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('admin_kick', async ({ targetKey, reason = '' } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const isOwner = entry.role === 'site_owner';
-    const isMgr = isOwner || db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
-    if (!isMgr) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية الطرد.' });
-      return;
-    }
-    const check = canModerateWithImmunity(entry, targetKey, { checkImmunePerm: true });
-    if (!check.allowed) {
-      socket.emit('error_toast', { message: check.reason });
-      if (typeof cb === 'function') cb({ error: check.reason });
-      return;
-    }
-    const cleanReason = String(reason || '').trim().slice(0, 240);
-    if (!isOwner && cleanReason.length < 2) {
-      const errMsg = 'يجب كتابة سبب الطرد (حرفان على الأقل).';
-      socket.emit('error_toast', { message: errMsg });
-      if (typeof cb === 'function') cb({ error: errMsg });
-      return;
-    }
-    const effectiveReason = cleanReason || 'بقرار من المالك';
-
-    for (const [sid, o] of onlineSockets.entries()) {
-      if (o.key === targetKey && o.roomId === entry.roomId) {
-        db.addAdminLog({
-          actorKey: entry.key,
-          actorName: entry.name,
-          actorRole: entry.role,
-          action: 'طرد من الغرفة',
-          targetKey,
-          targetName: o.name,
-          details: `${entry.roomId} • السبب: ${effectiveReason}`
-        });
-        io.to(sid).emit('kicked', { reason: `تم طردك من الغرفة بواسطة ${entry.name} — السبب: ${effectiveReason}` });
-        const s = io.sockets.sockets.get(sid);
-        if (s) s.disconnect(true);
-      }
-    }
-    notifyOwnersModerationEvent({
-      actorName: entry.name,
-      actorKey: entry.key,
-      targetName: check.info.targetName,
-      targetKey,
-      actionType: 'kick',
-      reason: effectiveReason,
-      roomId: entry.roomId
-    });
-    io.to(`room:${entry.roomId}`).emit('room_notice', {
-      roomId: entry.roomId,
-      text: `🚪 قام "${entry.name}" بطرد "${check.info.targetName}" من الغرفة${cleanReason ? ` — السبب: ${cleanReason}` : ''}`
-    });
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('admin_ban', async ({ targetKey, reason = '', banType = 'ban' } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    const isOwner = entry?.role === 'site_owner';
-    if (!entry || (!isOwner && !canDo(entry.role, 'ban'))) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية الحظر.' });
-      return;
-    }
-    const check = canModerateWithImmunity(entry, targetKey);
-    if (!check.allowed) {
-      socket.emit('error_toast', { message: check.reason });
-      if (typeof cb === 'function') cb({ error: check.reason });
-      return;
-    }
-    const cleanReason = String(reason || '').trim().slice(0, 240);
-    if (!isOwner && cleanReason.length < 2) {
-      const errMsg = 'يجب كتابة سبب الحظر (حرفان على الأقل).';
-      socket.emit('error_toast', { message: errMsg });
-      if (typeof cb === 'function') cb({ error: errMsg });
-      return;
-    }
-    const effectiveReason = cleanReason || (banType === 'xban' ? 'بقرار من المالك (X-Ban)' : 'بقرار من المالك');
-
-    const { targetName, targetEmail, targetIp, targetDevice, targetFingerprint } = check.info;
-    db.banTarget({
-      targetKey,
-      targetName,
-      email: targetEmail,
-      ipAddress: targetIp,
-      deviceId: banType === 'xban' ? targetDevice : '',
-      fingerprint: banType === 'xban' ? targetFingerprint : '',
-      banType: banType === 'xban' ? 'xban' : 'ban',
-      reason: effectiveReason,
-      bannedBy: entry.name,
-      bannedByKey: entry.key
-    });
-    db.addAdminLog({
-      actorKey: entry.key,
-      actorName: entry.name,
-      actorRole: entry.role,
-      action: banType === 'xban' ? 'إكس باند X-Ban' : 'حظر نهائي',
-      targetKey,
-      targetName,
-      details: effectiveReason
-    });
-    notifyOwnersModerationEvent({
-      actorName: entry.name,
-      actorKey: entry.key,
-      targetName,
-      targetKey,
-      actionType: banType === 'xban' ? 'xban' : 'ban',
-      reason: effectiveReason
-    });
-    for (const [sid, o] of onlineSockets.entries()) {
-      if (o.key === targetKey) {
-        io.to(sid).emit('kicked', {
-          reason: 'تم حظرك من الشات',
-          banned: true
-        });
-        const s = io.sockets.sockets.get(sid);
-        if (s) s.disconnect(true);
-      }
-    }
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('admin_ghost', async ({ targetKey, enabled = true } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'mute') && !canDo(entry.role, 'ban'))) return;
-    if (!targetKey || !String(targetKey).startsWith('user:') || db.isProtectedSupremeOwnerKey(targetKey)) {
-      if (typeof cb === 'function') cb({ error: 'لا يمكن تطبيق وضع الشبح على هذا الحساب.' });
-      return;
-    }
-    const check = canModerateWithImmunity(entry, targetKey, { checkImmunePerm: true });
-    if (!check.allowed) {
-      socket.emit('error_toast', { message: check.reason });
-      if (typeof cb === 'function') cb({ error: check.reason });
-      return;
-    }
-    const uid = Number(String(targetKey).replace('user:', ''));
-    const targetRow = db.findUserById(uid);
-    if (!targetRow) return;
-    const resGhost = db.setUserGhosted(uid, Boolean(enabled));
-    if (resGhost.error) {
-      socket.emit('error_toast', { message: resGhost.error });
-      if (typeof cb === 'function') cb({ error: resGhost.error });
-      return;
-    }
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: enabled ? 'تفعيل شبح' : 'إلغاء شبح', targetKey, targetName: db.getEffectiveName(targetRow) });
-    syncUserAcrossSockets(io, uid);
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true, isGhosted: Boolean(enabled) });
-  });
-
-  socket.on('admin_delete_account', async ({ userId } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || entry.role !== 'site_owner') {
-      if (typeof cb === 'function') cb({ error: 'حذف الحسابات متاح لصاحب الموقع فقط.' });
-      return;
-    }
-    const uid = Number(userId);
-    const resDel = db.deleteUserAccountPermanently(uid);
-    if (resDel.error) {
-      if (typeof cb === 'function') cb({ error: resDel.error });
-      return;
-    }
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'حذف حساب نهائي', targetKey: `user:${uid}` });
-    for (const [sid, o] of onlineSockets.entries()) {
-      if (o.userId === uid) {
-        io.to(sid).emit('kicked', { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.' });
-        const s = io.sockets.sockets.get(sid);
-        if (s) s.disconnect(true);
-      }
-    }
-    broadcastRoomsList(io);
-    broadcastGlobalOnlineUsers(io);
-    io.emit('persistent_members', buildPersistentMembersList());
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('admin_set_role', async ({ userId, newRole } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'set_rank'))) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية تعديل الرتب.' });
-      return;
-    }
-    const target = db.findUserById(userId);
-    if (!target) return;
-    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
-      if (typeof cb === 'function') cb({ error: 'صاحب الموقع محمي ولا يمكن تغيير رتبته.' });
-      return;
-    }
-    const myPower = db.getRankPower(entry.role);
-    const maxAssign = db.getMaxAssignablePower(entry.role);
-    const newPower = db.getRankPower(newRole);
-    if (entry.role !== 'site_owner') {
-      if (db.getRankPower(target.role) >= myPower) {
-        if (typeof cb === 'function') cb({ error: 'لا يمكنك تعديل رتبة مساوية لك أو أعلى منك.' });
-        return;
-      }
-      if (newPower > maxAssign) {
-        if (typeof cb === 'function') cb({ error: `سقف الترقية الأقصى المتاح لك هو (${maxAssign}).` });
-        return;
-      }
-    }
-
-    const updated = db.updateUserRole(userId, newRole);
-    if (!updated) return;
-    syncUserAcrossSockets(io, userId);
-    const rank = db.getRankByKey(newRole);
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تعديل رتبة', targetKey: `user:${userId}`, targetName: db.getEffectiveName(updated), details: rank.label });
-    if (entry.roomId) {
-      io.to(`room:${entry.roomId}`).emit('room_notice', {
-        roomId: entry.roomId,
-        text: `🎖️ تم ترقية/تعديل رتبة "${db.getEffectiveName(updated)}" إلى (${rank.icon} ${rank.label}) بواسطة ${entry.name}.`
-      });
-    }
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('admin_force_name', async ({ userId, targetKey, newDisplayName } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel') && !canDo(entry.role, 'mute'))) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية تغيير الأسماء.' });
-      return;
-    }
-    const clean = String(newDisplayName || '').trim().slice(0, 28);
-    if (clean.length < 2) {
-      if (typeof cb === 'function') cb({ error: 'الاسم الجديد قصير جداً.' });
-      return;
-    }
-    const resolvedKey = targetKey || (userId ? `user:${userId}` : '');
-    if (resolvedKey && resolvedKey.startsWith('guest:')) {
-      const updatedGuest = db.updateGuestCustomization(resolvedKey, { displayName: clean });
-      for (const [sid, o] of onlineSockets.entries()) {
-        if (o.key === resolvedKey) {
-          o.name = clean;
-          o.displayName = clean;
-          io.to(sid).emit('session_updated', { user: db.findGuestByKey(resolvedKey) ? { ...o, name: clean, displayName: clean } : o });
-        }
-      }
-      if (entry.roomId) broadcastRoomUsers(io, entry.roomId);
-      broadcastGlobalOnlineUsers(io);
-      io.emit('persistent_members', buildPersistentMembersList());
-      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم زائر', targetKey: resolvedKey, targetName: clean });
-      await db.flushWrites();
-      if (typeof cb === 'function') cb({ ok: true, name: clean, guest: updatedGuest });
-      return;
-    }
-    const uid = Number(userId || String(resolvedKey || '').replace('user:', ''));
-    const target = db.findUserById(uid);
-    if (!target) {
-      if (typeof cb === 'function') cb({ error: 'العضو غير موجود.' });
-      return;
-    }
-    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
-      if (typeof cb === 'function') cb({ error: 'صاحب الموقع محمي.' });
-      return;
-    }
-    if (entry.role !== 'site_owner' && db.getRankPower(target.role) >= db.getRankPower(entry.role)) {
-      if (typeof cb === 'function') cb({ error: 'لا يمكنك تعديل اسم عضو برتبة مساوية أو أعلى منك.' });
-      return;
-    }
-    db.forceChangeUserDisplayName(uid, clean);
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم عضو', targetKey: `user:${uid}`, targetName: clean });
-    syncUserAcrossSockets(io, uid);
-    io.emit('persistent_members', buildPersistentMembersList());
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true, name: clean });
-  });
-
-  socket.on('admin_clear_avatar', async ({ userId, targetKey } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel') && !canDo(entry.role, 'mute'))) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية مسح الصور.' });
-      return;
-    }
-    const resolvedKey = targetKey || (userId ? `user:${userId}` : '');
-    if (resolvedKey && resolvedKey.startsWith('guest:')) {
-      db.updateGuestCustomization(resolvedKey, { avatarUrl: '' });
-      for (const [sid, o] of onlineSockets.entries()) {
-        if (o.key === resolvedKey) {
-          o.avatarUrl = '';
-          io.to(sid).emit('session_updated', { user: { ...o, avatarUrl: '' } });
-        }
-      }
-      if (entry.roomId) broadcastRoomUsers(io, entry.roomId);
-      broadcastGlobalOnlineUsers(io);
-      io.emit('persistent_members', buildPersistentMembersList());
-      db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة زائر', targetKey: resolvedKey });
-      await db.flushWrites();
-      if (typeof cb === 'function') cb({ ok: true });
-      return;
-    }
-    const uid = Number(userId || String(resolvedKey || '').replace('user:', ''));
-    const target = db.findUserById(uid);
-    if (!target) {
-      if (typeof cb === 'function') cb({ error: 'العضو غير موجود.' });
-      return;
-    }
-    if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
-      if (typeof cb === 'function') cb({ error: 'صاحب الموقع محمي.' });
-      return;
-    }
-    if (entry.role !== 'site_owner' && db.getRankPower(target.role) >= db.getRankPower(entry.role)) {
-      if (typeof cb === 'function') cb({ error: 'لا يمكنك مسح صورة عضو برتبة مساوية أو أعلى منك.' });
-      return;
-    }
-    db.adminClearUserAvatar(uid);
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة عضو', targetKey: `user:${uid}`, targetName: db.getEffectiveName(target) });
-    syncUserAcrossSockets(io, uid);
-    io.emit('persistent_members', buildPersistentMembersList());
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('admin_give_coins', async ({ userId, amount } = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || (entry.role !== 'site_owner' && !canDo(entry.role, 'give_coins'))) {
-      if (typeof cb === 'function') cb({ error: 'ليست لديك صلاحية منح النقاط أو الروبي.' });
-      return;
-    }
-    const delta = Number(amount) || 0;
-    if (!delta) {
-      if (typeof cb === 'function') cb({ error: 'يرجى تحديد كمية صحيحة.' });
-      return;
-    }
-    const updated = db.adjustUserCoins(userId, delta);
-    if (!updated) {
-      if (typeof cb === 'function') cb({ error: 'العضو غير موجود.' });
-      return;
-    }
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: delta >= 0 ? 'منح روبي' : 'خصم روبي', targetKey: `user:${userId}`, targetName: db.getEffectiveName(updated), details: `${delta >= 0 ? `+${delta}` : delta} روبي` });
-    syncUserAcrossSockets(io, userId);
-    io.emit('persistent_members', buildPersistentMembersList());
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true, coins: updated.coins });
-  });
-
-  socket.on('admin_clear_room', async () => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId) return;
-    const isMgr = db.isRoomManager(entry.roomId, entry.userId, entry.role) || canDo(entry.role, 'clear_room');
-    if (!isMgr) return;
-    db.clearRoomMessages(entry.roomId);
-    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح رسائل الغرفة', targetKey: entry.roomId });
-    io.to(`room:${entry.roomId}`).emit('room_cleared', { roomId: entry.roomId, byName: entry.name });
-    await db.flushWrites();
-  });
-
-  socket.on('delete_message', async ({ msgId } = {}) => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry || !entry.roomId || !msgId) return;
-    const isMgr =
-      db.isRoomManager(entry.roomId, entry.userId, entry.role) ||
-      canDo(entry.role, 'delete_msg') ||
-      canDo(entry.role, 'clear_room');
-    const roomMsgs = db.getRoomMessages(entry.roomId, 200);
-    const target = roomMsgs.find((m) => String(m.id) === String(msgId) || String(m.doc_id) === String(msgId));
-    if (!target) return;
-    if (!isMgr && target.sender_key !== entry.key) return;
-    if (target.sender_key !== entry.key && entry.role !== 'site_owner') {
-      const check = canModerateWithImmunity(entry, target.sender_key);
-      if (!check.allowed) {
-        socket.emit('error_toast', { message: check.reason });
-        return;
-      }
-    }
-    db.deleteMessageById(msgId);
-    if (target.sender_key !== entry.key) {
-      db.addAdminLog({
-        actorKey: entry.key,
-        actorName: entry.name,
-        actorRole: entry.role,
-        action: 'حذف رسالة',
-        targetKey: target.sender_key,
-        targetName: target.sender_name || target.sender_key,
-        details: entry.roomId
-      });
-    }
-    io.to(`room:${entry.roomId}`).emit('message_deleted', { roomId: entry.roomId, msgId: String(msgId) });
-    await db.flushWrites();
-  });
-
-  socket.on('admin_room_update', async (payload = {}, cb) => {
-    const entry = onlineSockets.get(socket.id);
-    const rid = payload.roomId || entry?.roomId;
-    if (!entry || !rid) return;
-    if (!db.isRoomManager(rid, entry.userId, entry.role)) {
-      if (typeof cb === 'function') cb({ error: 'لا تملك صلاحية تعديل هذه الغرفة.' });
-      return;
-    }
-    const updated = db.updateRoom(rid, payload);
-    if (!updated) return;
-    io.to(`room:${rid}`).emit('room_updated', db.sanitizeRoomForPublic(updated));
-    broadcastRoomsList(io);
-    await db.flushWrites();
-    if (typeof cb === 'function') cb({ ok: true });
-  });
-
-  socket.on('disconnect', () => {
-    const entry = onlineSockets.get(socket.id);
-    if (!entry) return;
-    const oldRoomId = entry.roomId;
-    const key = entry.key;
-    onlineSockets.delete(socket.id);
-
-    if (socket._replacedByNewSocket) return;
-
-    const stillHasActiveSocket = [...onlineSockets.values()].some((o) => o.key === key);
-    if (stillHasActiveSocket) {
-      broadcastRoomUsers(io, oldRoomId);
-      broadcastGlobalOnlineUsers(io);
-      return;
-    }
-
-    if (socket._explicitLogout) {
-      releaseUserMicsInRoom(key, oldRoomId);
-      pauseQuizBotIfRoomEmpty(oldRoomId);
-      recentRoomPresence.delete(key);
-      broadcastRoomUsers(io, oldRoomId);
-      broadcastGlobalOnlineUsers(io);
-      broadcastRoomsList(io);
-      io.emit('persistent_members', buildPersistentMembersList());
-      return;
-    }
-
-    // Transient disconnect grace window: avoid offline flicker and mic/presence churn on quick drops
-    recentRoomPresence.set(key, { roomId: oldRoomId, at: Date.now() });
-    const prevGrace = pendingGrace.get(key);
-    if (prevGrace) clearTimeout(prevGrace.timeout);
-
-    const timeout = setTimeout(() => {
-      pendingGrace.delete(key);
-      const reconnected = [...onlineSockets.values()].some((o) => o.key === key);
-      if (reconnected) return;
-      releaseUserMicsInRoom(key, oldRoomId);
-      pauseQuizBotIfRoomEmpty(oldRoomId);
-      broadcastRoomUsers(io, oldRoomId);
-      broadcastGlobalOnlineUsers(io);
-      broadcastRoomsList(io);
-      io.emit('persistent_members', buildPersistentMembersList());
-    }, 18000);
-
-    pendingGrace.set(key, { timeout, lastRoomId: oldRoomId });
-  });
+  await db.flushWrites();
+  return res.json({ ok: true, pm });
 });
+
+app.post('/api/pm/read', requireAuth, async (req, res) => {
+  const { partnerKey } = req.body || {};
+  if (!partnerKey) return res.status(400).json({ error: 'المعرف مطلوب.' });
+  db.markPrivateMessagesRead(req.authUser.key, partnerKey);
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+// ==========================================
+// MODERATION REST ACTIONS (WITH HIERARCHICAL IMMUNITY)
+// ==========================================
+function resolveTargetInfo(targetKey) {
+  let targetName = targetKey || 'عضو';
+  let targetRole = 'guest';
+  let targetEmail = '';
+  let targetIp = '';
+  let targetDevice = '';
+  let targetFingerprint = '';
+  if (String(targetKey || '').startsWith('user:')) {
+    const uid = Number(String(targetKey).replace('user:', ''));
+    const row = Number.isNaN(uid) ? null : db.findUserById(uid);
+    if (row) {
+      targetName = db.getEffectiveName(row);
+      targetRole = row.role || 'member';
+      targetEmail = row.email || '';
+      targetIp = row.last_ip || '';
+      targetDevice = row.last_device_id || '';
+      targetFingerprint = row.last_fingerprint || '';
+    }
+  } else if (String(targetKey || '').startsWith('guest:')) {
+    const g = db.findGuestByKey(targetKey);
+    if (g) {
+      targetName = g.name || targetName;
+      targetIp = g.last_ip || '';
+      targetDevice = g.last_device_id || '';
+      targetFingerprint = g.last_fingerprint || '';
+    }
+  }
+  const live = onlinePresenceMap.get(targetKey);
+  if (live) {
+    targetName = live.name || targetName;
+    targetRole = live.role || targetRole;
+    targetEmail = live.email || targetEmail;
+    targetIp = live.ipAddress || targetIp;
+    targetDevice = live.deviceId || targetDevice;
+    targetFingerprint = live.fingerprint || targetFingerprint;
+  }
+  return { targetName, targetRole, targetEmail, targetIp, targetDevice, targetFingerprint };
+}
+
+function canModerateWithImmunity(actorEntry, targetKey, { checkImmunePerm = false } = {}) {
+  if (!actorEntry || !targetKey) return { allowed: false, reason: 'هدف غير صالح.' };
+  if (targetKey === actorEntry.key) return { allowed: false, reason: 'لا يمكنك تنفيذ هذا الإجراء على نفسك.' };
+  if (db.isProtectedSupremeOwnerKey(targetKey)) {
+    return { allowed: false, reason: 'حساب صاحب الموقع محمي بالكامل.' };
+  }
+  const info = resolveTargetInfo(targetKey);
+  if (info.targetRole === 'site_owner' && actorEntry.role !== 'site_owner') {
+    return { allowed: false, reason: 'لا يمكنك التحكم بصاحب الموقع.' };
+  }
+  if (actorEntry.role !== 'site_owner') {
+    const myPower = db.getRankPower(actorEntry.role);
+    const targetPower = db.getRankPower(info.targetRole);
+    if (targetPower >= myPower) {
+      return { allowed: false, reason: 'الحصانة المتدرجة: لا يمكنك التحكم بعضو أعلى منك أو مساوٍ لك في الرتبة.' };
+    }
+    if (checkImmunePerm && db.hasPermission(info.targetRole, 'immune')) {
+      return { allowed: false, reason: 'هذا العضو يمتلك حصانة إدارية ضد الكتم والطرد.' };
+    }
+  }
+  return { allowed: true, info };
+}
+
+app.post('/api/mod/warn', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  const roomId = String(req.body?.roomId || entry.roomId || 'general');
+  const targetKey = String(req.body?.targetKey || '').trim();
+  const isMgr =
+    entry.role === 'site_owner' ||
+    db.isRoomManager(roomId, entry.userId, entry.role) ||
+    canDo(entry.role, 'mute') ||
+    canDo(entry.role, 'kick') ||
+    canDo(entry.role, 'ban');
+  if (!isMgr) return res.status(403).json({ error: 'لا تملك صلاحية توجيه التحذيرات.' });
+  const check = canModerateWithImmunity(entry, targetKey);
+  if (!check.allowed) return res.status(403).json({ error: check.reason });
+
+  const cleanReason = String(req.body?.reason || 'مخالفة قوانين الغرفة').trim().slice(0, 240);
+  if (cleanReason.length < 2) return res.status(400).json({ error: 'يجب كتابة سبب التحذير (حرفان على الأقل).' });
+
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: 'تحذير إداري',
+    targetKey,
+    targetName: check.info.targetName,
+    details: cleanReason
+  });
+  const notif = db.addNotification({
+    targetKey,
+    title: `⚠️ تحذير إداري من ${entry.name}`,
+    body: cleanReason,
+    category: 'warning'
+  });
+  emitNotificationToUser(null, targetKey, notif);
+  db.patchUserStateDoc(targetKey, {
+    lastWarningAt: Date.now(),
+    lastWarning: { byName: entry.name, byRole: entry.role, reason: cleanReason, roomId }
+  });
+  emitRoomNoticeMessage(roomId, `⚠️ وجّه "${entry.name}" تحذيراً إدارياً إلى "${check.info.targetName}": ${cleanReason}`);
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/mute', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  const roomId = String(req.body?.roomId || entry.roomId || 'general');
+  const targetKey = String(req.body?.targetKey || '').trim();
+  const unmute = Boolean(req.body?.unmute);
+  const isOwner = entry.role === 'site_owner';
+  const isMgr = isOwner || db.isRoomManager(roomId, entry.userId, entry.role) || canDo(entry.role, 'mute');
+  if (!isMgr) return res.status(403).json({ error: 'لا تملك صلاحية الكتم.' });
+  const check = canModerateWithImmunity(entry, targetKey, { checkImmunePerm: true });
+  if (!check.allowed) return res.status(403).json({ error: check.reason });
+
+  if (unmute) {
+    db.removeMute(targetKey, roomId);
+    emitMuteStateToUser(targetKey, roomId);
+    emitRoomNoticeMessage(roomId, `🔊 قام "${entry.name}" بفك الكتم عن "${check.info.targetName}".`);
+    db.addAdminLog({
+      actorKey: entry.key,
+      actorName: entry.name,
+      actorRole: entry.role,
+      action: 'فك كتم',
+      targetKey,
+      targetName: check.info.targetName,
+      details: roomId
+    });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+
+  const minsNum = Number(req.body?.minutes);
+  const cleanReason = String(req.body?.reason || '').trim().slice(0, 240);
+  if (!Number.isFinite(minsNum) || minsNum < 1) {
+    return res.status(400).json({ error: 'يجب تحديد مدة الكتم بالدقائق (دقيقة واحدة على الأقل).' });
+  }
+  if (!isOwner && cleanReason.length < 2) {
+    return res.status(400).json({ error: 'يجب كتابة سبب الكتم (حرفان على الأقل).' });
+  }
+  const effectiveReason = cleanReason || 'بقرار من المالك';
+  const mins = Math.min(1440, Math.floor(minsNum));
+  db.setMute(targetKey, roomId, mins * 60 * 1000, entry.name, effectiveReason, {
+    targetName: check.info.targetName,
+    mutedByKey: entry.key
+  });
+  activeMutedKeysTracker.add(targetKey);
+  releaseUserMicsInRoom(targetKey, roomId);
+  emitMuteStateToUser(targetKey, roomId);
+  notifyUserMutedNotification(targetKey, mins);
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: 'كتم عضو',
+    targetKey,
+    targetName: check.info.targetName,
+    details: `${mins} دقيقة • السبب: ${effectiveReason}`
+  });
+  notifyOwnersModerationEvent({
+    actorName: entry.name,
+    actorKey: entry.key,
+    targetName: check.info.targetName,
+    targetKey,
+    actionType: 'mute',
+    reason: effectiveReason,
+    durationMins: mins,
+    roomId
+  });
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/kick', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  const roomId = String(req.body?.roomId || entry.roomId || 'general');
+  const targetKey = String(req.body?.targetKey || '').trim();
+  const isOwner = entry.role === 'site_owner';
+  const isMgr = isOwner || db.isRoomManager(roomId, entry.userId, entry.role) || canDo(entry.role, 'kick');
+  if (!isMgr) return res.status(403).json({ error: 'لا تملك صلاحية الطرد.' });
+  const check = canModerateWithImmunity(entry, targetKey, { checkImmunePerm: true });
+  if (!check.allowed) return res.status(403).json({ error: check.reason });
+
+  const cleanReason = String(req.body?.reason || '').trim().slice(0, 240);
+  if (!isOwner && cleanReason.length < 2) {
+    return res.status(400).json({ error: 'يجب كتابة سبب الطرد (حرفان على الأقل).' });
+  }
+  const effectiveReason = cleanReason || 'بقرار من المالك';
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: 'طرد من الغرفة',
+    targetKey,
+    targetName: check.info.targetName,
+    details: `${roomId} • السبب: ${effectiveReason}`
+  });
+  kickTargetFromPresence(targetKey, {
+    reason: `تم طردك من الغرفة بواسطة ${entry.name} — السبب: ${effectiveReason}`,
+    banned: false
+  });
+  notifyOwnersModerationEvent({
+    actorName: entry.name,
+    actorKey: entry.key,
+    targetName: check.info.targetName,
+    targetKey,
+    actionType: 'kick',
+    reason: effectiveReason,
+    roomId
+  });
+  emitRoomNoticeMessage(
+    roomId,
+    `🚪 قام "${entry.name}" بطرد "${check.info.targetName}" من الغرفة${cleanReason ? ` — السبب: ${cleanReason}` : ''}`
+  );
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/ban', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  const targetKey = String(req.body?.targetKey || '').trim();
+  const banType = req.body?.banType === 'xban' ? 'xban' : 'ban';
+  const isOwner = entry.role === 'site_owner';
+  if (!isOwner && !canDo(entry.role, 'ban')) return res.status(403).json({ error: 'لا تملك صلاحية الحظر.' });
+  const check = canModerateWithImmunity(entry, targetKey);
+  if (!check.allowed) return res.status(403).json({ error: check.reason });
+
+  const cleanReason = String(req.body?.reason || '').trim().slice(0, 240);
+  if (!isOwner && cleanReason.length < 2) {
+    return res.status(400).json({ error: 'يجب كتابة سبب الحظر (حرفان على الأقل).' });
+  }
+  const effectiveReason = cleanReason || (banType === 'xban' ? 'بقرار من المالك (X-Ban)' : 'بقرار من المالك');
+  const { targetName, targetEmail, targetIp, targetDevice, targetFingerprint } = check.info;
+  db.banTarget({
+    targetKey,
+    targetName,
+    email: targetEmail,
+    ipAddress: targetIp,
+    deviceId: banType === 'xban' ? targetDevice : '',
+    fingerprint: banType === 'xban' ? targetFingerprint : '',
+    banType,
+    reason: effectiveReason,
+    bannedBy: entry.name,
+    bannedByKey: entry.key
+  });
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: banType === 'xban' ? 'إكس باند X-Ban' : 'حظر نهائي',
+    targetKey,
+    targetName,
+    details: effectiveReason
+  });
+  notifyOwnersModerationEvent({
+    actorName: entry.name,
+    actorKey: entry.key,
+    targetName,
+    targetKey,
+    actionType: banType,
+    reason: effectiveReason
+  });
+  kickTargetFromPresence(targetKey, { reason: 'تم حظرك من الشات', banned: true });
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/ghost', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'mute') && !canDo(entry.role, 'ban')) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية وضع الشبح.' });
+  }
+  const targetKey = String(req.body?.targetKey || '').trim();
+  const enabled = Boolean(req.body?.enabled !== false);
+  if (!targetKey || !targetKey.startsWith('user:') || db.isProtectedSupremeOwnerKey(targetKey)) {
+    return res.status(400).json({ error: 'لا يمكن تطبيق وضع الشبح على هذا الحساب.' });
+  }
+  const check = canModerateWithImmunity(entry, targetKey, { checkImmunePerm: true });
+  if (!check.allowed) return res.status(403).json({ error: check.reason });
+
+  const uid = Number(targetKey.replace('user:', ''));
+  const targetRow = db.findUserById(uid);
+  if (!targetRow) return res.status(404).json({ error: 'العضو غير موجود.' });
+  const resGhost = db.setUserGhosted(uid, enabled);
+  if (resGhost.error) return res.status(400).json({ error: resGhost.error });
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: enabled ? 'تفعيل شبح' : 'إلغاء شبح',
+    targetKey,
+    targetName: db.getEffectiveName(targetRow)
+  });
+  syncUserPresence(uid);
+  await db.flushWrites();
+  return res.json({ ok: true, isGhosted: enabled });
+});
+
+app.post('/api/mod/delete-account', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  if (entry.role !== 'site_owner') return res.status(403).json({ error: 'حذف الحسابات متاح لصاحب الموقع فقط.' });
+  const uid = Number(req.body?.userId);
+  const resDel = db.deleteUserAccountPermanently(uid);
+  if (resDel.error) return res.status(400).json({ error: resDel.error });
+  db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'حذف حساب نهائي', targetKey: `user:${uid}` });
+  kickTargetFromPresence(`user:${uid}`, { reason: 'تم حذف حسابك نهائياً من قبل صاحب الموقع.', banned: false });
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/set-role', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'set_rank')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية تعديل الرتب.' });
+  }
+  const userId = Number(req.body?.userId);
+  const newRole = String(req.body?.newRole || '').trim();
+  const roomId = String(req.body?.roomId || entry.roomId || 'general');
+  const target = db.findUserById(userId);
+  if (!target) return res.status(404).json({ error: 'العضو غير موجود.' });
+  if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
+    return res.status(403).json({ error: 'صاحب الموقع محمي ولا يمكن تغيير رتبته.' });
+  }
+  const myPower = db.getRankPower(entry.role);
+  const maxAssign = db.getMaxAssignablePower(entry.role);
+  const newPower = db.getRankPower(newRole);
+  if (entry.role !== 'site_owner') {
+    if (db.getRankPower(target.role) >= myPower) {
+      return res.status(403).json({ error: 'لا يمكنك تعديل رتبة مساوية لك أو أعلى منك.' });
+    }
+    if (newPower > maxAssign) {
+      return res.status(403).json({ error: `سقف الترقية الأقصى المتاح لك هو (${maxAssign}).` });
+    }
+  }
+  const updated = db.updateUserRole(userId, newRole);
+  if (!updated) return res.status(400).json({ error: 'تعذر تحديث الرتبة.' });
+  syncUserPresence(userId);
+  const rank = db.getRankByKey(newRole);
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: 'تعديل رتبة',
+    targetKey: `user:${userId}`,
+    targetName: db.getEffectiveName(updated),
+    details: rank.label
+  });
+  emitRoomNoticeMessage(
+    roomId,
+    `🎖️ تم ترقية/تعديل رتبة "${db.getEffectiveName(updated)}" إلى (${rank.icon} ${rank.label}) بواسطة ${entry.name}.`
+  );
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/force-name', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel') && !canDo(entry.role, 'mute')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية تغيير الأسماء.' });
+  }
+  const clean = String(req.body?.newDisplayName || '').trim().slice(0, 28);
+  if (clean.length < 2) return res.status(400).json({ error: 'الاسم الجديد قصير جداً.' });
+  const userId = req.body?.userId ? Number(req.body.userId) : null;
+  const resolvedKey = String(req.body?.targetKey || (userId ? `user:${userId}` : '')).trim();
+  if (resolvedKey && resolvedKey.startsWith('guest:')) {
+    const updatedGuest = db.updateGuestCustomization(resolvedKey, { displayName: clean });
+    const live = onlinePresenceMap.get(resolvedKey);
+    if (live) {
+      live.name = clean;
+      live.displayName = clean;
+      upsertOnlinePresence(live, {}, live.roomId || 'general');
+    }
+    db.patchUserStateDoc(resolvedKey, { forcedNameAt: Date.now(), name: clean, displayName: clean });
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم زائر', targetKey: resolvedKey, targetName: clean });
+    await db.flushWrites();
+    return res.json({ ok: true, name: clean, guest: updatedGuest });
+  }
+  const uid = Number(userId || resolvedKey.replace('user:', ''));
+  const target = db.findUserById(uid);
+  if (!target) return res.status(404).json({ error: 'العضو غير موجود.' });
+  if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
+    return res.status(403).json({ error: 'صاحب الموقع محمي.' });
+  }
+  if (entry.role !== 'site_owner' && db.getRankPower(target.role) >= db.getRankPower(entry.role)) {
+    return res.status(403).json({ error: 'لا يمكنك تعديل اسم عضو برتبة مساوية أو أعلى منك.' });
+  }
+  db.forceChangeUserDisplayName(uid, clean);
+  db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم عضو', targetKey: `user:${uid}`, targetName: clean });
+  syncUserPresence(uid);
+  await db.flushWrites();
+  return res.json({ ok: true, name: clean });
+});
+
+app.post('/api/mod/clear-avatar', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'access_panel') && !canDo(entry.role, 'mute')) {
+    return res.status(403).json({ error: 'لا تملك صلاحية مسح الصور.' });
+  }
+  const userId = req.body?.userId ? Number(req.body.userId) : null;
+  const resolvedKey = String(req.body?.targetKey || (userId ? `user:${userId}` : '')).trim();
+  if (resolvedKey && resolvedKey.startsWith('guest:')) {
+    db.updateGuestCustomization(resolvedKey, { avatarUrl: '' });
+    const live = onlinePresenceMap.get(resolvedKey);
+    if (live) {
+      live.avatarUrl = '';
+      upsertOnlinePresence(live, {}, live.roomId || 'general');
+    }
+    db.patchUserStateDoc(resolvedKey, { avatarClearedAt: Date.now(), avatarUrl: '' });
+    db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة زائر', targetKey: resolvedKey });
+    await db.flushWrites();
+    return res.json({ ok: true });
+  }
+  const uid = Number(userId || resolvedKey.replace('user:', ''));
+  const target = db.findUserById(uid);
+  if (!target) return res.status(404).json({ error: 'العضو غير موجود.' });
+  if (db.isSupremeOwnerEmail(target.email) && !db.isSupremeOwnerEmail(entry.email)) {
+    return res.status(403).json({ error: 'صاحب الموقع محمي.' });
+  }
+  if (entry.role !== 'site_owner' && db.getRankPower(target.role) >= db.getRankPower(entry.role)) {
+    return res.status(403).json({ error: 'لا يمكنك مسح صورة عضو برتبة مساوية أو أعلى منك.' });
+  }
+  db.adminClearUserAvatar(uid);
+  db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة عضو', targetKey: `user:${uid}`, targetName: db.getEffectiveName(target) });
+  syncUserPresence(uid);
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/give-coins', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  if (entry.role !== 'site_owner' && !canDo(entry.role, 'give_coins')) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية منح النقاط أو الروبي.' });
+  }
+  const userId = Number(req.body?.userId);
+  const delta = Number(req.body?.amount) || 0;
+  if (!delta) return res.status(400).json({ error: 'يرجى تحديد كمية صحيحة.' });
+  const updated = db.adjustUserCoins(userId, delta);
+  if (!updated) return res.status(404).json({ error: 'العضو غير موجود.' });
+  db.addAdminLog({
+    actorKey: entry.key,
+    actorName: entry.name,
+    actorRole: entry.role,
+    action: delta >= 0 ? 'منح روبي' : 'خصم روبي',
+    targetKey: `user:${userId}`,
+    targetName: db.getEffectiveName(updated),
+    details: `${delta >= 0 ? `+${delta}` : delta} روبي`
+  });
+  syncUserPresence(userId);
+  await db.flushWrites();
+  return res.json({ ok: true, coins: updated.coins });
+});
+
+app.post('/api/mod/clear-room', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  const roomId = String(req.body?.roomId || entry.roomId || 'general');
+  const isMgr = db.isRoomManager(roomId, entry.userId, entry.role) || canDo(entry.role, 'clear_room');
+  if (!isMgr) return res.status(403).json({ error: 'لا تملك صلاحية مسح رسائل الغرفة.' });
+  db.clearRoomMessages(roomId);
+  db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح رسائل الغرفة', targetKey: roomId });
+  emitRoomNoticeMessage(roomId, `🧹 تم مسح رسائل الغرفة بواسطة ${entry.name}`, {
+    client_msg_id: `room_cleared:${Date.now()}`
+  });
+  await db.flushWrites();
+  return res.json({ ok: true });
+});
+
+app.post('/api/mod/room-update', requireAuth, async (req, res) => {
+  const entry = getPresenceOrAuthEntry(req);
+  const rid = String(req.body?.roomId || entry.roomId || 'general');
+  if (!db.isRoomManager(rid, entry.userId, entry.role)) {
+    return res.status(403).json({ error: 'لا تملك صلاحية تعديل هذه الغرفة.' });
+  }
+  const updated = db.updateRoom(rid, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+  await db.flushWrites();
+  return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+});
+
+// Handle Multer / Upload errors gracefully without crashing
+app.use((err, _req, res, _next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'حجم الملف يتجاوز الحد الأقصى المسموح به (2MB للصورة / 6MB للصوت).' });
+  }
+  if (err) {
+    return res.status(400).json({ error: err.message || 'خطأ في معالجة الطلب.' });
+  }
+  return res.status(500).json({ error: 'خطأ غير متوقع في الخادم.' });
+});
+
+const server = http.createServer(app);
 
 // ==========================================
 // STARTUP
 // ==========================================
 async function start() {
-  await db.init({
-    onExternalMessage: (msg) => {
-      if (msg && msg.room_id && !msg.is_ghost_only) io.to(`room:${msg.room_id}`).emit('new_message', msg);
-    },
-    onRanksChanged: (ranks) => {
-      io.emit('ranks_updated', ranks);
-    },
-    onRoomsChanged: () => {
-      broadcastRoomsList(io);
-    },
-    onSettingsChanged: (_settings) => {
-      io.emit('site_settings_updated', db.getPublicSiteSettings());
-      broadcastRoomsList(io);
-      broadcastGlobalOnlineUsers(io);
-    },
-    onEmojisChanged: (emojis) => {
-      io.emit('emojis_updated', emojis);
-    },
-    onUsersChanged: () => {
-      io.emit('persistent_members', buildPersistentMembersList());
-    }
-  });
+  await db.init({});
 
   // Anti-AFK Policy: passive 5-minute online presence reward removed; rewards occur exclusively on genuine text chat activity.
   startVirtualMembersLoop();
   startMuteExpiryMonitor();
+  startPresenceSweeper();
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Arabic CodyChat Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Arabic CodyChat Server (Firebase Real-Time) listening on http://0.0.0.0:${PORT}`);
   });
 }
 

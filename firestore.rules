@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global safety net catch-all
+    // Global safety net catch-all (Default Deny)
     match /{document=**} {
       allow read, write: if false;
     }
@@ -39,6 +39,14 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isNotBanned() {
+      return isSupremeOwner() ||
+             (isSignedIn() &&
+              !exists(/databases/$(database)/documents/user_bans/$(request.auth.uid)) &&
+              (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isBanned == false));
     }
 
     function isValidTimestamp(ts) {
@@ -106,7 +114,8 @@ service cloud.firestore {
     function isAllowedPublicProfileUpdate(userId, n, o, affected) {
       return isSupremeOwner() ||
              (isAdmin() && o.role != 'site_owner' && n.role != 'site_owner') ||
-             (isOwner(userId) &&
+             (isNotBanned() &&
+              isOwner(userId) &&
               n.role == o.role &&
               n.isStealth == o.isStealth &&
               n.giftsReceived == o.giftsReceived &&
@@ -123,10 +132,12 @@ service cloud.firestore {
                 'coins', 'activityPoints', 'giftsSent', 'isOnline', 'currentRoomId',
                 'deviceId', 'kickedFromRoom', 'lastSeenAt', 'updatedAt'
               ])) ||
-             (affected.hasOnly(['giftsReceived', 'coins', 'updatedAt']) &&
+             (isNotBanned() &&
+              affected.hasOnly(['giftsReceived', 'coins', 'updatedAt']) &&
               n.coins >= o.coins &&
               n.giftsReceived >= o.giftsReceived) ||
-             (affected.hasOnly(['likesCount', 'ratingSum', 'ratingCount', 'updatedAt']) &&
+             (isNotBanned() &&
+              affected.hasOnly(['likesCount', 'ratingSum', 'ratingCount', 'updatedAt']) &&
               (!('likesCount' in o) || n.likesCount >= o.likesCount) &&
               (!('ratingSum' in o) || n.ratingSum >= o.ratingSum) &&
               (!('ratingCount' in o) || n.ratingCount >= o.ratingCount));
@@ -329,7 +340,7 @@ service cloud.firestore {
              isValidTimestamp(data.updatedAt);
     }
 
-    // 1. Private Users (PII Isolated)
+    // 1. Private Users (PII Isolated & isBanned Linked)
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isSupremeOwner());
@@ -349,7 +360,8 @@ service cloud.firestore {
                        (
                          isSupremeOwner() ||
                          (isAdmin() && existing().role != 'site_owner' && incoming().role != 'site_owner') ||
-                         (isOwner(userId) &&
+                         (isNotBanned() &&
+                          isOwner(userId) &&
                           incoming().email == existing().email &&
                           incoming().role == existing().role &&
                           incoming().isStealth == existing().isStealth &&
@@ -358,6 +370,20 @@ service cloud.firestore {
                           incoming().diff(existing()).affectedKeys().hasOnly(['username', 'coins', 'deviceId', 'updatedAt']))
                        );
       allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner();
+    }
+
+    // 1b. Client Live State Mirror (No PII, tracks instant isBanned kick & coins)
+    match /user_states/{stateId} {
+      allow get: if isSignedIn() && isValidId(stateId) && (isOwner(stateId) || resource.data.firebaseUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.firebaseUid == request.auth.uid || isSupremeOwner());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 1c. Fast UID Ban Lookup Table
+    match /user_bans/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isSupremeOwner();
+      allow create, update, delete: if isAdmin();
     }
 
     // 2. Trusted Admins Collection
@@ -369,11 +395,16 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner() && userId != request.auth.uid;
     }
 
-    // 3. Public Profiles & Live Presence / Leaderboards (Zero PII)
+    // 2b. Admin Secrets (Gemini API key & bot config - strictly hidden from non-admins)
+    match /admin_secrets/{secretId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 3. Public Profiles & Live Presence (Zero PII)
     match /public_profiles/{userId} {
-      allow get: if isSignedIn() && isValidId(userId) && (resource.data.isPublic == true || resource.data.userId == request.auth.uid);
-      allow list: if isSignedIn() && resource.data.isPublic == true;
-      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(userId) && (resource.data.isPublic == true || resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && isNotBanned() && resource.data.isPublic == true;
+      allow create: if isSignedIn() && isNotBanned() && isValidId(userId) && isOwner(userId) &&
                        incoming().userId == request.auth.uid &&
                        incoming().isPublic == true &&
                        isValidPublicProfile(incoming()) &&
@@ -395,12 +426,30 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(userId) && isSupremeOwner();
     }
 
+    // 3b. Real-Time Online Presence & Room Mics & WebRTC Signals (Firebase onSnapshot Sync)
+    match /online_presence/{presenceId} {
+      allow get: if isSignedIn() && isNotBanned();
+      allow list: if isSignedIn() && isNotBanned();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /room_mics/{roomId} {
+      allow get: if isSignedIn() && isNotBanned();
+      allow list: if isSignedIn() && isNotBanned();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /webrtc_signals/{signalId} {
+      allow get, list: if isSignedIn() && isNotBanned() && (resource.data.toFirebaseUid == request.auth.uid || resource.data.fromFirebaseUid == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
     // 4. Chat Rooms & Mics Subcollection
     match /rooms/{roomId} {
-      allow get: if isSignedIn() && isValidId(roomId) && (resource.data.isActive == true || isAdmin());
-      allow list: if isSignedIn() && resource.data.isActive == true;
+      allow get: if isSignedIn() && isNotBanned() && isValidId(roomId) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && isNotBanned() && resource.data.isActive == true;
       allow create: if isSignedIn() && isValidId(roomId) && isAdmin() && isValidRoom(incoming()) && incoming().isActive == true;
-      allow update: if isSignedIn() && isValidId(roomId) &&
+      allow update: if isSignedIn() && isNotBanned() && isValidId(roomId) &&
                        isValidRoom(incoming()) &&
                        isImmutableCreatedAt() &&
                        (
@@ -417,12 +466,12 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(roomId) && isAdmin() && roomId != 'general';
 
       match /mics/{slotNumber} {
-        allow get: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber);
-        allow list: if isSignedIn() && resource.data.roomId == roomId;
-        allow create: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber) &&
+        allow get: if isSignedIn() && isNotBanned() && isValidId(roomId) && isValidId(slotNumber);
+        allow list: if isSignedIn() && isNotBanned() && resource.data.roomId == roomId;
+        allow create: if isSignedIn() && isNotBanned() && isValidId(roomId) && isValidId(slotNumber) &&
                          isValidRoomMicSlot(incoming(), roomId) &&
                          (incoming().holderUid == '' || incoming().holderUid == request.auth.uid || isAdmin());
-        allow update: if isSignedIn() && isValidId(roomId) && isValidId(slotNumber) &&
+        allow update: if isSignedIn() && isNotBanned() && isValidId(roomId) && isValidId(slotNumber) &&
                          isValidRoomMicSlot(incoming(), roomId) &&
                          isImmutableCreatedAt() &&
                          (
@@ -436,41 +485,57 @@ service cloud.firestore {
       }
     }
 
-    // 5. Chat Messages
+    // 5. Chat Messages (Public Room Feed - Blocked for Banned Users)
     match /messages/{messageId} {
-      allow get: if isSignedIn() && isValidId(messageId) && resource.data.roomId is string;
-      allow list: if isSignedIn() && resource.data.roomId is string && resource.data.roomId.size() > 0;
-      allow create: if isSignedIn() && isValidId(messageId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(messageId) && (resource.data.roomId is string || resource.data.room_id is string);
+      allow list: if isSignedIn() && isNotBanned() && ((resource.data.roomId is string && resource.data.roomId.size() > 0) || (resource.data.room_id is string && resource.data.room_id.size() > 0));
+      allow create: if isSignedIn() && isNotBanned() && isValidId(messageId) &&
                        isValidChatMessage(incoming()) &&
                        incoming().senderId == request.auth.uid &&
                        (incoming().isAdminNotice == false || isAdmin()) &&
                        (incoming().msgType != 'admin_notice' || isAdmin());
       allow update: if false;
-      allow delete: if isSignedIn() && isValidId(messageId) && (existing().senderId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isNotBanned() && isValidId(messageId) && (existing().senderId == request.auth.uid || isAdmin());
     }
 
     // 6. Ranks Matrix
     match /ranks/{rankKey} {
-      allow get: if isSignedIn() && isValidId(rankKey) && (resource.data.isActive == true || isAdmin());
-      allow list: if isSignedIn() && resource.data.isActive == true;
+      allow get: if isSignedIn() && isNotBanned() && isValidId(rankKey) && (resource.data.isActive == true || isAdmin());
+      allow list: if isSignedIn() && isNotBanned() && resource.data.isActive == true;
       allow create: if isSignedIn() && isValidId(rankKey) && isAdmin() && isValidRankConfig(incoming());
       allow update: if isSignedIn() && isValidId(rankKey) && isAdmin() && isValidRankConfig(incoming()) && isImmutableCreatedAt();
-      allow delete: if isSignedIn() && isValidId(rankKey) && isAdmin() && rankKey != 'site_owner' && rankKey != 'member';
+      allow delete: if isSignedIn() && isValidId(rankKey) && isAdmin() && rankKey != 'site_owner' && rankKey != 'member' && rankKey != 'guest';
     }
 
-    // 7. Site CMS Settings
+    // 7. Site CMS Settings & Public Catalogs (Gemini Key Never Stored Here)
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isNotBanned() && settingId in ['site', 'gifts_catalog'];
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+
     match /site_settings/{settingId} {
-      allow get: if isSignedIn() && isValidId(settingId) && resource.data.isPublic == true;
-      allow list: if isSignedIn() && resource.data.isPublic == true;
+      allow get: if isSignedIn() && isNotBanned() && isValidId(settingId) && resource.data.isPublic == true;
+      allow list: if isSignedIn() && isNotBanned() && resource.data.isPublic == true;
       allow create: if isSignedIn() && isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming());
       allow update: if isSignedIn() && isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming()) && isImmutableCreatedAt();
       allow delete: if false;
     }
 
+    match /custom_emojis/{emojiId} {
+      allow get, list: if isSignedIn() && isNotBanned();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /store_items/{itemId} {
+      allow get, list: if isSignedIn() && isNotBanned();
+      allow create, update, delete: if isAdmin();
+    }
+
     // 8. News Feed
     match /news/{newsId} {
-      allow get: if isSignedIn() && isValidId(newsId) && (resource.data.isPublished == true || isAdmin());
-      allow list: if isSignedIn() && resource.data.isPublished == true;
+      allow get: if isSignedIn() && isNotBanned() && isValidId(newsId) && (resource.data.isPublished == true || isAdmin());
+      allow list: if isSignedIn() && isNotBanned() && resource.data.isPublished == true;
       allow create: if isSignedIn() && isValidId(newsId) && isAdmin() && incoming().authorId == request.auth.uid && isValidNewsPost(incoming());
       allow update: if isSignedIn() && isValidId(newsId) && isAdmin() && isValidNewsPost(incoming()) && isImmutableCreatedAt();
       allow delete: if isSignedIn() && isValidId(newsId) && isAdmin();
@@ -478,10 +543,10 @@ service cloud.firestore {
 
     // 9. Public Wall Posts
     match /wall_posts/{postId} {
-      allow get: if isSignedIn() && isValidId(postId) && (resource.data.isPublic == true || resource.data.authorId == request.auth.uid);
-      allow list: if isSignedIn() && resource.data.isPublic == true;
-      allow create: if isSignedIn() && isValidId(postId) && incoming().authorId == request.auth.uid && isValidWallPost(incoming());
-      allow update: if isSignedIn() && isValidId(postId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(postId) && (resource.data.isPublic == true || resource.data.post_type in ['wall', 'news', 'gift_tx'] || resource.data.authorId == request.auth.uid);
+      allow list: if isSignedIn() && isNotBanned() && (resource.data.isPublic == true || resource.data.post_type in ['wall', 'news', 'gift_tx']);
+      allow create: if isSignedIn() && isNotBanned() && isValidId(postId) && incoming().authorId == request.auth.uid && isValidWallPost(incoming());
+      allow update: if isSignedIn() && isNotBanned() && isValidId(postId) &&
                        isValidWallPost(incoming()) &&
                        incoming().authorId == existing().authorId &&
                        isImmutableCreatedAt() &&
@@ -490,73 +555,73 @@ service cloud.firestore {
                          existing().authorId == request.auth.uid ||
                          incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt'])
                        );
-      allow delete: if isSignedIn() && isValidId(postId) && (existing().authorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isNotBanned() && isValidId(postId) && (existing().authorId == request.auth.uid || isAdmin());
     }
 
-    // 10. Private Messages (Strictly scoped to participants)
+    // 10. Private Messages (Strictly scoped to participants - isolated from global bell)
     match /private_messages/{pmId} {
-      allow get: if isSignedIn() && isValidId(pmId) && request.auth.uid in resource.data.participants;
-      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
-      allow create: if isSignedIn() && isValidId(pmId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(pmId) && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && isNotBanned() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && isNotBanned() && isValidId(pmId) &&
                        isValidPrivateMessage(incoming()) &&
                        incoming().senderId == request.auth.uid &&
                        request.auth.uid in incoming().participants;
-      allow update: if isSignedIn() && isValidId(pmId) &&
+      allow update: if isSignedIn() && isNotBanned() && isValidId(pmId) &&
                        isValidPrivateMessage(incoming()) &&
                        request.auth.uid == existing().receiverId &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
-      allow delete: if isSignedIn() && isValidId(pmId) && (request.auth.uid in existing().participants || isAdmin());
+      allow delete: if isSignedIn() && isNotBanned() && isValidId(pmId) && (request.auth.uid in existing().participants || isAdmin());
     }
 
     // 11. Friendships (Strictly scoped to participants)
     match /friendships/{friendshipId} {
-      allow get: if isSignedIn() && isValidId(friendshipId) && request.auth.uid in resource.data.participants;
-      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
-      allow create: if isSignedIn() && isValidId(friendshipId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(friendshipId) && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && isNotBanned() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && isNotBanned() && isValidId(friendshipId) &&
                        isValidFriendship(incoming()) &&
                        incoming().requesterId == request.auth.uid &&
                        request.auth.uid in incoming().participants &&
                        incoming().status == 'pending';
-      allow update: if isSignedIn() && isValidId(friendshipId) &&
+      allow update: if isSignedIn() && isNotBanned() && isValidId(friendshipId) &&
                        isValidFriendship(incoming()) &&
                        isImmutableCreatedAt() &&
                        request.auth.uid == existing().targetId &&
                        existing().status == 'pending' &&
                        incoming().status == 'accepted' &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
-      allow delete: if isSignedIn() && isValidId(friendshipId) && request.auth.uid in existing().participants;
+      allow delete: if isSignedIn() && isNotBanned() && isValidId(friendshipId) && request.auth.uid in existing().participants;
     }
 
-    // 12. Personal Notifications
+    // 12. Personal Notifications (Non-PM alerts only)
     match /notifications/{notifId} {
-      allow get: if isSignedIn() && isValidId(notifId) && resource.data.recipientId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.recipientId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(notifId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(notifId) && (resource.data.recipientId == request.auth.uid || resource.data.recipientId == '*');
+      allow list: if isSignedIn() && isNotBanned() && (resource.data.recipientId == request.auth.uid || resource.data.recipientId == '*');
+      allow create: if isSignedIn() && isNotBanned() && isValidId(notifId) &&
                        isValidNotification(incoming()) &&
                        incoming().senderId == request.auth.uid;
-      allow update: if isSignedIn() && isValidId(notifId) &&
+      allow update: if isSignedIn() && isNotBanned() && isValidId(notifId) &&
                        isValidNotification(incoming()) &&
                        existing().recipientId == request.auth.uid &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
-      allow delete: if isSignedIn() && isValidId(notifId) && (existing().recipientId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isNotBanned() && isValidId(notifId) && (existing().recipientId == request.auth.uid || isAdmin());
     }
 
     // 13. Gift Transactions
     match /gifts/{giftTxId} {
-      allow get: if isSignedIn() && isValidId(giftTxId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(giftTxId) &&
                     (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid || resource.data.isPublic == true);
-      allow list: if isSignedIn() && resource.data.isPublic == true;
-      allow create: if isSignedIn() && isValidId(giftTxId) &&
+      allow list: if isSignedIn() && isNotBanned() && resource.data.isPublic == true;
+      allow create: if isSignedIn() && isNotBanned() && isValidId(giftTxId) &&
                        isValidGiftTransaction(incoming()) &&
                        incoming().senderId == request.auth.uid;
       allow update, delete: if false;
     }
 
-    // 14. Reports
+    // 14. Reports & Admin Audit Logs
     match /reports/{reportId} {
-      allow get: if isSignedIn() && isValidId(reportId) && (resource.data.reporterId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.reporterId == request.auth.uid || isSupremeOwner());
-      allow create: if isSignedIn() && isValidId(reportId) &&
+      allow get: if isSignedIn() && isNotBanned() && isValidId(reportId) && (resource.data.reporterId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && isNotBanned() && (resource.data.reporterId == request.auth.uid || isSupremeOwner());
+      allow create: if isSignedIn() && isNotBanned() && isValidId(reportId) &&
                        isValidReport(incoming()) &&
                        incoming().reporterId == request.auth.uid &&
                        incoming().status == 'open';
@@ -564,7 +629,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(reportId) && isAdmin();
     }
 
-    // 15. Bans
+    match /admin_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 15. Bans & Mutes (Admin Controlled)
     match /bans/{banId} {
       allow get: if isSignedIn() && isValidId(banId) && (resource.data.targetUserId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.targetUserId == request.auth.uid || isSupremeOwner());
@@ -573,13 +642,20 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(banId) && isAdmin();
     }
 
-    // 16. Mutes
+    match /banned_users/{banId} {
+      allow read, write: if isAdmin();
+    }
+
     match /mutes/{muteId} {
       allow get: if isSignedIn() && isValidId(muteId) && (resource.data.targetUserId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.targetUserId == request.auth.uid || isSupremeOwner());
       allow create: if isSignedIn() && isValidId(muteId) && isAdmin() && isValidMuteRecord(incoming()) && incoming().targetUserId != request.auth.uid;
       allow update: if isSignedIn() && isValidId(muteId) && isAdmin() && isValidMuteRecord(incoming()) && isImmutableCreatedAt();
       allow delete: if isSignedIn() && isValidId(muteId) && isAdmin();
+    }
+
+    match /muted_users/{muteId} {
+      allow read, write: if isAdmin();
     }
   }
 }

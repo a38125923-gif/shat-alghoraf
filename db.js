@@ -59,10 +59,12 @@ function enforceSupremeOwnerUser(u) {
     patch.role = 'site_owner';
     changed = true;
   }
-  if (u.is_banned !== 0 || u.ban_reason) {
+  if (u.is_banned !== 0 || u.isBanned !== false || u.ban_reason) {
     u.is_banned = 0;
+    u.isBanned = false;
     u.ban_reason = '';
     patch.is_banned = 0;
+    patch.isBanned = false;
     patch.ban_reason = '';
     changed = true;
   }
@@ -273,7 +275,7 @@ const DEFAULT_RANKS = [
   },
   {
     key: 'general_admin',
-    label: 'إداري عام',
+    label: 'مدير عام',
     icon: '🎖️',
     badge_style: 'royal_shield',
     image_url: '',
@@ -1384,7 +1386,11 @@ function normalizeUserDoc(docId, data) {
               .map(([k, v]) => [String(k).slice(0, 48), String(v || '').slice(0, 180)])
           )
         : {},
-    is_banned: data.is_banned ? 1 : 0,
+    firebase_uid: String(data.firebase_uid || data.firebaseUid || ''),
+    message_count: Math.max(0, Number(data.message_count) || 0),
+    lastRewardAt: Math.max(0, Number(data.lastRewardAt || data.last_reward_at) || 0),
+    isBanned: Boolean(data.isBanned || data.is_banned),
+    is_banned: (data.isBanned || data.is_banned) ? 1 : 0,
     ban_reason: String(data.ban_reason || ''),
     created_at: String(data.created_at || nowIso())
   };
@@ -1502,6 +1508,7 @@ function normalizeRoomDoc(docId, data) {
     youtube_by_key: String(data.youtube_by_key || ''),
     youtube_by_name: String(data.youtube_by_name || ''),
     youtube_updated_at: String(data.youtube_updated_at || ''),
+    isActive: data.isActive === false ? false : true,
     created_by: String(data.created_by || 'system'),
     created_at: String(data.created_at || nowIso())
   };
@@ -1588,6 +1595,7 @@ function normalizeRankDoc(docId, data) {
       : data.max_assignable_rank !== undefined
         ? Math.max(0, Math.min(14, Number(data.max_assignable_rank) > 15 ? Math.max(0, power - 1) : Number(data.max_assignable_rank) || 0))
         : defaultMaxAssign,
+    isActive: data.isActive === false ? false : true,
     created_at: String(data.created_at || nowIso())
   };
   return obj;
@@ -1752,14 +1760,32 @@ function attachRealtimeListeners() {
       let siteChanged = false;
       for (const ch of changes) {
         if (ch.id === 'site' && ch.type !== 'removed') {
-          store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...ch.data, id: 1 };
+          const prevKey = String(store.siteSettings?.welcome_bot_gemini_key || '');
+          store.siteSettings = {
+            ...DEFAULT_SITE_SETTINGS,
+            ...ch.data,
+            welcome_bot_gemini_key: String(ch.data?.welcome_bot_gemini_key || prevKey || ''),
+            id: 1
+          };
           siteChanged = true;
         } else if (ch.id === 'store_frames_catalog' && ch.type !== 'removed') {
           loadCustomFramesCatalogFromDoc(ch.data);
+        } else if (ch.id === 'gifts_catalog' && ch.type !== 'removed') {
+          loadCustomGiftsCatalogFromDoc(ch.data);
         }
       }
       if (initialSettingsReady && siteChanged && hooks.onSettingsChanged) hooks.onSettingsChanged(getSiteSettings());
       initialSettingsReady = true;
+    })
+  );
+
+  unsubscribers.push(
+    fsListen('admin_secrets', (changes) => {
+      for (const ch of changes) {
+        if (ch.id === 'bots' && ch.type !== 'removed' && ch.data) {
+          store.siteSettings.welcome_bot_gemini_key = String(ch.data.welcome_bot_gemini_key || '');
+        }
+      }
     })
   );
 
@@ -1974,7 +2000,8 @@ async function init(eventHooks = {}) {
         fsGetAll('reports'),
         fsGetAll('notifications'),
         fsGetAll('counters'),
-        fsGetAll('user_sessions')
+        fsGetAll('user_sessions'),
+        fsGetAll('admin_secrets')
       ]);
 
     let loadedCollections;
@@ -2012,7 +2039,8 @@ async function init(eventHooks = {}) {
       reportsDocs,
       notifDocs,
       counterDocs,
-      sessionsDocs
+      sessionsDocs,
+      adminSecretsDocs
     ] = loadedCollections;
 
     for (const c of counterDocs) {
@@ -2041,19 +2069,34 @@ async function init(eventHooks = {}) {
 
     let hasSiteSettingsDoc = false;
     let shouldMigrateSiteName = false;
+    let shouldStripKeyFromPublicSiteDoc = false;
     for (const d of settingsDocs) {
       if (d.id === 'site') {
         hasSiteSettingsDoc = true;
         store.siteSettings = { ...DEFAULT_SITE_SETTINGS, ...d.data, id: 1 };
+        if (d.data && String(d.data.welcome_bot_gemini_key || '').trim()) {
+          shouldStripKeyFromPublicSiteDoc = true;
+        }
         if (!store.siteSettings.site_name || store.siteSettings.site_name === 'شات الغرف المباشر') {
           store.siteSettings.site_name = DEFAULT_SITE_SETTINGS.site_name;
           shouldMigrateSiteName = true;
         }
       } else if (d.id === 'store_frames_catalog') {
         loadCustomFramesCatalogFromDoc(d.data);
+      } else if (d.id === 'gifts_catalog') {
+        loadCustomGiftsCatalogFromDoc(d.data);
       } else if (d.id === 'connectivity_probe' || d.id === 'probe_1') {
         enqueueDelete('settings', d.id);
       }
+    }
+    for (const sDoc of adminSecretsDocs || []) {
+      if (sDoc.id === 'bots' && sDoc.data && String(sDoc.data.welcome_bot_gemini_key || '').trim()) {
+        store.siteSettings.welcome_bot_gemini_key = String(sDoc.data.welcome_bot_gemini_key).trim();
+      }
+    }
+    if (shouldStripKeyFromPublicSiteDoc && store.siteSettings.welcome_bot_gemini_key) {
+      enqueueSet('admin_secrets', 'bots', { welcome_bot_gemini_key: store.siteSettings.welcome_bot_gemini_key, updated_at: nowIso() }, true);
+      enqueueSet('settings', 'site', { welcome_bot_gemini_key: '', welcome_bot_has_gemini_key: true, isPublic: true }, true);
     }
 
     for (const d of roomsDocs) {
@@ -2239,6 +2282,7 @@ async function init(eventHooks = {}) {
     const legacyDefaultsMap = {
       site_owner: ['Owner / صاحب الموقع', 'مالك الموقع', 'المالك'],
       co_owner: ['الإدارة العليا'],
+      general_admin: ['إداري عام'],
       royal_vip: ['ملوك الموقع VIP', 'ملكي'],
       premium: ['عضو بريميوم', 'Premium'],
       member: ['عضو مسجل'],
@@ -2307,18 +2351,26 @@ async function init(eventHooks = {}) {
     }
 
     if (!hasSiteSettingsDoc) {
-      await fsSetDoc('settings', 'site', store.siteSettings, true);
+      await fsSetDoc('settings', 'site', getPublicSiteSettingsForFirestore(store.siteSettings), true);
     } else if (shouldMigrateSiteName) {
-      await fsSetDoc('settings', 'site', { site_name: store.siteSettings.site_name }, true);
+      await fsSetDoc('settings', 'site', { site_name: store.siteSettings.site_name, isPublic: true }, true);
     }
 
     if (store.roomsById.size === 0) {
       const roomBatch = [];
       for (const r of DEFAULT_ROOMS) {
-        store.roomsById.set(r.id, { ...r });
-        roomBatch.push({ docId: r.id, data: r, merge: true });
+        const norm = { ...r, isActive: true };
+        store.roomsById.set(norm.id, norm);
+        roomBatch.push({ docId: norm.id, data: norm, merge: true });
       }
       await fsBatchSet('rooms', roomBatch);
+    } else if (!store.roomsById.has('general')) {
+      const generalDef = DEFAULT_ROOMS.find((r) => r.id === 'general') || DEFAULT_ROOMS[0];
+      if (generalDef) {
+        const norm = { ...generalDef, isActive: true };
+        store.roomsById.set(norm.id, norm);
+        await fsSetDoc('rooms', norm.id, norm, true);
+      }
     }
 
     await fsSetDoc('counters', 'sequences', store.counters, true);
@@ -2786,8 +2838,71 @@ function deleteCustomFrame(frameId) {
 }
 
 // ==========================================
+// GIFTS CATALOG HELPERS (DYNAMIC + DEFAULT)
+// ==========================================
+let dynamicGiftsCatalog = null;
+
+function loadCustomGiftsCatalogFromDoc(docData) {
+  if (!docData || !Array.isArray(docData.items) || docData.items.length === 0) {
+    dynamicGiftsCatalog = null;
+    return;
+  }
+  const clean = docData.items
+    .map((g, idx) => {
+      const name = String(g?.name || '').trim().slice(0, 60);
+      if (!name) return null;
+      return {
+        id: String(g?.id || `gift_${idx + 1}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || `gift_${idx + 1}`,
+        name,
+        emoji: String(g?.emoji || '🎁').trim().slice(0, 12) || '🎁',
+        cost: Math.max(1, Math.min(100000, Math.round(Number(g?.cost) || 50))),
+        reward: Math.max(0, Math.min(100000, Math.round(Number(g?.reward) || 25))),
+        tier: ['classic', 'warm', 'vip', 'royal', 'legend'].includes(String(g?.tier)) ? String(g.tier) : 'classic',
+        color: sanitizeHexColor(g?.color, '#e11d48')
+      };
+    })
+    .filter(Boolean);
+  dynamicGiftsCatalog = clean.length > 0 ? clean : null;
+}
+
+function getGiftsCatalog() {
+  return (dynamicGiftsCatalog || GIFT_CATALOG).map((g) => ({ ...g }));
+}
+
+function updateGiftsCatalog(items = []) {
+  const clean = (Array.isArray(items) ? items : [])
+    .map((g, idx) => {
+      const name = String(g?.name || '').trim().slice(0, 60);
+      if (!name) return null;
+      return {
+        id: String(g?.id || `gift_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || `gift_${idx}`,
+        name,
+        emoji: String(g?.emoji || '🎁').trim().slice(0, 12) || '🎁',
+        cost: Math.max(1, Math.min(100000, Math.round(Number(g?.cost) || 50))),
+        reward: Math.max(0, Math.min(100000, Math.round(Number(g?.reward) || 25))),
+        tier: ['classic', 'warm', 'vip', 'royal', 'legend'].includes(String(g?.tier)) ? String(g.tier) : 'classic',
+        color: sanitizeHexColor(g?.color, '#e11d48')
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 40);
+  if (clean.length === 0) return { error: 'يجب الإبقاء على هدية واحدة على الأقل.' };
+  dynamicGiftsCatalog = clean;
+  enqueueSet('settings', 'gifts_catalog', { items: clean, isPublic: true, updated_at: nowIso() }, false);
+  return { gifts: getGiftsCatalog() };
+}
+
+// ==========================================
 // SITE SETTINGS & THEME CMS HELPERS
 // ==========================================
+function getPublicSiteSettingsForFirestore(s = store.siteSettings) {
+  const base = { ...DEFAULT_SITE_SETTINGS, ...s, id: 1, isPublic: true };
+  const hasKey = Boolean(String(base.welcome_bot_gemini_key || '').trim());
+  base.welcome_bot_gemini_key = '';
+  base.welcome_bot_has_gemini_key = hasKey;
+  return base;
+}
+
 function getSiteSettings() {
   return { ...DEFAULT_SITE_SETTINGS, ...store.siteSettings };
 }
@@ -3133,7 +3248,8 @@ function updateSiteSettings(patch = {}) {
   };
 
   store.siteSettings = next;
-  enqueueSet('settings', 'site', next);
+  enqueueSet('settings', 'site', getPublicSiteSettingsForFirestore(next));
+  enqueueSet('admin_secrets', 'bots', { welcome_bot_gemini_key: next.welcome_bot_gemini_key || '', updated_at: next.updated_at }, true);
   return getSiteSettings();
 }
 
@@ -3215,6 +3331,10 @@ function registerUser({ username, email, passwordHash, ipAddress, deviceId, fing
     last_device_id: deviceId || '',
     last_fingerprint: String(fingerprint || '').trim().slice(0, 128),
     last_ua: String(userAgent || '').trim().slice(0, 200),
+    firebase_uid: '',
+    message_count: 0,
+    lastRewardAt: 0,
+    isBanned: false,
     is_banned: 0,
     ban_reason: '',
     created_at: nowIso()
@@ -3243,6 +3363,109 @@ function findUserById(id) {
   if (!u) return null;
   if (isSupremeOwnerEmail(u.email)) enforceSupremeOwnerUser(u);
   return { ...u };
+}
+
+function findUserByFirebaseUid(firebaseUid) {
+  const uid = String(firebaseUid || '').trim();
+  if (!uid) return null;
+  for (const u of store.usersById.values()) {
+    if (u.firebase_uid && u.firebase_uid === uid) {
+      if (isSupremeOwnerEmail(u.email)) enforceSupremeOwnerUser(u);
+      return { ...u };
+    }
+  }
+  return null;
+}
+
+function linkUserFirebaseUid(userId, firebaseUid) {
+  const u = store.usersById.get(Number(userId));
+  const fuid = String(firebaseUid || '').trim().slice(0, 128);
+  if (!u || !fuid) return u ? { ...u } : null;
+  if (u.firebase_uid !== fuid) {
+    u.firebase_uid = fuid;
+    enqueueSet('users', String(u.id), { firebase_uid: fuid }, true);
+  }
+  syncUserStateDoc(u);
+  return { ...u };
+}
+
+function syncUserStateDoc(userRow) {
+  if (!userRow || !userRow.id) return;
+  const userKey = `user:${userRow.id}`;
+  const isBanned = Boolean(userRow.isBanned || userRow.is_banned === 1) && !isSupremeOwnerEmail(userRow.email);
+  const stateDoc = {
+    userKey,
+    userId: userRow.id,
+    firebaseUid: String(userRow.firebase_uid || ''),
+    isBanned,
+    role: String(userRow.role || 'member'),
+    coins: Number(userRow.coins) || 0,
+    ruby: Number(userRow.coins) || 0,
+    isGhosted: Boolean(userRow.is_ghosted),
+    isShadowMuted: Boolean(userRow.is_shadow_muted),
+    isFrozen: Boolean(userRow.is_frozen),
+    displayName: getEffectiveName(userRow),
+    avatarUrl: String(userRow.avatar_url || ''),
+    updatedAt: nowIso()
+  };
+  enqueueSet('user_states', safeDocId(userKey), stateDoc, true);
+  if (userRow.firebase_uid) {
+    enqueueSet('user_states', safeDocId(userRow.firebase_uid), stateDoc, true);
+    if (isBanned) {
+      enqueueSet('user_bans', safeDocId(userRow.firebase_uid), { userKey, isBanned: true, updatedAt: nowIso() }, true);
+    } else {
+      enqueueDelete('user_bans', safeDocId(userRow.firebase_uid));
+    }
+  }
+}
+
+function patchUserStateDoc(userKey, patch = {}) {
+  const key = String(userKey || '').trim();
+  if (!key || !patch || typeof patch !== 'object') return;
+  const payload = {
+    userKey: key,
+    ...patch,
+    updatedAtMs: Date.now(),
+    updatedAt: nowIso()
+  };
+  enqueueSet('user_states', safeDocId(key), payload, true);
+  if (key.startsWith('user:')) {
+    const u = store.usersById.get(Number(key.slice(5)));
+    if (u && u.firebase_uid) {
+      enqueueSet('user_states', safeDocId(u.firebase_uid), payload, true);
+    }
+  }
+}
+
+function processMessageAutoRubyReward(userId, nowTs = Date.now()) {
+  if (!userId) return { awarded: false };
+  const u = store.usersById.get(Number(userId));
+  if (!u) return { awarded: false };
+  const COOLDOWN_MS = 3 * 60 * 1000;
+  const nextCount = (Number(u.message_count) || 0) + 1;
+  u.message_count = nextCount;
+  const lastReward = Number(u.lastRewardAt) || 0;
+  if (nextCount >= 50 && nowTs - lastReward >= COOLDOWN_MS) {
+    u.coins = (Number(u.coins) || 0) + 10;
+    u.message_count = 0;
+    u.lastRewardAt = nowTs;
+    enqueueSet(
+      'users',
+      String(u.id),
+      { coins: u.coins, message_count: 0, lastRewardAt: nowTs },
+      true
+    );
+    syncUserStateDoc(u);
+    return { awarded: true, delta: 10, coins: u.coins, message_count: 0, lastRewardAt: nowTs };
+  }
+  enqueueSet('users', String(u.id), { message_count: nextCount }, true);
+  return {
+    awarded: false,
+    coins: u.coins,
+    message_count: nextCount,
+    waitingCooldown: nextCount >= 50,
+    remainingMs: nextCount >= 50 ? Math.max(0, COOLDOWN_MS - (nowTs - lastReward)) : 0
+  };
 }
 
 function updateUserIp(userId, ipAddress, deviceId = '', extra = {}) {
@@ -3642,6 +3865,10 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
     gifts_sent: 0,
     last_ip: '',
     last_device_id: '',
+    firebase_uid: '',
+    message_count: 0,
+    lastRewardAt: 0,
+    isBanned: false,
     is_banned: 0,
     ban_reason: '',
     created_at: nowIso()
@@ -4286,6 +4513,7 @@ function createRoom({
     youtube_is_playing: 0,
     youtube_updated_at: '',
     mics_enabled: 1,
+    isActive: true,
     created_by: createdBy || 'owner',
     created_at: nowIso()
   };
@@ -4457,6 +4685,7 @@ function addMessage({
     id,
     doc_id: String(id),
     room_id: roomId,
+    roomId: roomId,
     sender_key: senderKey,
     sender_name: senderName,
     sender_role: senderRole || 'member',
@@ -4715,9 +4944,13 @@ function banTarget({
     const u = store.usersById.get(uid);
     if (u) {
       u.is_banned = 1;
+      u.isBanned = true;
       u.ban_reason = cleanReason;
-      enqueueSet('users', String(uid), { is_banned: 1, ban_reason: cleanReason }, true);
+      enqueueSet('users', String(uid), { is_banned: 1, isBanned: true, ban_reason: cleanReason }, true);
+      syncUserStateDoc(u);
     }
+  } else {
+    enqueueSet('user_states', safeDocId(targetKey), { userKey: targetKey, isBanned: true, updatedAt: nowIso() }, true);
   }
   revokeAllSessionsForUser(targetKey);
   return true;
@@ -4732,9 +4965,13 @@ function unbanTarget(targetKey) {
     const u = store.usersById.get(uid);
     if (u) {
       u.is_banned = 0;
+      u.isBanned = false;
       u.ban_reason = '';
-      enqueueSet('users', String(uid), { is_banned: 0, ban_reason: '' }, true);
+      enqueueSet('users', String(uid), { is_banned: 0, isBanned: false, ban_reason: '' }, true);
+      syncUserStateDoc(u);
     }
+  } else {
+    enqueueSet('user_states', safeDocId(targetKey), { userKey: targetKey, isBanned: false, updatedAt: nowIso() }, true);
   }
 }
 
@@ -4764,7 +5001,7 @@ function isTargetBanned(input) {
       if (u && (isSupremeOwnerEmail(u.email) || u.role === 'site_owner')) {
         return null;
       }
-      if (u && u.is_banned === 1) {
+      if (u && (u.isBanned === true || u.is_banned === 1)) {
         return {
           target_key: targetKey,
           target_name: getEffectiveName(u),
@@ -4842,7 +5079,7 @@ function deleteNewsPost(newsId) {
 }
 
 function sendGift({ fromUserId, fromKey, fromName, fromRole, toKey, toName, giftId, roomId }) {
-  const gift = GIFT_CATALOG.find((g) => g.id === giftId);
+  const gift = getGiftsCatalog().find((g) => g.id === giftId);
   if (!gift) return { error: 'الهدية المختارة غير متوفرة.' };
   if (!fromUserId) return { error: 'إرسال الهدايا متاح للأعضاء المسجلين فقط.' };
   const sender = store.usersById.get(Number(fromUserId));
@@ -4933,8 +5170,24 @@ function getGiftsForUser(userKey) {
   };
 }
 
+function resolveFirebaseUidForKey(userKey) {
+  const k = String(userKey || '');
+  if (k.startsWith('user:')) {
+    const u = store.usersById.get(Number(k.replace('user:', '')));
+    return u && u.firebase_uid ? String(u.firebase_uid) : '';
+  }
+  if (k.startsWith('guest:')) {
+    const g = store.guestsByKey.get(k);
+    return g && g.firebase_uid ? String(g.firebase_uid) : '';
+  }
+  return '';
+}
+
 function addPrivateMessage({ fromKey, fromName, fromRole, fromAvatar, toKey, toName, content }) {
   const id = nextSeq('private_messages');
+  const fromFuid = resolveFirebaseUidForKey(fromKey);
+  const toFuid = resolveFirebaseUidForKey(toKey);
+  const parts = Array.from(new Set([String(fromKey || ''), String(toKey || ''), fromFuid, toFuid].filter(Boolean)));
   const pm = {
     id,
     from_key: fromKey,
@@ -4943,12 +5196,16 @@ function addPrivateMessage({ fromKey, fromName, fromRole, fromAvatar, toKey, toN
     from_avatar: fromAvatar || '',
     to_key: toKey,
     to_name: toName,
+    participants: parts,
     content,
     is_read: 0,
     created_at: nowIso()
   };
   store.privateMessagesById.set(id, pm);
   enqueueSet('private_messages', String(id), pm);
+  if (toKey) {
+    enqueueSet('user_states', safeDocId(toKey), { userKey: toKey, lastPmAt: Date.now() }, true);
+  }
   return { ...pm };
 }
 
@@ -5207,10 +5464,13 @@ function getPmLinkAlerts(limit = 60) {
 }
 
 function addNotification({ targetKey, title, body, category = 'system' }) {
+  if (category === 'pm') return null;
   const id = nextSeq('notifications');
+  const recipientUid = targetKey === '*' ? '*' : (resolveFirebaseUidForKey(targetKey) || targetKey);
   const notif = {
     id,
     target_key: targetKey,
+    recipientId: recipientUid,
     title,
     body,
     category,
@@ -5225,7 +5485,7 @@ function addNotification({ targetKey, title, body, category = 'system' }) {
 
 function getNotificationsForUser(userKey) {
   return [...store.notificationsById.values()]
-    .filter((n) => n.target_key === userKey || n.target_key === '*')
+    .filter((n) => n.category !== 'pm' && (n.target_key === userKey || n.target_key === '*'))
     .sort((a, b) => Number(b.id) - Number(a.id))
     .slice(0, 35)
     .map((n) => ({
@@ -5240,6 +5500,7 @@ function getNotificationsForUser(userKey) {
 function getUnreadNotificationCount(userKey) {
   let count = 0;
   for (const n of store.notificationsById.values()) {
+    if (n.category === 'pm') continue;
     if (n.target_key === userKey) {
       if (!n.is_read) count += 1;
     } else if (n.target_key === '*') {
@@ -5483,6 +5744,47 @@ module.exports = {
   registerUser,
   findUserByIdentifier,
   findUserById,
+  findUserByFirebaseUid,
+  linkUserFirebaseUid,
+  syncUserStateDoc,
+  patchUserStateDoc,
+  processMessageAutoRubyReward,
+  getGiftsCatalog,
+  updateGiftsCatalog,
+  syncOnlinePresenceDoc(presenceEntry) {
+    if (!presenceEntry || !presenceEntry.key) return;
+    enqueueSet('online_presence', safeDocId(presenceEntry.key), {
+      ...presenceEntry,
+      updatedAtMs: Date.now(),
+      updatedAt: nowIso()
+    });
+  },
+  removeOnlinePresenceDoc(key) {
+    if (!key) return;
+    enqueueDelete('online_presence', safeDocId(key));
+  },
+  syncRoomMicsDoc(roomId, slots = []) {
+    if (!roomId) return;
+    enqueueSet('room_mics', String(roomId), {
+      roomId: String(roomId),
+      slots: Array.isArray(slots) ? slots : [],
+      updatedAtMs: Date.now(),
+      updatedAt: nowIso()
+    });
+  },
+  pushWebRtcSignalDoc(signal = {}) {
+    const id = `sig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    enqueueSet('webrtc_signals', id, {
+      id,
+      ...signal,
+      createdAtMs: Date.now()
+    });
+    return id;
+  },
+  deleteWebRtcSignalDoc(id) {
+    if (!id) return;
+    enqueueDelete('webrtc_signals', String(id));
+  },
   updateUserIp,
   setUserStealth,
   setUserGhosted,
@@ -5561,6 +5863,13 @@ module.exports = {
   deleteWallPost,
   addReport,
   getReports,
+  deleteReportById(reportId) {
+    const rid = Number(reportId);
+    if (!store.reportsById.has(rid)) return false;
+    store.reportsById.delete(rid);
+    enqueueDelete('reports', String(rid));
+    return true;
+  },
   addAdminLog,
   getAdminLogs,
   addPmLinkAlert,
@@ -5917,7 +6226,11 @@ module.exports = {
         fsBatchSet('notifications', Array.from(store.notificationsById.values()).map((nt) => ({ docId: String(nt.id), data: nt, merge: false }))),
         fsBatchSet('user_sessions', Array.from(store.sessionsById.values()).map((s) => ({ docId: String(s.id), data: s, merge: false }))),
         fsBatchSet('profile_media', Array.from(store.profileMediaById.values()).map((m) => ({ docId: String(m.id), data: m, merge: false }))),
-        fsSetDoc('settings', 'site', store.siteSettings, false),
+        fsSetDoc('settings', 'site', getPublicSiteSettingsForFirestore(store.siteSettings), false),
+        fsSetDoc('admin_secrets', 'bots', {
+          welcome_bot_gemini_key: String(store.siteSettings.welcome_bot_gemini_key || ''),
+          updated_at: nowIso()
+        }, true),
         fsSetDoc('settings', 'store_frames_catalog', {
           items: Object.fromEntries(Array.from(store.customFramesById.entries())),
           updatedAt: nowIso()

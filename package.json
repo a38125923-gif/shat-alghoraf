@@ -1,13 +1,13 @@
 {
   "name": "arabic-realtime-chat",
   "version": "1.0.0",
-  "description": "تطبيق شات دردشة عربي حقيقي ومباشر (Real-time) بنمط CodyChat الاحترافي مع Firebase Cloud Firestore",
+  "description": "تطبيق شات دردشة عربي حقيقي ومباشر (Real-time) بنمط CodyChat الاحترافي مع Firebase Auth و Cloud Firestore",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "lint": "node --check db.js && node --check server.js && node --check public/app.js",
-    "build": "node --check db.js && node --check server.js && node --check public/app.js"
+    "lint": "node --check db.js && node --check server.js && node --check public/firebase-client.js && node --check public/app.js && node --check private_admin/admin-panel.js",
+    "build": "node --check db.js && node --check server.js && node --check public/firebase-client.js && node --check public/app.js && node --check private_admin/admin-panel.js"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -17,7 +17,6 @@
     "express": "^4.21.2",
     "firebase": "^13.3.0",
     "firebase-admin": "^14.5.1",
-    "multer": "^1.4.5-lts.1",
-    "socket.io": "^4.8.1"
+    "multer": "^1.4.5-lts.1"
   }
 }

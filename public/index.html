@@ -73,6 +73,9 @@
           <label>كلمة المرور</label>
           <input type="password" id="loginPassword" placeholder="••••••••" required />
           <button type="submit" class="btn-primary btn-full"><i class="fa-solid fa-right-to-bracket"></i> دخول إلى الشات</button>
+          <button type="button" id="googleLoginBtn" class="btn-secondary btn-full" style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px;">
+            <i class="fa-brands fa-google" style="color:#f87171;"></i> تسجيل الدخول السريع عبر Google
+          </button>
         </form>
 
         <form id="registerForm" class="auth-form hidden">
@@ -164,9 +167,6 @@
           </button>
         </div>
       </header>
-      <div id="reconnectBanner" class="reconnect-banner hidden" role="status">
-        <i class="fa-solid fa-wifi"></i> <span>فُقد الاتصال، جاري إعادة المحاولة...</span>
-      </div>
       <div id="urgentBroadcastBar" class="urgent-broadcast-bar hidden"></div>
 
       <!-- MICS 1..5 (#1a237e) + BLUE DIVIDER BUTTONS + YOUTUBE BAR -->
@@ -1184,7 +1184,7 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="/firebase-client.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
