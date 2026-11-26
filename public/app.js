@@ -270,6 +270,17 @@
     return lum >= 0.12;
   }
 
+  function isReadableOnLightBg(hex) {
+    const rgb = parseHexRgb(hex);
+    if (!rgb) return true;
+    const toLin = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const lum = 0.2126 * toLin(rgb[0]) + 0.7152 * toLin(rgb[1]) + 0.0722 * toLin(rgb[2]);
+    return lum <= 0.58;
+  }
+
   function refreshLucideIcons() {
     try {
       if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -308,59 +319,129 @@
   };
 
   const ANIMATED_STICKERS = [
-    { id: 'crown_king', glyph: '👑', label: 'تاج ملكي' },
-    { id: 'heart_fire', glyph: '❤️‍🔥', label: 'قلب متوهج' },
-    { id: 'rocket_boom', glyph: '🚀', label: 'انطلاق' },
-    { id: 'rose_gift', glyph: '🌹', label: 'وردة' },
-    { id: 'diamond_vip', glyph: '💎', label: 'ألماس' },
-    { id: 'fire_hot', glyph: '🔥', label: 'حماس' },
-    { id: 'clap_bravo', glyph: '👏', label: 'تصفيق' },
-    { id: 'party_pop', glyph: '🥳', label: 'احتفال' },
-    { id: 'kiss_love', glyph: '😘', label: 'محبة' },
-    { id: 'trophy_win', glyph: '🏆', label: 'كأس' },
-    { id: 'butterfly', glyph: '🦋', label: 'فراشة' },
-    { id: 'sparkle_star', glyph: '✨', label: 'نجوم' }
+    {
+      id: 'crown_king',
+      glyph: '👑',
+      label: 'تاج ملكي',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><defs><linearGradient id="stkCr" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="55%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><path fill="url(#stkCr)" stroke="#78350f" stroke-width="1.4" d="M5 27h26l-2.5-14-6.5 6L18 8l-4 11-6.5-6L5 27zm2 3h22v2.4H7z"/><circle cx="18" cy="6.8" r="2.2" fill="#e11d48"/><circle cx="6.8" cy="11.5" r="1.8" fill="#0ea5e9"/><circle cx="29.2" cy="11.5" r="1.8" fill="#0ea5e9"/></svg>'
+    },
+    {
+      id: 'heart_fire',
+      glyph: '❤️‍🔥',
+      label: 'قلب متوهج',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><defs><linearGradient id="stkHr" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fb7185"/><stop offset="60%" stop-color="#e11d48"/><stop offset="100%" stop-color="#9f1239"/></linearGradient></defs><path fill="url(#stkHr)" stroke="#881337" stroke-width="1.2" d="M18 31.5S5.5 23.8 4 14.4C2.9 8.2 7.5 4.2 12.6 4.6c2.6.2 4.4 1.8 5.4 3.6 1-1.8 2.8-3.4 5.4-3.6 5.1-.4 9.7 3.6 8.6 9.8-1.5 9.4-14 17.1-14 17.1z"/><path fill="#fde047" opacity="0.88" d="M18 11c1.8 2.6 2.8 4.4 2.4 6.6 1.4-.6 2.4-2 2.4-3.8 2 1.8 2.5 4.8.8 7-1.4 2-4.2 2.8-6.4 2-2.6-.9-3.9-4-2.5-6.6 1-1.8 2.2-3 3.3-5.2z"/></svg>'
+    },
+    {
+      id: 'diamond_vip',
+      glyph: '💎',
+      label: 'ألماس VIP',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><defs><linearGradient id="stkDm" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e0f2fe"/><stop offset="45%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#1d4ed8"/></linearGradient></defs><path fill="url(#stkDm)" stroke="#1e3a8a" stroke-width="1.3" d="M9.5 6h17l6 8.5L18 31.5 3.5 14.5 9.5 6z"/><path fill="rgba(255,255,255,0.55)" d="M9.5 6 13 14.5 18 6zm8.5 0-5 8.5h10z"/></svg>'
+    },
+    {
+      id: 'trophy_win',
+      glyph: '🏆',
+      label: 'كأس الفوز',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><defs><linearGradient id="stkTr" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="55%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><path fill="url(#stkTr)" stroke="#78350f" stroke-width="1.3" d="M10 6h16v9c0 4.4-3.6 8-8 8s-8-3.6-8-8V6zm-5 2h5v5c-2.8 0-5-2.2-5-5zm26 0h-5v5c2.8 0 5-2.2 5-5zm-15 15h4v4.5h5.5V31h-15v-3.5H16V23z"/></svg>'
+    },
+    {
+      id: 'rose_gift',
+      glyph: '🌹',
+      label: 'وردة فاخرة',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><path fill="#16a34a" d="M17 18h2v13h-2z"/><path fill="#22c55e" d="M18 24c3-2 6.5-1.5 7.5 1-3 .8-6 0-7.5-1zm0 3c-3-2-6.5-1.5-7.5 1 3 .8 6 0 7.5-1z"/><circle cx="18" cy="13" r="6.8" fill="#e11d48" stroke="#9f1239" stroke-width="1.2"/><path fill="#fb7185" d="M14 11c1.8-2 6-2 7.8 0-1.4 1.6-6.2 1.6-7.8 0z"/></svg>'
+    },
+    {
+      id: 'rocket_boom',
+      glyph: '🚀',
+      label: 'انطلاق',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><path fill="#ef4444" d="M18 4c4.5 4.2 6.5 9.8 6.2 16l-6.2 3-6.2-3C11.5 13.8 13.5 8.2 18 4z"/><path fill="#f8fafc" stroke="#1e293b" stroke-width="1.2" d="M18 5c3.5 4 5 8.8 4.8 14H13.2C13 13.8 14.5 9 18 5z"/><circle cx="18" cy="13" r="2.6" fill="#38bdf8"/><path fill="#f59e0b" d="M14.5 22h7l-3.5 9z"/></svg>'
+    },
+    {
+      id: 'fire_hot',
+      glyph: '🔥',
+      label: 'حماس',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><path fill="#ef4444" d="M19 4c2.8 5.2-.5 8.2 2.4 11.8 1.2-1.8 2.2-3.4 2.4-5.4 4.2 3 6.2 7.4 6.2 11.8a12 12 0 1 1-24 0c0-5.6 4-11.2 13-18.2z"/><path fill="#fde047" d="M18.2 16c2.6 2.8 3.8 5 3.8 7.8a4.2 4.2 0 1 1-8.4 0c0-2.6 1.4-5 4.6-7.8z"/></svg>'
+    },
+    {
+      id: 'sparkle_star',
+      glyph: '✨',
+      label: 'نجمة لامعة',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><path fill="#facc15" stroke="#b45309" stroke-width="1.2" d="M18 3.5l4.2 8.8 9.7 1.4-7 6.8 1.7 9.6-8.6-4.6-8.6 4.6 1.7-9.6-7-6.8 9.7-1.4z"/></svg>'
+    },
+    {
+      id: 'party_pop',
+      glyph: '🥳',
+      label: 'احتفال',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><path fill="#f59e0b" stroke="#92400e" stroke-width="1.2" d="M7 29l7-18 11 11z"/><circle cx="24" cy="9" r="2.2" fill="#ec4899"/><circle cx="29" cy="14" r="2" fill="#38bdf8"/><circle cx="18" cy="6" r="2" fill="#22c55e"/><circle cx="28" cy="23" r="2" fill="#a855f7"/></svg>'
+    },
+    {
+      id: 'clap_bravo',
+      glyph: '👏',
+      label: 'تصفيق حار',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><circle cx="18" cy="18" r="13.5" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/><path fill="#d97706" d="M12.5 22.5l5-9 3.5 2-4.5 9.2c-1.4 1.2-3.4.4-4-.2zm5.5 2l5.2-9.5 3.2 1.8-4.8 9.4c-1.2 1-3 .5-3.6-.7z"/></svg>'
+    },
+    {
+      id: 'kiss_love',
+      glyph: '😘',
+      label: 'محبة وتقدير',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><circle cx="18" cy="18" r="13" fill="#fde047" stroke="#ca8a04" stroke-width="1.2"/><circle cx="13.5" cy="14.5" r="1.8" fill="#1e293b"/><path fill="none" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" d="M20 14.5c1.2-1 2.8-1 4 0"/><path fill="#e11d48" d="M26 20c1.4-1.8 4.4-1 4.4 1.3 0 2.2-4.4 4.7-4.4 4.7s-4.4-2.5-4.4-4.7c0-2.3 3-3.1 4.4-1.3z"/></svg>'
+    },
+    {
+      id: 'butterfly',
+      glyph: '🦋',
+      label: 'فراشة ملونة',
+      svg: '<svg viewBox="0 0 36 36" class="stk-svg-art"><path fill="#38bdf8" stroke="#0284c7" stroke-width="1.1" d="M17 17C12 9 5 8 5 14c0 4 4 7 12 6zm2 0c5-8 12-9 12-3 0 4-4 7-12 6z"/><path fill="#a855f7" stroke="#6b21a8" stroke-width="1.1" d="M17 20c-6 1-10 5-7 9 2.5 3 6 .5 7-9zm2 0c6 1 10 5 7 9-2.5 3-6 .5-7-9z"/><rect x="17" y="10" width="2" height="17" rx="1" fill="#0f172a"/></svg>'
+    }
   ];
 
   const NAME_COLOR_SWATCHES = [
-    '#f8fafc', '#e2e8f0', '#cbd5e1', '#fbbf24', '#f59e0b', '#fb7185',
-    '#f43f5e', '#ef4444', '#fb923c', '#facc15', '#4ade80', '#2dd4bf',
-    '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#f472b6'
+    '#0f172a', '#1e293b', '#f8fafc', '#e2e8f0', '#fbbf24', '#f59e0b', '#fb7185',
+    '#f43f5e', '#ef4444', '#fb923c', '#facc15', '#16a34a', '#2dd4bf',
+    '#0284c7', '#38bdf8', '#60a5fa', '#7c3aed', '#c084fc'
   ];
 
   const RANK_ICON_PRESETS = [
-    '👑', '💎', '⭐', '🏆', '🛡️', '🦅', '⚜️', '🔥',
-    '✨', '🎖️', '🔰', '💫', '🐉', '🦁', '🌟', '💍'
+    '👑', '💎', '⭐', '🏆', '🛡️', '🦅', '⚜️', '🌟',
+    '✨', '🎖️', '💠', '💫', '🔱', '🏅', '🪄', '💍'
   ];
 
   const RANK_BADGE_STYLES = [
     { id: 'gold_crown', label: 'تاج ذهبي ملكي', iconClass: 'fa-solid fa-crown' },
-    { id: 'silver_crown', label: 'تاج فضي', iconClass: 'fa-solid fa-crown' },
+    { id: 'crown_royal', label: 'تاج السيادة المرصع', iconClass: 'fa-solid fa-crown' },
+    { id: 'ruby_crown', label: 'تاج الياقوت الأحمر', iconClass: 'fa-solid fa-crown' },
+    { id: 'silver_crown', label: 'تاج فضي ملكي', iconClass: 'fa-solid fa-crown' },
+    { id: 'royal_trophy', label: 'كأس البطولة الذهبي', iconClass: 'fa-solid fa-trophy' },
+    { id: 'diamond_trophy', label: 'كأس الماس السماوي', iconClass: 'fa-solid fa-trophy' },
+    { id: 'emerald_trophy', label: 'كأس الزمرد الفاخر', iconClass: 'fa-solid fa-trophy' },
+    { id: 'gold_star', label: 'نجمة ذهبية متلألئة', iconClass: 'fa-solid fa-star' },
+    { id: 'sapphire_star', label: 'نجمة الياقوت الأزرق', iconClass: 'fa-solid fa-star' },
     { id: 'royal_shield', label: 'درع ملكي', iconClass: 'fa-solid fa-shield-halved' },
     { id: 'silver_shield', label: 'درع فضي محصّن', iconClass: 'fa-solid fa-shield' },
-    { id: 'gold_star', label: 'نجمة ذهبية متلألئة', iconClass: 'fa-solid fa-star' },
     { id: 'diamond_gem', label: 'ماسة زرقاء براقة', iconClass: 'fa-solid fa-gem' },
     { id: 'vip_wings', label: 'أجنحة VIP ملكية', iconClass: 'fa-solid fa-feather-pointed' },
     { id: 'silver_wing', label: 'جناح فضي', iconClass: 'fa-solid fa-dove' },
     { id: 'gold_eagle', label: 'نسر ذهبي', iconClass: 'fa-solid fa-feather-pointed' },
     { id: 'neon_badge', label: 'شارة نيون متوهجة', iconClass: 'fa-solid fa-certificate' },
-    { id: 'crown_royal', label: 'تاج السيادة', iconClass: 'fa-solid fa-crown' },
     { id: 'diamond_medal', label: 'وسام ماسي', iconClass: 'fa-solid fa-gem' }
   ];
 
   const BUILT_IN_RANK_SVGS = {
-    gold_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="gCrown" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="55%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><path fill="url(#gCrown)" stroke="#78350f" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2z"/><circle cx="12" cy="4.2" r="1.4" fill="#ef4444"/><circle cx="4.4" cy="7.5" r="1.1" fill="#38bdf8"/><circle cx="19.6" cy="7.5" r="1.1" fill="#38bdf8"/></svg>',
-    crown_royal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="gCrownR" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fde047"/><stop offset="50%" stop-color="#eab308"/><stop offset="100%" stop-color="#a16207"/></linearGradient></defs><path fill="url(#gCrownR)" stroke="#713f12" stroke-width="1" d="M2.5 18.5h19L20 8l-4.8 4.2L12 4.5 8.8 12.2 4 8l-1.5 10.5zM4 20.5h16v1.8H4z"/><circle cx="12" cy="14" r="1.5" fill="#dc2626"/></svg>',
-    silver_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="sCrown" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#cbd5e1"/><stop offset="100%" stop-color="#64748b"/></linearGradient></defs><path fill="url(#sCrown)" stroke="#334155" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.3" fill="#38bdf8"/></svg>',
-    royal_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="rShield" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#b45309"/></linearGradient></defs><path fill="#1e293b" stroke="url(#rShield)" stroke-width="1.8" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="url(#rShield)" d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z"/></svg>',
-    silver_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="sShield" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="60%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/></linearGradient></defs><path fill="url(#sShield)" stroke="#1e293b" stroke-width="1.3" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="#0ea5e9" d="M12 6.5l3 5.5-3 5.5-3-5.5z"/></svg>',
-    gold_star: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="gStar" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef9c3"/><stop offset="50%" stop-color="#facc15"/><stop offset="100%" stop-color="#d97706"/></linearGradient></defs><path fill="url(#gStar)" stroke="#92400e" stroke-width="1.1" d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17l-5.9 3.2 1.2-6.5-4.8-4.6 6.6-.9z"/></svg>',
-    diamond_gem: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="dGem" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e0f2fe"/><stop offset="45%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><path fill="url(#dGem)" stroke="#1e40af" stroke-width="1" d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5z"/><path fill="rgba(255,255,255,0.45)" d="M6.5 3.5 9 9l3-5.5zm5.5 0L9 9h6z"/></svg>',
-    diamond_medal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="dMed" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fae8ff"/><stop offset="50%" stop-color="#a855f7"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs><path fill="url(#dMed)" stroke="#312e81" stroke-width="1" d="M7 3h10l4 5.5L12 21 3 8.5 7 3z"/></svg>',
-    vip_wings: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="vWing" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fde047"/><stop offset="100%" stop-color="#ea580c"/></linearGradient></defs><path fill="url(#vWing)" stroke="#7c2d12" stroke-width="0.8" d="M2 7c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2-2.2 1-4.5.7-6-.8.8 1.8 3.2 2.8 5.5 2.5L12 19l3-2.8c2.3.3 4.7-.7 5.5-2.5-1.5 1.5-3.8 1.8-6 .8 2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2 1.5-3 4-5.5 8-5.5-4.5-.8-8 1-10 4.2C10 8 6.5 6.2 2 7z"/><circle cx="12" cy="11" r="2.2" fill="#facc15" stroke="#7c2d12" stroke-width="0.7"/></svg>',
+    gold_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16a1 1 0 0 1 0 2H4a1 1 0 0 1 0-2z"/><circle cx="12" cy="4.2" r="1.5" fill="#e11d48"/><circle cx="4.4" cy="7.5" r="1.2" fill="#0ea5e9"/><circle cx="19.6" cy="7.5" r="1.2" fill="#0ea5e9"/></svg>',
+    crown_royal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#eab308" stroke="#713f12" stroke-width="1" d="M2.5 18.5h19L20 8l-4.8 4.2L12 4.5 8.8 12.2 4 8l-1.5 10.5zM4 20.5h16v1.8H4z"/><circle cx="12" cy="14" r="1.6" fill="#dc2626"/><circle cx="8" cy="14.5" r="1.1" fill="#38bdf8"/><circle cx="16" cy="14.5" r="1.1" fill="#38bdf8"/></svg>',
+    ruby_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#f43f5e" stroke="#881337" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.5" fill="#fde047"/><circle cx="12" cy="14" r="1.6" fill="#fef08a"/></svg>',
+    silver_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#cbd5e1" stroke="#334155" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.4" fill="#38bdf8"/></svg>',
+    royal_trophy: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#fbbf24" stroke="#92400e" stroke-width="1" d="M7 4h10v6a5 5 0 0 1-10 0V4zm-3 1.5h3v3.5A3 3 0 0 1 4 6V5.5zm16 0h-3v3.5A3 3 0 0 0 20 6V5.5zM10.5 15h3v3h3.5v2H7v-2h3.5v-3z"/><circle cx="12" cy="8.2" r="1.5" fill="#dc2626"/></svg>',
+    diamond_trophy: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#1e3a8a" stroke-width="1" d="M7 4h10v6a5 5 0 0 1-10 0V4zm-3 1.5h3v3.5A3 3 0 0 1 4 6V5.5zm16 0h-3v3.5A3 3 0 0 0 20 6V5.5zM10.5 15h3v3h3.5v2H7v-2h3.5v-3z"/><circle cx="12" cy="8.2" r="1.5" fill="#fef08a"/></svg>',
+    emerald_trophy: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#10b981" stroke="#064e3b" stroke-width="1" d="M7 4h10v6a5 5 0 0 1-10 0V4zm-3 1.5h3v3.5A3 3 0 0 1 4 6V5.5zm16 0h-3v3.5A3 3 0 0 0 20 6V5.5zM10.5 15h3v3h3.5v2H7v-2h3.5v-3z"/><circle cx="12" cy="8.2" r="1.5" fill="#fde047"/></svg>',
+    gold_star: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#facc15" stroke="#92400e" stroke-width="1.1" d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17l-5.9 3.2 1.2-6.5-4.8-4.6 6.6-.9z"/></svg>',
+    sapphire_star: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#1e40af" stroke-width="1.1" d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17l-5.9 3.2 1.2-6.5-4.8-4.6 6.6-.9z"/></svg>',
+    royal_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#1e293b" stroke="#fbbf24" stroke-width="1.8" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="#fbbf24" d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z"/></svg>',
+    silver_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#94a3b8" stroke="#1e293b" stroke-width="1.3" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="#0ea5e9" d="M12 6.5l3 5.5-3 5.5-3-5.5z"/></svg>',
+    diamond_gem: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#1e40af" stroke-width="1" d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5z"/><path fill="rgba(255,255,255,0.45)" d="M6.5 3.5 9 9l3-5.5zm5.5 0L9 9h6z"/></svg>',
+    diamond_medal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#a855f7" stroke="#312e81" stroke-width="1" d="M7 3h10l4 5.5L12 21 3 8.5 7 3z"/><path fill="rgba(255,255,255,0.35)" d="M7 3l3 5.5 2-5.5z"/></svg>',
+    vip_wings: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#fbbf24" stroke="#7c2d12" stroke-width="0.8" d="M2 7c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2-2.2 1-4.5.7-6-.8.8 1.8 3.2 2.8 5.5 2.5L12 19l3-2.8c2.3.3 4.7-.7 5.5-2.5-1.5 1.5-3.8 1.8-6 .8 2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2 1.5-3 4-5.5 8-5.5-4.5-.8-8 1-10 4.2C10 8 6.5 6.2 2 7z"/><circle cx="12" cy="11" r="2.2" fill="#facc15" stroke="#7c2d12" stroke-width="0.7"/></svg>',
     silver_wing: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#e2e8f0" stroke="#475569" stroke-width="0.9" d="M3 8c4.5 0 7.5 2.8 9 6-2.5.8-5.5.1-7-2 1.4 2.5 4 3.8 6.5 4-2.2 1-4.6.6-6-.8.9 1.8 3.4 2.7 5.8 2.3L12 19l8.5-7c-3.5-.3-6.5 1-8.5 3.3C10.5 10.5 7 7.7 3 8z"/></svg>',
     gold_eagle: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="0.9" d="M12 4l2.2 3.2 7.3-1.7-3.5 5 2 3-5.2-1.2L12 20.5 9.2 12.3 4 13.5l2-3-3.5-5 7.3 1.7z"/></svg>',
-    neon_badge: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><defs><linearGradient id="nBad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="50%" stop-color="#ec4899"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs><path fill="url(#nBad)" stroke="#ffffff" stroke-width="0.9" d="M12 2l2.3 2.7 3.5-.5.8 3.4 3.2 1.5-1.3 3.3 1.3 3.3-3.2 1.5-.8 3.4-3.5-.5L12 22l-2.3-2.7-3.5.5-.8-3.4-3.2-1.5 1.3-3.3-1.3-3.3 3.2-1.5.8-3.4 3.5.5z"/><path fill="#ffffff" d="M12 7.5l1.3 2.9 3.1.4-2.2 2.2.5 3.1-2.7-1.5-2.7 1.5.5-3.1-2.2-2.2 3.1-.4z"/></svg>'
+    neon_badge: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#ec4899" stroke="#ffffff" stroke-width="0.9" d="M12 2l2.3 2.7 3.5-.5.8 3.4 3.2 1.5-1.3 3.3 1.3 3.3-3.2 1.5-.8 3.4-3.5-.5L12 22l-2.3-2.7-3.5.5-.8-3.4-3.2-1.5 1.3-3.3-1.3-3.3 3.2-1.5.8-3.4 3.5.5z"/><path fill="#ffffff" d="M12 7.5l1.3 2.9 3.1.4-2.2 2.2.5 3.1-2.7-1.5-2.7 1.5.5-3.1-2.2-2.2 3.1-.4z"/></svg>'
   };
 
   const FRAME_ORNAMENT_SVGS = {
@@ -421,6 +502,7 @@
     rooms: [],
     currentRoom: null,
     isRoomManager: false,
+    canStyleRoom: false,
     messages: [],
     mics: [],
     roomUsers: [],
@@ -442,6 +524,7 @@
     ytForceVideo: false,
     quizBotState: { active: false, hintSent: false, enabledSetting: true },
     activeCustomizeTab: 'info',
+    nameStyleMode: 'solid',
     activeNameStyleTab: 'color',
     activeLeaderboardTab: 'rich',
     activeAdminTab: 'ranks_matrix',
@@ -779,23 +862,27 @@
   function syncChatComposerLockState() {
     const isMuted = Boolean(state.activeMute && state.activeMute.expiresAtMs > Date.now());
     const isFrozen = Boolean(state.user?.isFrozen && state.user?.role !== 'site_owner');
-    const locked = isMuted || isFrozen;
+    const isGlobalMuted = Number(state.settings?.global_chat_mute) === 1 && state.user?.role !== 'site_owner';
+    const guestBlocked = Boolean(state.user?.isGuest && Number(state.settings?.guest_can_chat ?? 1) === 0);
+    const locked = isMuted || isFrozen || isGlobalMuted;
     const input = $('messageInput');
     const sendBtn = $('sendMsgBtn');
     if (input) {
       input.disabled = locked;
       if (isMuted) input.placeholder = 'أنت مكتوم مؤقتاً — لا يمكنك الإرسال حتى انتهاء العداد...';
+      else if (isGlobalMuted) input.placeholder = 'الدردشة العامة مكتومة مؤقتاً من قبل المالك...';
       else if (isFrozen) input.placeholder = 'حسابك مجمد حالياً (للقراءة فقط)...';
+      else if (guestBlocked) input.placeholder = 'الكتابة للزوار مقيدة حالياً من المالك...';
       else input.placeholder = 'اكتب هنا...';
     }
     if (sendBtn) sendBtn.disabled = locked;
     const pmInput = $('pmComposeInput');
     const pmBtn = $('pmComposeSendBtn');
     if (pmInput) {
-      pmInput.disabled = locked;
+      pmInput.disabled = isMuted || isFrozen;
       pmInput.placeholder = isMuted ? 'أنت مكتوم مؤقتاً — لا يمكنك الإرسال...' : 'اكتب رسالتك الخاصة...';
     }
-    if (pmBtn) pmBtn.disabled = locked;
+    if (pmBtn) pmBtn.disabled = isMuted || isFrozen;
   }
 
   function showOwnerModAlert(payload) {
@@ -1096,19 +1183,46 @@
   }
 
   function getRank(roleKey) {
-    return (
-      state.ranks.find((r) => r.key === roleKey) || {
-        key: roleKey || 'member',
-        label: 'عضو',
-        icon: roleKey === 'member' ? '' : '👤',
+    const cleanKey = String(roleKey || 'member').trim() || 'member';
+    const found = state.ranks.find((r) => r.key === cleanKey);
+    if (found) return found;
+    if (cleanKey === 'guest') {
+      return {
+        key: 'guest',
+        label: 'زائر',
+        icon: '👤',
         badge_style: 'royal_shield',
         image_url: '',
-        bg_color: '#334155',
-        text_color: '#ffffff',
-        power: 5,
+        bg_color: '#475569',
+        text_color: '#f8fafc',
+        power: 1,
         permissions: {}
-      }
-    );
+      };
+    }
+    return {
+      key: cleanKey,
+      label: 'عضو',
+      icon: cleanKey === 'member' ? '' : '👤',
+      badge_style: 'royal_shield',
+      image_url: '',
+      bg_color: '#334155',
+      text_color: '#ffffff',
+      power: 5,
+      permissions: {}
+    };
+  }
+
+  function isSafeHttpsOrLocalUrlClient(rawUrl, allowDataImage = false) {
+    const val = String(rawUrl || '').trim();
+    if (!val) return true;
+    if (val.startsWith('/') && !val.startsWith('//')) return true;
+    if (allowDataImage && /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(val)) return true;
+    try {
+      const parsed = new URL(val);
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch {
+      return false;
+    }
   }
 
   function hasPerm(perm) {
@@ -1250,10 +1364,34 @@
   function getAssignableRanksForActor() {
     if (!state.user) return [];
     const isOwner = state.user.role === 'site_owner';
+    const allRanks = (state.ranks || []).filter((r) => r.key !== 'guest' && r.key !== 'site_owner');
+    if (isOwner) {
+      return [...allRanks].sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
+    }
     const myRank = getRank(state.user.role);
-    const ceiling = isOwner ? 15 : (Number(myRank?.max_assignable_rank) || 0);
-    return (state.ranks || [])
-      .filter((r) => r.key !== 'guest' && r.key !== 'site_owner' && (isOwner || Number(r.power) <= ceiling))
+    const allowedSet = new Set();
+    if (Array.isArray(myRank?.assignable_roles) && myRank.assignable_roles.length > 0) {
+      myRank.assignable_roles.forEach((k) => {
+        if (k) allowedSet.add(String(k));
+      });
+    } else {
+      const ceiling = Number(myRank?.max_assignable_rank) || 0;
+      allRanks.forEach((r) => {
+        if (Number(r.power) <= ceiling) allowedSet.add(r.key);
+      });
+    }
+    const isRoomOwner = Boolean(
+      state.currentRoom?.owner_user_id &&
+      state.user?.userId &&
+      Number(state.currentRoom.owner_user_id) === Number(state.user.userId)
+    );
+    if (isRoomOwner && state.currentRoom?.owner_perms?.assign_roles && Array.isArray(state.currentRoom.owner_allowed_roles)) {
+      state.currentRoom.owner_allowed_roles.forEach((k) => {
+        if (k) allowedSet.add(String(k));
+      });
+    }
+    return allRanks
+      .filter((r) => allowedSet.has(r.key))
       .sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
   }
 
@@ -1304,7 +1442,12 @@
 
     const styles = [];
     if (!isExclusiveOwner && shine === 'none' && nameStyleMode !== 'gradient') {
-      const safeNameCol = (!nameBg && !isReadableOnDarkBg(nameColor)) ? '#f8fafc' : nameColor;
+      const stageIsDark = isCurrentStageDark();
+      let safeNameCol = nameColor;
+      if (!nameBg) {
+        if (stageIsDark && !isReadableOnDarkBg(nameColor)) safeNameCol = '#f8fafc';
+        else if (!stageIsDark && !isReadableOnLightBg(nameColor)) safeNameCol = '#0f172a';
+      }
       styles.push(`color:${escapeHtml(safeNameCol)}`);
     }
     if (nameBg) {
@@ -1333,43 +1476,51 @@
     return `<span class="${classes.join(' ')}" style="${styles.join(';')}">${leftWing}<span class="${textClass}">${name}</span>${rightWing}</span>${verifiedHtml}${kingHtml}`;
   }
 
+  function findFrameCatalogEntry(frameId) {
+    if (!frameId || frameId === 'none') return null;
+    return (state.shopItems?.frames || []).find((f) => f.id === frameId) || null;
+  }
+
   function frameOrnamentHtml(frame, isOwnerUser = false) {
+    if (!frame || frame === 'none') return '';
+    const frameObj = findFrameCatalogEntry(frame);
+    if (frameObj && frameObj.imageUrl) {
+      return `<img src="${escapeHtml(frameObj.imageUrl)}" class="avatar-frame-img-overlay" alt="" />`;
+    }
     const svg = FRAME_ORNAMENT_SVGS[frame] || '';
-    const overlayHtml = frame && frame !== 'none'
-      ? `<span class="avatar-frame-overlay frame-overlay-${escapeHtml(frame)}" aria-hidden="true">${svg}</span>`
-      : '';
+    const innerOrnament = svg ? `<span class="avatar-frame-svg-overlay">${svg}</span>` : '';
+    const overlayHtml = `<span class="avatar-frame-overlay frame-overlay-${escapeHtml(frame)}" aria-hidden="true">${innerOrnament}</span>`;
     if (frame === 'owner_sovereign' && isOwnerUser) {
       return `${overlayHtml}<span class="royal-eclipse-orbits" aria-hidden="true"><span class="eclipse-crystal ec-1"></span><span class="eclipse-crystal ec-2"></span><span class="eclipse-crystal ec-3"></span></span>`;
     }
-    const cornerHtml = svg ? `<span class="frame-svg-ornament" aria-hidden="true">${svg}</span>` : '';
-    return `${overlayHtml}${cornerHtml}`;
+    return overlayHtml;
   }
 
   function syncFrameOrnament(wrapEl, frame, isOwnerUser = false) {
     if (!wrapEl) return;
-    wrapEl.querySelectorAll('.frame-svg-ornament, .royal-eclipse-orbits, .avatar-frame-overlay').forEach((n) => n.remove());
-    if (frame && frame !== 'none') {
-      const ov = document.createElement('span');
-      ov.className = `avatar-frame-overlay frame-overlay-${frame}`;
-      ov.setAttribute('aria-hidden', 'true');
-      ov.innerHTML = FRAME_ORNAMENT_SVGS[frame] || '';
-      wrapEl.appendChild(ov);
+    wrapEl.querySelectorAll('.frame-svg-ornament, .royal-eclipse-orbits, .avatar-frame-overlay, .avatar-frame-img-overlay').forEach((n) => n.remove());
+    if (!frame || frame === 'none') return;
+    const frameObj = findFrameCatalogEntry(frame);
+    if (frameObj && frameObj.imageUrl) {
+      const img = document.createElement('img');
+      img.src = frameObj.imageUrl;
+      img.className = 'avatar-frame-img-overlay';
+      img.alt = '';
+      wrapEl.appendChild(img);
+      return;
     }
+    const ov = document.createElement('span');
+    ov.className = `avatar-frame-overlay frame-overlay-${frame}`;
+    ov.setAttribute('aria-hidden', 'true');
+    const svg = FRAME_ORNAMENT_SVGS[frame] || '';
+    ov.innerHTML = svg ? `<span class="avatar-frame-svg-overlay">${svg}</span>` : '';
+    wrapEl.appendChild(ov);
     if (frame === 'owner_sovereign' && isOwnerUser) {
       const orbits = document.createElement('span');
       orbits.className = 'royal-eclipse-orbits';
       orbits.setAttribute('aria-hidden', 'true');
       orbits.innerHTML = '<span class="eclipse-crystal ec-1"></span><span class="eclipse-crystal ec-2"></span><span class="eclipse-crystal ec-3"></span>';
       wrapEl.appendChild(orbits);
-      return;
-    }
-    const svg = FRAME_ORNAMENT_SVGS[frame];
-    if (svg) {
-      const sp = document.createElement('span');
-      sp.className = 'frame-svg-ornament';
-      sp.setAttribute('aria-hidden', 'true');
-      sp.innerHTML = svg;
-      wrapEl.appendChild(sp);
     }
   }
 
@@ -1537,42 +1688,59 @@
     if (explicitId && explicitName && !knownNames.some((x) => x.name.toLowerCase() === explicitName.toLowerCase())) {
       knownNames.unshift({
         name: explicitName,
-        user: { key: explicitId, name: explicitName, nameBgColor: '#1e293b', nameColor: '#fde047' }
+        user: { key: explicitId, name: explicitName }
       });
     }
     const tokens = [];
 
     for (const item of knownNames) {
       const esc = escapeHtml(item.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const bg = item.user.nameBgColor || item.user.name_bg_color || '#18181b';
-      const fg = (item.user.nameBgColor || item.user.name_bg_color)
-        ? (item.user.nameColor || item.user.name_color || '#ffffff')
-        : '#ffffff';
       const itemKey = String(item.user?.key || explicitId || '');
       const isMeMention = Boolean(
         state.user?.key &&
+        msg?.sender_key !== state.user.key &&
         ((explicitId && explicitId === state.user.key && (!explicitName || normalizeCleanMentionText(item.name) === normalizeCleanMentionText(explicitName))) ||
-          (itemKey && itemKey === state.user.key))
+          (!explicitId && itemKey && itemKey === state.user.key))
+      );
+      const isMeRecipient = Boolean(
+        isMeMention &&
+        state.user?.key &&
+        msg?.sender_key !== state.user.key
       );
       const re = new RegExp(`(^|\\s|>)@?${esc}(?=$|\\s|<|[،,.!?:"'()\\-])`, 'gi');
       html = html.replace(re, (match, lead) => {
         if (/<[^>]*$/.test(html.slice(0, html.indexOf(match)))) return match;
         const idx = tokens.length;
-        tokens.push(
-          `<span class="mention-inline-badge${isMeMention ? ' mention-is-me' : ''}" data-mention-name="${escapeHtml(item.name)}" data-mention-key="${escapeHtml(itemKey)}" style="background:${escapeHtml(bg)};color:${escapeHtml(fg)};">${escapeHtml(item.name)}</span>`
-        );
+        if (isMeRecipient) {
+          tokens.push(
+            `<span class="mention-inline-badge mention-is-me" data-mention-name="${escapeHtml(item.name)}" data-mention-key="${escapeHtml(itemKey)}">${escapeHtml(item.name)}</span>`
+          );
+        } else {
+          tokens.push(
+            `<span class="mention-plain-name" data-mention-name="${escapeHtml(item.name)}" data-mention-key="${escapeHtml(itemKey)}">${escapeHtml(item.name)}</span>`
+          );
+        }
         return `${lead}\u0000MTOK${idx}\u0000`;
       });
     }
 
-    // Legacy @token fallback (clean display without @)
+    // Legacy @token fallback (clean display without @, highlighted only for recipient)
     html = html.replace(
       /(^|\s)@([^\s<>"'&\u0000]{2,30})/g,
-      '$1<span class="mention-inline-badge" data-mention-name="$2" style="background:#18181b;color:#facc15;">$2</span>'
+      (_m, lead, tok) => {
+        const isMeTok = Boolean(
+          state.user?.key &&
+          msg?.sender_key !== state.user.key &&
+          normalizeCleanMentionText(tok) === normalizeCleanMentionText(state.user?.name || state.user?.username || '')
+        );
+        return isMeTok
+          ? `${lead}<span class="mention-inline-badge mention-is-me" data-mention-name="${tok}">${tok}</span>`
+          : `${lead}<span class="mention-plain-name" data-mention-name="${tok}">${tok}</span>`;
+      }
     );
 
     html = html.replace(/\u0000MTOK(\d+)\u0000/g, (_m, i) => tokens[Number(i)] || '');
-    return { html, hasMention: tokens.length > 0 || html.includes('mention-inline-badge') };
+    return { html, hasMention: html.includes('mention-is-me') };
   }
 
   function openCustomDrawerSectionModal(section) {
@@ -1656,6 +1824,50 @@
     });
   }
 
+  function renderAdSlotHtml(slotEl, adsList) {
+    if (!slotEl) return;
+    const active = (Array.isArray(adsList) ? adsList : []).filter(
+      (a) => a && a.enabled !== false && String(a.code || '').trim()
+    );
+    const sig = active.map((a) => `${a.id}:${a.placement}:${a.code}`).join('||');
+    if (slotEl.dataset.adsSig === sig) {
+      slotEl.classList.toggle('hidden', active.length === 0);
+      return;
+    }
+    slotEl.dataset.adsSig = sig;
+    slotEl.innerHTML = '';
+    if (!active.length) {
+      slotEl.classList.add('hidden');
+      return;
+    }
+    slotEl.classList.remove('hidden');
+    for (const ad of active) {
+      const box = document.createElement('div');
+      box.className = 'ad-unit-box';
+      const tpl = document.createElement('template');
+      tpl.innerHTML = String(ad.code || '').trim();
+      const frag = tpl.content;
+      const scripts = [...frag.querySelectorAll('script')];
+      scripts.forEach((sc) => sc.remove());
+      box.appendChild(frag);
+      for (const oldSc of scripts) {
+        const ns = document.createElement('script');
+        for (const attr of oldSc.attributes) ns.setAttribute(attr.name, attr.value);
+        if (oldSc.textContent) ns.textContent = oldSc.textContent;
+        box.appendChild(ns);
+      }
+      slotEl.appendChild(box);
+    }
+  }
+
+  function mountAdSlots(s = state.settings) {
+    const units = Array.isArray(s?.ad_units) ? s.ad_units : [];
+    const authAds = units.filter((a) => a && a.enabled !== false && (!a.placement || a.placement === 'both' || a.placement === 'auth'));
+    const drawerAds = units.filter((a) => a && a.enabled !== false && (!a.placement || a.placement === 'both' || a.placement === 'drawer'));
+    renderAdSlotHtml($('authAdsSlot'), authAds);
+    renderAdSlotHtml($('drawerAdsSlot'), drawerAds);
+  }
+
   function applySiteSettings(s, skipMirror = false) {
     if (!s) return;
     state.settings = s;
@@ -1668,10 +1880,10 @@
       $('authSiteLogo').classList.remove('hidden');
     }
     const root = document.documentElement.style;
-    const normBarColor = (c) => (!c || c === '#1a45e5' || c === '#0b2239' ? '#18181b' : c);
-    root.setProperty('--top-bar-bg', normBarColor(s.top_bar_color));
-    root.setProperty('--bottom-bar-bg', normBarColor(s.bottom_bar_color));
-    root.setProperty('--accent-btn', normBarColor(s.button_color));
+    const normBarColor = (c, fb = '#0f2342') => (!c || c === '#1a45e5' || c === '#0b2239' || c === '#18181b' ? fb : c);
+    root.setProperty('--top-bar-bg', normBarColor(s.top_bar_color, '#0f2342'));
+    root.setProperty('--bottom-bar-bg', normBarColor(s.bottom_bar_color, '#0f2342'));
+    root.setProperty('--accent-btn', normBarColor(s.button_color, '#1d4ed8'));
     if (s.font_family) root.setProperty('--chat-font', `'${s.font_family}', 'Cairo', sans-serif`);
     if (s.font_size) root.setProperty('--chat-font-size', `${s.font_size}px`);
     if ($('dynamicCmsCss')) $('dynamicCmsCss').textContent = s.custom_css || '';
@@ -1683,6 +1895,7 @@
         $('customHtmlBanner').classList.add('hidden');
       }
     }
+    mountAdSlots(s);
     const glassOn = Number(s.fx_glass_bubbles ?? 1) !== 0;
     const micWavesOn = Number(s.fx_mic_waves ?? 1) !== 0;
     document.body.classList.toggle('fx-glass-bubbles-on', glassOn);
@@ -1713,13 +1926,34 @@
     $('voiceRecordBtn')?.classList.toggle('hidden', !canMediaUi);
     document.querySelector('.drawer-item[data-drawer="store"]')?.classList.toggle('hidden', !canStoreUi);
     renderDynamicDrawerSections(s);
-    const msgInputEl = $('messageInput');
-    if (msgInputEl && state.user) {
-      const guestBlocked = state.user.isGuest && Number(s.guest_can_chat ?? 1) === 0;
-      msgInputEl.placeholder = guestBlocked
-        ? 'الكتابة للزوار مقيدة حالياً من المالك...'
-        : 'اكتب هنا...';
+    const allowReg = Number(s.allow_register ?? 1) !== 0;
+    const allowGuest = Number(s.allow_guests ?? 1) !== 0;
+    const regTabBtn = document.querySelector('.auth-tab[data-auth-tab="register"]');
+    const guestTabBtn = document.querySelector('.auth-tab[data-auth-tab="guest"]');
+    if (regTabBtn) {
+      regTabBtn.classList.toggle('is-locked-tab', !allowReg);
+      regTabBtn.title = allowReg ? '' : 'التسجيل الجديد مغلق مؤقتاً من المالك';
     }
+    if (guestTabBtn) {
+      guestTabBtn.classList.toggle('is-locked-tab', !allowGuest);
+      guestTabBtn.title = allowGuest ? '' : 'دخول الزوار مغلق مؤقتاً من المالك';
+    }
+    const regSubmit = $('registerForm')?.querySelector('button[type="submit"]');
+    if (regSubmit) {
+      regSubmit.disabled = !allowReg;
+      regSubmit.innerHTML = allowReg
+        ? '<i class="fa-solid fa-user-plus"></i> إنشاء حساب ودخول'
+        : '<i class="fa-solid fa-lock"></i> التسجيل مغلق مؤقتاً من المالك';
+    }
+    const guestSubmit = $('guestForm')?.querySelector('button[type="submit"]');
+    if (guestSubmit) {
+      guestSubmit.disabled = !allowGuest;
+      guestSubmit.innerHTML = allowGuest
+        ? '<i class="fa-solid fa-bolt"></i> دخول فوري كزائر'
+        : '<i class="fa-solid fa-lock"></i> دخول الزوار مغلق مؤقتاً من المالك';
+    }
+
+    syncChatComposerLockState();
     if (!$('inlineMsgStyleBar')?.classList.contains('hidden')) {
       renderInlineMsgStyleBar();
     }
@@ -1735,13 +1969,19 @@
   }
 
   function isNightAtmosphereActive() {
-    const globalMode = String(state.settings?.fx_night_atmosphere || 'always_on');
+    const globalMode = String(state.settings?.fx_night_atmosphere || 'off');
     if (globalMode === 'off') return false;
     if (state.userNightPref === 'on') return true;
     if (state.userNightPref === 'off') return false;
     if (globalMode === 'always_on') return true;
     const hr = new Date().getHours();
     return hr >= 18 || hr < 6;
+  }
+
+  function isCurrentStageDark() {
+    const r = state.currentRoom || {};
+    const nightOn = isNightAtmosphereActive() && !r.wallpaper_url && !r.bg_custom;
+    return Boolean(nightOn || r.bg_theme === 'royal_night' || r.wallpaper_url || r.bg_custom);
   }
 
   function showCinematicEntrance(userObj) {
@@ -1931,7 +2171,7 @@
     $('roomBannerDesc').textContent = r.description || '';
     $('roomBannerImg').src = r.image_url || '/assets/rooms/default.svg';
     $('roomActivityBadge').innerHTML = `<i class="fa-solid fa-fire"></i> ${r.activity_points || 0} تفاعل`;
-    $('roomSettingsBtn')?.classList.toggle('hidden', !state.isRoomManager);
+    $('roomSettingsBtn')?.classList.toggle('hidden', !(state.isRoomManager || state.canStyleRoom));
 
     const pinnedBar = $('pinnedRoyalBanner');
     if (pinnedBar) {
@@ -1964,8 +2204,10 @@
     if ($('roomOnlineCounter')) $('roomOnlineCounter').textContent = String(boosted);
 
     const stage = $('chatStage');
+    const rawTheme = r.bg_theme || 'classic_light';
     const nightOn = isNightAtmosphereActive() && !r.wallpaper_url && !r.bg_custom;
-    stage.className = `chat-stage theme-${r.bg_theme || 'warm_peach'}${nightOn ? ' night-atmosphere-active' : ''}`;
+    const isDarkStage = Boolean(nightOn || rawTheme === 'royal_night' || r.wallpaper_url || r.bg_custom);
+    stage.className = `chat-stage theme-${rawTheme} ${isDarkStage ? 'is-dark-stage' : 'is-light-stage'}${nightOn ? ' night-atmosphere-active' : ''}`;
     if (r.wallpaper_url) {
       stage.style.backgroundImage = `url("${r.wallpaper_url}")`;
     } else if (r.bg_custom) {
@@ -1977,7 +2219,7 @@
     $('nightStarsLayer')?.classList.toggle('hidden', !nightOn);
     const nightBtn = $('toggleNightAtmosBtn');
     if (nightBtn) {
-      const globalOff = String(state.settings?.fx_night_atmosphere || 'always_on') === 'off';
+      const globalOff = String(state.settings?.fx_night_atmosphere || 'off') === 'off';
       nightBtn.classList.toggle('hidden', globalOff);
       nightBtn.classList.toggle('active-night', nightOn);
       nightBtn.title = nightOn ? 'إيقاف أجواء السهرة الليلية مؤقتاً' : 'تفعيل أجواء السهرة الليلية';
@@ -2548,7 +2790,13 @@
     } else if (msg.msg_type === 'audio' && msg.media_url) {
       mediaBelowHtml = `<audio controls src="${escapeHtml(msg.media_url)}" class="msg-audio-player"></audio>`;
     } else if (msg.msg_type === 'sticker') {
-      inlineTextHtml = `<span class="msg-sticker-pill">${escapeHtml(msg.content || '✨')}</span>`;
+      const rawStk = String(msg.content || '✨').trim();
+      const matchedStk = ANIMATED_STICKERS.find((s) => rawStk.startsWith(s.glyph) || rawStk.includes(s.label));
+      if (matchedStk?.svg) {
+        inlineTextHtml = `<span class="msg-sticker-pill msg-sticker-svg-pill"><span class="sticker-anim-float stk-svg-inline">${matchedStk.svg}</span><span>${escapeHtml(matchedStk.label)}</span></span>`;
+      } else {
+        inlineTextHtml = `<span class="msg-sticker-pill">${escapeHtml(rawStk)}</span>`;
+      }
     } else {
       const rendered = renderMessageTextWithMentions(msg.content, msg);
       hasMention = rendered.hasMention;
@@ -2560,16 +2808,24 @@
             ? '<span class="admin-notice-prefix">إشعار الإدارة</span>'
             : '';
       const rawTxtColor = String(msg.text_color || '').trim();
-      const readableColor = isAdminNotice
-        ? '#fecaca'
-        : isWelcomeBotMsg
-          ? ''
-          : (!rawTxtColor || !isReadableOnDarkBg(rawTxtColor) ? '#e2e8f0' : escapeHtml(rawTxtColor));
+      const stageIsDark = isCurrentStageDark();
+      let readableColor = '';
+      if (isAdminNotice) {
+        readableColor = stageIsDark ? '#fecaca' : '#991b1b';
+      } else if (!isWelcomeBotMsg) {
+        if (rawTxtColor) {
+          if (stageIsDark) {
+            readableColor = isReadableOnDarkBg(rawTxtColor) ? escapeHtml(rawTxtColor) : '#e2e8f0';
+          } else {
+            readableColor = isReadableOnLightBg(rawTxtColor) ? escapeHtml(rawTxtColor) : '#0f172a';
+          }
+        }
+      }
       const ff = `font-family:${resolveFontFamilyCss(msg.font_family || 'Cairo')};`;
       const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
       const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
       const colorCss = readableColor ? `color:${readableColor};` : '';
-      inlineTextHtml = `<span class="msg-text-inline" style="${colorCss}font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
+      inlineTextHtml = `<span class="msg-text-inline ${readableColor ? '' : 'msg-auto-color'}" style="${colorCss}font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
 
     const useOwnerPortal = isOwnerSender && !isAdminNotice && isOwnerGalaxyVisualEnabled();
@@ -2668,7 +2924,7 @@
       e.stopPropagation();
       row.remove();
     });
-    row.querySelectorAll('.mention-inline-badge').forEach((badge) => {
+    row.querySelectorAll('.mention-inline-badge, .mention-plain-name').forEach((badge) => {
       badge.addEventListener('click', (e) => {
         e.stopPropagation();
         const found = findKnownUserByMention(badge.dataset.mentionName);
@@ -2935,6 +3191,10 @@
       showToast('أنت مكتوم مؤقتاً — انتظر انتهاء العد التنازلي.', true);
       return;
     }
+    if (Number(state.settings?.global_chat_mute) === 1 && state.user?.role !== 'site_owner') {
+      showToast('الدردشة العامة مكتومة مؤقتاً من قبل المالك.', true);
+      return;
+    }
     const input = $('messageInput');
     const text = input.value.trim();
     if (!text || !state.token || !state.currentRoom) return;
@@ -3093,14 +3353,21 @@
       u.key === 'system:welcomebot' ||
       u.key === 'system:quizbot' ||
       String(u.key || '').startsWith('virtual:');
+    const isRoomOwnerSelf = Boolean(
+      state.currentRoom?.owner_user_id &&
+      state.user?.userId &&
+      Number(state.currentRoom.owner_user_id) === Number(state.user.userId)
+    );
+    const roomOwnerPerms = state.currentRoom?.owner_perms || { style_bg: true, kick: true, room_ban: true, assign_roles: false };
     const allowedByImmunity = !isMe && !isBotTarget && !isTargetOwner && canManageTargetUser(u);
     const canMod = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('clear_room') || hasPerm('set_rank') || hasPerm('access_panel'));
     const canBan = allowedByImmunity && (isOwner || hasPerm('ban'));
-    const canKick = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('kick'));
+    const canKick = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('kick') || (isRoomOwnerSelf && roomOwnerPerms.kick !== false));
+    const canRoomBan = allowedByImmunity && (isOwner || hasPerm('ban') || (isRoomOwnerSelf && roomOwnerPerms.room_ban !== false));
     const canClearRoom = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('clear_room'));
-    const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || hasPerm('set_rank'));
+    const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || hasPerm('set_rank') || (isRoomOwnerSelf && Boolean(roomOwnerPerms.assign_roles)));
     const canGiveCoins = Boolean(targetUserId) && (isOwner || (allowedByImmunity && hasPerm('give_coins')));
-    const showAdminTab = Boolean(allowedByImmunity && (canMod || canBan || canKick || canClearRoom || canRank || canGiveCoins || isOwner));
+    const showAdminTab = Boolean(allowedByImmunity && (canMod || canBan || canKick || canRoomBan || canClearRoom || canRank || canGiveCoins || isOwner));
     const canGift = !isMe && !isBotTarget && !state.user?.isGuest && isFeatureEnabled('feat_gifts') && isFeatureEnabled('feat_profile_gifts') && (isOwner || hasPerm('gifts'));
     const canPmTarget = !isMe && !isBotTarget && u.allowPm !== false && isFeatureEnabled('feat_pm') && (isOwner || (passesSettingRankThreshold('min_rank_pm') && hasPerm('pm')));
     const allowProfLikes = isFeatureEnabled('feat_profile_likes');
@@ -3118,7 +3385,7 @@
     };
     const musicLabel = hasMusic ? (musicLabelMap[u.profileMusic] || 'موسيقى بروفايل مخصصة') : '';
     const { richRank, interactionRank } = computeUserRanks(u.key);
-    const avgRating = u.ratingCount > 0 ? (Number(u.ratingSum || 0) / Number(u.ratingCount)).toFixed(1) : '0.0';
+    const avgRating = !isReg ? '-' : (u.ratingCount > 0 ? (Number(u.ratingSum || 0) / Number(u.ratingCount)).toFixed(1) : '5.0');
     const bgEffectClass = u.profileBgEffect && u.profileBgEffect !== 'none' ? `bg-effect-${u.profileBgEffect}` : '';
 
     try {
@@ -3160,9 +3427,9 @@
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة الغلاف والبطاقة"><i class="fa-solid fa-eye"></i></button>
           </div>
           <div class="profile-cover-stats-bar">
-            ${allowProfLikes ? `<button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#fb7185;"></i> <span id="quLikesCount">${Number(u.likesCount || 0)}</span></button>` : ''}
-            ${allowProfRating ? `<div class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <span id="quRatingAvg">${avgRating}</span></div>` : ''}
-            <div class="hero-stat-pill" title="الروبي"><i class="fa-solid fa-gem" style="color:#f43f5e;"></i> <span id="quHeroCoinsVal">${Number(u.coins || 0)}</span></div>
+            <span class="hero-stat-pill" title="عدد زوار الملف"><i class="fa-solid fa-eye" style="color:#38bdf8;"></i> <strong id="quVisitorsCountVal">${Number(u.visitorsCount || 0)}</strong> <small>الزوار</small></span>
+            ${allowProfRating && isReg ? `<span class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <strong id="quRatingAvg">${avgRating}</strong> <small>التقييم</small></span>` : ''}
+            ${allowProfLikes ? `<button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-heart" style="color:#fb7185;"></i> <strong id="quLikesCount">${Number(u.likesCount || 0)}</strong> <small>الإعجابات</small></button>` : ''}
           </div>
         </div>
 
@@ -3184,7 +3451,7 @@
               <span class="mini-music-eq" aria-hidden="true"><i></i><i></i><i></i></span>
               <span class="mini-music-label">${escapeHtml(musicLabel)}</span>
             </div>` : ''}
-          ${allowProfRating ? `
+          ${allowProfRating && isReg ? `
             <div class="qu-star-rating-row" id="quStarRatingRow" title="قيّم هذا العضو">
               ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="star-rate-btn" data-star="${n}"><i class="fa-solid fa-star"></i></button>`).join('')}
             </div>` : ''}
@@ -3213,11 +3480,11 @@
               <div class="rank-duo-grid">
                 <div class="rank-duo-card rich rich-green">
                   <span class="rd-label"><i class="fa-solid fa-gem"></i> ترتيب الأثرياء</span>
-                  <strong>${richRank > 0 ? `#${richRank}` : '—'}</strong>
+                  <strong>${!isReg ? '-' : (richRank > 0 ? `#${richRank}` : '-')}</strong>
                 </div>
                 <div class="rank-duo-card interaction interaction-blue">
                   <span class="rd-label"><i class="fa-solid fa-fire"></i> ترتيب التفاعل</span>
-                  <strong>${interactionRank > 0 ? `#${interactionRank}` : '—'}</strong>
+                  <strong>${!isReg ? '-' : (interactionRank > 0 ? `#${interactionRank}` : '-')}</strong>
                 </div>
               </div>
               ${u.bio ? `<div class="profile-about-card"><strong><i class="fa-solid fa-message"></i> رسالة معلوماتي</strong><p>${escapeHtml(u.bio)}</p></div>` : ''}
@@ -3284,6 +3551,7 @@
                     ${canMod ? '<button type="button" class="qu-admin-grid-btn warning" id="quMuteBtn"><i class="fa-solid fa-volume-xmark"></i><span>كتم مؤقت</span></button>' : ''}
                     ${canMod ? '<button type="button" class="qu-admin-grid-btn info" id="quUnmuteBtn"><i class="fa-solid fa-volume-high"></i><span>فك الكتم</span></button>' : ''}
                     ${canKick ? '<button type="button" class="qu-admin-grid-btn danger" id="quKickBtn"><i class="fa-solid fa-door-open"></i><span>طرد</span></button>' : ''}
+                    ${canRoomBan ? '<button type="button" class="qu-admin-grid-btn danger" id="quRoomBanBtn"><i class="fa-solid fa-door-closed"></i><span>حظر من الغرفة</span></button>' : ''}
                     ${canBan ? '<button type="button" class="qu-admin-grid-btn danger" id="quBanBtn"><i class="fa-solid fa-ban"></i><span>حظر</span></button>' : ''}
                     ${canBan ? '<button type="button" class="qu-admin-grid-btn danger" id="quXBanBtn"><i class="fa-solid fa-shield-virus"></i><span>إكس باند</span></button>' : ''}
                     ${isOwner ? `<button type="button" class="qu-admin-grid-btn info" id="quFreezeUserBtn"><i class="fa-solid fa-snowflake"></i><span>${u.isFrozen ? 'فك التجميد' : 'تجميد'}</span></button>` : ''}
@@ -3309,9 +3577,86 @@
               </div>
             </div>
           </div>
+
+          ${isOwner && !isTargetOwner && targetUserId ? `
+            <div id="quOwnerSecretBox" class="qu-owner-secret-box">
+              <div class="qu-owner-secret-head">
+                <strong><i class="fa-solid fa-crown" style="color:#fbbf24;"></i> صندوق المالك السري — تحكم كامل بالحساب</strong>
+                <span class="muted" style="font-size:11px;">مرئي للمالك فقط</span>
+              </div>
+              <div class="qu-owner-secret-grid">
+                <div class="qu-owner-media-ctrl">
+                  <label class="muted">الصورة الشخصية (رفع / رابط / حذف)</label>
+                  <div class="inline-row" style="gap:6px;flex-wrap:wrap;">
+                    <label class="btn-secondary btn-xs" style="cursor:pointer;">
+                      <i class="fa-solid fa-upload"></i> رفع صورة
+                      <input type="file" id="quOwnerAvatarFile" accept="image/*" class="hidden" />
+                    </label>
+                    <input type="text" id="quOwnerAvatarUrl" value="${escapeHtml(u.avatarUrl || '')}" placeholder="رابط https://..." style="flex:1;min-width:130px;" />
+                    <button type="button" id="quOwnerAvatarUrlBtn" class="btn-primary btn-xs">تطبيق</button>
+                    <button type="button" id="quOwnerAvatarDelBtn" class="btn-danger btn-xs" title="حذف الصورة"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </div>
+                <div class="qu-owner-media-ctrl">
+                  <label class="muted">صورة الغلاف (رفع / رابط / حذف)</label>
+                  <div class="inline-row" style="gap:6px;flex-wrap:wrap;">
+                    <label class="btn-secondary btn-xs" style="cursor:pointer;">
+                      <i class="fa-solid fa-image"></i> رفع غلاف
+                      <input type="file" id="quOwnerCoverFile" accept="image/*" class="hidden" />
+                    </label>
+                    <input type="text" id="quOwnerCoverUrl" value="${escapeHtml(u.coverUrl || '')}" placeholder="رابط https://..." style="flex:1;min-width:130px;" />
+                    <button type="button" id="quOwnerCoverUrlBtn" class="btn-primary btn-xs">تطبيق</button>
+                    <button type="button" id="quOwnerCoverDelBtn" class="btn-danger btn-xs" title="حذف الغلاف"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-grid-2" style="margin-top:8px;">
+                <div>
+                  <label class="muted">البريد الإلكتروني</label>
+                  <input type="email" id="quOwnerEditEmail" value="${escapeHtml(u.email || '')}" placeholder="email@example.com" />
+                </div>
+                <div>
+                  <label class="muted">كلمة مرور جديدة (اختياري)</label>
+                  <input type="password" id="quOwnerEditPass" placeholder="اتركه فارغاً للإبقاء" minlength="5" />
+                </div>
+                <div>
+                  <label class="muted">رصيد الروبي</label>
+                  <input type="number" id="quOwnerEditCoins" value="${Number(u.coins || 0)}" min="0" max="100000000" />
+                </div>
+                <div>
+                  <label class="muted">الرتبة</label>
+                  <select id="quOwnerEditRole">
+                    ${(state.ranks || []).filter((r) => r.key !== 'guest' && r.key !== 'site_owner').sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0)).map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === u.role ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+              <button type="button" id="quOwnerEditSaveBtn" class="btn-primary btn-sm btn-full" style="margin-top:8px;">
+                <i class="fa-solid fa-floppy-disk"></i> حفظ تعديلات المالك الشاملة
+              </button>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
+
+    if (isReg && !isMe) {
+      api('/api/profile/interact', {
+        method: 'POST',
+        body: { targetKey: u.key, visit: true }
+      }).then((visitRes) => {
+        const upd = visitRes?.user || visitRes?.target;
+        if (!upd) return;
+        u.visitorsCount = upd.visitorsCount;
+        u.likesCount = upd.likesCount;
+        u.ratingSum = upd.ratingSum;
+        u.ratingCount = upd.ratingCount;
+        if ($('quVisitorsCountVal')) $('quVisitorsCountVal').textContent = String(upd.visitorsCount || 0);
+        if ($('quLikesCount')) $('quLikesCount').textContent = String(upd.likesCount || 0);
+        if ($('quRatingAvg')) {
+          $('quRatingAvg').textContent = upd.ratingCount > 0 ? (Number(upd.ratingSum || 0) / Number(upd.ratingCount)).toFixed(1) : '5.0';
+        }
+      }).catch(() => {});
+    }
 
     $('quHeroCloseBtn')?.addEventListener('click', () => closeModal('quickUserModal'));
     $('quCoverPreviewToggleBtn')?.addEventListener('click', () => {
@@ -3373,7 +3718,7 @@
           if (upd) {
             u.ratingSum = upd.ratingSum;
             u.ratingCount = upd.ratingCount;
-            const nextAvg = u.ratingCount > 0 ? (u.ratingSum / u.ratingCount).toFixed(1) : '0.0';
+            const nextAvg = u.ratingCount > 0 ? (u.ratingSum / u.ratingCount).toFixed(1) : '5.0';
             if ($('quRatingAvg')) $('quRatingAvg').textContent = nextAvg;
           }
           $('quStarRatingRow').querySelectorAll('.star-rate-btn').forEach((b) => {
@@ -3539,6 +3884,27 @@
           try {
             await api('/api/mod/kick', { method: 'POST', body: { targetKey: u.key, reason, roomId: state.currentRoom?.id } });
             showToast(`تم طرد ${u.name} من الغرفة.`);
+            done();
+            closeModal('quickUserModal');
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        }
+      });
+    });
+
+    $('quRoomBanBtn')?.addEventListener('click', () => {
+      showInlinePrompt({
+        title: `<i class="fa-solid fa-door-closed" style="color:#dc2626;"></i> حظر "${escapeHtml(u.name)}" من هذه الغرفة`,
+        htmlBody: `<input type="text" id="quInlineRoomBanReason" placeholder="${isOwner ? 'سبب الحظر من الغرفة (اختياري للمالك)...' : 'اكتب سبب الحظر من الغرفة (إلزامي)...'}" />`,
+        confirmText: 'تأكيد حظر الغرفة',
+        danger: true,
+        onConfirm: async (_box, done) => {
+          const reason = ($('quInlineRoomBanReason')?.value || '').trim();
+          if (!isOwner && reason.length < 2) return showToast('يرجى كتابة سبب الحظر من الغرفة (حرفين على الأقل).', true);
+          try {
+            await api('/api/mod/room-ban', { method: 'POST', body: { roomId: state.currentRoom?.id, targetKey: u.key, reason } });
+            showToast(`تم حظر ${u.name} من الغرفة بنجاح.`);
             done();
             closeModal('quickUserModal');
           } catch (err) {
@@ -3754,6 +4120,155 @@
       });
     });
 
+    if (isOwner && !isTargetOwner && targetUserId) {
+      const applyTargetUserMediaUpdate = (updatedUser) => {
+        if (!updatedUser) return;
+        u.avatarUrl = updatedUser.avatarUrl || '';
+        u.coverUrl = updatedUser.coverUrl || '';
+        if ($('quOwnerAvatarUrl')) $('quOwnerAvatarUrl').value = u.avatarUrl;
+        if ($('quOwnerCoverUrl')) $('quOwnerCoverUrl').value = u.coverUrl;
+        const stage = $('quickUserBody')?.querySelector('.profile-avatar-85-stage');
+        if (stage) {
+          stage.innerHTML = `${isTargetOwnerGalaxy ? '<span class="owner-avatar-cosmic-halo" aria-hidden="true"></span>' : ''}${formatAvatarHTML(u, 'profile-avatar-85')}`;
+        }
+        const coverHero = $('quCoverHero');
+        if (coverHero) {
+          coverHero.classList.toggle('has-cover-img', Boolean(u.coverUrl));
+          coverHero.style.backgroundImage = u.coverUrl ? `url('${u.coverUrl}')` : '';
+          let cImg = coverHero.querySelector('.profile-cover-img');
+          if (u.coverUrl) {
+            if (!cImg) {
+              cImg = document.createElement('img');
+              cImg.className = 'profile-cover-img';
+              cImg.alt = '';
+              coverHero.insertBefore(cImg, coverHero.firstChild);
+            }
+            cImg.src = u.coverUrl;
+          } else if (cImg) {
+            cImg.remove();
+          }
+        }
+      };
+
+      const sendOwnerMediaUpload = async (kind, file) => {
+        if (!file) return;
+        try {
+          const fd = new FormData();
+          fd.append('kind', kind);
+          fd.append('file', file);
+          const res = await api(`/api/admin/users/${targetUserId}/media`, { method: 'POST', body: fd });
+          applyTargetUserMediaUpdate(res?.user);
+          showToast(kind === 'cover' ? 'تم تحديث صورة الغلاف للعضو.' : 'تم تحديث الصورة الشخصية للعضو.');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      };
+
+      $('quOwnerAvatarFile')?.addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (f) sendOwnerMediaUpload('avatar', f);
+        e.target.value = '';
+      });
+      $('quOwnerCoverFile')?.addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (f) sendOwnerMediaUpload('cover', f);
+        e.target.value = '';
+      });
+
+      $('quOwnerAvatarUrlBtn')?.addEventListener('click', async () => {
+        const url = ($('quOwnerAvatarUrl')?.value || '').trim();
+        if (!url || !isSafeHttpsOrLocalUrlClient(url, true)) {
+          return showToast('أدخل رابط صورة صالح يبدأ بـ https:// أو /.', true);
+        }
+        try {
+          const res = await api(`/api/admin/users/${targetUserId}/media`, {
+            method: 'POST',
+            body: { kind: 'avatar', mode: 'url', url }
+          });
+          applyTargetUserMediaUpdate(res?.user);
+          showToast('تم حفظ رابط الصورة الشخصية.');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+
+      $('quOwnerCoverUrlBtn')?.addEventListener('click', async () => {
+        const url = ($('quOwnerCoverUrl')?.value || '').trim();
+        if (!url || !isSafeHttpsOrLocalUrlClient(url, true)) {
+          return showToast('أدخل رابط غلاف صالح يبدأ بـ https:// أو /.', true);
+        }
+        try {
+          const res = await api(`/api/admin/users/${targetUserId}/media`, {
+            method: 'POST',
+            body: { kind: 'cover', mode: 'url', url }
+          });
+          applyTargetUserMediaUpdate(res?.user);
+          showToast('تم حفظ رابط الغلاف.');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+
+      $('quOwnerAvatarDelBtn')?.addEventListener('click', async () => {
+        try {
+          const res = await api(`/api/admin/users/${targetUserId}/media`, {
+            method: 'POST',
+            body: { kind: 'avatar', mode: 'delete' }
+          });
+          applyTargetUserMediaUpdate(res?.user);
+          showToast('تم حذف الصورة الشخصية للعضو.');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+
+      $('quOwnerCoverDelBtn')?.addEventListener('click', async () => {
+        try {
+          const res = await api(`/api/admin/users/${targetUserId}/media`, {
+            method: 'POST',
+            body: { kind: 'cover', mode: 'delete' }
+          });
+          applyTargetUserMediaUpdate(res?.user);
+          showToast('تم حذف غلاف العضو.');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+
+      $('quOwnerEditSaveBtn')?.addEventListener('click', async () => {
+        const email = ($('quOwnerEditEmail')?.value || '').trim();
+        const password = ($('quOwnerEditPass')?.value || '').trim();
+        const coins = Number($('quOwnerEditCoins')?.value);
+        const role = $('quOwnerEditRole')?.value || u.role;
+        if (password && password.length < 5) {
+          return showToast('كلمة المرور الجديدة يجب أن لا تقل عن 5 أحرف.', true);
+        }
+        try {
+          const payload = {
+            email: email || undefined,
+            coins: Number.isFinite(coins) ? Math.max(0, Math.floor(coins)) : undefined,
+            role
+          };
+          if (password) payload.password = password;
+          const res = await api(`/api/admin/users/${targetUserId}`, { method: 'PUT', body: payload });
+          if (res?.user) {
+            u.email = res.user.email;
+            u.coins = res.user.coins;
+            u.role = res.user.role;
+            if ($('quHeaderNameRow')) $('quHeaderNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(u)}`;
+            if ($('quHeaderRoleSub')) {
+              const rk = getRank(u.role);
+              $('quHeaderRoleSub').innerHTML = `${escapeHtml(rk.label)} • المستوى ${Math.max(1, Number(u.level) || Number(rk.power) || 1)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}`;
+            }
+            if ($('quOwnerEditPass')) $('quOwnerEditPass').value = '';
+          }
+          showToast('تم حفظ تعديلات المالك للحساب بنجاح.');
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    }
+
     openModal('quickUserModal');
 
     if (opts?.initialTab === 'admin' && showAdminTab) {
@@ -3842,11 +4357,9 @@
       $(`nameStylePane_${t}`)?.classList.toggle('hidden', t !== tab);
     });
     $('nameColorSwatches')?.classList.toggle('hidden', tab === 'gradient');
-    if ($('custNameStyleMode')) {
-      if (tab === 'color') $('custNameStyleMode').value = 'solid';
-      else if (tab === 'gradient') $('custNameStyleMode').value = 'gradient';
-      else if (tab === 'neon') $('custNameStyleMode').value = 'glow';
-    }
+    if (tab === 'color') state.nameStyleMode = 'solid';
+    else if (tab === 'gradient') state.nameStyleMode = 'gradient';
+    else if (tab === 'neon') state.nameStyleMode = 'glow';
     renderNameColorSwatches();
     updateCustomizePreview();
   }
@@ -3887,18 +4400,15 @@
   }
 
   async function openCustomizeModal(initialTab = 'info') {
-    if (!state.user || state.user.isGuest) {
-      showToast('تخصيص الملف والإضافات متاح للأعضاء المسجلين فقط.', true);
-      return;
-    }
+    if (!state.user) return;
+    const isGuestUser = Boolean(state.user.isGuest || state.user.role === 'guest');
 
     try {
-      const [shopRes, socialRes] = await Promise.all([
-        api('/api/shop/items'),
-        api('/api/social/state')
-      ]);
-      state.shopItems = { ...state.shopItems, ...shopRes };
-      state.social = { ...state.social, ...socialRes };
+      const promises = [api('/api/shop/items')];
+      if (!isGuestUser) promises.push(api('/api/social/state'));
+      const [shopRes, socialRes] = await Promise.all(promises);
+      if (shopRes) state.shopItems = { ...state.shopItems, ...shopRes };
+      if (socialRes) state.social = { ...state.social, ...socialRes };
     } catch {
       // ignore fallback
     }
@@ -3911,13 +4421,39 @@
       $('custCoverPreviewToggleBtn').classList.remove('active');
       $('custCoverPreviewToggleBtn').innerHTML = '<i class="fa-solid fa-eye"></i>';
     }
-    $('custDisplayName').value = u.displayName || u.name || '';
-    $('custVipFamily').value = u.vipFamily || '';
-    if ($('custStatusInput')) $('custStatusInput').value = u.statusText || '';
-    $('custBioInput').value = u.bio || '';
-    if ($('custAgeInput')) $('custAgeInput').value = u.age ? String(u.age) : '';
-    if ($('custGenderSelect')) $('custGenderSelect').value = u.gender || '';
-    if ($('custCountryInput')) $('custCountryInput').value = u.country || '';
+    $('custGuestUpgradeCard')?.classList.toggle('hidden', !isGuestUser);
+    $('custProfileLinkWrap')?.classList.toggle('hidden', isGuestUser);
+
+    if ($('custDisplayName')) {
+      $('custDisplayName').value = u.displayName || u.name || '';
+      $('custDisplayName').disabled = isGuestUser;
+    }
+    if ($('custVipFamily')) {
+      $('custVipFamily').value = u.vipFamily || '';
+      $('custVipFamily').disabled = isGuestUser;
+    }
+    if ($('custStatusInput')) {
+      $('custStatusInput').value = u.statusText || '';
+      $('custStatusInput').disabled = isGuestUser;
+    }
+    if ($('custBioInput')) {
+      $('custBioInput').value = u.bio || '';
+      $('custBioInput').disabled = isGuestUser;
+    }
+    if ($('custAgeInput')) {
+      $('custAgeInput').value = u.age ? String(u.age) : '';
+      $('custAgeInput').disabled = isGuestUser;
+    }
+    if ($('custGenderSelect')) {
+      $('custGenderSelect').value = u.gender || '';
+      $('custGenderSelect').disabled = isGuestUser;
+    }
+    if ($('custCountryInput')) {
+      $('custCountryInput').value = u.country || '';
+      $('custCountryInput').disabled = isGuestUser;
+    }
+    if ($('custWallInput')) $('custWallInput').disabled = isGuestUser;
+    if ($('custWallSubmitBtn')) $('custWallSubmitBtn').disabled = isGuestUser;
 
     $('custNameColor').value = /^#[0-9a-f]{6}$/i.test(u.nameColor || '') ? u.nameColor : '#f8fafc';
     $('custTextColor').value = /^#[0-9a-f]{6}$/i.test(u.textColor || '') ? u.textColor : '#e2e8f0';
@@ -3942,9 +4478,7 @@
       $('custFontSize').value = String(fsz);
       if ($('custFontSizeVal')) $('custFontSizeVal').textContent = String(fsz);
     }
-    if ($('custNameStyleMode')) {
-      $('custNameStyleMode').value = ['solid', 'gradient', 'glow'].includes(u.nameStyleMode) ? u.nameStyleMode : 'solid';
-    }
+    state.nameStyleMode = ['solid', 'gradient', 'glow'].includes(u.nameStyleMode) ? u.nameStyleMode : 'solid';
     if ($('custNameGradient')) {
       $('custNameGradient').value = u.nameGradient || 'gold_royal';
     }
@@ -3979,20 +4513,20 @@
     $('custStealthCard')?.classList.toggle('hidden', !canStealth);
     if ($('custStealthToggle')) $('custStealthToggle').checked = Boolean(u.isStealth);
 
-    // Cover hero & live rank cards
+    // Cover hero & live rank cards (الزوار | التقييم | الإعجابات)
+    if ($('custVisitorsCountVal')) $('custVisitorsCountVal').textContent = String(u.visitorsCount || 0);
     if ($('custLikesCountVal')) $('custLikesCountVal').textContent = String(u.likesCount || 0);
-    const avg = u.ratingCount > 0 ? (Number(u.ratingSum || 0) / Number(u.ratingCount)).toFixed(1) : '0.0';
-    if ($('custRatingAvgVal')) $('custRatingAvgVal').textContent = avg;
-    if ($('custTopCoinsVal')) $('custTopCoinsVal').textContent = String(u.coins || 0);
+    const avg = u.ratingCount > 0 ? (Number(u.ratingSum || 0) / Number(u.ratingCount)).toFixed(1) : '5.0';
+    if ($('custRatingAvgVal')) $('custRatingAvgVal').textContent = isGuestUser ? '-' : avg;
 
     const { interactionRank, richRank } = computeUserRanks(u.key);
-    if ($('custInteractionRankNum')) $('custInteractionRankNum').textContent = interactionRank > 0 ? `#${interactionRank}` : '—';
-    if ($('custRichRankNum')) $('custRichRankNum').textContent = richRank > 0 ? `#${richRank}` : '—';
-    if ($('custProfileLinkInput')) $('custProfileLinkInput').value = `${window.location.origin}/?profile=${encodeURIComponent(u.key)}`;
+    if ($('custInteractionRankNum')) $('custInteractionRankNum').textContent = isGuestUser ? '-' : (interactionRank > 0 ? `#${interactionRank}` : '-');
+    if ($('custRichRankNum')) $('custRichRankNum').textContent = isGuestUser ? '-' : (richRank > 0 ? `#${richRank}` : '-');
+    if ($('custProfileLinkInput')) $('custProfileLinkInput').value = isGuestUser ? '' : `${window.location.origin}/?profile=${encodeURIComponent(u.key)}`;
 
     const refBox = $('custReferralBox');
     if (refBox) {
-      if (u.userId) {
+      if (!isGuestUser && u.userId) {
         const refLink = `${window.location.origin}/?ref=${u.userId}`;
         const bonus = Number(state.settings?.referral_bonus) || 200;
         refBox.classList.remove('hidden');
@@ -4014,8 +4548,8 @@
       }
     }
 
-    // Friends tab
-    const friends = state.social.friends || [];
+    // Friends & Gifts tab
+    const friends = isGuestUser ? [] : (state.social.friends || []);
     if ($('custFriendsList')) {
       $('custFriendsList').innerHTML = friends.length
         ? friends.map((f) => `
@@ -4024,7 +4558,7 @@
               <button type="button" class="btn-secondary btn-xs cust-fr-pm" data-fk="${escapeHtml(f.friend_key)}" data-fn="${escapeHtml(f.friend_name)}">مراسلة</button>
             </div>
           `).join('')
-        : '<div class="muted" style="text-align:center;padding:12px;">لا يوجد أصدقاء مضافون بعد.</div>';
+        : `<div class="muted" style="text-align:center;padding:12px;">${isGuestUser ? 'سجّل عضوية دائمة لإضافة الأصدقاء.' : 'لا يوجد أصدقاء مضافون بعد.'}</div>`;
       $('custFriendsList').querySelectorAll('.cust-fr-pm').forEach((b) => {
         b.addEventListener('click', () => {
           closeModal('customizeModal');
@@ -4033,12 +4567,11 @@
       });
     }
 
-    // Gifts tab
     $('custCoinsBalance').textContent = String(u.coins || 0);
     $('custGiftsReceivedCount').textContent = String(u.giftsReceived || 0);
     $('custGiftsSentCount').textContent = String(u.giftsSent || 0);
     $('custActivityPoints').textContent = String(u.activityPoints || 0);
-    const recList = state.social.myGifts?.received || [];
+    const recList = isGuestUser ? [] : (state.social.myGifts?.received || []);
     $('custReceivedGiftsList').innerHTML = recList.length
       ? recList.map((g) => `
           <div class="gift-card">
@@ -4049,7 +4582,6 @@
         `).join('')
       : '<div class="muted">لم تستلم هدايا بعد.</div>';
 
-    // Relations tab
     if ($('custRelationsBox')) {
       $('custRelationsBox').innerHTML = `
         <div class="admin-list-card">
@@ -4064,7 +4596,7 @@
 
     // Posts tab
     if ($('custUserPostsList')) {
-      const myPosts = (state.social.wallPosts || []).filter((p) => p.author_key === u.key);
+      const myPosts = isGuestUser ? [] : (state.social.wallPosts || []).filter((p) => p.author_key === u.key);
       $('custUserPostsList').innerHTML = myPosts.length
         ? myPosts.map((p) => `
             <div class="news-card">
@@ -4073,17 +4605,17 @@
               <span class="muted"><i class="fa-solid fa-heart"></i> ${p.likes_count || 0}</span>
             </div>
           `).join('')
-        : '<div class="muted" style="text-align:center;padding:10px;">لم تنشر منشورات على حائطك بعد.</div>';
+        : `<div class="muted" style="text-align:center;padding:10px;">${isGuestUser ? 'النشر على الجدار متاح للأعضاء المسجلين فقط.' : 'لم تنشر منشورات على حائطك بعد.'}</div>`;
     }
 
-    // More / Addons & Rank Threshold Gating
-    const canAddons = isOwner || hasPerm('use_addons');
-    const canAvatar = isOwner || passesSettingRankThreshold('min_rank_avatar', 'member');
-    const canCover = isOwner || passesSettingRankThreshold('min_rank_cover', 'member');
+    // Addons & Rank Threshold Gating
+    const canAddons = !isGuestUser && (isOwner || hasPerm('use_addons'));
+    const canAvatar = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_avatar', 'member'));
+    const canCover = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_cover', 'member'));
     const canBgEff = canAddons && passesSettingRankThreshold('min_rank_bg_effect', 'member');
-    const canMusic = isOwner || passesSettingRankThreshold('min_rank_music', 'member');
-    const canNameStyle = isOwner || passesSettingRankThreshold('min_rank_name_style', 'member');
-    const canMsgStyle = isOwner || passesSettingRankThreshold('min_rank_msg_style', 'member');
+    const canMusic = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_music', 'member'));
+    const canNameStyle = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_name_style', 'member'));
+    const canMsgStyle = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_msg_style', 'member'));
 
     $('custAddonsLockNotice').classList.toggle('hidden', canAddons);
     $('custVipWingsToggle').disabled = !canAddons;
@@ -4098,18 +4630,25 @@
     if ($('custMusicCustomUrl')) $('custMusicCustomUrl').disabled = !canMusic;
     if ($('custNameColor')) $('custNameColor').disabled = !canNameStyle;
     if ($('custNameGradient')) $('custNameGradient').disabled = !canNameStyle;
-    if ($('custNameStyleMode')) $('custNameStyleMode').disabled = !canNameStyle;
     if ($('custNeonColor')) $('custNeonColor').disabled = !canNameStyle;
     if ($('custNameBgColor')) $('custNameBgColor').disabled = !canNameStyle;
     if ($('custNameFontSize')) $('custNameFontSize').disabled = !canNameStyle;
+    if ($('custNameAnim')) $('custNameAnim').disabled = !canNameStyle;
+    if ($('custNameAnimSpeed')) $('custNameAnimSpeed').disabled = !canNameStyle;
     if ($('custTextColor')) $('custTextColor').disabled = !canMsgStyle;
     if ($('custFontFamily')) $('custFontFamily').disabled = !canMsgStyle;
     if ($('custFontStyle')) $('custFontStyle').disabled = !canMsgStyle;
     if ($('custFontSize')) $('custFontSize').disabled = !canMsgStyle;
+    if ($('saveCustomizeBtn')) {
+      $('saveCustomizeBtn').disabled = isGuestUser;
+      $('saveCustomizeBtn').innerHTML = isGuestUser
+        ? '<i class="fa-solid fa-lock"></i> الحفظ متاح للأعضاء المسجلين فقط'
+        : '<i class="fa-solid fa-floppy-disk"></i> حفظ جميع التغييرات';
+    }
 
     // Global Profile Feature Toggles + Dynamic Profile Fields
     const featLikes = isFeatureEnabled('feat_profile_likes');
-    const featRating = isFeatureEnabled('feat_profile_rating');
+    const featRating = isFeatureEnabled('feat_profile_rating') && !isGuestUser;
     const featMusic = isFeatureEnabled('feat_profile_music');
     const featFriends = isFeatureEnabled('feat_profile_friends');
     const featGifts = isFeatureEnabled('feat_profile_gifts');
@@ -4119,10 +4658,9 @@
     $('custLikesStatPill')?.classList.toggle('hidden', !featLikes);
     $('custRatingStatPill')?.classList.toggle('hidden', !featRating);
     $('custMiniMusicPlayer')?.classList.toggle('hidden', !featMusic);
-    document.querySelector('#customizeModal .cust-tab[data-cust-tab="friends"]')?.classList.toggle('hidden', !featFriends);
-    document.querySelector('#customizeModal .cust-tab[data-cust-tab="gifts"]')?.classList.toggle('hidden', !featGifts);
-    document.querySelector('#customizeModal .cust-tab[data-cust-tab="relations"]')?.classList.toggle('hidden', !featRelations);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="friends_gifts"]')?.classList.toggle('hidden', !(featFriends || featGifts || featRelations));
     document.querySelector('#customizeModal .cust-tab[data-cust-tab="posts"]')?.classList.toggle('hidden', !featWall);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="account_privacy"]')?.classList.toggle('hidden', isGuestUser);
 
     const dynWrap = $('custDynamicProfileFieldsWrap');
     if (dynWrap) {
@@ -4133,7 +4671,7 @@
         dynWrap.innerHTML = enabledDynFields.map((fld) => `
           <div>
             <label class="muted">${escapeHtml(fld.label)}</label>
-            <input type="text" class="cust-dynamic-field-inp" data-field-id="${escapeHtml(fld.id)}" value="${escapeHtml(uCustom[fld.id] || '')}" placeholder="${escapeHtml(fld.placeholder || fld.label)}" maxlength="120" />
+            <input type="text" class="cust-dynamic-field-inp" data-field-id="${escapeHtml(fld.id)}" value="${escapeHtml(uCustom[fld.id] || '')}" placeholder="${escapeHtml(fld.placeholder || fld.label)}" maxlength="120" ${isGuestUser ? 'disabled' : ''} />
           </div>
         `).join('');
       } else {
@@ -4143,21 +4681,21 @@
     }
 
     renderCustomizeAddonsGrids(canAddons, canBgEff);
-    const initialModeTab = u.nameStyleMode === 'gradient' ? 'gradient' : (u.nameStyleMode === 'glow' ? 'neon' : (state.activeNameStyleTab || 'color'));
+    const initialModeTab = state.nameStyleMode === 'gradient' ? 'gradient' : (state.nameStyleMode === 'glow' ? 'neon' : (state.activeNameStyleTab || 'color'));
     switchNameStyleTab(initialModeTab);
-    let resolvedTab = initialTab === 'account' ? 'info' : (initialTab === 'options' || initialTab === 'addons' ? 'more' : initialTab);
+
+    let resolvedTab = normalizeCustomizeTabKey(initialTab);
     if (
-      (resolvedTab === 'friends' && !featFriends) ||
-      (resolvedTab === 'gifts' && !featGifts) ||
-      (resolvedTab === 'relations' && !featRelations) ||
-      (resolvedTab === 'posts' && !featWall)
+      (resolvedTab === 'friends_gifts' && !(featFriends || featGifts || featRelations)) ||
+      (resolvedTab === 'posts' && !featWall) ||
+      (resolvedTab === 'account_privacy' && isGuestUser)
     ) {
       resolvedTab = 'info';
     }
     switchCustomizeTab(resolvedTab);
     updateCustomizePreview();
     openModal('customizeModal');
-    if (initialTab === 'options') {
+    if (initialTab === 'options' || initialTab === 'appearance') {
       setTimeout(() => {
         $('custNameStyleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 60);
@@ -4177,10 +4715,9 @@
       </div>
     `).join('');
 
-    [$('custBgEffectsGrid'), $('custMyBgEffectsGrid')].forEach((grid) => {
-      if (!grid) return;
-      grid.innerHTML = bgHtml;
-      grid.querySelectorAll('.pick-bg-effect-btn').forEach((btn) => {
+    if ($('custBgEffectsGrid')) {
+      $('custBgEffectsGrid').innerHTML = bgHtml;
+      $('custBgEffectsGrid').querySelectorAll('.pick-bg-effect-btn').forEach((btn) => {
         btn.addEventListener('click', async () => {
           try {
             const res = await api('/api/shop/equip', { method: 'POST', body: { type: 'bg_effect', itemId: btn.dataset.bgId } });
@@ -4194,7 +4731,7 @@
           }
         });
       });
-    });
+    }
 
     $('custShineGrid').innerHTML = (state.shopItems.shines || []).map((s) => `
       <div class="addon-card ${u.nameShine === s.id ? 'active' : ''}">
@@ -4246,8 +4783,6 @@
       `;
     }).join('');
 
-    const myOwnedFrames = allFrames.filter((f) => isOwnerSelf || ownedFramesList.includes(f.id));
-
     const bindFrameGridActions = (gridEl) => {
       if (!gridEl) return;
       gridEl.querySelectorAll('.equip-frame-btn').forEach((btn) => {
@@ -4273,7 +4808,6 @@
           try {
             const res = await api('/api/shop/buy', { method: 'POST', body: { type: 'frame', itemId: btn.dataset.frameId } });
             if (res?.user) state.user = res.user;
-            if ($('custTopCoinsVal')) $('custTopCoinsVal').textContent = String(state.user?.coins || 0);
             if ($('custCoinsBalance')) $('custCoinsBalance').textContent = String(state.user?.coins || 0);
             renderCustomizeAddonsGrids(canAddons, canBgEff);
             updateCustomizePreview();
@@ -4299,13 +4833,6 @@
         });
       });
     };
-
-    if ($('custMyFramesGrid')) {
-      $('custMyFramesGrid').innerHTML = myOwnedFrames.length
-        ? renderFramesCardList(myOwnedFrames)
-        : '<div class="muted" style="grid-column:1/-1;text-align:center;">لا تملك إطارات بعد — افتح المتجر لشراء إطار.</div>';
-      bindFrameGridActions($('custMyFramesGrid'));
-    }
 
     if ($('custFramesGrid')) {
       $('custFramesGrid').innerHTML = renderFramesCardList(allFrames);
@@ -4369,7 +4896,7 @@
       fontStyle: $('custFontStyle').value,
       fontSize: $('custFontSize') ? Number($('custFontSize').value) : (u.fontSize || 14),
       nameFontSize: $('custNameFontSize') ? Number($('custNameFontSize').value) : (u.nameFontSize || 14),
-      nameStyleMode: $('custNameStyleMode') ? $('custNameStyleMode').value : (u.nameStyleMode || 'solid'),
+      nameStyleMode: state.nameStyleMode || u.nameStyleMode || 'solid',
       nameGradient: $('custNameGradient') ? $('custNameGradient').value : (u.nameGradient || 'gold_royal'),
       nameAnim: selectedAnim,
       nameAnimSpeed: selectedSpeed,
@@ -4383,13 +4910,7 @@
     }
     const hintEl = $('custContrastHint');
     if (hintEl) {
-      const txtVal = $('custTextColor')?.value || '#e2e8f0';
-      if (!isReadableOnDarkBg(txtVal)) {
-        hintEl.textContent = 'اللون داكن جداً ولا يظهر بوضوح على الخلفية الليلية؛ اختر لوناً أفتح أو اضغط «افتراضي».';
-        hintEl.classList.remove('hidden');
-      } else {
-        hintEl.classList.add('hidden');
-      }
+      hintEl.classList.add('hidden');
     }
     const isOwner = isExclusiveOwnerObj(u);
     const isOwnerGalaxy = isOwner && isOwnerGalaxyVisualEnabled();
@@ -4523,26 +5044,40 @@
       $('custMiniMusicPlayBtn').innerHTML = playingThis ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
       $('custMiniMusicPlayBtn').disabled = !activeMusicRef;
     }
-    if ($('custTopCoinsVal')) $('custTopCoinsVal').textContent = String(u.coins || 0);
     if ($('custCoinsBalance')) $('custCoinsBalance').textContent = String(u.coins || 0);
     renderNameColorSwatches();
   }
 
+  function normalizeCustomizeTabKey(rawTab) {
+    const t = String(rawTab || 'info').trim();
+    if (t === 'my_frames') return 'frames_bg';
+    if (t === 'friends' || t === 'gifts' || t === 'relations') return 'friends_gifts';
+    if (t === 'account') return 'info';
+    if (t === 'options' || t === 'addons' || t === 'more') return 'appearance';
+    if (t === 'privacy') return 'account_privacy';
+    const valid = ['info', 'appearance', 'frames_bg', 'friends_gifts', 'posts', 'account_privacy'];
+    return valid.includes(t) ? t : 'info';
+  }
+
   function switchCustomizeTab(tab) {
-    state.activeCustomizeTab = tab;
-    document.querySelectorAll('.cust-tab').forEach((b) => b.classList.toggle('active', b.dataset.custTab === tab));
-    ['info', 'my_frames', 'friends', 'gifts', 'relations', 'posts', 'more'].forEach((t) => {
-      $(`custPane_${t}`)?.classList.toggle('hidden', t !== tab);
+    const resolved = normalizeCustomizeTabKey(tab);
+    state.activeCustomizeTab = resolved;
+    document.querySelectorAll('.cust-tab').forEach((b) => b.classList.toggle('active', b.dataset.custTab === resolved));
+    ['info', 'appearance', 'frames_bg', 'friends_gifts', 'posts', 'account_privacy'].forEach((t) => {
+      $(`custPane_${t}`)?.classList.toggle('hidden', t !== resolved);
     });
   }
 
   async function saveCustomizeProfile(closeAfter = true) {
+    if (!state.user || state.user.isGuest) {
+      return showToast('حفظ وتعديل الملف الشخصي متاح للأعضاء المسجلين فقط.', true);
+    }
     try {
-      const textColVal = $('custTextColor').value;
-      if (!isReadableOnDarkBg(textColVal)) {
-        return showToast('لون نص الرسائل داكن جداً ولا يناسب الخلفية الليلية؛ اختر لوناً أوضح.', true);
-      }
+      const textColVal = $('custTextColor').value || '#0f172a';
       const customUrl = $('custMusicCustomUrl')?.value.trim() || '';
+      if (customUrl && !isSafeHttpsOrLocalUrlClient(customUrl, false)) {
+        return showToast('رابط موسيقى البروفايل يجب أن يبدأ بـ https:// أو http://.', true);
+      }
       const profileMusic = customUrl || ($('custMusicPreset')?.value || '');
       const customFields = { ...((state.user?.customFields && typeof state.user.customFields === 'object') ? state.user.customFields : {}) };
       document.querySelectorAll('#custDynamicProfileFieldsWrap .cust-dynamic-field-inp').forEach((inp) => {
@@ -4569,7 +5104,7 @@
           fontStyle: $('custFontStyle').value,
           fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
           nameFontSize: $('custNameFontSize') ? Number($('custNameFontSize').value) : 14,
-          nameStyleMode: $('custNameStyleMode') ? $('custNameStyleMode').value : 'solid',
+          nameStyleMode: state.nameStyleMode || 'solid',
           nameGradient: $('custNameGradient') ? $('custNameGradient').value : 'gold_royal',
           nameAnim: $('custNameAnim')?.value || 'none',
           nameAnimSpeed: $('custNameAnimSpeed')?.value || 'normal',
@@ -4920,22 +5455,7 @@
       `).join('')}</div>`;
     }
 
-    body.innerHTML = `
-      <div class="store-ruby-bar">
-        <div>
-          <span><i class="fa-solid fa-gem" style="color:#e11d48;"></i> رصيدك الحالي: <strong>${u.coins || 0}</strong> روبي</span>
-          <div class="muted" style="font-size:11px;">تربح +2 نقطة تفاعل وروبي مضاعف حسب رتبتك مع التفاعل الحقيقي في المحادثات!</div>
-        </div>
-        <button type="button" id="storeOpenCustBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-palette"></i> ألوان وخط الاسم</button>
-      </div>
-      ${lockHtml}
-      ${itemsHtml}
-    `;
-
-    $('storeOpenCustBtn')?.addEventListener('click', () => {
-      closeModal('storeModal');
-      openCustomizeModal('options');
-    });
+    body.innerHTML = `${lockHtml}${itemsHtml}`;
 
     body.querySelectorAll('.store-buy-rank-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -5675,6 +6195,7 @@
     if (!data || !data.room) return;
     state.currentRoom = data.room;
     state.isRoomManager = Boolean(data.isRoomManager);
+    state.canStyleRoom = Boolean(data.canStyleRoom || data.isRoomManager);
     state.roomKingKey = data.roomKingKey || null;
     state.messages = Array.isArray(data.messages) ? data.messages : [];
     state.mics = Array.isArray(data.mics) ? data.mics : [];
@@ -5785,6 +6306,7 @@
           if (Array.isArray(data.persistentMembers)) state.persistentMembers = data.persistentMembers;
           if (Array.isArray(data.news)) state.news = data.news;
           if (Array.isArray(data.giftsCatalog)) state.giftsCatalog = data.giftsCatalog;
+          if (Array.isArray(data.framesCatalog)) state.shopItems.frames = data.framesCatalog;
           if (data.settings) applySiteSettings(data.settings, true);
           updateNotificationBadge(data.unreadNotifCount || 0);
           lastSeenNotifCount = Number(data.unreadNotifCount || 0);
@@ -5814,6 +6336,12 @@
           window.AsilRealtime?.updateUser(state.user);
           if (state.user && state.token) persistSessionState(state.user, state.token);
           renderUserIdentity();
+        },
+        onRoomPermissions(perms) {
+          if (!perms) return;
+          state.isRoomManager = Boolean(perms.isRoomManager);
+          state.canStyleRoom = Boolean(perms.canStyleRoom || perms.isRoomManager);
+          $('roomSettingsBtn')?.classList.toggle('hidden', !(state.isRoomManager || state.canStyleRoom));
         },
         onMessages(msgs, meta) {
           if (!meta || meta.roomId !== state.currentRoom?.id || !Array.isArray(msgs)) return;
@@ -6066,9 +6594,19 @@
     $('authView').classList.remove('hidden');
   }
 
+  function positionEmojiPopover() {
+    const pop = $('emojiPopover');
+    const bar = $('bottomBar') || document.querySelector('.cody-input-bar');
+    if (!pop || !bar) return;
+    const rect = bar.getBoundingClientRect();
+    const bottomPx = Math.max(58, Math.ceil(window.innerHeight - rect.top) + 8);
+    pop.style.bottom = `${bottomPx}px`;
+  }
+
   function renderEmojiPopoverGrid() {
     const grid = $('emojiPopoverGrid');
     if (!grid) return;
+    positionEmojiPopover();
     const tab = state.activeEmojiTab || 'faces';
 
     if (tab === 'arabic_stickers') {
@@ -6086,11 +6624,18 @@
     }
 
     if (tab === 'animated') {
-      grid.innerHTML = ANIMATED_STICKERS.map((st) => `
+      const animatedCustom = (state.emojis || []).filter((e) => e.image_url && /\.(gif|webp)(\?|$)/i.test(String(e.image_url)));
+      const builtinHtml = ANIMATED_STICKERS.map((st) => `
         <button type="button" class="emoji-pick-btn sticker-pick-btn" data-sticker-id="${escapeHtml(st.id)}" data-sticker-glyph="${escapeHtml(st.glyph)}" data-sticker-label="${escapeHtml(st.label)}" title="${escapeHtml(st.label)}">
-          <span class="sticker-anim-float">${st.glyph}</span>
+          <span class="sticker-anim-float">${st.svg || st.glyph}</span>
         </button>
       `).join('');
+      const customGifHtml = animatedCustom.map((e) => `
+        <button type="button" class="emoji-pick-btn sticker-gif-pick-btn" data-ins="${escapeHtml(e.code)}" title="${escapeHtml(e.code)}">
+          <img src="${escapeHtml(e.image_url)}" alt="${escapeHtml(e.code)}" />
+        </button>
+      `).join('');
+      grid.innerHTML = builtinHtml + customGifHtml;
       grid.querySelectorAll('.sticker-pick-btn').forEach((b) => {
         b.addEventListener('click', async () => {
           if (!state.currentRoom) return;
@@ -6106,6 +6651,13 @@
           } catch (err) {
             showToast(err.message, true);
           }
+        });
+      });
+      grid.querySelectorAll('.sticker-gif-pick-btn').forEach((b) => {
+        b.addEventListener('click', () => {
+          $('messageInput').value += `${b.dataset.ins} `;
+          $('messageInput').focus();
+          $('emojiPopover').classList.add('hidden');
         });
       });
       return;
@@ -6240,12 +6792,12 @@
 
     $('dropCustomizeBtn').addEventListener('click', () => {
       $('profileDropdown').classList.add('hidden');
-      openCustomizeModal('more');
+      openCustomizeModal('appearance');
     });
 
     $('dropGiftsTabBtn').addEventListener('click', () => {
       $('profileDropdown').classList.add('hidden');
-      openCustomizeModal('gifts');
+      openCustomizeModal('friends_gifts');
     });
 
     $('authBackToChatBtn')?.addEventListener('click', () => {
@@ -6300,7 +6852,7 @@
     });
     $('inlineMsgNameCustBtn')?.addEventListener('click', () => {
       $('inlineMsgStyleBar')?.classList.add('hidden');
-      openCustomizeModal('options');
+      openCustomizeModal('appearance');
     });
     $('inlineMsgColorPicker')?.addEventListener('change', (e) => {
       saveInlineMsgStyle({ textColor: e.target.value });
@@ -6437,7 +6989,7 @@
     $('closeTopicBannerBtn')?.addEventListener('click', () => {
       $('topicBannerBar')?.classList.add('hidden');
     });
-    $('footerOptionsBtn')?.addEventListener('click', () => openCustomizeModal('more'));
+    $('footerOptionsBtn')?.addEventListener('click', () => openCustomizeModal('appearance'));
     $('footerRefreshBtn')?.addEventListener('click', async () => {
       if (state.currentRoom) {
         await window.AsilRealtime?.triggerHeartbeatNow(true).catch(() => {});
@@ -6461,11 +7013,117 @@
       $('radioPopover')?.classList.add('hidden');
     });
 
-    // Room switch, Night Atmosphere toggle & YouTube (URL + Live Search by Name)
+    // Room switch, Dedicated Room Settings Modal (Full Admin + Delegated Room Owners), Night Atmosphere toggle & YouTube
     $('switchRoomsBtn')?.addEventListener('click', openRoomsModal);
-    $('roomSettingsBtn')?.addEventListener('click', () => openAdminPanel('rooms', state.currentRoom?.id || null));
+
+    function syncRoomWpPreview(url) {
+      const clean = String(url || '').trim();
+      if ($('rmSettingsWpUrl')) $('rmSettingsWpUrl').value = clean;
+      if ($('rmSettingsWpPreviewImg')) {
+        $('rmSettingsWpPreviewImg').src = clean;
+        $('rmSettingsWpPreviewImg').classList.toggle('hidden', !clean);
+      }
+      if ($('rmSettingsWpPlaceholder')) {
+        $('rmSettingsWpPlaceholder').classList.toggle('hidden', Boolean(clean));
+      }
+    }
+
+    function openRoomSettingsModal() {
+      const r = state.currentRoom;
+      if (!r) return;
+      const isFullAdmin = state.user?.role === 'site_owner' || hasPerm('manage_rooms');
+      if (!isFullAdmin && !state.canStyleRoom) {
+        return showToast('ليست لديك صلاحية لتعديل نمط هذه الغرفة.', true);
+      }
+      if ($('rmSettingsName')) $('rmSettingsName').value = r.name || '';
+      if ($('rmSettingsDesc')) $('rmSettingsDesc').value = r.description || '';
+      if ($('rmSettingsTheme')) $('rmSettingsTheme').value = r.bg_theme || 'classic_light';
+      if ($('rmSettingsWelcome')) $('rmSettingsWelcome').value = r.welcome_message || '';
+      if ($('rmSettingsPass')) $('rmSettingsPass').value = '';
+      if ($('rmSettingsMicsEnabled')) $('rmSettingsMicsEnabled').checked = r.mics_enabled !== false;
+      syncRoomWpPreview(r.wallpaper_url || '');
+
+      $('rmSettingsNameWrap')?.classList.toggle('hidden', !isFullAdmin);
+      $('rmSettingsDescWrap')?.classList.toggle('hidden', !isFullAdmin);
+      $('rmSettingsPassGroup')?.classList.toggle('hidden', !isFullAdmin);
+      $('rmSettingsMicsWrap')?.classList.toggle('hidden', !isFullAdmin);
+      $('rmSettingsAdvancedBtn')?.classList.toggle('hidden', !isFullAdmin);
+      openModal('roomSettingsModal');
+    }
+
+    $('roomSettingsBtn')?.addEventListener('click', openRoomSettingsModal);
+    $('rmSettingsAdvancedBtn')?.addEventListener('click', () => {
+      closeModal('roomSettingsModal');
+      openAdminPanel('rooms', state.currentRoom?.id || null);
+    });
+    $('rmSettingsWpUploadBtn')?.addEventListener('click', () => $('rmSettingsWpFile')?.click());
+    $('rmSettingsWpClearBtn')?.addEventListener('click', () => syncRoomWpPreview(''));
+    $('rmSettingsWpFile')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file || !state.currentRoom) return;
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const up = await api(`/api/upload/wallpaper?roomId=${encodeURIComponent(state.currentRoom.id)}`, {
+          method: 'POST',
+          body: fd
+        });
+        syncRoomWpPreview(up?.url || '');
+        showToast('تم رفع الخلفية؛ اضغط «حفظ إعدادات الغرفة» لتطبيقها.');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+      e.target.value = '';
+    });
+    $('rmSettingsSaveBtn')?.addEventListener('click', async () => {
+      const r = state.currentRoom;
+      if (!r) return;
+      const isFullAdmin = state.user?.role === 'site_owner' || hasPerm('manage_rooms');
+      const bgTheme = $('rmSettingsTheme')?.value || 'classic_light';
+      const welcomeMessage = $('rmSettingsWelcome')?.value?.trim() || '';
+      const wallpaperUrl = $('rmSettingsWpUrl')?.value?.trim() || '';
+      try {
+        let res = null;
+        if (isFullAdmin) {
+          res = await api(`/api/admin/rooms/${encodeURIComponent(r.id)}`, {
+            method: 'PUT',
+            body: {
+              name: $('rmSettingsName')?.value?.trim() || r.name,
+              description: $('rmSettingsDesc')?.value?.trim() || '',
+              bgTheme,
+              welcomeMessage,
+              wallpaperUrl,
+              password: $('rmSettingsPass')?.value || '',
+              micsEnabled: $('rmSettingsMicsEnabled')?.checked !== false
+            }
+          });
+        } else {
+          res = await api(`/api/rooms/${encodeURIComponent(r.id)}/style`, {
+            method: 'PUT',
+            body: {
+              bgTheme,
+              welcomeMessage,
+              wallpaperUrl
+            }
+          });
+        }
+        if (res?.room) {
+          state.currentRoom = { ...state.currentRoom, ...res.room };
+          const idx = (state.rooms || []).findIndex((x) => x.id === state.currentRoom.id);
+          if (idx >= 0) state.rooms[idx] = { ...state.rooms[idx], ...res.room };
+          renderRoomBanner();
+          renderAllMessages();
+          syncLocalMirror();
+        }
+        closeModal('roomSettingsModal');
+        showToast('تم حفظ نمط وخلفية الغرفة وتطبيقها بنجاح.');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
     $('toggleNightAtmosBtn')?.addEventListener('click', () => {
-      const globalMode = String(state.settings?.fx_night_atmosphere || 'always_on');
+      const globalMode = String(state.settings?.fx_night_atmosphere || 'off');
       if (globalMode === 'off') {
         return showToast('أجواء السهرة الليلية معطلة حالياً من المالك.', true);
       }
@@ -6473,6 +7131,7 @@
       state.userNightPref = currentlyOn ? 'off' : 'on';
       localStorage.setItem('chat_night_atmos_pref', state.userNightPref);
       renderRoomBanner();
+      renderAllMessages();
       showToast(state.userNightPref === 'on' ? '🌙 تم تفعيل أجواء السهرة الليلية.' : '☀️ تم التبديل إلى الوضع النهاري.');
     });
     $('toggleYoutubeBarBtn')?.addEventListener('click', () => {
@@ -6640,14 +7299,23 @@
     });
     $('plusCustomizeTextBtn').addEventListener('click', () => {
       $('plusDropdown').classList.add('hidden');
-      openCustomizeModal('options');
+      openCustomizeModal('appearance');
     });
 
-    // Emoji Popover
+    // Emoji Popover (positioned directly above bottomBar)
     $('emojiPickerBtn').addEventListener('click', (e) => {
       e.stopPropagation();
-      $('emojiPopover').classList.toggle('hidden');
-      renderEmojiPopoverGrid();
+      const pop = $('emojiPopover');
+      if (!pop) return;
+      const willOpen = pop.classList.contains('hidden');
+      pop.classList.toggle('hidden', !willOpen);
+      if (willOpen) {
+        positionEmojiPopover();
+        renderEmojiPopoverGrid();
+      }
+    });
+    window.addEventListener('resize', () => {
+      if (!$('emojiPopover')?.classList.contains('hidden')) positionEmojiPopover();
     });
     document.querySelectorAll('.ep-tab').forEach((b) => {
       b.addEventListener('click', () => {
@@ -6703,11 +7371,11 @@
       b.addEventListener('click', () => switchCustomizeTab(b.dataset.custTab));
     });
     $('custSwitchToMoreBtn')?.addEventListener('click', () => {
-      switchCustomizeTab('more');
+      switchCustomizeTab('appearance');
       setTimeout(() => $('custNameStyleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
     });
     $('custQuickBgEffectsBtn')?.addEventListener('click', () => {
-      switchCustomizeTab('my_frames');
+      switchCustomizeTab('frames_bg');
     });
     $('custOpenStoreFromFramesBtn')?.addEventListener('click', () => {
       closeModal('customizeModal');
@@ -6715,7 +7383,7 @@
     });
     $('storeHeroCustShortcutBtn')?.addEventListener('click', () => {
       closeModal('storeModal');
-      openCustomizeModal('options');
+      openCustomizeModal('appearance');
     });
     $('custMiniMusicPlayBtn')?.addEventListener('click', () => {
       const ref = ($('custMusicCustomUrl')?.value.trim() || $('custMusicPreset')?.value || state.user?.profileMusic || '').trim();
@@ -6729,7 +7397,7 @@
       }
     });
     $('custMiniMusicEditBtn')?.addEventListener('click', () => {
-      switchCustomizeTab('more');
+      switchCustomizeTab('appearance');
       setTimeout(() => $('custMusicPreset')?.focus(), 80);
     });
     $('custCoverPreviewToggleBtn')?.addEventListener('click', () => {
@@ -6757,18 +7425,13 @@
     [
       'custDisplayName', 'custStatusInput', 'custBioInput', 'custNameColor', 'custTextColor',
       'custFontFamily', 'custFontStyle', 'custFontSize', 'custNameFontSize',
-      'custNameStyleMode', 'custNameGradient', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'
+      'custNameGradient', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'
     ].forEach((id) => {
       $(id)?.addEventListener('input', updateCustomizePreview);
       $(id)?.addEventListener('change', updateCustomizePreview);
     });
-    $('custNameStyleMode')?.addEventListener('change', (e) => {
-      const mode = e.target.value;
-      const targetTab = mode === 'gradient' ? 'gradient' : (mode === 'glow' ? 'neon' : 'color');
-      switchNameStyleTab(targetTab);
-    });
     $('custResetTextColorBtn')?.addEventListener('click', () => {
-      if ($('custTextColor')) $('custTextColor').value = '#e2e8f0';
+      if ($('custTextColor')) $('custTextColor').value = isCurrentStageDark() ? '#e2e8f0' : '#0f172a';
       updateCustomizePreview();
       showToast('تمت استعادة لون النص الافتراضي المتباين.');
     });
@@ -7032,7 +7695,6 @@
         $('custMiniMusicPlayBtn').innerHTML = playing ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
       }
     });
-    $('saveNameStyleQuickBtn')?.addEventListener('click', () => saveCustomizeProfile(false));
     $('saveCustomizeBtn').addEventListener('click', () => saveCustomizeProfile(true));
 
     // News composer

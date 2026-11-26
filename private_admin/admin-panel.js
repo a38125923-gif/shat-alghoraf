@@ -7,27 +7,43 @@
   ];
 
   const DEFAULT_BADGE_STYLES = [
-    { id: 'gold_crown', label: 'تاج ذهبي ملكي', iconClass: 'fa-solid fa-crown' },
-    { id: 'silver_crown', label: 'تاج فضي', iconClass: 'fa-solid fa-crown' },
-    { id: 'royal_shield', label: 'درع ملكي', iconClass: 'fa-solid fa-shield-halved' },
-    { id: 'silver_shield', label: 'درع فضي محصّن', iconClass: 'fa-solid fa-shield' },
+    { id: 'gold_crown', label: 'تاج ذهبي ملكي مرصّع', iconClass: 'fa-solid fa-crown' },
+    { id: 'crown_royal', label: 'تاج السيادة الملكي', iconClass: 'fa-solid fa-crown' },
+    { id: 'ruby_crown', label: 'تاج الياقوت الأحمر', iconClass: 'fa-solid fa-crown' },
+    { id: 'silver_crown', label: 'تاج فضي لامع', iconClass: 'fa-solid fa-crown' },
+    { id: 'royal_trophy', label: 'كأس البطولة الذهبي', iconClass: 'fa-solid fa-trophy' },
+    { id: 'diamond_trophy', label: 'كأس الماس الملكي', iconClass: 'fa-solid fa-trophy' },
+    { id: 'emerald_trophy', label: 'كأس الزمرد المتلألئ', iconClass: 'fa-solid fa-trophy' },
     { id: 'gold_star', label: 'نجمة ذهبية متلألئة', iconClass: 'fa-solid fa-star' },
-    { id: 'diamond_gem', label: 'ماسة زرقاء براقة', iconClass: 'fa-solid fa-gem' },
+    { id: 'sapphire_star', label: 'نجمة الياقوت الزرقاء', iconClass: 'fa-solid fa-star' },
+    { id: 'royal_shield', label: 'درع ذهبي ملكي', iconClass: 'fa-solid fa-shield-halved' },
+    { id: 'silver_shield', label: 'درع الحماية الفضي', iconClass: 'fa-solid fa-shield' },
+    { id: 'diamond_gem', label: 'ماسة براقة', iconClass: 'fa-solid fa-gem' },
     { id: 'vip_wings', label: 'أجنحة VIP ملكية', iconClass: 'fa-solid fa-feather-pointed' },
-    { id: 'silver_wing', label: 'جناح فضي', iconClass: 'fa-solid fa-dove' },
-    { id: 'gold_eagle', label: 'نسر ذهبي', iconClass: 'fa-solid fa-feather-pointed' },
-    { id: 'neon_badge', label: 'شارة نيون متوهجة', iconClass: 'fa-solid fa-certificate' },
-    { id: 'crown_royal', label: 'تاج السيادة', iconClass: 'fa-solid fa-crown' },
-    { id: 'diamond_medal', label: 'وسام ماسي', iconClass: 'fa-solid fa-gem' }
+    { id: 'silver_wing', label: 'جناح فضي لامع', iconClass: 'fa-solid fa-dove' },
+    { id: 'gold_eagle', label: 'نسر ذهبي مجنح', iconClass: 'fa-solid fa-feather-pointed' },
+    { id: 'neon_badge', label: 'شارة نيون حديثة', iconClass: 'fa-solid fa-certificate' },
+    { id: 'diamond_medal', label: 'وسام ماسي متوهج', iconClass: 'fa-solid fa-gem' }
   ];
 
   const DEFAULT_RANK_SVGS = {
-    gold_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#f59e0b" stroke="#78350f" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18z"/></svg>',
-    crown_royal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#eab308" stroke="#713f12" stroke-width="1" d="M2.5 18.5h19L20 8l-4.8 4.2L12 4.5 8.8 12.2 4 8l-1.5 10.5z"/></svg>',
-    silver_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#cbd5e1" stroke="#334155" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18z"/></svg>',
-    royal_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#1e293b" stroke="#fbbf24" stroke-width="1.8" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/></svg>',
+    gold_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#f59e0b" stroke="#78350f" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.4" fill="#ef4444"/><circle cx="4.5" cy="7.5" r="1.1" fill="#38bdf8"/><circle cx="19.5" cy="7.5" r="1.1" fill="#38bdf8"/></svg>',
+    crown_royal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#eab308" stroke="#713f12" stroke-width="1" d="M2.5 18.5h19L20 8l-4.8 4.2L12 4.5 8.8 12.2 4 8l-1.5 10.5zM4 20.5h16v1.8H4z"/><circle cx="12" cy="14" r="1.5" fill="#dc2626"/></svg>',
+    ruby_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#e11d48" stroke="#881337" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.4" fill="#fef08a"/><circle cx="12" cy="13.5" r="1.4" fill="#fde047"/></svg>',
+    silver_crown: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#e2e8f0" stroke="#334155" stroke-width="1" d="M3 18h18l-1.5-9.5-4.5 4L12 5l-3 7.5-4.5-4L3 18zm1 2h16v1.8H4z"/><circle cx="12" cy="4.2" r="1.3" fill="#38bdf8"/></svg>',
+    royal_trophy: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#f59e0b" stroke="#78350f" stroke-width="1" d="M6 4h12v4a6 6 0 0 1-12 0V4z"/><path fill="none" stroke="#fbbf24" stroke-width="1.5" d="M6 6H3.5a2 2 0 0 0 0 4H6M18 6h2.5a2 2 0 0 1 0 4H18"/><path fill="#d97706" d="M10.5 14h3v4h3v2.5h-9V18h3z"/><circle cx="12" cy="8.2" r="1.5" fill="#fef08a"/></svg>',
+    diamond_trophy: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#0c4a6e" stroke-width="1" d="M6 4h12v4a6 6 0 0 1-12 0V4z"/><path fill="none" stroke="#7dd3fc" stroke-width="1.5" d="M6 6H3.5a2 2 0 0 0 0 4H6M18 6h2.5a2 2 0 0 1 0 4H18"/><path fill="#0284c7" d="M10.5 14h3v4h3v2.5h-9V18h3z"/><polygon points="12,6 14,8.5 12,11 10,8.5" fill="#ffffff"/></svg>',
+    emerald_trophy: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#10b981" stroke="#064e3b" stroke-width="1" d="M6 4h12v4a6 6 0 0 1-12 0V4z"/><path fill="none" stroke="#34d399" stroke-width="1.5" d="M6 6H3.5a2 2 0 0 0 0 4H6M18 6h2.5a2 2 0 0 1 0 4H18"/><path fill="#059669" d="M10.5 14h3v4h3v2.5h-9V18h3z"/><circle cx="12" cy="8.2" r="1.5" fill="#d1fae5"/></svg>',
     gold_star: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#facc15" stroke="#92400e" stroke-width="1.1" d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17l-5.9 3.2 1.2-6.5-4.8-4.6 6.6-.9z"/></svg>',
-    diamond_gem: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#1e40af" stroke-width="1" d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5z"/></svg>'
+    sapphire_star: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#1e3a8a" stroke-width="1.1" d="M12 2.2l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17l-5.9 3.2 1.2-6.5-4.8-4.6 6.6-.9z"/><circle cx="12" cy="11.5" r="1.8" fill="#e0f2fe"/></svg>',
+    royal_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#1e293b" stroke="#fbbf24" stroke-width="1.8" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="#fbbf24" d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z"/></svg>',
+    silver_shield: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#cbd5e1" stroke="#1e293b" stroke-width="1.3" d="M12 2.5 4.5 5.6v6.2c0 4.9 3.2 8.7 7.5 9.9 4.3-1.2 7.5-5 7.5-9.9V5.6L12 2.5z"/><path fill="#0ea5e9" d="M12 6.5l3 5.5-3 5.5-3-5.5z"/></svg>',
+    diamond_gem: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#38bdf8" stroke="#1e40af" stroke-width="1" d="M6.5 3.5h11l4 5.5L12 21 2.5 9l4-5.5z"/><path fill="rgba(255,255,255,0.45)" d="M6.5 3.5 9 9l3-5.5zm5.5 0L9 9h6z"/></svg>',
+    diamond_medal: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#a855f7" stroke="#312e81" stroke-width="1" d="M7 3h10l4 5.5L12 21 3 8.5 7 3z"/><path fill="rgba(255,255,255,0.4)" d="M7 3l2.5 5.5L12 3z"/></svg>',
+    vip_wings: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#f59e0b" stroke="#7c2d12" stroke-width="0.8" d="M2 7c4 0 6.5 2.5 8 5.5-2.5.8-5.5.2-7-2.2 1.2 2.5 3.8 4 6.5 4.2-2.2 1-4.5.7-6-.8.8 1.8 3.2 2.8 5.5 2.5L12 19l3-2.8c2.3.3 4.7-.7 5.5-2.5-1.5 1.5-3.8 1.8-6 .8 2.7-.2 5.3-1.7 6.5-4.2-1.5 2.4-4.5 3-7 2.2 1.5-3 4-5.5 8-5.5-4.5-.8-8 1-10 4.2C10 8 6.5 6.2 2 7z"/><circle cx="12" cy="11" r="2.2" fill="#facc15" stroke="#7c2d12" stroke-width="0.7"/></svg>',
+    silver_wing: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#e2e8f0" stroke="#475569" stroke-width="0.9" d="M3 8c4.5 0 7.5 2.8 9 6-2.5.8-5.5.1-7-2 1.4 2.5 4 3.8 6.5 4-2.2 1-4.6.6-6-.8.9 1.8 3.4 2.7 5.8 2.3L12 19l8.5-7c-3.5-.3-6.5 1-8.5 3.3C10.5 10.5 7 7.7 3 8z"/></svg>',
+    gold_eagle: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#fbbf24" stroke="#78350f" stroke-width="0.9" d="M12 4l2.2 3.2 7.3-1.7-3.5 5 2 3-5.2-1.2L12 20.5 9.2 12.3 4 13.5l2-3-3.5-5 7.3 1.7z"/></svg>',
+    neon_badge: '<svg viewBox="0 0 24 24" class="rank-svg-ico" aria-hidden="true"><path fill="#ec4899" stroke="#ffffff" stroke-width="0.9" d="M12 2l2.3 2.7 3.5-.5.8 3.4 3.2 1.5-1.3 3.3 1.3 3.3-3.2 1.5-.8 3.4-3.5-.5L12 22l-2.3-2.7-3.5.5-.8-3.4-3.2-1.5 1.3-3.3-1.3-3.3 3.2-1.5.8-3.4 3.5.5z"/><path fill="#ffffff" d="M12 7.5l1.3 2.9 3.1.4-2.2 2.2.5 3.1-2.7-1.5-2.7 1.5.5-3.1-2.2-2.2 3.1-.4z"/></svg>'
   };
 
   function ensureAdminModalCss() {
@@ -40,6 +56,29 @@
       .adm-shell-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 16px;background:linear-gradient(135deg,#090d16,#1e293b);border-bottom:1px solid rgba(245,158,11,0.3);border-radius:16px 16px 0 0;}
       .adm-standalone-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:12px 16px;background:rgba(15,23,42,0.92);border-bottom:1px solid rgba(148,163,184,0.18);}
       .adm-standalone-body{padding:16px;display:flex;flex-direction:column;gap:12px;}
+      .owner-emergency-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:linear-gradient(135deg,rgba(127,29,29,0.28),rgba(15,23,42,0.95));border-bottom:1px solid rgba(248,113,113,0.35);}
+      .owner-emergency-title{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#fecaca;}
+      .owner-emergency-actions{display:flex;flex-wrap:wrap;gap:6px;}
+      .owner-em-btn{min-height:36px;padding:6px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.28);background:rgba(30,41,59,0.92);color:#f8fafc;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+      .owner-em-btn.is-alert{background:rgba(185,28,28,0.85);border-color:rgba(252,165,165,0.55);color:#fff;}
+      .owner-em-btn.is-ok{background:rgba(15,118,110,0.45);border-color:rgba(45,212,191,0.45);color:#ccfbf1;}
+      .adm-assignable-roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:6px;margin-top:6px;padding:8px;border-radius:10px;background:rgba(15,23,42,0.65);border:1px solid rgba(148,163,184,0.18);}
+      .adm-full-edit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:8px;margin-bottom:8px;}
+      .adm-media-ctrl-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;border-radius:10px;background:rgba(15,23,42,0.62);border:1px solid rgba(148,163,184,0.18);margin-bottom:6px;}
+      .adm-media-ctrl-row img{width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid rgba(251,191,36,0.35);}
+      .radar-table-wrap{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+      .radar-row-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,0.84);border:1px solid rgba(56,189,248,0.22);}
+      .radar-meta-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;font-size:11.5px;color:#cbd5e1;}
+      .radar-meta-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(30,41,59,0.9);border:1px solid rgba(148,163,184,0.2);}
+      .adm-violation-card{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:12px;background:rgba(69,10,10,0.38);border:1px solid rgba(248,113,113,0.35);}
+      .adm-violation-word{display:inline-block;padding:2px 8px;border-radius:8px;background:rgba(220,38,38,0.3);color:#fecaca;font-weight:800;font-size:11.5px;margin-top:4px;}
+      @media (max-width:640px){
+        .adm-standalone-tabs{flex-wrap:nowrap;overflow-x:auto;padding:10px 10px;}
+        .adm-standalone-tabs .adm-tab{flex-shrink:0;white-space:nowrap;}
+        .adm-standalone-body{padding:10px;}
+        .owner-emergency-bar{padding:8px 10px;}
+        .owner-em-btn{flex:1 1 calc(50% - 6px);justify-content:center;}
+      }
     `;
     document.head.appendChild(st);
   }
@@ -119,15 +158,27 @@
       shopItems: { frames: [], rankBadgeStyles: DEFAULT_BADGE_STYLES }
     };
 
-    const getRank = (rk) => st.ranks.find((r) => r.key === rk) || {
-      key: rk || 'member',
-      label: rk === 'site_owner' ? 'مالك الموقع' : 'عضو',
-      icon: rk === 'site_owner' ? '👑' : '⭐',
-      bg_color: '#334155',
-      text_color: '#ffffff',
-      power: 5,
-      permissions: {}
-    };
+    const getRank = (rk) => st.ranks.find((r) => r.key === rk) || (
+      rk === 'guest'
+        ? {
+            key: 'guest',
+            label: 'زائر',
+            icon: '👤',
+            bg_color: '#475569',
+            text_color: '#f8fafc',
+            power: 1,
+            permissions: {}
+          }
+        : {
+            key: rk || 'member',
+            label: rk === 'site_owner' ? 'مالك الموقع' : 'عضو',
+            icon: rk === 'site_owner' ? '👑' : '⭐',
+            bg_color: '#334155',
+            text_color: '#ffffff',
+            power: rk === 'site_owner' ? 15 : 5,
+            permissions: {}
+          }
+    );
 
     const hasPerm = (p) => {
       if (st.user?.role === 'site_owner' || st.user?.isSupremeOwner) return true;
@@ -170,9 +221,10 @@
 
   function normalizeAdminTabTarget(rawTab, subOverride = null) {
     const t = String(rawTab || 'ranks_matrix');
-    if (['ranks_matrix', 'protection', 'store_gifts', 'members_control', 'quiz_bot', 'welcome_bot', 'bans_mutes', 'audit_log', 'owner_tools'].includes(t)) {
+    if (['ranks_matrix', 'protection', 'store_gifts', 'members_control', 'quiz_bot', 'welcome_bot', 'ads_manager', 'bans_mutes', 'audit_log', 'owner_tools'].includes(t)) {
       return { tab: t, sub: subOverride || null };
     }
+    if (t === 'ads') return { tab: 'ads_manager', sub: null };
     if (t === 'ranks') return { tab: 'ranks_matrix', sub: subOverride || 'creator' };
     if (t === 'master_matrix') return { tab: 'ranks_matrix', sub: subOverride || 'matrix' };
     if (t === 'store_mgr') return { tab: 'store_gifts', sub: subOverride || 'frames' };
@@ -205,9 +257,11 @@
           <button type="button" class="adm-tab v-owner hidden" data-adm-tab="store_gifts"><i class="fa-solid fa-store"></i> المتجر والهدايا</button>
           <button type="button" class="adm-tab v-owner hidden" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> المسابقات</button>
           <button type="button" class="adm-tab v-owner hidden" data-adm-tab="welcome_bot"><i class="fa-solid fa-wand-magic-sparkles"></i> البوت الترحيبي</button>
+          <button type="button" class="adm-tab v-owner hidden" data-adm-tab="ads_manager"><i class="fa-solid fa-rectangle-ad"></i> إدارة الإعلانات</button>
           <button type="button" class="adm-tab v-owner hidden" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل والرادار</button>
           <button type="button" class="adm-tab v-owner hidden" data-adm-tab="owner_tools"><i class="fa-solid fa-database"></i> النسخ والأدوات</button>
         </div>
+        <div id="ownerEmergencyBar" class="owner-emergency-bar hidden"></div>
         <div id="adminModalBody" class="modal-body-scroll"></div>
       </div>
     `;
@@ -249,17 +303,166 @@
     let activeBodyEl = null;
     let activeTabsContainer = null;
 
+    function isSafeHttpsOrLocalUrlClient(rawUrl, allowDataImage = true) {
+      const val = String(rawUrl || '').trim();
+      if (!val) return true;
+      if (val.startsWith('/')) return !val.startsWith('//');
+      if (allowDataImage && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(val)) return true;
+      try {
+        const parsed = new URL(val);
+        return parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }
+
+    function countryFlagEmoji(rawCountry) {
+      const c = String(rawCountry || '').trim();
+      if (!c) return '🌐';
+      if (/^[A-Za-z]{2}$/.test(c)) {
+        const code = c.toUpperCase();
+        return String.fromCodePoint(127397 + code.charCodeAt(0), 127397 + code.charCodeAt(1));
+      }
+      const map = [
+        [/السعودية|saudi|\bsa\b/i, '🇸🇦'],
+        [/مصر|egypt|\beg\b/i, '🇪🇬'],
+        [/الإمارات|الامارات|uae|\bae\b/i, '🇦🇪'],
+        [/الكويت|kuwait|\bkw\b/i, '🇰🇼'],
+        [/قطر|qatar|\bqa\b/i, '🇶🇦'],
+        [/البحرين|bahrain|\bbh\b/i, '🇧🇭'],
+        [/عمان|oman|\bom\b/i, '🇴🇲'],
+        [/الأردن|الاردن|jordan|\bjo\b/i, '🇯🇴'],
+        [/العراق|iraq|\biq\b/i, '🇮🇶'],
+        [/سوريا|syria|\bsy\b/i, '🇸🇾'],
+        [/لبنان|lebanon|\blb\b/i, '🇱🇧'],
+        [/فلسطين|palestine|\bps\b/i, '🇵🇸'],
+        [/اليمن|yemen|\bye\b/i, '🇾🇪'],
+        [/المغرب|morocco|\bma\b/i, '🇲🇦'],
+        [/الجزائر|algeria|\bdz\b/i, '🇩🇿'],
+        [/تونس|tunisia|\btn\b/i, '🇹🇳'],
+        [/ليبيا|libya|\bly\b/i, '🇱🇾'],
+        [/السودان|sudan|\bsd\b/i, '🇸🇩'],
+        [/تركيا|turkey|\btr\b/i, '🇹🇷'],
+        [/أمريكا|usa|united states|\bus\b/i, '🇺🇸'],
+        [/بريطانيا|uk|britain|\bgb\b/i, '🇬🇧'],
+        [/ألمانيا|germany|\bde\b/i, '🇩🇪'],
+        [/فرنسا|france|\bfr\b/i, '🇫🇷']
+      ];
+      for (const [rx, flag] of map) {
+        if (rx.test(c)) return flag;
+      }
+      return '🌍';
+    }
+
+    function parseUaDeviceAndBrowser(uaRaw) {
+      const ua = String(uaRaw || '');
+      let device = '💻 كمبيوتر';
+      if (/ipad|tablet|playbook|silk|(android(?!.*mobile))/i.test(ua)) device = '📱 تابلت';
+      else if (/mobile|iphone|ipod|android|blackberry|iemobile|opera mini/i.test(ua)) device = '📱 موبايل';
+      let browser = 'متصفح آخر';
+      if (/edg\//i.test(ua)) browser = 'Edge';
+      else if (/opr\/|opera/i.test(ua)) browser = 'Opera';
+      else if (/samsungbrowser/i.test(ua)) browser = 'Samsung Browser';
+      else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
+      else if (/chrome|crios/i.test(ua) && !/edg/i.test(ua)) browser = 'Chrome';
+      else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) browser = 'Safari';
+      return { device, browser };
+    }
+
+    function canAccessAdminTab(tab, isOwner) {
+      if (isOwner) return true;
+      const myPower = Number(getRank(state.user?.role)?.power || 0);
+      const canBank = state.user?.role === 'co_owner' || myPower >= 14;
+      switch (tab) {
+        case 'ranks_matrix':
+          return false;
+        case 'protection':
+          return hasPerm('manage_rooms') || hasPerm('ban') || hasPerm('mute');
+        case 'members_control':
+          return hasPerm('set_rank') || hasPerm('give_coins') || hasPerm('ban') || hasPerm('mute') || hasPerm('kick') || hasPerm('publish_news') || hasPerm('access_panel') || canBank;
+        case 'bans_mutes':
+          return hasPerm('ban') || hasPerm('mute');
+        case 'store_gifts':
+        case 'quiz_bot':
+        case 'welcome_bot':
+        case 'ads_manager':
+        case 'audit_log':
+        case 'owner_tools':
+          return false;
+        default:
+          return false;
+      }
+    }
+
+    function resolveAllowedAdminTab(wantedTab, isOwner) {
+      if (canAccessAdminTab(wantedTab, isOwner)) return wantedTab;
+      const order = ['members_control', 'protection', 'bans_mutes', 'ranks_matrix', 'store_gifts', 'quiz_bot', 'welcome_bot', 'ads_manager', 'audit_log', 'owner_tools'];
+      return order.find((t) => canAccessAdminTab(t, isOwner)) || 'members_control';
+    }
+
     function buildAssignableRankOptions(selectedKey) {
       const isOwner = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
-      const ceiling = isOwner ? 15 : (state.adminOverview?.stats?.myMaxAssignablePower ?? 0);
+      const myRank = getRank(state.user?.role);
+      const explicitList = Array.isArray(myRank?.assignable_roles) ? myRank.assignable_roles : [];
+      const ceiling = isOwner ? 15 : (state.adminOverview?.stats?.myMaxAssignablePower ?? Number(myRank?.max_assignable_rank || 0));
       return (state.ranks || [])
-        .filter((r) => r.key !== 'guest' && (isOwner || r.power <= ceiling))
+        .filter((r) => r.key !== 'guest' && (isOwner || r.key === selectedKey || (r.key !== 'site_owner' && (r.power <= ceiling || explicitList.includes(r.key)))))
         .map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === selectedKey ? 'selected' : ''}>${r.icon && r.icon !== '⭐' ? `${escapeHtml(r.icon)} ` : ''}${escapeHtml(r.label)} (قوة ${r.power})</option>`)
         .join('');
     }
 
+    function renderOwnerEmergencyBar(isOwner, ov, suite) {
+      const barEl = rawCtx.isStandalone ? $('standaloneOwnerEmergencyBar') : $('ownerEmergencyBar');
+      if (!barEl) return;
+      if (!isOwner) {
+        barEl.innerHTML = '';
+        barEl.classList.add('hidden');
+        return;
+      }
+      const prot = suite?.protections || ov?.settings || state.settings || {};
+      const guestsOpen = Number(prot.allow_guests ?? 1) !== 0;
+      const registerOpen = Number(prot.allow_register ?? 1) !== 0;
+      const globalMuteOn = Number(prot.global_chat_mute ?? 0) === 1;
+      barEl.classList.remove('hidden');
+      barEl.innerHTML = `
+        <div class="owner-emergency-title"><i class="fa-solid fa-triangle-exclamation" style="color:#f87171;"></i> طوارئ المالك الفورية</div>
+        <div class="owner-emergency-actions">
+          <button type="button" id="emToggleGuestsBtn" class="owner-em-btn ${guestsOpen ? 'is-ok' : 'is-alert'}" data-next="${guestsOpen ? '0' : '1'}">
+            <i class="fa-solid ${guestsOpen ? 'fa-door-open' : 'fa-lock'}"></i> ${guestsOpen ? 'قفل دخول الزوار' : 'فتح دخول الزوار (مقفل)'}
+          </button>
+          <button type="button" id="emToggleRegisterBtn" class="owner-em-btn ${registerOpen ? 'is-ok' : 'is-alert'}" data-next="${registerOpen ? '0' : '1'}">
+            <i class="fa-solid ${registerOpen ? 'fa-user-plus' : 'fa-user-lock'}"></i> ${registerOpen ? 'قفل تسجيل الحسابات' : 'فتح تسجيل الحسابات (مقفل)'}
+          </button>
+          <button type="button" id="emToggleGlobalMuteBtn" class="owner-em-btn ${globalMuteOn ? 'is-alert' : 'is-ok'}" data-next="${globalMuteOn ? '0' : '1'}">
+            <i class="fa-solid ${globalMuteOn ? 'fa-volume-xmark' : 'fa-volume-high'}"></i> ${globalMuteOn ? 'إلغاء الكتم الشامل (مفعّل)' : 'الكتم الشامل للدردشة'}
+          </button>
+          <button type="button" id="emClearAllRoomsBtn" class="owner-em-btn is-alert">
+            <i class="fa-solid fa-broom"></i> تنظيف جميع الغرف دفعة واحدة
+          </button>
+        </div>
+      `;
+      $('emToggleGuestsBtn')?.addEventListener('click', () => {
+        const nextVal = $('emToggleGuestsBtn')?.dataset.next === '1';
+        runOwnerCmdAction({ action: 'toggle_emergency', field: 'allow_guests', enabled: nextVal }, nextVal ? 'تم فتح دخول الزوار.' : 'تم قفل دخول الزوار مؤقتاً.');
+      });
+      $('emToggleRegisterBtn')?.addEventListener('click', () => {
+        const nextVal = $('emToggleRegisterBtn')?.dataset.next === '1';
+        runOwnerCmdAction({ action: 'toggle_emergency', field: 'allow_register', enabled: nextVal }, nextVal ? 'تم فتح تسجيل الحسابات الجديدة.' : 'تم قفل تسجيل الحسابات الجديدة.');
+      });
+      $('emToggleGlobalMuteBtn')?.addEventListener('click', () => {
+        const nextVal = $('emToggleGlobalMuteBtn')?.dataset.next === '1';
+        runOwnerCmdAction({ action: 'toggle_emergency', field: 'global_chat_mute', enabled: nextVal }, nextVal ? 'تم تفعيل الكتم الشامل للدردشة العامة!' : 'تم رفع الكتم الشامل عن الدردشة.');
+      });
+      $('emClearAllRoomsBtn')?.addEventListener('click', () => {
+        if (!confirm('تنظيف وحذف رسائل جميع الغرف دفعة واحدة الآن؟')) return;
+        runOwnerCmdAction({ action: 'clear_all_rooms' }, 'تم تنظيف جميع الغرف دفعة واحدة!');
+      });
+    }
+
     async function refreshPanel(tab, preselectRoomId = null, subOverride = null) {
-      const { tab: normTab, sub } = normalizeAdminTabTarget(tab || state.activeAdminTab, subOverride);
+      const isOwner = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
+      const { tab: rawNormTab, sub } = normalizeAdminTabTarget(tab || state.activeAdminTab, subOverride);
+      const normTab = resolveAllowedAdminTab(rawNormTab, isOwner);
       state.activeAdminTab = normTab;
       if (sub) state.activeAdminSubTab = { ...(state.activeAdminSubTab || {}), [normTab]: sub };
       if (preselectRoomId !== undefined && preselectRoomId !== null) state.editingRoomId = preselectRoomId;
@@ -270,7 +473,6 @@
 
       if (activeBodyEl) activeBodyEl.innerHTML = '<div class="muted" style="padding:18px;text-align:center;">جاري تحميل بيانات لوحة القيادة...</div>';
       try {
-        const isOwner = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
         const promises = [api('/api/admin/overview')];
         if (isOwner) promises.push(api('/api/owner/suite').catch(() => null));
         const [ov, suite] = await Promise.all(promises);
@@ -280,6 +482,7 @@
         if (ov?.rooms) state.rooms = ov.rooms;
         if (ov?.settings && typeof rawCtx.applySiteSettings === 'function') rawCtx.applySiteSettings(ov.settings);
         syncOwnerTabVisibility();
+        renderOwnerEmergencyBar(isOwner, ov, suite || state.ownerSuite);
         renderTab(normTab);
       } catch (err) {
         if (activeBodyEl) activeBodyEl.innerHTML = `<div class="form-error">${escapeHtml(err.message)}</div>`;
@@ -289,7 +492,10 @@
     function syncOwnerTabVisibility() {
       const isOwner = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
       const container = activeTabsContainer || document;
-      container.querySelectorAll('.adm-tab.v-owner').forEach((b) => b.classList.toggle('hidden', !isOwner));
+      container.querySelectorAll('.adm-tab').forEach((b) => {
+        const allowed = canAccessAdminTab(b.dataset.admTab, isOwner);
+        b.classList.toggle('hidden', !allowed);
+      });
     }
 
     async function runOwnerCmdAction(payload, okMsg, refreshTab = state.activeAdminTab, refreshSub = null) {
@@ -312,7 +518,8 @@
       if (!ov || !body) return;
       const isOwner = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
       const suite = state.ownerSuite || {};
-      const { tab, sub } = normalizeAdminTabTarget(rawTab);
+      const { tab: rawNormTab, sub } = normalizeAdminTabTarget(rawTab);
+      const tab = resolveAllowedAdminTab(rawNormTab, isOwner);
       state.activeAdminTab = tab;
       if (sub && !state.activeAdminSubTab?.[tab]) {
         state.activeAdminSubTab = { ...(state.activeAdminSubTab || {}), [tab]: sub };
@@ -325,6 +532,7 @@
       if (tab === 'store_gifts') return renderStoreGiftsTab(body, ov, suite, isOwner);
       if (tab === 'quiz_bot') return renderQuizBotTab(body, ov, suite, isOwner);
       if (tab === 'welcome_bot') return renderWelcomeBotTab(body, ov, suite, isOwner);
+      if (tab === 'ads_manager') return renderAdsManagerTab(body, ov, suite, isOwner);
       if (tab === 'members_control') return renderMembersControlTab(body, ov, suite, isOwner);
       if (tab === 'bans_mutes') return renderBansMutesTab(body, ov, suite, isOwner);
       if (tab === 'audit_log') return renderAuditLogTab(body, ov, suite, isOwner);
@@ -424,18 +632,28 @@
                 ${RANK_ICON_PRESETS.map((ic) => `<button type="button" class="icon-preset-btn" data-ic="${ic}">${ic}</button>`).join('')}
               </div>
             </div>
-            <div class="rk-icon-40-preview-wrap">
+            <div class="rk-icon-40-preview-wrap" style="flex-wrap:wrap;">
               <div class="rk-icon-40-preview" title="معاينة 40×40">
                 ${editRk?.image_url
                   ? `<img id="rkIconPreviewImg" src="${escapeHtml(editRk.image_url)}" alt="" />`
                   : '<img id="rkIconPreviewImg" class="hidden" alt="" /><span id="rkIconPreviewPlaceholder" class="muted" style="font-size:10px;">40×40</span>'}
               </div>
-              <input type="file" id="rkIconFile" accept="image/png,image/jpeg,image/webp,image/gif,image/*" />
-              <input type="text" id="rkImgUrl" value="${escapeHtml(editRk?.image_url || '')}" placeholder="أو رابط صورة أيقونة (40×40)" style="flex:1;min-width:160px;" />
+              <label for="rkIconFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-mobile-screen-button"></i> رفع أيقونة رتبة من الجوال (PNG / SVG / GIF)</label>
+              <input type="file" id="rkIconFile" accept="image/png,image/svg+xml,image/gif,image/webp,image/jpeg,image/*" style="display:none;" />
+              <input type="text" id="rkImgUrl" value="${escapeHtml(editRk?.image_url || '')}" placeholder="أو رابط صورة أيقونة (PNG/SVG/GIF)" style="flex:1;min-width:160px;" />
             </div>
             <div>
               <label class="muted">سقف الترقية (0-${editRk?.key === 'site_owner' ? 15 : 14}):</label>
               <input type="number" id="rkMaxAssign" min="0" max="${editRk?.key === 'site_owner' ? 15 : 14}" value="${editRk ? (editRk.max_assignable_rank || 0) : 0}" ${editRk?.key === 'site_owner' ? 'disabled' : ''} />
+            </div>
+            <div>
+              <label class="muted">الرتب المحددة المسموح لهذه الرتبة بترقيتها (تعيين مرن):</label>
+              <div class="adm-assignable-roles-grid">
+                ${allRanksSorted.filter((rk) => rk.key !== 'guest' && rk.key !== 'site_owner').map((rk) => {
+                  const isAssigned = Array.isArray(editRk?.assignable_roles) && editRk.assignable_roles.includes(rk.key);
+                  return `<label class="switch-label"><input type="checkbox" class="rk-assign-role-chk" data-rkey="${escapeHtml(rk.key)}" ${isAssigned ? 'checked' : ''} ${editRk?.key === 'site_owner' ? 'disabled' : ''} /><span>${escapeHtml(rk.icon || '⭐')} ${escapeHtml(rk.label)}</span></label>`;
+                }).join('')}
+              </div>
             </div>
             <div class="perms-check-grid">
               ${rankPermDefs.map((p) => {
@@ -571,34 +789,30 @@
         else { img.src = ''; img.classList.add('hidden'); if (ph) ph.classList.remove('hidden'); }
       };
       $('rkImgUrl')?.addEventListener('input', (e) => updateRkPreview(e.target.value.trim()));
-      $('rkIconFile')?.addEventListener('change', (e) => {
+      $('rkIconFile')?.addEventListener('change', async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 40;
-            canvas.height = 40;
-            const ctx2 = canvas.getContext('2d');
-            if (!ctx2) return;
-            ctx2.clearRect(0, 0, 40, 40);
-            ctx2.drawImage(img, 0, 0, 40, 40);
-            const dataUrl = canvas.toDataURL('image/png');
-            if ($('rkImgUrl')) $('rkImgUrl').value = dataUrl;
-            updateRkPreview(dataUrl);
-            showToast('تم تحويل الأيقونة إلى مقاس 40×40 جاهزة للحفظ.');
-          };
-          img.onerror = () => showToast('تعذر قراءة ملف الصورة.', true);
-          img.src = String(reader.result || '');
-        };
-        reader.readAsDataURL(file);
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const up = await api('/api/upload/rank-icon', { method: 'POST', body: fd });
+          if (up?.url) {
+            if ($('rkImgUrl')) $('rkImgUrl').value = up.url;
+            updateRkPreview(up.url);
+            showToast('تم رفع أيقونة الرتبة بنجاح! اضغط حفظ لتطبيقها.');
+          }
+        } catch (err) {
+          showToast(err.message || 'تعذر رفع أيقونة الرتبة.', true);
+        }
       });
       $('rkSaveBtn')?.addEventListener('click', async () => {
         try {
           const permissions = {};
           body.querySelectorAll('.rk-perm-chk').forEach((chk) => { permissions[chk.dataset.perm] = Boolean(chk.checked); });
+          const assignableRoles = [];
+          body.querySelectorAll('.rk-assign-role-chk:checked').forEach((chk) => {
+            if (chk.dataset.rkey) assignableRoles.push(chk.dataset.rkey);
+          });
           const payload = {
             label: $('rkLabel').value,
             power: Number($('rkPower').value),
@@ -608,6 +822,7 @@
             icon: $('rkIconInput').value,
             imageUrl: $('rkImgUrl').value.trim(),
             maxAssignableRank: Number($('rkMaxAssign').value) || 0,
+            assignableRoles,
             permissions
           };
           if (isEditing && editRk) {
@@ -680,18 +895,28 @@
     }
 
     function renderProtectionTab(body, ov, suite, isOwner) {
-      const sub = state.activeAdminSubTab?.protection || (isOwner ? 'rules' : 'rooms');
+      const canRooms = isOwner || hasPerm('manage_rooms');
+      const canBans = isOwner || hasPerm('ban') || hasPerm('mute');
+      let sub = state.activeAdminSubTab?.protection || (isOwner ? 'rules' : (canRooms ? 'rooms' : 'bans'));
+      if (sub === 'rules' && !isOwner) sub = canRooms ? 'rooms' : 'bans';
+      if (sub === 'rooms' && !canRooms) sub = canBans ? 'bans' : (isOwner ? 'rules' : 'rooms');
+      if (sub === 'bans' && !canBans) sub = canRooms ? 'rooms' : (isOwner ? 'rules' : 'bans');
+
       const prot = suite.protections || ov.settings || {};
       const editRm = state.editingRoomId ? (ov.rooms || []).find((r) => r.id === state.editingRoomId) : null;
       const isEditingRm = Boolean(editRm);
       const userOpts = (ov.users || []).map((u) => `<option value="${u.id}" ${editRm?.owner_user_id === u.id ? 'selected' : ''}>${escapeHtml(u.displayName)} (@${escapeHtml(u.username)})</option>`).join('');
       const roomOpts = (ov.rooms || state.rooms || []).map((r) => `<option value="${escapeHtml(r.id)}" ${state.currentRoom?.id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}${r.is_frozen ? ' ❄️' : ''}</option>`).join('');
+      const editOwnerPerms = editRm?.owner_perms || { style_bg: true, kick: true, room_ban: true, assign_roles: false };
+      const editOwnerAllowedRoles = Array.isArray(editRm?.owner_allowed_roles) ? editRm.owner_allowed_roles : [];
+      const assignableRanksList = [...(ov.ranks || state.ranks || [])].filter((rk) => rk.key !== 'guest' && rk.key !== 'site_owner').sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
+      const roomBansList = Array.isArray(suite.roomBans) ? suite.roomBans : (Array.isArray(ov.roomBans) ? ov.roomBans : []);
 
       body.innerHTML = `
         <div class="cmd-subpills">
           ${isOwner ? `<button type="button" class="cmd-subpill ${sub === 'rules' ? 'active' : ''}" data-sub="rules"><i class="fa-solid fa-shield"></i> الحماية والكلمات</button>` : ''}
-          <button type="button" class="cmd-subpill ${sub === 'rooms' ? 'active' : ''}" data-sub="rooms"><i class="fa-solid fa-door-open"></i> إدارة الغرف</button>
-          <button type="button" class="cmd-subpill ${sub === 'bans' ? 'active' : ''}" data-sub="bans"><i class="fa-solid fa-ban"></i> البلاغات والحظر (${(ov.reports || []).length})</button>
+          ${canRooms ? `<button type="button" class="cmd-subpill ${sub === 'rooms' ? 'active' : ''}" data-sub="rooms"><i class="fa-solid fa-door-open"></i> إدارة الغرف</button>` : ''}
+          ${canBans ? `<button type="button" class="cmd-subpill ${sub === 'bans' ? 'active' : ''}" data-sub="bans"><i class="fa-solid fa-ban"></i> البلاغات والحظر (${(ov.reports || []).length})</button>` : ''}
         </div>
         ${isOwner ? `
           <div id="cmdProt_rules" class="${sub === 'rules' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
@@ -722,106 +947,140 @@
             </div>
           </div>
         ` : ''}
-        <div id="cmdProt_rooms" class="${sub === 'rooms' ? '' : 'hidden'}">
-          <div class="news-composer">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-              <strong>${isEditingRm ? `✏️ تعديل الغرفة: ${escapeHtml(editRm.name)}` : '🏠 إنشاء غرفة جديدة'}</strong>
-              ${isEditingRm ? '<button type="button" id="admCancelRoomEditBtn" class="btn-secondary btn-xs">إلغاء التعديل</button>' : ''}
-            </div>
-            <div class="form-grid-2">
-              <input type="text" id="admRoomName" placeholder="اسم الغرفة" value="${escapeHtml(editRm?.name || '')}" />
-              <input type="text" id="admRoomDesc" placeholder="وصف الغرفة" value="${escapeHtml(editRm?.description || '')}" />
-              <input type="text" id="admRoomIcon" placeholder="أيقونة الغرفة" value="${escapeHtml(editRm?.icon || '💬')}" />
-              <input type="text" id="admRoomPass" placeholder="${isEditingRm ? 'كلمة مرور جديدة (اختياري)' : 'كلمة مرور (اختياري)'}" />
-              <select id="admRoomTheme">
-                <option value="warm_peach" ${editRm?.bg_theme === 'warm_peach' ? 'selected' : ''}>خوخ دافئ</option>
-                <option value="sunset_rose" ${editRm?.bg_theme === 'sunset_rose' ? 'selected' : ''}>وردي غروب</option>
-                <option value="sky_breeze" ${editRm?.bg_theme === 'sky_breeze' ? 'selected' : ''}>سماوي نقي</option>
-                <option value="royal_night" ${editRm?.bg_theme === 'royal_night' ? 'selected' : ''}>ليلي ملكي</option>
-              </select>
-              <select id="admRoomOwner"><option value="">— بدون مالك معيّن —</option>${userOpts}</select>
-            </div>
-            <div class="inline-row" style="flex-wrap:wrap;">
-              <input type="file" id="admRoomWallpaperFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
-              <input type="text" id="admRoomWallpaperUrl" value="${escapeHtml(editRm?.wallpaper_url || '')}" placeholder="رابط صورة خلفية الغرفة" style="flex:1" />
-              <label class="switch-label"><input type="checkbox" id="admRoomMicsEnabled" ${!editRm || editRm.mics_enabled !== 0 ? 'checked' : ''} /><span>🎙️ المايكات</span></label>
-            </div>
-            <button type="button" id="admSaveRoomBtn" class="btn-primary btn-sm">${isEditingRm ? '💾 حفظ تعديلات الغرفة' : '➕ إنشاء الغرفة'}</button>
-            ${isEditingRm ? `
-              <hr style="border:none;border-top:1px solid rgba(148,163,184,0.22);" />
-              <strong>🗝️ مشرفو هذه الغرفة</strong>
-              <div class="inline-row">
-                <select id="admRoomStaffUserSel" style="flex:1">${userOpts}</select>
-                <input type="text" id="admRoomStaffRoleInput" value="مشرف غرفة" style="width:120px;" />
-                <button type="button" id="admAddRoomStaffBtn" class="btn-secondary btn-xs">➕ إضافة</button>
+        ${canRooms ? `
+          <div id="cmdProt_rooms" class="${sub === 'rooms' ? '' : 'hidden'}">
+            <div class="news-composer">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <strong>${isEditingRm ? `✏️ تعديل الغرفة: ${escapeHtml(editRm.name)}` : '🏠 إنشاء غرفة جديدة'}</strong>
+                ${isEditingRm ? '<button type="button" id="admCancelRoomEditBtn" class="btn-secondary btn-xs">إلغاء التعديل</button>' : ''}
               </div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                ${(editRm.staff || []).map((st) => `
-                  <span class="rank-pill" style="background:rgba(148,163,184,0.18);color:#f8fafc;">
-                    ${escapeHtml(st.name)} (${escapeHtml(st.staffRole)})
-                    <button type="button" class="btn-danger btn-xs del-rm-staff-btn" data-uid="${st.userId}" style="min-height:20px;padding:1px 6px;">✕</button>
-                  </span>
-                `).join('') || '<span class="muted">لا يوجد مشرفون مخصصون.</span>'}
+              <div class="form-grid-2">
+                <input type="text" id="admRoomName" placeholder="اسم الغرفة" value="${escapeHtml(editRm?.name || '')}" />
+                <input type="text" id="admRoomDesc" placeholder="وصف الغرفة" value="${escapeHtml(editRm?.description || '')}" />
+                <input type="text" id="admRoomIcon" placeholder="أيقونة الغرفة" value="${escapeHtml(editRm?.icon || '💬')}" />
+                <input type="text" id="admRoomPass" placeholder="${isEditingRm ? 'كلمة مرور جديدة (اختياري)' : 'كلمة مرور (اختياري)'}" />
+                <select id="admRoomTheme">
+                  <option value="classic_light" ${!editRm?.bg_theme || editRm?.bg_theme === 'classic_light' ? 'selected' : ''}>كلاسيكي فاتح (#f8fafc)</option>
+                  <option value="warm_peach" ${editRm?.bg_theme === 'warm_peach' ? 'selected' : ''}>خوخ دافئ</option>
+                  <option value="sunset_rose" ${editRm?.bg_theme === 'sunset_rose' ? 'selected' : ''}>وردي غروب</option>
+                  <option value="sky_breeze" ${editRm?.bg_theme === 'sky_breeze' ? 'selected' : ''}>سماوي نقي</option>
+                  <option value="royal_night" ${editRm?.bg_theme === 'royal_night' ? 'selected' : ''}>ليلي ملكي</option>
+                </select>
+                <select id="admRoomOwner"><option value="">— بدون مالك معيّن —</option>${userOpts}</select>
               </div>
-            ` : ''}
-          </div>
-          <div class="news-feed-list" style="margin-top:10px;">
-            ${(ov.rooms || []).map((r) => `
-              <div class="admin-list-card">
-                <div>
-                  <strong>${escapeHtml(r.icon)} ${escapeHtml(r.name)} ${r.hasPassword ? '🔒' : ''}</strong>
-                  <div class="muted">👥 ${r.onlineCount || 0} • 🔥 ${r.activity_points || 0} تفاعل ${r.owner_name ? `• 🗝️ ${escapeHtml(r.owner_name)}` : ''}</div>
+              <div class="inline-row" style="flex-wrap:wrap;">
+                <input type="file" id="admRoomWallpaperFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
+                <input type="text" id="admRoomWallpaperUrl" value="${escapeHtml(editRm?.wallpaper_url || '')}" placeholder="رابط صورة خلفية الغرفة" style="flex:1" />
+                <label class="switch-label"><input type="checkbox" id="admRoomMicsEnabled" ${!editRm || editRm.mics_enabled !== 0 ? 'checked' : ''} /><span>🎙️ المايكات</span></label>
+              </div>
+              <div style="margin-top:6px;">
+                <label class="muted">صلاحيات مالك الغرفة المعيّن:</label>
+                <div class="perms-check-grid" style="margin-top:4px;">
+                  <label class="switch-label"><input type="checkbox" id="admRoomOwnerPermStyle" ${editOwnerPerms.style_bg !== false ? 'checked' : ''} /><span>تنسيق وخلفية الغرفة</span></label>
+                  <label class="switch-label"><input type="checkbox" id="admRoomOwnerPermKick" ${editOwnerPerms.kick !== false ? 'checked' : ''} /><span>الطرد من الغرفة</span></label>
+                  <label class="switch-label"><input type="checkbox" id="admRoomOwnerPermBan" ${editOwnerPerms.room_ban !== false ? 'checked' : ''} /><span>الحظر من الغرفة</span></label>
+                  <label class="switch-label"><input type="checkbox" id="admRoomOwnerPermAssign" ${editOwnerPerms.assign_roles ? 'checked' : ''} /><span>تغيير الرتب داخل الغرفة</span></label>
                 </div>
+              </div>
+              <div style="margin-top:6px;">
+                <label class="muted">الرتب المسموح لمالك الغرفة منحها (عند تفعيل تغيير الرتب):</label>
+                <div class="adm-assignable-roles-grid">
+                  ${assignableRanksList.map((rk) => `
+                    <label class="switch-label"><input type="checkbox" class="rm-owner-role-chk" data-rkey="${escapeHtml(rk.key)}" ${editOwnerAllowedRoles.includes(rk.key) ? 'checked' : ''} /><span>${escapeHtml(rk.icon || '⭐')} ${escapeHtml(rk.label)}</span></label>
+                  `).join('')}
+                </div>
+              </div>
+              <button type="button" id="admSaveRoomBtn" class="btn-primary btn-sm" style="margin-top:8px;">${isEditingRm ? '💾 حفظ تعديلات الغرفة' : '➕ إنشاء الغرفة'}</button>
+              ${isEditingRm ? `
+                <hr style="border:none;border-top:1px solid rgba(148,163,184,0.22);" />
+                <strong>🗝️ مشرفو هذه الغرفة</strong>
                 <div class="inline-row">
-                  <button type="button" class="btn-secondary btn-xs edit-room-btn" data-rid="${escapeHtml(r.id)}">✏️ تعديل</button>
-                  ${r.id !== 'general' ? `<button type="button" class="btn-danger btn-xs del-room-btn" data-rid="${escapeHtml(r.id)}">حذف</button>` : ''}
+                  <select id="admRoomStaffUserSel" style="flex:1">${userOpts}</select>
+                  <input type="text" id="admRoomStaffRoleInput" value="مشرف غرفة" style="width:120px;" />
+                  <button type="button" id="admAddRoomStaffBtn" class="btn-secondary btn-xs">➕ إضافة</button>
                 </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        <div id="cmdProt_bans" class="${sub === 'bans' ? '' : 'hidden'}">
-          <h4 class="sub-heading">🚫 المحظورين حالياً (${(ov.bans || []).length})</h4>
-          <div class="news-feed-list">
-            ${(ov.bans || []).map((b) => `
-              <div class="admin-list-card">
-                <div>
-                  <strong>${escapeHtml(b.target_name || b.target_key)} ${b.ban_type === 'xban' ? '<span class="lvl-pill-mini" style="background:#991b1b;color:#fff;">إكس باند</span>' : ''}</strong>
-                  <div class="muted">بواسطة: ${escapeHtml(b.banned_by || 'الإدارة')} • السبب: ${escapeHtml(b.reason || 'بدون سبب')}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  ${(editRm.staff || []).map((st) => `
+                    <span class="rank-pill" style="background:rgba(148,163,184,0.18);color:#f8fafc;">
+                      ${escapeHtml(st.name)} (${escapeHtml(st.staffRole)})
+                      <button type="button" class="btn-danger btn-xs del-rm-staff-btn" data-uid="${st.userId}" style="min-height:20px;padding:1px 6px;">✕</button>
+                    </span>
+                  `).join('') || '<span class="muted">لا يوجد مشرفون مخصصون.</span>'}
                 </div>
-                <button type="button" class="btn-secondary btn-xs unban-btn" data-bk="${escapeHtml(b.target_key)}"><i class="fa-solid fa-unlock"></i> فك الحظر</button>
-              </div>
-            `).join('') || '<div class="muted">لا يوجد محظورون حالياً.</div>'}
-          </div>
-          <h4 class="sub-heading" style="margin-top:12px;">🔇 المكتومين حالياً (${(ov.mutes || []).length})</h4>
-          <div class="news-feed-list">
-            ${(ov.mutes || []).map((m) => `
-              <div class="admin-list-card">
-                <div>
-                  <strong>${escapeHtml(m.target_name || m.target_key)}</strong>
-                  <div class="muted">
-                    بواسطة: ${escapeHtml(m.muted_by || 'الإدارة')} • السبب: ${escapeHtml(m.reason || 'بدون سبب')}
-                    ${m.violating_word ? ` • <span style="color:#f87171;font-weight:700;">الكلمة: ${escapeHtml(m.violating_word)}</span>` : ''}
-                    • المتبقي: ${formatRemainingMmSs(m.remaining_ms ?? m.remainingMs ?? Math.max(0, Number(m.expires_at || m.expires_at_ms || 0) - Date.now()))}
+              ` : ''}
+            </div>
+            <div class="news-feed-list" style="margin-top:10px;">
+              ${(ov.rooms || []).map((r) => `
+                <div class="admin-list-card">
+                  <div>
+                    <strong>${escapeHtml(r.icon)} ${escapeHtml(r.name)} ${r.hasPassword ? '🔒' : ''}</strong>
+                    <div class="muted">👥 ${r.onlineCount || 0} • 🔥 ${r.activity_points || 0} تفاعل ${r.owner_name ? `• 🗝️ ${escapeHtml(r.owner_name)}` : ''}</div>
+                  </div>
+                  <div class="inline-row">
+                    <button type="button" class="btn-secondary btn-xs edit-room-btn" data-rid="${escapeHtml(r.id)}">✏️ تعديل</button>
+                    ${r.id !== 'general' ? `<button type="button" class="btn-danger btn-xs del-room-btn" data-rid="${escapeHtml(r.id)}">حذف</button>` : ''}
                   </div>
                 </div>
-                <button type="button" class="btn-primary btn-xs unmute-admin-btn" data-mk="${escapeHtml(m.target_key)}"><i class="fa-solid fa-volume-high"></i> فك الكتم</button>
-              </div>
-            `).join('') || '<div class="muted">لا يوجد مكتومون حالياً.</div>'}
+              `).join('')}
+            </div>
           </div>
-          <h4 class="sub-heading" style="margin-top:12px;">🚨 البلاغات الواردة (${(ov.reports || []).length})</h4>
-          <div class="news-feed-list">
-            ${(ov.reports || []).map((r) => `
-              <div class="admin-list-card">
-                <div><strong>المبلّغ عنه: ${escapeHtml(r.target_name)}</strong><div class="muted">من ${escapeHtml(r.reporter_name)}: ${escapeHtml(r.reason)}</div></div>
-                <div class="inline-row">
-                  <button type="button" class="btn-primary btn-xs adm-resolve-report-btn" data-rep-id="${escapeHtml(r.id)}">تمت المعالجة</button>
-                  <button type="button" class="btn-danger btn-xs adm-del-report-btn" data-rep-id="${escapeHtml(r.id)}">حذف</button>
+        ` : ''}
+        ${canBans ? `
+          <div id="cmdProt_bans" class="${sub === 'bans' ? '' : 'hidden'}">
+            <h4 class="sub-heading">🚫 المحظورين حالياً (${(ov.bans || []).length})</h4>
+            <div class="news-feed-list">
+              ${(ov.bans || []).map((b) => `
+                <div class="admin-list-card">
+                  <div>
+                    <strong>${escapeHtml(b.target_name || b.target_key)} ${b.ban_type === 'xban' ? '<span class="lvl-pill-mini" style="background:#991b1b;color:#fff;">إكس باند</span>' : ''}</strong>
+                    <div class="muted">بواسطة: ${escapeHtml(b.banned_by || 'الإدارة')} • السبب: ${escapeHtml(b.reason || 'بدون سبب')}</div>
+                  </div>
+                  <button type="button" class="btn-secondary btn-xs unban-btn" data-bk="${escapeHtml(b.target_key)}"><i class="fa-solid fa-unlock"></i> فك الحظر</button>
                 </div>
-              </div>
-            `).join('') || '<div class="muted">لا توجد بلاغات.</div>'}
+              `).join('') || '<div class="muted">لا يوجد محظورون حالياً.</div>'}
+            </div>
+            <h4 class="sub-heading" style="margin-top:12px;">🚪 محظورو الغرف المحددة (${roomBansList.length})</h4>
+            <div class="news-feed-list">
+              ${roomBansList.map((rb) => `
+                <div class="admin-list-card">
+                  <div>
+                    <strong>${escapeHtml(rb.target_name || rb.target_key)}</strong>
+                    <div class="muted">الغرفة: ${escapeHtml((ov.rooms || []).find((x) => x.id === rb.room_id)?.name || rb.room_id)} • بواسطة: ${escapeHtml(rb.banned_by || 'إدارة الغرفة')} • السبب: ${escapeHtml(rb.reason || '—')}</div>
+                  </div>
+                  <button type="button" class="btn-secondary btn-xs unban-room-btn" data-rid="${escapeHtml(rb.room_id)}" data-tk="${escapeHtml(rb.target_key)}"><i class="fa-solid fa-door-open"></i> فك حظر الغرفة</button>
+                </div>
+              `).join('') || '<div class="muted">لا يوجد محظورون على مستوى الغرف.</div>'}
+            </div>
+            <h4 class="sub-heading" style="margin-top:12px;">🔇 المكتومين حالياً (${(ov.mutes || []).length})</h4>
+            <div class="news-feed-list">
+              ${(ov.mutes || []).map((m) => `
+                <div class="admin-list-card">
+                  <div>
+                    <strong>${escapeHtml(m.target_name || m.target_key)}</strong>
+                    <div class="muted">
+                      بواسطة: ${escapeHtml(m.muted_by || 'الإدارة')} • السبب: ${escapeHtml(m.reason || 'بدون سبب')}
+                      ${m.violating_word ? ` • <span style="color:#f87171;font-weight:700;">الكلمة: ${escapeHtml(m.violating_word)}</span>` : ''}
+                      • المتبقي: ${formatRemainingMmSs(m.remaining_ms ?? m.remainingMs ?? Math.max(0, Number(m.expires_at || m.expires_at_ms || 0) - Date.now()))}
+                    </div>
+                  </div>
+                  <button type="button" class="btn-primary btn-xs unmute-admin-btn" data-mk="${escapeHtml(m.target_key)}"><i class="fa-solid fa-volume-high"></i> فك الكتم</button>
+                </div>
+              `).join('') || '<div class="muted">لا يوجد مكتومون حالياً.</div>'}
+            </div>
+            <h4 class="sub-heading" style="margin-top:12px;">🚨 البلاغات الواردة (${(ov.reports || []).length})</h4>
+            <div class="news-feed-list">
+              ${(ov.reports || []).map((r) => `
+                <div class="admin-list-card">
+                  <div><strong>المبلّغ عنه: ${escapeHtml(r.target_name)}</strong><div class="muted">من ${escapeHtml(r.reporter_name)}: ${escapeHtml(r.reason)}</div></div>
+                  <div class="inline-row">
+                    <button type="button" class="btn-primary btn-xs adm-resolve-report-btn" data-rep-id="${escapeHtml(r.id)}">تمت المعالجة</button>
+                    <button type="button" class="btn-danger btn-xs adm-del-report-btn" data-rep-id="${escapeHtml(r.id)}">حذف</button>
+                  </div>
+                </div>
+              `).join('') || '<div class="muted">لا توجد بلاغات.</div>'}
+            </div>
           </div>
-        </div>
+        ` : ''}
       `;
 
       body.querySelectorAll('.cmd-subpill').forEach((b) => {
@@ -857,6 +1116,9 @@
       $('admSaveRoomBtn')?.addEventListener('click', async () => {
         try {
           let wallpaperUrl = $('admRoomWallpaperUrl').value.trim();
+          if (wallpaperUrl && !isSafeHttpsOrLocalUrlClient(wallpaperUrl, true)) {
+            return showToast('رابط خلفية الغرفة يجب أن يبدأ بـ https:// أو يكون رابطاً محلياً.', true);
+          }
           const wpFile = $('admRoomWallpaperFile').files[0];
           if (wpFile) {
             const fd = new FormData();
@@ -864,6 +1126,16 @@
             const up = await api('/api/upload/wallpaper', { method: 'POST', body: fd });
             wallpaperUrl = up.url;
           }
+          const ownerPerms = {
+            style_bg: Boolean($('admRoomOwnerPermStyle')?.checked),
+            kick: Boolean($('admRoomOwnerPermKick')?.checked),
+            room_ban: Boolean($('admRoomOwnerPermBan')?.checked),
+            assign_roles: Boolean($('admRoomOwnerPermAssign')?.checked)
+          };
+          const ownerAllowedRoles = [];
+          body.querySelectorAll('.rm-owner-role-chk:checked').forEach((chk) => {
+            if (chk.dataset.rkey) ownerAllowedRoles.push(chk.dataset.rkey);
+          });
           const payload = {
             name: $('admRoomName').value,
             description: $('admRoomDesc').value,
@@ -871,6 +1143,8 @@
             bgTheme: $('admRoomTheme').value,
             wallpaperUrl,
             ownerUserId: $('admRoomOwner').value ? Number($('admRoomOwner').value) : null,
+            ownerPerms,
+            ownerAllowedRoles,
             micsEnabled: $('admRoomMicsEnabled').checked
           };
           const passVal = $('admRoomPass').value;
@@ -924,6 +1198,15 @@
           try {
             await api(`/api/admin/ban/${encodeURIComponent(b.dataset.bk)}`, { method: 'DELETE' });
             showToast('تم فك الحظر بنجاح.');
+            refreshPanel('protection', null, 'bans');
+          } catch (err) { showToast(err.message, true); }
+        });
+      });
+      body.querySelectorAll('.unban-room-btn').forEach((b) => {
+        b.addEventListener('click', async () => {
+          try {
+            await api('/api/mod/room-ban', { method: 'POST', body: { roomId: b.dataset.rid, targetKey: b.dataset.tk, unban: true } });
+            showToast('تم فك حظر الغرفة بنجاح.');
             refreshPanel('protection', null, 'bans');
           } catch (err) { showToast(err.message, true); }
         });
@@ -1014,7 +1297,7 @@
 
         <div class="${sub === 'frames' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
           <div class="news-composer">
-            <strong><i class="fa-solid fa-wand-sparkles" style="color:#F59E0B;"></i> إضافة إطار صورة مخصص للمتجر</strong>
+            <strong><i class="fa-solid fa-wand-sparkles" style="color:#F59E0B;"></i> إضافة إطار صورة ملكي مخصص للمتجر</strong>
             <div class="form-grid-2">
               <input type="text" id="sfLabel" placeholder="اسم الإطار" />
               <input type="number" id="sfPrice" min="0" value="300" placeholder="السعر بالروبي" />
@@ -1022,10 +1305,13 @@
                 <option value="permanent">دائم</option>
                 <option value="monthly">شهري (30 يوماً)</option>
               </select>
-              <input type="text" id="sfImgUrl" placeholder="رابط صورة الإطار (PNG / GIF)" />
+              <input type="text" id="sfImgUrl" placeholder="رابط صورة الإطار (PNG / SVG / GIF)" />
             </div>
-            <div class="inline-row">
-              <input type="file" id="sfImgFile" accept="image/*" />
+            <div class="inline-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
+              <img id="sfFramePreviewImg" class="hidden" style="width:42px;height:42px;object-fit:contain;border-radius:50%;border:1px solid rgba(251,191,36,0.45);background:rgba(15,23,42,0.8);" alt="" />
+              <label for="sfImgFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-mobile-screen-button"></i> رفع إطار من الجوال (PNG / SVG / GIF)</label>
+              <input type="file" id="sfImgFile" accept="image/png,image/svg+xml,image/gif,image/webp,image/*" style="display:none;" />
+              <span id="sfFileNameLbl" class="muted" style="font-size:11px;"></span>
               <button type="button" id="sfAddFrameBtn" class="btn-primary btn-sm"><i class="fa-solid fa-plus"></i> إضافة الإطار للمتجر</button>
             </div>
           </div>
@@ -1108,6 +1394,17 @@
         } catch (err) { showToast(err.message, true); }
       });
 
+      $('sfImgFile')?.addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        const prev = $('sfFramePreviewImg');
+        const lbl = $('sfFileNameLbl');
+        if (lbl) lbl.textContent = f ? f.name : '';
+        if (prev && f) {
+          prev.src = URL.createObjectURL(f);
+          prev.classList.remove('hidden');
+        }
+      });
+
       $('sfAddFrameBtn')?.addEventListener('click', async () => {
         try {
           let imageUrl = ($('sfImgUrl')?.value || '').trim();
@@ -1115,7 +1412,7 @@
           if (file) {
             const fd = new FormData();
             fd.append('file', file);
-            const up = await api('/api/upload/emoji', { method: 'POST', body: fd });
+            const up = await api('/api/upload/frame', { method: 'POST', body: fd });
             imageUrl = up.url;
           }
           await api('/api/admin/store/frames', {
@@ -1127,7 +1424,7 @@
               imageUrl
             }
           });
-          showToast('تمت إضافة الإطار للمتجر!');
+          showToast('تمت إضافة الإطار للمتجر بنجاح!');
           refreshPanel('store_gifts', null, 'frames');
         } catch (err) { showToast(err.message, true); }
       });
@@ -1326,7 +1623,7 @@
 
       body.innerHTML = `
         <div class="owner-suite-section">
-          <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:#F59E0B;"></i> إعدادات البوت الترحيبي الذكي (gemini-3.8-flash المباشر)</h4>
+          <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:#F59E0B;"></i> إعدادات البوت الترحيبي الذكي (الذكاء الاصطناعي المتدرج Gemini)</h4>
           <label class="switch-label"><input type="checkbox" id="wbEnabledChk" ${draft.enabled ? 'checked' : ''} /><span>تفعيل البوت الترحيبي والرد الذكي في الغرف</span></label>
           <div class="form-grid-2" style="margin-top:8px;">
             <div>
@@ -1355,7 +1652,7 @@
             <textarea id="wbGreetingInput" rows="2" maxlength="300">${escapeHtml(draft.greeting)}</textarea>
           </div>
           <div style="margin-top:10px;">
-            <label class="muted">مفتاح Gemini API (محفوظ في الخادم فقط — نموذج gemini-3.8-flash المباشر بدون أخطاء في الغرفة)</label>
+            <label class="muted">مفتاح Gemini API (محفوظ في الخادم فقط — الذكاء الاصطناعي المتدرج Gemini بدون أخطاء في الغرفة)</label>
             <div class="inline-row" style="gap:6px;">
               <input type="password" id="wbGeminiKeyInput" value="${escapeHtml(draft.geminiKey)}" placeholder="AIzaSy..." autocomplete="off" style="flex:1;" />
               <button type="button" id="wbToggleKeyVisBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-eye"></i></button>
@@ -1494,7 +1791,18 @@
       const canPub = isOwner || hasPerm('publish_news');
       const canBan = isOwner || hasPerm('ban');
       const canMod = isOwner || hasPerm('mute') || hasPerm('kick');
-      const sub = state.activeAdminSubTab?.members_control || 'detector';
+      const canSetRank = isOwner || hasPerm('set_rank');
+      const canGiveCoins = isOwner || hasPerm('give_coins');
+      const canEditFull = isOwner || hasPerm('access_panel');
+      const canAppearanceSub = canEditFull || canPub;
+      const canDetectorSub = isOwner || canSetRank || canGiveCoins || canBan || canMod || canEditFull;
+
+      let sub = state.activeAdminSubTab?.members_control || (canDetectorSub ? 'detector' : (canBank ? 'bank' : 'appearance'));
+      if (sub === 'detector' && !canDetectorSub) sub = canBank ? 'bank' : 'appearance';
+      if (sub === 'bank' && !canBank) sub = canDetectorSub ? 'detector' : 'appearance';
+      if (sub === 'appearance' && !canAppearanceSub) sub = canDetectorSub ? 'detector' : 'bank';
+      if (sub === 'engagement' && !isOwner) sub = canDetectorSub ? 'detector' : 'appearance';
+
       const prot = suite.protections || ov.settings || {};
       const s = ov.settings || {};
       const roomOpts = (ov.rooms || state.rooms || []).map((r) => `<option value="${escapeHtml(r.id)}" ${state.currentRoom?.id === r.id ? 'selected' : ''}>${escapeHtml(r.name)}${r.is_frozen ? ' ❄️' : ''}</option>`).join('');
@@ -1511,80 +1819,90 @@
 
       body.innerHTML = `
         <div class="cmd-subpills">
-          <button type="button" class="cmd-subpill ${sub === 'detector' ? 'active' : ''}" data-sub="detector"><i class="fa-solid fa-fingerprint"></i> كاشف الهوية والأعضاء</button>
+          ${canDetectorSub ? `<button type="button" class="cmd-subpill ${sub === 'detector' ? 'active' : ''}" data-sub="detector"><i class="fa-solid fa-fingerprint"></i> كاشف الهوية والأعضاء</button>` : ''}
           ${canBank ? `<button type="button" class="cmd-subpill ${sub === 'bank' ? 'active' : ''}" data-sub="bank"><i class="fa-solid fa-vault"></i> بنك الروبي</button>` : ''}
-          <button type="button" class="cmd-subpill ${sub === 'appearance' ? 'active' : ''}" data-sub="appearance"><i class="fa-solid fa-wand-magic-sparkles"></i> المظهر والأخبار</button>
+          ${canAppearanceSub ? `<button type="button" class="cmd-subpill ${sub === 'appearance' ? 'active' : ''}" data-sub="appearance"><i class="fa-solid fa-wand-magic-sparkles"></i> المظهر والأخبار</button>` : ''}
           ${isOwner ? `<button type="button" class="cmd-subpill ${sub === 'engagement' ? 'active' : ''}" data-sub="engagement"><i class="fa-solid fa-bullhorn"></i> البث والتنشيط</button>` : ''}
         </div>
 
-        <div id="cmdMem_detector" class="${sub === 'detector' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
-          ${isOwner ? `
-            <div class="owner-suite-section">
-              <h4><i class="fa-solid fa-satellite-dish" style="color:#38bdf8;"></i> كاشف الهوية الحقيقية للمتصلين (${(suite.liveSockets || []).length})</h4>
-              ${(suite.liveSockets || []).map((sk) => `
-                <div class="identity-detector-card admin-list-card">
-                  <div style="min-width:0;flex:1;">
-                    <strong>${escapeHtml(sk.name)} (${escapeHtml(getRank(sk.role).label)}) ${sk.isStealth ? '• <span style="color:#F59E0B;">متخفي</span>' : ''}</strong>
-                    <div class="identity-meta-grid">
-                      <span><i class="fa-solid fa-door-open"></i> ${escapeHtml(sk.roomName || sk.roomId || '—')}</span>
-                      <span><i class="fa-solid fa-globe"></i> IP: ${escapeHtml(sk.ipAddress || '—')}</span>
-                      <span><i class="fa-solid fa-earth-asia"></i> الدولة: ${escapeHtml(sk.country || 'غير محدد')}</span>
-                      <span><i class="fa-solid fa-microchip"></i> البصمة: ${escapeHtml((sk.fingerprint || sk.deviceId || '—').slice(0, 16))}</span>
+        ${canDetectorSub ? `
+          <div id="cmdMem_detector" class="${sub === 'detector' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
+            ${isOwner ? `
+              <div class="owner-suite-section">
+                <h4><i class="fa-solid fa-satellite-dish" style="color:#38bdf8;"></i> كاشف الهوية الحقيقية للمتصلين (${(suite.liveSockets || []).length})</h4>
+                ${(suite.liveSockets || []).map((sk) => `
+                  <div class="identity-detector-card admin-list-card">
+                    <div style="min-width:0;flex:1;">
+                      <strong>${escapeHtml(sk.name)} (${escapeHtml(getRank(sk.role).label)}) ${sk.isStealth ? '• <span style="color:#F59E0B;">متخفي</span>' : ''}</strong>
+                      <div class="identity-meta-grid">
+                        <span><i class="fa-solid fa-door-open"></i> ${escapeHtml(sk.roomName || sk.roomId || '—')}</span>
+                        <span><i class="fa-solid fa-globe"></i> IP: ${escapeHtml(sk.ipAddress || '—')}</span>
+                        <span><i class="fa-solid fa-earth-asia"></i> الدولة: ${escapeHtml(sk.country || 'غير محدد')}</span>
+                        <span><i class="fa-solid fa-microchip"></i> البصمة: ${escapeHtml((sk.fingerprint || sk.deviceId || '—').slice(0, 16))}</span>
+                      </div>
+                    </div>
+                    ${sk.role !== 'site_owner' ? `<button type="button" class="btn-danger btn-xs owner-ban-ip-btn" data-ip="${escapeHtml(sk.ipAddress || '')}" data-dev="${escapeHtml(sk.deviceId || '')}" data-tk="${escapeHtml(sk.key)}"><i class="fa-solid fa-shield-virus"></i> إكس باند</button>` : ''}
+                  </div>
+                `).join('') || '<div class="muted">لا يوجد متصلون حالياً.</div>'}
+              </div>
+              <div class="owner-suite-section">
+                <h4><i class="fa-solid fa-users-viewfinder" style="color:#F59E0B;"></i> كاشف الحسابات المتعددة (${(suite.multiAccounts || []).length})</h4>
+                ${(suite.multiAccounts || []).length ? (suite.multiAccounts || []).map((m) => `
+                  <div class="admin-list-card">
+                    <div><strong>${escapeHtml(m.type)}: ${escapeHtml(String(m.fingerprint || '').slice(0, 22))}</strong><div class="muted">${(m.accounts || []).map((a) => escapeHtml(a.displayName)).join(' ، ')}</div></div>
+                  </div>
+                `).join('') : '<div class="muted">لا توجد حسابات متعددة متطابقة حالياً.</div>'}
+              </div>
+            ` : ''}
+
+            ${canSetRank ? `
+              <div class="news-composer">
+                <strong><i class="fa-solid fa-user-plus"></i> إنشاء حساب عضو جديد وتعيين رتبته</strong>
+                <div class="form-grid-2">
+                  <input type="text" id="admNewUsername" placeholder="اسم المستخدم" />
+                  <input type="text" id="admNewDisplay" placeholder="الاسم المعروض" />
+                  <input type="email" id="admNewEmail" placeholder="البريد الإلكتروني" />
+                  <input type="password" id="admNewPass" placeholder="كلمة المرور (5+ أحرف)" />
+                </div>
+                <div class="inline-row">
+                  <select id="admNewRole" style="flex:1">${buildAssignableRankOptions('member')}</select>
+                  <button type="button" id="admCreateUserBtn" class="btn-primary btn-sm">إنشاء الحساب</button>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="news-feed-list">
+              ${(ov.users || []).map((u) => `
+                <div class="admin-list-card" style="flex-direction:column;align-items:stretch;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      ${u.avatarUrl ? `<img src="${escapeHtml(u.avatarUrl)}" style="width:36px;height:36px;border-radius:10px;object-fit:cover;border:1px solid rgba(251,191,36,0.35);" alt="" />` : ''}
+                      <div>
+                        <strong>${escapeHtml(u.displayName)} (@${escapeHtml(u.username)}) ${u.isSupremeOwner ? '<i class="fa-solid fa-shield-halved" style="color:#F59E0B;"></i>' : ''}</strong>
+                        <div class="muted">${escapeHtml(u.email)} • ${roleBadgeHTML(u.role)} • 💎 ${u.coins} ${u.isBanned ? '<span class="adm-ban-badge-pill">محظور isBanned</span>' : ''} ${u.isGhosted ? '• <span style="color:#a78bfa;">شبح</span>' : ''}</div>
+                      </div>
+                    </div>
+                    <div class="inline-row" style="flex-wrap:wrap;">
+                      ${canSetRank ? `
+                        <select class="adm-user-role-sel" data-uid="${u.id}" ${u.isSupremeOwner && !isOwner ? 'disabled' : ''}>${buildAssignableRankOptions(u.role)}</select>
+                        <button type="button" class="btn-primary btn-xs adm-save-role-btn" data-uid="${u.id}" ${u.isSupremeOwner && !isOwner ? 'disabled' : ''}>تطبيق</button>
+                      ` : ''}
+                      ${canEditFull && (!u.isSupremeOwner || isOwner) ? `<button type="button" class="btn-secondary btn-xs adm-edit-full-btn" data-uid="${u.id}"><i class="fa-solid fa-user-pen"></i> تعديل شامل والصور</button>` : ''}
+                      ${!u.isSupremeOwner || isOwner ? `<button type="button" class="btn-secondary btn-xs adm-rename-user-btn" data-uid="${u.id}" data-cur="${escapeHtml(u.displayName)}"><i class="fa-solid fa-pen"></i> الاسم</button>` : ''}
+                      ${canGiveCoins ? `<button type="button" class="btn-secondary btn-xs adm-give-coins-btn" data-uid="${u.id}">+500</button>` : ''}
+                      ${canBan && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="${u.isBanned ? 'btn-primary' : 'btn-danger'} btn-xs adm-toggle-isbanned-btn" data-uid="${u.id}" data-banned="${u.isBanned ? '1' : '0'}">${u.isBanned ? 'فك isBanned' : 'تفعيل isBanned'}</button>` : ''}
+                      ${canMod && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-secondary btn-xs adm-ghost-user-btn" data-uid="${u.id}" data-ghosted="${u.isGhosted ? '1' : '0'}"><i class="fa-solid fa-ghost"></i> ${u.isGhosted ? 'إلغاء شبح' : 'شبح'}</button>` : ''}
+                      ${canBan && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-danger btn-xs adm-xban-user-btn" data-uid="${u.id}" data-uname="${escapeHtml(u.displayName)}"><i class="fa-solid fa-shield-virus"></i> إكس باند</button>` : ''}
+                      ${canBan && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-danger btn-xs adm-ban-user-btn" data-uid="${u.id}" data-uname="${escapeHtml(u.displayName)}"><i class="fa-solid fa-ban"></i> حظر</button>` : ''}
+                      ${isOwner && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-danger btn-xs adm-del-user-btn" data-uid="${u.id}" data-uname="${escapeHtml(u.displayName)}"><i class="fa-solid fa-user-slash"></i> حذف</button>` : ''}
                     </div>
                   </div>
-                  ${sk.role !== 'site_owner' ? `<button type="button" class="btn-danger btn-xs owner-ban-ip-btn" data-ip="${escapeHtml(sk.ipAddress || '')}" data-dev="${escapeHtml(sk.deviceId || '')}" data-tk="${escapeHtml(sk.key)}"><i class="fa-solid fa-shield-virus"></i> إكس باند</button>` : ''}
+                  <div class="adm-user-inline-box hidden" data-uid="${u.id}"></div>
                 </div>
-              `).join('') || '<div class="muted">لا يوجد متصلون حالياً.</div>'}
-            </div>
-            <div class="owner-suite-section">
-              <h4><i class="fa-solid fa-users-viewfinder" style="color:#F59E0B;"></i> كاشف الحسابات المتعددة (${(suite.multiAccounts || []).length})</h4>
-              ${(suite.multiAccounts || []).length ? (suite.multiAccounts || []).map((m) => `
-                <div class="admin-list-card">
-                  <div><strong>${escapeHtml(m.type)}: ${escapeHtml(String(m.fingerprint || '').slice(0, 22))}</strong><div class="muted">${(m.accounts || []).map((a) => escapeHtml(a.displayName)).join(' ، ')}</div></div>
-                </div>
-              `).join('') : '<div class="muted">لا توجد حسابات متعددة متطابقة حالياً.</div>'}
-            </div>
-          ` : ''}
-
-          <div class="news-composer">
-            <strong><i class="fa-solid fa-user-plus"></i> إنشاء حساب عضو جديد وتعيين رتبته</strong>
-            <div class="form-grid-2">
-              <input type="text" id="admNewUsername" placeholder="اسم المستخدم" />
-              <input type="text" id="admNewDisplay" placeholder="الاسم المعروض" />
-              <input type="email" id="admNewEmail" placeholder="البريد الإلكتروني" />
-              <input type="password" id="admNewPass" placeholder="كلمة المرور (5+ أحرف)" />
-            </div>
-            <div class="inline-row">
-              <select id="admNewRole" style="flex:1">${buildAssignableRankOptions('member')}</select>
-              <button type="button" id="admCreateUserBtn" class="btn-primary btn-sm">إنشاء الحساب</button>
+              `).join('')}
             </div>
           </div>
-
-          <div class="news-feed-list">
-            ${(ov.users || []).map((u) => `
-              <div class="admin-list-card" style="flex-direction:column;align-items:stretch;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-                  <div>
-                    <strong>${escapeHtml(u.displayName)} (@${escapeHtml(u.username)}) ${u.isSupremeOwner ? '<i class="fa-solid fa-shield-halved" style="color:#F59E0B;"></i>' : ''}</strong>
-                    <div class="muted">${escapeHtml(u.email)} • ${roleBadgeHTML(u.role)} • 💎 ${u.coins} ${u.isBanned ? '<span class="adm-ban-badge-pill">محظور isBanned</span>' : ''} ${u.isGhosted ? '• <span style="color:#a78bfa;">شبح</span>' : ''}</div>
-                  </div>
-                  <div class="inline-row" style="flex-wrap:wrap;">
-                    <select class="adm-user-role-sel" data-uid="${u.id}" ${u.isSupremeOwner && !isOwner ? 'disabled' : ''}>${buildAssignableRankOptions(u.role)}</select>
-                    <button type="button" class="btn-primary btn-xs adm-save-role-btn" data-uid="${u.id}">تطبيق</button>
-                    ${!u.isSupremeOwner || isOwner ? `<button type="button" class="btn-secondary btn-xs adm-rename-user-btn" data-uid="${u.id}" data-cur="${escapeHtml(u.displayName)}"><i class="fa-solid fa-pen"></i> الاسم</button>` : ''}
-                    ${(isOwner || hasPerm('give_coins')) ? `<button type="button" class="btn-secondary btn-xs adm-give-coins-btn" data-uid="${u.id}">+500</button>` : ''}
-                    ${canBan && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="${u.isBanned ? 'btn-primary' : 'btn-danger'} btn-xs adm-toggle-isbanned-btn" data-uid="${u.id}" data-banned="${u.isBanned ? '1' : '0'}">${u.isBanned ? 'فك isBanned' : 'تفعيل isBanned'}</button>` : ''}
-                    ${canMod && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-secondary btn-xs adm-ghost-user-btn" data-uid="${u.id}" data-ghosted="${u.isGhosted ? '1' : '0'}"><i class="fa-solid fa-ghost"></i> ${u.isGhosted ? 'إلغاء شبح' : 'شبح'}</button>` : ''}
-                    ${canBan && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-danger btn-xs adm-xban-user-btn" data-uid="${u.id}" data-uname="${escapeHtml(u.displayName)}"><i class="fa-solid fa-shield-virus"></i> إكس باند</button>` : ''}
-                    ${canBan && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-danger btn-xs adm-ban-user-btn" data-uid="${u.id}" data-uname="${escapeHtml(u.displayName)}"><i class="fa-solid fa-ban"></i> حظر</button>` : ''}
-                    ${isOwner && !u.isSupremeOwner && u.id !== state.user?.userId ? `<button type="button" class="btn-danger btn-xs adm-del-user-btn" data-uid="${u.id}" data-uname="${escapeHtml(u.displayName)}"><i class="fa-solid fa-user-slash"></i> حذف</button>` : ''}
-                  </div>
-                </div>
-                <div class="adm-user-inline-box hidden" data-uid="${u.id}"></div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
+        ` : ''}
 
         ${canBank ? `
           <div id="cmdMem_bank" class="${sub === 'bank' ? '' : 'hidden'}">
@@ -1600,73 +1918,83 @@
           </div>
         ` : ''}
 
-        <div id="cmdMem_appearance" class="${sub === 'appearance' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
-          <div class="news-composer">
-            <strong>🎨 هوية الموقع والمظهر العام (Dark Glassmorphism)</strong>
-            <div class="form-grid-2">
-              <div><label>اسم الموقع</label><input type="text" id="cmsSiteName" value="${escapeHtml(s.site_name || '')}" /></div>
-              <div><label>وصف الموقع</label><input type="text" id="cmsSiteDesc" value="${escapeHtml(s.site_description || '')}" /></div>
-              <div><label>لون الشريط العلوي</label><input type="color" id="cmsTopColor" value="${escapeHtml(s.top_bar_color || '#0F172A')}" /></div>
-              <div><label>لون الشريط السفلي</label><input type="color" id="cmsBotColor" value="${escapeHtml(s.bottom_bar_color || '#0F172A')}" /></div>
-              <div><label>لون الأزرار</label><input type="color" id="cmsBtnColor" value="${escapeHtml(s.button_color || '#F59E0B')}" /></div>
-              <div><label>حجم الخط (px)</label><input type="number" id="cmsFontSize" value="${s.font_size || 15}" min="12" max="22" /></div>
-            </div>
-            <label>CSS مخصص للموقع</label><textarea id="cmsCustomCss" rows="2">${escapeHtml(s.custom_css || '')}</textarea>
-            <label>شريط HTML علوي مخصص</label><textarea id="cmsCustomHtml" rows="2">${escapeHtml(s.custom_html || '')}</textarea>
-            ${isOwner ? `<label>رسالة دخول المالك المخصصة</label><input type="text" id="cmsOwnerJoinMsg" value="${escapeHtml(s.owner_join_message || 'انضم إلى الغرفه مؤسس ومالك الشات [الاسم] • أهلاً بك')}" />` : ''}
-            <button type="button" id="cmsSaveBtn" class="btn-primary btn-sm">💾 حفظ وتحديث المظهر فوراً</button>
-          </div>
-          ${isOwner ? `
-            <div class="owner-suite-section luxury-fx-panel">
-              <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:#F59E0B;"></i> المؤثرات البصرية الحصرية</h4>
-              <div class="luxury-fx-grid">
-                <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxGalaxyToggle" ${Number(prot.fx_owner_galaxy_identity ?? s.fx_owner_galaxy_identity ?? 1) !== 0 ? 'checked' : ''} /><strong>هوية المالك الحصرية للملف</strong></div></label>
-                <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxGlassToggle" ${Number(prot.fx_glass_bubbles ?? s.fx_glass_bubbles ?? 1) !== 0 ? 'checked' : ''} /><strong>فقاعات الدردشة الزجاجية</strong></div></label>
-                <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxMicWavesToggle" ${Number(prot.fx_mic_waves ?? s.fx_mic_waves ?? 1) !== 0 ? 'checked' : ''} /><strong>موجات الصوت حول المايكات</strong></div></label>
-                <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxEntranceToggle" ${Number(prot.fx_cinematic_entrance ?? s.fx_cinematic_entrance ?? 1) !== 0 ? 'checked' : ''} /><strong>بطاقة الدخول السينمائية</strong></div></label>
-                <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxTypingToggle" ${Number(prot.fx_typing_avatars ?? s.fx_typing_avatars ?? 1) !== 0 ? 'checked' : ''} /><strong>مؤشر الكتابة بالصور</strong></div></label>
-                <div class="luxury-fx-card">
-                  <div class="luxury-fx-head"><strong>السهرة الليلية</strong></div>
-                  <select id="ownerFxNightSelect">
-                    <option value="always_on" ${String(prot.fx_night_atmosphere ?? s.fx_night_atmosphere ?? 'always_on') === 'always_on' ? 'selected' : ''}>🌙 مفعّلة دائماً</option>
-                    <option value="auto" ${String(prot.fx_night_atmosphere ?? s.fx_night_atmosphere) === 'auto' ? 'selected' : ''}>🌗 تلقائي ليلاً</option>
-                    <option value="off" ${String(prot.fx_night_atmosphere ?? s.fx_night_atmosphere) === 'off' ? 'selected' : ''}>☀️ متوقفة</option>
-                  </select>
+        ${canAppearanceSub ? `
+          <div id="cmdMem_appearance" class="${sub === 'appearance' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
+            ${canEditFull ? `
+              <div class="news-composer">
+                <strong>🎨 هوية الموقع والمظهر الكلاسيكي الافتراضي</strong>
+                <div class="form-grid-2">
+                  <div><label>اسم الموقع</label><input type="text" id="cmsSiteName" value="${escapeHtml(s.site_name || '')}" /></div>
+                  <div><label>وصف الموقع</label><input type="text" id="cmsSiteDesc" value="${escapeHtml(s.site_description || '')}" /></div>
+                  <div><label>لون الشريط العلوي</label><input type="color" id="cmsTopColor" value="${escapeHtml(s.top_bar_color || '#0f2342')}" /></div>
+                  <div><label>لون الشريط السفلي</label><input type="color" id="cmsBotColor" value="${escapeHtml(s.bottom_bar_color || '#0f2342')}" /></div>
+                  <div><label>لون الأزرار</label><input type="color" id="cmsBtnColor" value="${escapeHtml(s.button_color || '#1d4ed8')}" /></div>
+                  <div><label>حجم الخط (px)</label><input type="number" id="cmsFontSize" value="${s.font_size || 14}" min="12" max="22" /></div>
+                </div>
+                <label>CSS مخصص للموقع</label><textarea id="cmsCustomCss" rows="2">${escapeHtml(s.custom_css || '')}</textarea>
+                <label>شريط HTML علوي مخصص</label><textarea id="cmsCustomHtml" rows="2">${escapeHtml(s.custom_html || '')}</textarea>
+                ${isOwner ? `<label>رسالة دخول المالك المخصصة</label><input type="text" id="cmsOwnerJoinMsg" value="${escapeHtml(s.owner_join_message || 'انضم إلى الغرفه مؤسس ومالك الشات [الاسم] • أهلاً بك')}" />` : ''}
+                <button type="button" id="cmsSaveBtn" class="btn-primary btn-sm">💾 حفظ وتحديث المظهر فوراً</button>
+              </div>
+            ` : ''}
+            ${isOwner ? `
+              <div class="owner-suite-section luxury-fx-panel">
+                <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:#F59E0B;"></i> المؤثرات البصرية الحصرية</h4>
+                <div class="luxury-fx-grid">
+                  <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxGalaxyToggle" ${Number(prot.fx_owner_galaxy_identity ?? s.fx_owner_galaxy_identity ?? 1) !== 0 ? 'checked' : ''} /><strong>هوية المالك الحصرية للملف</strong></div></label>
+                  <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxGlassToggle" ${Number(prot.fx_glass_bubbles ?? s.fx_glass_bubbles ?? 1) !== 0 ? 'checked' : ''} /><strong>فقاعات الدردشة الزجاجية</strong></div></label>
+                  <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxMicWavesToggle" ${Number(prot.fx_mic_waves ?? s.fx_mic_waves ?? 1) !== 0 ? 'checked' : ''} /><strong>موجات الصوت حول المايكات</strong></div></label>
+                  <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxEntranceToggle" ${Number(prot.fx_cinematic_entrance ?? s.fx_cinematic_entrance ?? 1) !== 0 ? 'checked' : ''} /><strong>بطاقة الدخول السينمائية</strong></div></label>
+                  <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="ownerFxTypingToggle" ${Number(prot.fx_typing_avatars ?? s.fx_typing_avatars ?? 1) !== 0 ? 'checked' : ''} /><strong>مؤشر الكتابة بالصور</strong></div></label>
+                  <div class="luxury-fx-card">
+                    <div class="luxury-fx-head"><strong>السهرة الليلية</strong></div>
+                    <select id="ownerFxNightSelect">
+                      <option value="off" ${String(prot.fx_night_atmosphere ?? s.fx_night_atmosphere ?? 'off') === 'off' ? 'selected' : ''}>☀️ متوقفة (الوضع الفاتح افتراضي)</option>
+                      <option value="auto" ${String(prot.fx_night_atmosphere ?? s.fx_night_atmosphere ?? 'off') === 'auto' ? 'selected' : ''}>🌗 تلقائي ليلاً</option>
+                      <option value="always_on" ${String(prot.fx_night_atmosphere ?? s.fx_night_atmosphere ?? 'off') === 'always_on' ? 'selected' : ''}>🌙 مفعّلة دائماً</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="inline-row" style="flex-wrap:wrap;margin-top:6px;">
+                  <button type="button" id="ownerSaveLuxuryFxBtn" class="btn-primary btn-sm">💾 حفظ المؤثرات للجميع</button>
                 </div>
               </div>
-              <div class="inline-row" style="flex-wrap:wrap;margin-top:6px;">
-                <button type="button" id="ownerSaveLuxuryFxBtn" class="btn-primary btn-sm">💾 حفظ المؤثرات للجميع</button>
+            ` : ''}
+            ${canPub ? `
+              <div class="news-composer">
+                <strong>📰 نشر خبر جديد</strong>
+                <input type="text" id="admNewsTitle" placeholder="عنوان الخبر" />
+                <textarea id="admNewsContent" rows="2" placeholder="تفاصيل الخبر..."></textarea>
+                <div class="inline-row">
+                  <input type="file" id="admNewsFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
+                  <button type="button" id="admNewsPublishBtn" class="btn-primary btn-sm">🚀 نشر</button>
+                </div>
+                <div class="news-feed-list" style="margin-top:6px;">
+                  ${(ov.news || []).map((n) => `
+                    <div class="admin-list-card"><div><strong>${escapeHtml(n.title)}</strong><div class="muted">${escapeHtml((n.content || '').slice(0, 80))}</div></div><button type="button" class="btn-danger btn-xs adm-del-news-btn" data-nid="${n.id}">حذف</button></div>
+                  `).join('') || '<div class="muted">لا توجد أخبار.</div>'}
+                </div>
               </div>
-            </div>
-          ` : ''}
-          <div class="news-composer">
-            <strong>📰 نشر خبر جديد</strong>
-            <input type="text" id="admNewsTitle" placeholder="عنوان الخبر" />
-            <textarea id="admNewsContent" rows="2" placeholder="تفاصيل الخبر..."></textarea>
-            <div class="inline-row">
-              <input type="file" id="admNewsFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
-              <button type="button" id="admNewsPublishBtn" class="btn-primary btn-sm" ${!canPub ? 'disabled' : ''}>🚀 نشر</button>
-            </div>
-            <div class="news-feed-list" style="margin-top:6px;">
-              ${(ov.news || []).map((n) => `
-                <div class="admin-list-card"><div><strong>${escapeHtml(n.title)}</strong><div class="muted">${escapeHtml((n.content || '').slice(0, 80))}</div></div><button type="button" class="btn-danger btn-xs adm-del-news-btn" data-nid="${n.id}">حذف</button></div>
-              `).join('') || '<div class="muted">لا توجد أخبار.</div>'}
-            </div>
+            ` : ''}
+            ${canEditFull ? `
+              <div class="news-composer">
+                <strong>➕ رفع إيموجي / حزم فيسات متحركة (GIF / PNG / SVG)</strong>
+                <div class="inline-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
+                  <input type="text" id="admEmojiCode" placeholder="الكود مثال: :وردة: (اختياري للحزم)" style="flex:1;min-width:150px;" />
+                  <label for="admEmojiFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-mobile-screen-button"></i> رفع فيسات / GIF من الجوال</label>
+                  <input type="file" id="admEmojiFile" multiple accept="image/gif,image/webp,image/png,image/jpeg,image/svg+xml,image/*" style="display:none;" />
+                  <span id="admEmojiFilesLbl" class="muted" style="font-size:11px;"></span>
+                  <button type="button" id="admAddEmojiBtn" class="btn-primary btn-sm">إضافة / رفع</button>
+                </div>
+                <div class="received-gifts-grid" style="margin-top:6px;">
+                  ${(ov.emojis || []).map((e) => `
+                    <div class="addon-card"><img src="${escapeHtml(e.image_url)}" style="width:34px;height:34px;object-fit:contain;" alt="" /><strong>${escapeHtml(e.code)}</strong><button type="button" class="btn-danger btn-xs del-em-btn" data-eid="${e.id}">حذف</button></div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
           </div>
-          <div class="news-composer">
-            <strong>➕ إضافة إيموجي / ملصق مخصص</strong>
-            <div class="inline-row">
-              <input type="text" id="admEmojiCode" placeholder="الكود مثال: :وردة:" />
-              <input type="file" id="admEmojiFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
-              <button type="button" id="admAddEmojiBtn" class="btn-primary btn-sm">إضافة</button>
-            </div>
-            <div class="received-gifts-grid" style="margin-top:6px;">
-              ${(ov.emojis || []).map((e) => `
-                <div class="addon-card"><img src="${escapeHtml(e.image_url)}" style="width:34px;height:34px;object-fit:contain;" alt="" /><strong>${escapeHtml(e.code)}</strong><button type="button" class="btn-danger btn-xs del-em-btn" data-eid="${e.id}">حذف</button></div>
-              `).join('')}
-            </div>
-          </div>
-        </div>
+        ` : ''}
 
         ${isOwner ? `
           <div id="cmdMem_engagement" class="${sub === 'engagement' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
@@ -1771,6 +2099,119 @@
           } catch (err) { showToast(err.message, true); }
         });
       });
+      body.querySelectorAll('.adm-edit-full-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const uid = Number(btn.dataset.uid);
+          const targetUser = (ov.users || []).find((x) => Number(x.id) === uid);
+          if (!targetUser) return;
+          const htmlBody = `
+            <div class="adm-full-edit-grid">
+              <div><label class="muted">الاسم المعروض</label><input type="text" class="adm-fe-display" value="${escapeHtml(targetUser.displayName || '')}" maxlength="28" /></div>
+              <div><label class="muted">اسم المستخدم</label><input type="text" class="adm-fe-username" value="${escapeHtml(targetUser.username || '')}" maxlength="24" /></div>
+              <div><label class="muted">البريد الإلكتروني</label><input type="email" class="adm-fe-email" value="${escapeHtml(targetUser.email || '')}" /></div>
+              <div><label class="muted">كلمة مرور جديدة (اختياري)</label><input type="password" class="adm-fe-pass" placeholder="اتركه فارغاً دون تغيير" /></div>
+              ${canGiveCoins ? `<div><label class="muted">رصيد الروبي</label><input type="number" class="adm-fe-coins" min="0" value="${Number(targetUser.coins || 0)}" /></div>` : ''}
+              ${canSetRank ? `<div><label class="muted">الرتبة</label><select class="adm-fe-role" ${targetUser.isSupremeOwner && !isOwner ? 'disabled' : ''}>${buildAssignableRankOptions(targetUser.role)}</select></div>` : ''}
+            </div>
+            <div class="adm-media-ctrl-row">
+              ${targetUser.avatarUrl ? `<img src="${escapeHtml(targetUser.avatarUrl)}" alt="avatar" />` : '<span class="muted">بدون صورة</span>'}
+              <input type="text" class="adm-fe-avatar-url" value="${escapeHtml(targetUser.avatarUrl || '')}" placeholder="رابط الصورة الشخصية (https://...)" style="flex:1;min-width:150px;" />
+              <label class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-upload"></i> رفع صورة<input type="file" class="adm-fe-avatar-file" accept="image/*" style="display:none;" /></label>
+              <button type="button" class="btn-primary btn-xs adm-fe-save-media-btn" data-kind="avatar">حفظ الرابط</button>
+              <button type="button" class="btn-danger btn-xs adm-fe-del-media-btn" data-kind="avatar">حذف الصورة</button>
+            </div>
+            <div class="adm-media-ctrl-row">
+              ${targetUser.coverUrl ? `<img src="${escapeHtml(targetUser.coverUrl)}" alt="cover" />` : '<span class="muted">بدون غلاف</span>'}
+              <input type="text" class="adm-fe-cover-url" value="${escapeHtml(targetUser.coverUrl || '')}" placeholder="رابط صورة الغلاف (https://...)" style="flex:1;min-width:150px;" />
+              <label class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-upload"></i> رفع غلاف<input type="file" class="adm-fe-cover-file" accept="image/*" style="display:none;" /></label>
+              <button type="button" class="btn-primary btn-xs adm-fe-save-media-btn" data-kind="cover">حفظ الغلاف</button>
+              <button type="button" class="btn-danger btn-xs adm-fe-del-media-btn" data-kind="cover">حذف الغلاف</button>
+            </div>
+          `;
+          openInlineUserBox(uid, `تعديل شامل وإدارة صور "${escapeHtml(targetUser.displayName)}"`, htmlBody, 'حفظ البيانات', false, async (box) => {
+            const avatarUrlVal = (box.querySelector('.adm-fe-avatar-url')?.value || '').trim();
+            const coverUrlVal = (box.querySelector('.adm-fe-cover-url')?.value || '').trim();
+            if (avatarUrlVal && !isSafeHttpsOrLocalUrlClient(avatarUrlVal, true)) {
+              return showToast('رابط الصورة الشخصية غير صالح (يجب أن يكون https:// أو مساراً محلياً).', true);
+            }
+            if (coverUrlVal && !isSafeHttpsOrLocalUrlClient(coverUrlVal, true)) {
+              return showToast('رابط الغلاف غير صالح (يجب أن يكون https:// أو مساراً محلياً).', true);
+            }
+            const payload = {
+              displayName: (box.querySelector('.adm-fe-display')?.value || '').trim(),
+              username: (box.querySelector('.adm-fe-username')?.value || '').trim(),
+              email: (box.querySelector('.adm-fe-email')?.value || '').trim(),
+              avatarUrl: avatarUrlVal,
+              coverUrl: coverUrlVal
+            };
+            const passVal = box.querySelector('.adm-fe-pass')?.value || '';
+            if (passVal) {
+              if (passVal.length < 5) return showToast('كلمة المرور يجب أن تكون 5 أحرف على الأقل.', true);
+              payload.password = passVal;
+            }
+            const coinsInp = box.querySelector('.adm-fe-coins');
+            if (coinsInp) payload.coins = Math.max(0, Number(coinsInp.value) || 0);
+            const roleSel = box.querySelector('.adm-fe-role');
+            if (roleSel && roleSel.value) payload.role = roleSel.value;
+            try {
+              await api(`/api/admin/users/${uid}`, { method: 'PUT', body: payload });
+              showToast('تم حفظ جميع بيانات العضو بنجاح!');
+              refreshPanel('members_control', null, 'detector');
+            } catch (err) { showToast(err.message, true); }
+          });
+          const box = body.querySelector(`.adm-user-inline-box[data-uid="${uid}"]`);
+          if (!box) return;
+          box.querySelector('.adm-fe-avatar-file')?.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+              const fd = new FormData();
+              fd.append('kind', 'avatar');
+              fd.append('file', file);
+              await api(`/api/admin/users/${uid}/media`, { method: 'POST', body: fd });
+              showToast('تم رفع وتحديث الصورة الشخصية للعضو.');
+              refreshPanel('members_control', null, 'detector');
+            } catch (err) { showToast(err.message, true); }
+          });
+          box.querySelector('.adm-fe-cover-file')?.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+              const fd = new FormData();
+              fd.append('kind', 'cover');
+              fd.append('file', file);
+              await api(`/api/admin/users/${uid}/media`, { method: 'POST', body: fd });
+              showToast('تم رفع وتحديث صورة الغلاف للعضو.');
+              refreshPanel('members_control', null, 'detector');
+            } catch (err) { showToast(err.message, true); }
+          });
+          box.querySelectorAll('.adm-fe-save-media-btn').forEach((mbtn) => {
+            mbtn.addEventListener('click', async () => {
+              const kind = mbtn.dataset.kind;
+              const urlVal = (box.querySelector(kind === 'cover' ? '.adm-fe-cover-url' : '.adm-fe-avatar-url')?.value || '').trim();
+              if (!isSafeHttpsOrLocalUrlClient(urlVal, true)) {
+                return showToast('الرابط يجب أن يبدأ بـ https:// أو يكون محلياً.', true);
+              }
+              try {
+                await api(`/api/admin/users/${uid}/media`, { method: 'POST', body: { kind, mode: 'url', url: urlVal } });
+                showToast(kind === 'cover' ? 'تم حفظ رابط الغلاف.' : 'تم حفظ رابط الصورة.');
+                refreshPanel('members_control', null, 'detector');
+              } catch (err) { showToast(err.message, true); }
+            });
+          });
+          box.querySelectorAll('.adm-fe-del-media-btn').forEach((mbtn) => {
+            mbtn.addEventListener('click', async () => {
+              const kind = mbtn.dataset.kind;
+              try {
+                await api(`/api/admin/users/${uid}/media`, { method: 'POST', body: { kind, mode: 'delete' } });
+                showToast(kind === 'cover' ? 'تم حذف الغلاف.' : 'تم حذف الصورة الشخصية.');
+                refreshPanel('members_control', null, 'detector');
+              } catch (err) { showToast(err.message, true); }
+            });
+          });
+        });
+      });
+
       body.querySelectorAll('.adm-rename-user-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           const uid = Number(btn.dataset.uid);
@@ -1941,7 +2382,7 @@
           fx_mic_waves: $('ownerFxMicWavesToggle')?.checked ? 1 : 0,
           fx_cinematic_entrance: $('ownerFxEntranceToggle')?.checked ? 1 : 0,
           fx_typing_avatars: $('ownerFxTypingToggle')?.checked ? 1 : 0,
-          fx_night_atmosphere: $('ownerFxNightSelect')?.value || 'always_on'
+          fx_night_atmosphere: $('ownerFxNightSelect')?.value || 'off'
         }
       }, 'تم حفظ وتطبيق المؤثرات للجميع!', 'members_control', 'appearance'));
 
@@ -1966,15 +2407,32 @@
           refreshPanel('members_control', null, 'appearance');
         });
       });
+      $('admEmojiFile')?.addEventListener('change', (e) => {
+        const count = e.target.files?.length || 0;
+        if ($('admEmojiFilesLbl')) $('admEmojiFilesLbl').textContent = count ? `تم اختيار ${count} ملف` : '';
+      });
       $('admAddEmojiBtn')?.addEventListener('click', async () => {
         try {
-          const file = $('admEmojiFile')?.files[0];
-          if (!file) return showToast('اختر صورة الملصق أولاً.', true);
-          const fd = new FormData();
-          fd.append('file', file);
-          const up = await api('/api/upload/emoji', { method: 'POST', body: fd });
-          await api('/api/admin/emojis', { method: 'POST', body: { code: $('admEmojiCode').value, imageUrl: up.url } });
-          showToast('تمت إضافة الملصق!');
+          const files = Array.from($('admEmojiFile')?.files || []);
+          if (!files.length) return showToast('اختر صورة أو ملف GIF للملصق أولاً.', true);
+          const customCode = ($('admEmojiCode')?.value || '').trim();
+          let uploadedCount = 0;
+          for (let i = 0; i < files.length; i += 1) {
+            const file = files[i];
+            const fd = new FormData();
+            fd.append('file', file);
+            const up = await api('/api/upload/emoji', { method: 'POST', body: fd });
+            const baseName = String(file.name || `sticker_${Date.now()}_${i + 1}`)
+              .replace(/\.[^.]+$/, '')
+              .replace(/[^a-zA-Z0-9\u0600-\u06FF_-]+/g, '_')
+              .slice(0, 18) || `stk_${i + 1}`;
+            const codeVal = (files.length === 1 && customCode)
+              ? customCode
+              : `:${customCode ? `${customCode.replace(/^:+|:+$/g, '')}_${i + 1}` : baseName}:`;
+            await api('/api/admin/emojis', { method: 'POST', body: { code: codeVal, imageUrl: up.url } });
+            uploadedCount += 1;
+          }
+          showToast(uploadedCount > 1 ? `تم رفع وإضافة ${uploadedCount} فيسات/ملصقات بنجاح!` : 'تمت إضافة الملصق بنجاح!');
           refreshPanel('members_control', null, 'appearance');
         } catch (err) { showToast(err.message, true); }
       });
@@ -2101,10 +2559,56 @@
     function renderAuditLogTab(body, ov, suite, isOwner) {
       const logs = Array.isArray(suite.adminLogs) ? suite.adminLogs : (Array.isArray(ov.adminLogs) ? ov.adminLogs : []);
       const pmAlerts = Array.isArray(suite.pmLinkAlerts) ? suite.pmLinkAlerts : [];
+      const violationLogs = Array.isArray(suite.violationLogs) ? suite.violationLogs : (Array.isArray(ov.violationLogs) ? ov.violationLogs : []);
+      const liveSockets = Array.isArray(suite.liveSockets) ? suite.liveSockets : [];
       body.innerHTML = `
-        <div class="owner-suite-section">
-          <h4><i class="fa-solid fa-clipboard-list" style="color:#F59E0B;"></i> السجل الرقابي والتنبيهات (${logs.length} إجراء • ${pmAlerts.length} رادار روابط)</h4>
-          ${!isOwner ? '<div class="muted">السجل الرقابي الكامل مخصص لحساب المالك.</div>' : `
+        ${!isOwner ? '<div class="form-error">السجل الرقابي ورادار المتواجدين مخصصان لحساب المالك فقط.</div>' : `
+          <div class="owner-suite-section">
+            <h4><i class="fa-solid fa-radar fa-satellite-dish" style="color:#38bdf8;"></i> رادار المتواجدين المباشر (${liveSockets.length})</h4>
+            <div class="radar-table-wrap">
+              ${liveSockets.length ? liveSockets.map((sk) => {
+                const parsed = parseUaDeviceAndBrowser(sk.userAgent);
+                const flag = countryFlagEmoji(sk.country);
+                return `
+                  <div class="radar-row-card">
+                    <div style="min-width:0;flex:1;">
+                      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <strong>${escapeHtml(sk.name)}</strong>
+                        <span class="radar-meta-pill">${sk.isGuest ? 'زائر' : 'عضو'}</span>
+                        ${roleBadgeHTML(sk.role)}
+                        ${sk.isStealth ? '<span class="adm-ban-badge-pill" style="background:rgba(245,158,11,0.2);color:#fde68a;border-color:rgba(245,158,11,0.4);">متخفي</span>' : ''}
+                      </div>
+                      <div class="radar-meta-pills">
+                        <span class="radar-meta-pill">${flag} ${escapeHtml(sk.country || 'غير محدد')}</span>
+                        <span class="radar-meta-pill">${parsed.device} • ${escapeHtml(parsed.browser)}</span>
+                        <span class="radar-meta-pill"><i class="fa-solid fa-globe"></i> ${escapeHtml(sk.ipAddress || '—')}</span>
+                        <span class="radar-meta-pill"><i class="fa-solid fa-door-open"></i> ${escapeHtml(sk.roomName || sk.roomId || '—')}</span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('') : '<div class="muted">لا يوجد متواجدون متصلون حالياً.</div>'}
+            </div>
+          </div>
+
+          <div class="owner-suite-section" style="margin-top:12px;">
+            <h4><i class="fa-solid fa-user-secret" style="color:#f87171;"></i> السجل السري للمخالفات والكلمات المحظورة (${violationLogs.length})</h4>
+            <div class="news-feed-list">
+              ${violationLogs.length ? violationLogs.map((v) => `
+                <div class="adm-violation-card">
+                  <div style="min-width:0;flex:1;">
+                    <div><strong>${escapeHtml(v.offender_name || v.offender_key || 'مخالف')}</strong> <span class="muted">• ${escapeHtml(v.penalty_type || 'كتم تلقائي')}</span></div>
+                    <div class="muted" style="margin-top:3px;">السبب: ${escapeHtml(v.reason || 'مخالفة')} ${v.room_id ? `• الغرفة: ${escapeHtml(v.room_id)}` : ''}</div>
+                    ${v.violating_detail ? `<div class="adm-violation-word">التفاصيل / الكلمة المخالفة: ${escapeHtml(v.violating_detail)}</div>` : ''}
+                  </div>
+                  <span class="muted" style="font-size:10.5px;">${v.created_at ? new Date(v.created_at).toLocaleString('ar-EG') : ''}</span>
+                </div>
+              `).join('') : '<div class="muted">لا توجد مخالفات مسجلة حالياً.</div>'}
+            </div>
+          </div>
+
+          <div class="owner-suite-section" style="margin-top:12px;">
+            <h4><i class="fa-solid fa-clipboard-list" style="color:#F59E0B;"></i> السجل الرقابي والتنبيهات (${logs.length} إجراء • ${pmAlerts.length} رادار روابط)</h4>
             <div class="inline-row" style="flex-wrap:wrap;margin-bottom:8px;">
               <input type="text" id="auditSearchInput" placeholder="تصفية السجل (اسم، إجراء، هدف)..." style="flex:1;min-width:180px;" />
               <select id="auditTypeFilter">
@@ -2114,8 +2618,8 @@
               </select>
             </div>
             <div id="auditListContainer" class="news-feed-list"></div>
-          `}
-        </div>
+          </div>
+        `}
       `;
       if (!isOwner) return;
       const renderFiltered = () => {
@@ -2376,6 +2880,169 @@
       });
     }
 
+    function renderAdsManagerTab(body, ov, suite, isOwner) {
+      if (!isOwner) {
+        body.innerHTML = '<div class="form-error">إدارة الإعلانات متاحة للمالك فقط.</div>';
+        return;
+      }
+      const existingAds = Array.isArray(suite?.adUnits)
+        ? suite.adUnits
+        : (Array.isArray(ov?.settings?.ad_units) ? ov.settings.ad_units : (state.settings?.ad_units || []));
+      if (!Array.isArray(state.adUnitsDraft)) {
+        state.adUnitsDraft = existingAds.map((ad) => ({ ...ad }));
+      }
+      const list = state.adUnitsDraft;
+      const editAd = state.editingAdId ? list.find((a) => a.id === state.editingAdId) : null;
+      const placeLabels = {
+        both: 'صفحة الدخول + القائمة الجانبية',
+        auth: 'أسفل صفحة الدخول فقط',
+        drawer: 'أسفل القائمة الجانبية فقط'
+      };
+
+      const persistAds = async (nextList, okMsg) => {
+        try {
+          const res = await api('/api/owner/ads', { method: 'PUT', body: { adUnits: nextList } });
+          const savedList = Array.isArray(res?.adUnits) ? res.adUnits : nextList;
+          state.adUnitsDraft = savedList.map((a) => ({ ...a }));
+          if (state.ownerSuite) state.ownerSuite.adUnits = savedList;
+          if (state.adminOverview?.settings) state.adminOverview.settings.ad_units = savedList;
+          if (res?.settings && typeof rawCtx.applySiteSettings === 'function') {
+            rawCtx.applySiteSettings(res.settings);
+          }
+          showToast(okMsg);
+          renderAdsManagerTab(body, ov, suite, isOwner);
+        } catch (err) {
+          showToast(err.message || 'تعذر حفظ الإعلانات.', true);
+        }
+      };
+
+      body.innerHTML = `
+        <div class="owner-suite-section">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <h4><i class="fa-solid fa-rectangle-ad" style="color:#F59E0B;"></i> إدارة الإعلانات والأكواد المخصصة (HTML / Script)</h4>
+            <span class="muted">يدعم أكواد Google AdSense ووسوم &lt;script&gt; لأكواد المالك فقط</span>
+          </div>
+
+          <div class="news-composer" style="margin-top:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <strong>${editAd ? `✏️ تعديل الإعلان: ${escapeHtml(editAd.title)}` : '➕ إضافة كود إعلان جديد'}</strong>
+              ${editAd ? '<button type="button" id="adCancelEditBtn" class="btn-secondary btn-xs">إلغاء التعديل</button>' : ''}
+            </div>
+            <div class="form-grid-2">
+              <div>
+                <label class="muted">عنوان الإعلان</label>
+                <input type="text" id="adTitleInput" placeholder="مثال: بانر Google AdSense السفلي" value="${escapeHtml(editAd?.title || '')}" maxlength="80" />
+              </div>
+              <div>
+                <label class="muted">مكان الظهور</label>
+                <select id="adPlacementSel">
+                  <option value="both" ${(!editAd || editAd.placement === 'both') ? 'selected' : ''}>صفحة الدخول + أسفل القائمة الجانبية</option>
+                  <option value="auth" ${editAd?.placement === 'auth' ? 'selected' : ''}>أسفل صفحة الدخول فقط</option>
+                  <option value="drawer" ${editAd?.placement === 'drawer' ? 'selected' : ''}>أسفل القائمة الجانبية فقط</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="muted">كود الإعلان (HTML أو &lt;script&gt;)</label>
+              <textarea id="adCodeInput" rows="4" dir="ltr" style="font-family:monospace;font-size:12px;" placeholder="<script async src=...></script> أو كود HTML">${escapeHtml(editAd?.code || '')}</textarea>
+            </div>
+            <div class="inline-row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <label class="switch-label">
+                <input type="checkbox" id="adEnabledChk" ${(!editAd || editAd.enabled !== false) ? 'checked' : ''} />
+                <span>تشغيل الإعلان فوراً بعد الحفظ</span>
+              </label>
+              <button type="button" id="adSaveUnitBtn" class="btn-primary btn-sm">
+                <i class="fa-solid ${editAd ? 'fa-floppy-disk' : 'fa-plus'}"></i> ${editAd ? 'حفظ تعديلات الإعلان' : '+ إضافة كود إعلان'}
+              </button>
+            </div>
+          </div>
+
+          <div class="news-feed-list" style="margin-top:10px;">
+            ${list.length ? list.map((ad) => `
+              <div class="admin-list-card" style="flex-direction:column;align-items:stretch;gap:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <strong>${escapeHtml(ad.title || 'إعلان')}</strong>
+                    <span class="radar-meta-pill">${escapeHtml(placeLabels[ad.placement] || placeLabels.both)}</span>
+                    <span class="radar-meta-pill" style="background:${ad.enabled !== false ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.2)'};color:${ad.enabled !== false ? '#6ee7b7' : '#fca5a5'};border-color:${ad.enabled !== false ? 'rgba(52,211,153,0.45)' : 'rgba(248,113,113,0.4)'};">
+                      ${ad.enabled !== false ? '● قيد التشغيل' : '○ متوقف'}
+                    </span>
+                  </div>
+                  <div class="inline-row" style="gap:6px;flex-wrap:wrap;">
+                    <button type="button" class="btn-xs ad-toggle-btn ${ad.enabled !== false ? 'btn-secondary' : 'btn-primary'}" data-ad-id="${escapeHtml(ad.id)}">
+                      <i class="fa-solid ${ad.enabled !== false ? 'fa-pause' : 'fa-play'}"></i> ${ad.enabled !== false ? 'إيقاف' : 'تشغيل'}
+                    </button>
+                    <button type="button" class="btn-secondary btn-xs ad-edit-btn" data-ad-id="${escapeHtml(ad.id)}"><i class="fa-solid fa-pen"></i> تعديل</button>
+                    <button type="button" class="btn-danger btn-xs ad-del-btn" data-ad-id="${escapeHtml(ad.id)}"><i class="fa-solid fa-trash"></i> حذف</button>
+                  </div>
+                </div>
+                <pre dir="ltr" style="margin:0;padding:8px;border-radius:8px;background:rgba(2,6,23,0.65);border:1px solid rgba(148,163,184,0.18);color:#cbd5e1;font-size:11px;overflow:auto;max-height:80px;">${escapeHtml(String(ad.code || '').slice(0, 360))}</pre>
+              </div>
+            `).join('') : '<div class="muted" style="text-align:center;padding:14px;">لا توجد أكواد إعلانية مضافة حالياً. أضف أول كود إعلان من النموذج أعلاه.</div>'}
+          </div>
+        </div>
+      `;
+
+      $('adCancelEditBtn')?.addEventListener('click', () => {
+        state.editingAdId = null;
+        renderAdsManagerTab(body, ov, suite, isOwner);
+      });
+
+      $('adSaveUnitBtn')?.addEventListener('click', async () => {
+        const title = ($('adTitleInput')?.value || '').trim() || `إعلان ${list.length + 1}`;
+        const placement = $('adPlacementSel')?.value || 'both';
+        const code = ($('adCodeInput')?.value || '').trim();
+        const enabled = Boolean($('adEnabledChk')?.checked);
+        if (!code) return showToast('أدخل كود HTML أو Script للإعلان أولاً.', true);
+
+        const nextList = list.map((a) => ({ ...a }));
+        if (editAd) {
+          const idx = nextList.findIndex((a) => a.id === editAd.id);
+          if (idx >= 0) {
+            nextList[idx] = { ...nextList[idx], title, placement, code, enabled, updatedAt: new Date().toISOString() };
+          }
+          state.editingAdId = null;
+          await persistAds(nextList, 'تم تحديث وحفظ كود الإعلان بنجاح!');
+        } else {
+          nextList.push({
+            id: `ad_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+            title,
+            placement,
+            code,
+            enabled,
+            updatedAt: new Date().toISOString()
+          });
+          await persistAds(nextList, 'تمت إضافة كود الإعلان وحفظه بنجاح!');
+        }
+      });
+
+      body.querySelectorAll('.ad-toggle-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.adId;
+          const nextList = list.map((a) => (a.id === id ? { ...a, enabled: a.enabled === false } : { ...a }));
+          const toggled = nextList.find((a) => a.id === id);
+          await persistAds(nextList, toggled?.enabled ? 'تم تشغيل الإعلان.' : 'تم إيقاف الإعلان.');
+        });
+      });
+
+      body.querySelectorAll('.ad-edit-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.editingAdId = btn.dataset.adId;
+          renderAdsManagerTab(body, ov, suite, isOwner);
+        });
+      });
+
+      body.querySelectorAll('.ad-del-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.adId;
+          if (!confirm('حذف كود الإعلان نهائياً؟')) return;
+          if (state.editingAdId === id) state.editingAdId = null;
+          const nextList = list.filter((a) => a.id !== id);
+          await persistAds(nextList, 'تم حذف الإعلان بنجاح.');
+        });
+      });
+    }
+
     return {
       setTargets(bodyEl, tabsEl) {
         activeBodyEl = bodyEl;
@@ -2429,9 +3096,11 @@
           <button type="button" class="adm-tab v-owner ${isOwner ? '' : 'hidden'}" data-adm-tab="store_gifts"><i class="fa-solid fa-store"></i> المتجر والهدايا</button>
           <button type="button" class="adm-tab v-owner ${isOwner ? '' : 'hidden'}" data-adm-tab="quiz_bot"><i class="fa-solid fa-robot"></i> بوت المسابقات</button>
           <button type="button" class="adm-tab v-owner ${isOwner ? '' : 'hidden'}" data-adm-tab="welcome_bot"><i class="fa-solid fa-wand-magic-sparkles"></i> البوت الترحيبي</button>
+          <button type="button" class="adm-tab v-owner ${isOwner ? '' : 'hidden'}" data-adm-tab="ads_manager"><i class="fa-solid fa-rectangle-ad"></i> إدارة الإعلانات</button>
           <button type="button" class="adm-tab v-owner ${isOwner ? '' : 'hidden'}" data-adm-tab="audit_log"><i class="fa-solid fa-clipboard-list"></i> السجل والرادار</button>
           <button type="button" class="adm-tab v-owner ${isOwner ? '' : 'hidden'}" data-adm-tab="owner_tools"><i class="fa-solid fa-database"></i> النسخ والأدوات</button>
         </div>
+        <div id="standaloneOwnerEmergencyBar" class="owner-emergency-bar hidden"></div>
         <div id="standaloneAdminBody" class="adm-standalone-body"></div>
       `;
 
@@ -2451,7 +3120,7 @@
         }
       });
 
-      return renderer.refreshPanel(opts.initialTab || 'members_control');
+      return renderer.refreshPanel(opts.initialTab || (isOwner ? 'ranks_matrix' : 'members_control'));
     }
   };
 })();

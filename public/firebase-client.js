@@ -330,6 +330,9 @@
     if (!data || !session.active) return;
     const cb = session.callbacks || {};
     if (data.user && typeof cb.onSessionPatch === 'function') cb.onSessionPatch(data.user);
+    if ((typeof data.isRoomManager === 'boolean' || typeof data.canStyleRoom === 'boolean') && typeof cb.onRoomPermissions === 'function') {
+      cb.onRoomPermissions({ isRoomManager: Boolean(data.isRoomManager), canStyleRoom: Boolean(data.canStyleRoom) });
+    }
     if (data.userState) handleUserStateSnapshot(data.userState);
     if (Array.isArray(data.rooms) && typeof cb.onRooms === 'function') cb.onRooms(data.rooms);
     if (Array.isArray(data.roomUsers) && typeof cb.onRoomUsers === 'function') cb.onRoomUsers(data.roomUsers, data.roomKingKey || null);

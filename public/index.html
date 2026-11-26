@@ -99,6 +99,7 @@
           <i class="fa-solid fa-arrow-right"></i> العودة إلى الدردشة كزائر
         </button>
       </div>
+      <div id="authAdsSlot" class="ads-slot-container auth-ads-slot hidden"></div>
     </div>
 
     <!-- MAIN CHAT WORKSPACE -->
@@ -474,6 +475,7 @@
           <button type="button" class="drawer-item danger" data-drawer="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج</button>
         </nav>
         <div id="drawerBodyContent" class="drawer-body-content"></div>
+        <div id="drawerAdsSlot" class="ads-slot-container drawer-ads-slot hidden"></div>
       </aside>
     </div>
 
@@ -496,7 +498,7 @@
          MODALS
     ========================================== -->
 
-    <!-- 1. LUXURY 6-TAB OWN PROFILE & CUSTOMIZER VIEW (FLOATING CARD) -->
+    <!-- 1. MODERN DARK 6-TAB OWN PROFILE & CUSTOMIZER VIEW (FLOATING CARD) -->
     <div id="customizeModal" class="modal-backdrop modal-floating-profile hidden">
       <div class="modal-card modal-card-md profile-luxury-card">
         <div id="custBgEffectLayer" class="profile-bg-effect-layer"></div>
@@ -541,9 +543,9 @@
               <div id="custPreviewNameRow" class="cust-preview-name-row">معاينة الاسم</div>
               <div id="custPreviewRoleLine" class="profile-role-subtitle">عضو</div>
               <div class="profile-cover-stats-bar">
-                <span class="hero-stat-pill" id="custLikesStatPill" title="الإعجابات"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <i class="fa-solid fa-heart" style="color:#ef4444;"></i> <span id="custLikesCountVal">0</span></span>
-                <span class="hero-stat-pill" id="custRatingStatPill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> <span id="custRatingAvgVal">5.0</span></span>
-                <span class="hero-stat-pill" id="custRubyStatPill" title="النقاط والروبي"><i class="fa-solid fa-gem" style="color:#e11d48;"></i> <span id="custTopCoinsVal">0</span></span>
+                <span class="hero-stat-pill" id="custVisitorsStatPill" title="عدد زوار الملف"><i class="fa-solid fa-eye" style="color:#38bdf8;"></i> <strong id="custVisitorsCountVal">0</strong> <small>الزوار</small></span>
+                <span class="hero-stat-pill" id="custRatingStatPill" title="تقييم النجوم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <strong id="custRatingAvgVal">5.0</strong> <small>التقييم</small></span>
+                <span class="hero-stat-pill" id="custLikesStatPill" title="عدد الإعجابات"><i class="fa-solid fa-heart" style="color:#fb7185;"></i> <strong id="custLikesCountVal">0</strong> <small>الإعجابات</small></span>
               </div>
             </div>
           </div>
@@ -552,13 +554,13 @@
           <input type="file" id="custAvatarFile" accept="image/*" class="sr-file-input" />
         </div>
 
-        <!-- ORGANIZED ROW UNDERNEATH THE COVER FOR COLORS / BACKGROUNDS / COVER ACTIONS -->
+        <!-- COMPACT QUICK-ACTION BAR UNDER COVER -->
         <div class="profile-below-cover-bar" id="custBelowCoverActionsBar">
-          <button type="button" id="custSwitchToMoreBtn" class="below-cover-pill-btn" title="تخصيص الألوان والخطوط والخصوصية">
-            <i class="fa-solid fa-palette"></i> <span>الألوان والخطوط</span>
+          <button type="button" id="custSwitchToMoreBtn" class="below-cover-pill-btn" title="تخصيص المظهر والألوان والخطوط">
+            <i class="fa-solid fa-palette"></i> <span>المظهر والألوان</span>
           </button>
           <button type="button" id="custQuickBgEffectsBtn" class="below-cover-pill-btn" title="الإطارات والخلفيات المتحركة">
-            <i class="fa-solid fa-sparkles"></i> <span>الخلفيات والإطارات</span>
+            <i class="fa-solid fa-sparkles"></i> <span>الإطارات والخلفيات</span>
           </button>
           <button type="button" id="custDeleteCoverBtn" class="below-cover-pill-btn danger-pill hidden" title="حذف صورة الغلاف">
             <i class="fa-solid fa-trash-can"></i> <span>حذف الغلاف</span>
@@ -579,28 +581,28 @@
           </div>
         </div>
 
-        <!-- DARK-SHADED LOWER STAGE + 2x3 GRID 6-TAB NAVIGATION -->
+        <!-- DARK-SHADED LOWER STAGE + 6 ACTUAL TABS -->
         <div class="profile-lower-dark-stage">
-          <div class="cust-tabs-nav six-tabs">
-            <button type="button" class="cust-tab active" data-cust-tab="info"><i class="fa-solid fa-circle-info"></i> المعلومات</button>
-            <button type="button" class="cust-tab" data-cust-tab="my_frames"><i class="fa-solid fa-crown"></i> إطاراتي</button>
-            <button type="button" class="cust-tab" data-cust-tab="friends"><i class="fa-solid fa-user-group"></i> الأصدقاء</button>
-            <button type="button" class="cust-tab" data-cust-tab="gifts"><i class="fa-solid fa-gift"></i> الهدايا</button>
-            <button type="button" class="cust-tab" data-cust-tab="relations"><i class="fa-solid fa-heart-pulse"></i> العلاقات</button>
-            <button type="button" class="cust-tab" data-cust-tab="posts"><i class="fa-solid fa-signs-post"></i> المنشورات</button>
+          <div class="cust-tabs-nav six-tabs" id="custTabsNav">
+            <button type="button" class="cust-tab active" data-cust-tab="info"><i class="fa-solid fa-circle-info"></i><span>المعلومات</span></button>
+            <button type="button" class="cust-tab" data-cust-tab="appearance"><i class="fa-solid fa-palette"></i><span>المظهر</span></button>
+            <button type="button" class="cust-tab" data-cust-tab="frames_bg"><i class="fa-solid fa-crown"></i><span>الإطارات والخلفيات</span></button>
+            <button type="button" class="cust-tab" data-cust-tab="friends_gifts"><i class="fa-solid fa-gift"></i><span>الأصدقاء والهدايا</span></button>
+            <button type="button" class="cust-tab" data-cust-tab="posts"><i class="fa-solid fa-signs-post"></i><span>المنشورات</span></button>
+            <button type="button" class="cust-tab" data-cust-tab="account_privacy"><i class="fa-solid fa-shield-halved"></i><span>الحساب والخصوصية</span></button>
           </div>
 
           <div class="modal-body profile-modal-body">
-            <!-- TAB 1: المعلومات -->
+            <!-- TAB 1: المعلومات (الاسم، الحالة السريعة، النبذة، العمر، الجنس، البلد) -->
             <div id="custPane_info" class="cust-pane">
               <div class="rank-duo-grid">
                 <div class="rank-duo-card rich rich-green">
                   <span class="rd-label"><i class="fa-solid fa-gem"></i> ترتيب الأثرياء</span>
-                  <strong id="custRichRankNum">#1</strong>
+                  <strong id="custRichRankNum">-</strong>
                 </div>
                 <div class="rank-duo-card interaction interaction-blue">
                   <span class="rd-label"><i class="fa-solid fa-fire"></i> ترتيب التفاعل</span>
-                  <strong id="custInteractionRankNum">#1</strong>
+                  <strong id="custInteractionRankNum">-</strong>
                 </div>
               </div>
 
@@ -613,7 +615,8 @@
                   <i class="fa-solid fa-user-plus"></i> تسجيل عضوية
                 </button>
               </div>
-              <div class="profile-link-box">
+
+              <div class="profile-link-box" id="custProfileLinkWrap">
                 <input type="text" id="custProfileLinkInput" readonly />
                 <button type="button" id="custCopyLinkBtn" class="btn-primary btn-xs"><i class="fa-solid fa-copy"></i> نسخ الرابط</button>
               </div>
@@ -621,7 +624,7 @@
 
               <div class="form-grid-2">
                 <div>
-                  <label>الاسم المستعار للعرض</label>
+                  <label>الاسم المستعار</label>
                   <input type="text" id="custDisplayName" maxlength="28" />
                 </div>
                 <div>
@@ -648,311 +651,303 @@
                   <input type="text" id="custCountryInput" maxlength="40" placeholder="مثال: السعودية، مصر، العراق..." />
                 </div>
                 <div>
-                  <label>حالتي الآن</label>
-                  <input type="text" id="custStatusInput" maxlength="80" placeholder="مثال: متاح للدردشة ✨ أو أستمع للموسيقى..." />
+                  <label>الحالة الآن</label>
+                  <input type="text" id="custStatusInput" maxlength="80" placeholder="مثال: متاح للدردشة ✨..." />
                 </div>
               </div>
 
               <div class="cust-status-presets-wrap">
-                <span class="muted" style="font-size:11.5px;display:block;margin-bottom:5px;"><i class="fa-solid fa-face-smile"></i> اختيار سريع للحالة:</span>
+                <span class="muted" style="font-size:11.5px;display:block;margin-bottom:5px;"><i class="fa-solid fa-face-smile"></i> الحالة السريعة:</span>
                 <div id="custStatusPresets" class="cust-status-chips-row">
                   <button type="button" class="cust-status-chip" data-status="🟢 متاح للدردشة">🟢 متاح للدردشة</button>
                   <button type="button" class="cust-status-chip" data-status="🎧 أستمع للموسيقى">🎧 أستمع للموسيقى</button>
                   <button type="button" class="cust-status-chip" data-status="☕ رايق ومزاج عالي">☕ رايق</button>
                   <button type="button" class="cust-status-chip" data-status="⛔ مشغول حالياً">⛔ مشغول</button>
                   <button type="button" class="cust-status-chip" data-status="✈️ مسافر">✈️ مسافر</button>
-                  <button type="button" class="cust-status-chip" data-status="">✕ مسح الحالة</button>
+                  <button type="button" class="cust-status-chip" data-status="">✕ مسح</button>
                 </div>
               </div>
 
               <div style="margin-top:8px;">
-                <label>رسالة معلوماتي (نبذة عني تظهر في البطاقة)</label>
-                <textarea id="custBioInput" rows="2" maxlength="160" placeholder="اكتب رسالة معلوماتي الخاصة بك لتظهر للجميع في بطاقتك..."></textarea>
+                <label>النبذة (رسالة معلوماتي)</label>
+                <textarea id="custBioInput" rows="2" maxlength="160" placeholder="اكتب نبذة مختصرة عنك لتظهر للجميع في بطاقتك..."></textarea>
               </div>
               <div id="custDynamicProfileFieldsWrap" class="form-grid-2 hidden" style="margin-top:8px;"></div>
             </div>
 
-            <!-- TAB 2: إطاراتي وخلفياتي -->
-            <div id="custPane_my_frames" class="cust-pane hidden">
-              <div class="addon-block">
+            <!-- TAB 2: المظهر (معاينة حية مثبتة في الأعلى + لون الاسم، الخط، الحركة، وموسيقى البروفايل) -->
+            <div id="custPane_appearance" class="cust-pane hidden">
+              <div id="custNameStyleLivePreview" class="namestyle-live-preview namestyle-sticky-preview"></div>
+
+              <div class="addon-block" id="custNameStyleSection">
                 <div class="addon-block-head">
-                  <h4><i class="fa-solid fa-crown" style="color:#fbbf24;"></i> إطاراتي المملوكة والتبديل السريع</h4>
+                  <h4><i class="fa-solid fa-palette"></i> تنسيق لون الاسم والخط</h4>
                 </div>
-                <div id="custMyFramesGrid" class="frames-addon-grid"></div>
-                <button type="button" id="custOpenStoreFromFramesBtn" class="btn-primary btn-sm btn-full" style="margin-top:8px;">
-                  <i class="fa-solid fa-store"></i> فتح المتجر لشراء إطارات ورتب جديدة
-                </button>
-              </div>
-              <div class="addon-block" style="margin-top:8px;">
-                <div class="addon-block-head">
-                  <h4><i class="fa-solid fa-sparkles" style="color:#38bdf8;"></i> خلفيات البطاقة المتحركة</h4>
+                <div class="sub-pill-tabs" id="nameStyleSubTabs">
+                  <button type="button" class="sub-pill-tab active" data-namestyle-tab="color">لون ثابت</button>
+                  <button type="button" class="sub-pill-tab" data-namestyle-tab="gradient">تدرج لوني</button>
+                  <button type="button" class="sub-pill-tab" data-namestyle-tab="neon">توهج نيون</button>
+                  <button type="button" class="sub-pill-tab" data-namestyle-tab="bg">خلفية للاسم</button>
                 </div>
-                <div id="custMyBgEffectsGrid" class="shine-grid"></div>
-              </div>
-            </div>
+                <div class="swatch-grid-boxes" id="nameColorSwatches"></div>
 
-            <!-- TAB 3: الأصدقاء -->
-            <div id="custPane_friends" class="cust-pane hidden">
-              <div id="custFriendsList" class="news-feed-list"></div>
-            </div>
-
-            <!-- TAB 4: الهدايا -->
-            <div id="custPane_gifts" class="cust-pane hidden">
-              <div class="gifts-wallet-summary">
-                <div class="stat-mini"><span><i class="fa-solid fa-gem" style="color:#e11d48;"></i> رصيد الروبي</span><strong id="custCoinsBalance">0</strong></div>
-                <div class="stat-mini"><span><i class="fa-solid fa-box-open"></i> مستلمة</span><strong id="custGiftsReceivedCount">0</strong></div>
-                <div class="stat-mini"><span><i class="fa-solid fa-paper-plane"></i> مرسلة</span><strong id="custGiftsSentCount">0</strong></div>
-                <div class="stat-mini"><span><i class="fa-solid fa-fire"></i> التفاعل</span><strong id="custActivityPoints">0</strong></div>
-              </div>
-              <h4 class="sub-heading">سجل الهدايا المستلمة</h4>
-              <div id="custReceivedGiftsList" class="received-gifts-grid"></div>
-            </div>
-
-          <!-- TAB 4: العلاقات -->
-          <div id="custPane_relations" class="cust-pane hidden">
-            <div id="custRelationsBox" class="news-feed-list"></div>
-          </div>
-
-          <!-- TAB 5: المنشورات -->
-          <div id="custPane_posts" class="cust-pane hidden">
-            <div class="news-composer">
-              <textarea id="custWallInput" rows="2" placeholder="شارك منشوراً في ملفك وجدار الموقع..."></textarea>
-              <button type="button" id="custWallSubmitBtn" class="btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> نشر على الجدار</button>
-            </div>
-            <div id="custUserPostsList" class="news-feed-list" style="margin-top:8px;"></div>
-          </div>
-
-          <!-- TAB 6: المزيد (لون/نيون/خلفية + الإضافات + الحساب + الخصوصية + الخروج) -->
-          <div id="custPane_more" class="cust-pane hidden">
-            <!-- NAME COLOR WITH LIVE PREVIEW + SUB-TABS: لون | تدرج | نيون | خلفية + ARABIC FONTS -->
-            <div class="addon-block" id="custNameStyleSection">
-              <div class="addon-block-head">
-                <h4><i class="fa-solid fa-palette"></i> المعاينة الحية وتنسيق الاسم والخط</h4>
-              </div>
-              <div id="custNameStyleLivePreview" class="namestyle-live-preview"></div>
-              <div class="sub-pill-tabs" id="nameStyleSubTabs">
-                <button type="button" class="sub-pill-tab active" data-namestyle-tab="color">لون ثابت</button>
-                <button type="button" class="sub-pill-tab" data-namestyle-tab="gradient">تدرج</button>
-                <button type="button" class="sub-pill-tab" data-namestyle-tab="neon">توهج نيون</button>
-                <button type="button" class="sub-pill-tab" data-namestyle-tab="bg">خلفية</button>
-              </div>
-              <div class="swatch-grid-boxes" id="nameColorSwatches"></div>
-              <div id="nameStylePane_color" class="namestyle-pane">
-                <div class="inline-row" style="margin-top:6px;">
-                  <label class="muted">تحديد لون مخصص للاسم:</label>
-                  <input type="color" id="custNameColor" value="#f8fafc" />
-                </div>
-              </div>
-              <div id="nameStylePane_gradient" class="namestyle-pane hidden">
-                <div class="inline-row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
-                  <label class="muted">تدرج الاسم الملكي:</label>
-                  <select id="custNameGradient" style="flex:1;min-width:160px;">
-                    <option value="gold_royal">ذهب ملكي مشرق</option>
-                    <option value="cyan_neon">سماوي نيون</option>
-                    <option value="rose_fire">وردي ناري</option>
-                    <option value="emerald_aurora">زمردي متلألئ</option>
-                    <option value="violet_galaxy">بنفسجي كوني</option>
-                  </select>
-                </div>
-              </div>
-              <div id="nameStylePane_neon" class="namestyle-pane hidden">
-                <div class="inline-row" style="margin-top:6px;">
-                  <label class="muted">لون توهج النيون:</label>
-                  <input type="color" id="custNeonColor" value="#38bdf8" />
-                  <button type="button" id="custClearNeonBtn" class="btn-secondary btn-xs">إلغاء النيون</button>
-                </div>
-              </div>
-              <div id="nameStylePane_bg" class="namestyle-pane hidden">
-                <div class="inline-row" style="margin-top:6px;">
-                  <label class="muted">لون خلفية الاسم:</label>
-                  <input type="color" id="custNameBgColor" value="#1e293b" />
-                  <button type="button" id="custClearNameBgBtn" class="btn-secondary btn-xs">بدون خلفية</button>
-                </div>
-              </div>
-
-              <div class="form-grid-2" style="margin-top:10px;">
-                <div>
-                  <label>لون نص الرسائل (متباين مع الليلي)</label>
-                  <div class="inline-row" style="gap:6px;">
-                    <input type="color" id="custTextColor" value="#e2e8f0" />
-                    <button type="button" id="custResetTextColorBtn" class="btn-secondary btn-xs">افتراضي</button>
+                <div id="nameStylePane_color" class="namestyle-pane">
+                  <div class="inline-row" style="margin-top:6px;">
+                    <label class="muted">تحديد لون مخصص للاسم:</label>
+                    <input type="color" id="custNameColor" value="#f8fafc" />
                   </div>
-                  <div id="custContrastHint" class="form-hint hidden" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
                 </div>
-                <div>
-                  <label>الخط العربي (6 خطوط)</label>
-                  <select id="custFontFamily">
-                    <option value="Cairo">Cairo (كايرو - قياسي)</option>
-                    <option value="Tajawal">Tajawal (تجوال - عصري)</option>
-                    <option value="Amiri">Amiri (أميري - كلاسيكي)</option>
-                    <option value="Reem Kufi">Reem Kufi (ريم كوفي)</option>
-                    <option value="Aref Ruqaa">Aref Ruqaa (عارف رقعة)</option>
-                    <option value="Almarai">Almarai (المراعي)</option>
-                  </select>
+                <div id="nameStylePane_gradient" class="namestyle-pane hidden">
+                  <div class="inline-row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
+                    <label class="muted">تدرج الاسم الملكي:</label>
+                    <select id="custNameGradient" style="flex:1;min-width:160px;">
+                      <option value="gold_royal">ذهب ملكي مشرق</option>
+                      <option value="cyan_neon">سماوي نيون</option>
+                      <option value="rose_fire">وردي ناري</option>
+                      <option value="emerald_aurora">زمردي متلألئ</option>
+                      <option value="violet_galaxy">بنفسجي كوني</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-              <div class="form-grid-2" style="margin-top:6px;">
-                <div>
-                  <label>نمط الخط</label>
-                  <select id="custFontStyle">
-                    <option value="Normal">عادي Normal</option>
-                    <option value="Bold">عريض Bold</option>
-                    <option value="Italic">مائل Italic</option>
-                  </select>
+                <div id="nameStylePane_neon" class="namestyle-pane hidden">
+                  <div class="inline-row" style="margin-top:6px;">
+                    <label class="muted">لون توهج النيون:</label>
+                    <input type="color" id="custNeonColor" value="#38bdf8" />
+                    <button type="button" id="custClearNeonBtn" class="btn-secondary btn-xs">إلغاء النيون</button>
+                  </div>
                 </div>
-                <div>
-                  <label>حجم خط الاسم (<span id="custNameFontSizeVal">14</span>px)</label>
-                  <input type="range" id="custNameFontSize" min="13" max="18" step="1" value="14" style="width:100%;padding:4px 0;" />
+                <div id="nameStylePane_bg" class="namestyle-pane hidden">
+                  <div class="inline-row" style="margin-top:6px;">
+                    <label class="muted">لون خلفية الاسم:</label>
+                    <input type="color" id="custNameBgColor" value="#1e293b" />
+                    <button type="button" id="custClearNameBgBtn" class="btn-secondary btn-xs">بدون خلفية</button>
+                  </div>
                 </div>
-              </div>
-              <div class="form-grid-2" style="margin-top:6px;">
-                <div>
+
+                <div class="form-grid-2" style="margin-top:10px;">
+                  <div>
+                    <label>لون نص الرسائل (متباين مع الليلي)</label>
+                    <div class="inline-row" style="gap:6px;">
+                      <input type="color" id="custTextColor" value="#e2e8f0" />
+                      <button type="button" id="custResetTextColorBtn" class="btn-secondary btn-xs">افتراضي</button>
+                    </div>
+                    <div id="custContrastHint" class="form-hint hidden" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
+                  </div>
+                  <div>
+                    <label>الخط العربي</label>
+                    <select id="custFontFamily">
+                      <option value="Cairo">Cairo (كايرو - قياسي)</option>
+                      <option value="Tajawal">Tajawal (تجوال - عصري)</option>
+                      <option value="Amiri">Amiri (أميري - كلاسيكي)</option>
+                      <option value="Reem Kufi">Reem Kufi (ريم كوفي)</option>
+                      <option value="Aref Ruqaa">Aref Ruqaa (عارف رقعة)</option>
+                      <option value="Almarai">Almarai (المراعي)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-grid-2" style="margin-top:6px;">
+                  <div>
+                    <label>نمط الخط</label>
+                    <select id="custFontStyle">
+                      <option value="Normal">عادي Normal</option>
+                      <option value="Bold">عريض Bold</option>
+                      <option value="Italic">مائل Italic</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>حجم خط الاسم (<span id="custNameFontSizeVal">14</span>px)</label>
+                    <input type="range" id="custNameFontSize" min="13" max="18" step="1" value="14" style="width:100%;padding:4px 0;" />
+                  </div>
+                </div>
+
+                <div style="margin-top:6px;">
                   <label>حجم خط الرسالة (<span id="custFontSizeVal">14</span>px)</label>
                   <input type="range" id="custFontSize" min="13" max="17" step="1" value="14" style="width:100%;padding:4px 0;" />
                 </div>
-                <div>
-                  <label>وضع لون الاسم</label>
-                  <select id="custNameStyleMode">
-                    <option value="solid">لون ثابت</option>
-                    <option value="gradient">تدرج لوني</option>
-                    <option value="glow">توهج نيون</option>
-                  </select>
+
+                <!-- ANIMATED NAME CONTROLS -->
+                <div class="name-anim-control-box" id="custNameAnimSection">
+                  <div class="name-anim-box-head">
+                    <label><i class="fa-solid fa-wand-magic-sparkles" style="color:#a78bfa;"></i> حركة الاسم المتحركة</label>
+                    <button type="button" id="custNameAnimOffBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-ban"></i> إيقاف الحركة</button>
+                  </div>
+                  <div class="form-grid-2" style="margin-top:6px;">
+                    <div>
+                      <label>نمط الحركة</label>
+                      <select id="custNameAnim">
+                        <option value="none">ثابت (بدون حركة)</option>
+                        <option value="pulse">نبض ملكي متوهج</option>
+                        <option value="color_wave">تموج ألوان الطيف</option>
+                        <option value="gradient_glow">بريق التدرج الذهبي</option>
+                        <option value="gentle_shake">اهتزاز خفيف جذاب</option>
+                        <option value="float_bounce">طفو وانسياب ناعم</option>
+                        <option value="neon_flicker">وميض النيون السريع</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>سرعة الحركة</label>
+                      <select id="custNameAnimSpeed">
+                        <option value="slow">بطيء (ناعم)</option>
+                        <option value="normal">متوسط (قياسي)</option>
+                        <option value="fast">سريع (نابض)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div id="custNameAnimPills" class="name-anim-pills-row"></div>
                 </div>
               </div>
 
-              <!-- ANIMATED NAME CONTROLS -->
-              <div class="name-anim-control-box" id="custNameAnimSection">
-                <div class="name-anim-box-head">
-                  <label><i class="fa-solid fa-wand-magic-sparkles" style="color:#7c3aed;"></i> حركة الاسم المتحركة في الغرف</label>
-                  <button type="button" id="custNameAnimOffBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-ban"></i> إيقاف الحركة</button>
+              <!-- PROFILE MUSIC -->
+              <div class="addon-block" style="margin-top:10px;">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-music" style="color:#38bdf8;"></i> موسيقى البروفايل</h4>
                 </div>
-                <div class="form-grid-2" style="margin-top:6px;">
+                <div class="form-grid-2">
                   <div>
-                    <label>نمط الحركة</label>
-                    <select id="custNameAnim">
-                      <option value="none">ثابت (بدون حركة)</option>
-                      <option value="pulse">نبض ملكي متوهج</option>
-                      <option value="color_wave">تموج ألوان الطيف</option>
-                      <option value="gradient_glow">بريق التدرج الذهبي</option>
-                      <option value="gentle_shake">اهتزاز خفيف جذاب</option>
-                      <option value="float_bounce">طفو وانسياب ناعم</option>
-                      <option value="neon_flicker">وميض النيون السريع</option>
-                    </select>
+                    <label>اختيار نغمة</label>
+                    <div class="inline-row">
+                      <select id="custMusicPreset" style="flex:1">
+                        <option value="">بدون موسيقى</option>
+                        <option value="preset:calm_lofi">أنغام هادئة</option>
+                        <option value="preset:royal_oud">نغمة ملكية</option>
+                        <option value="preset:ambient_stars">أوتار ليلية</option>
+                      </select>
+                      <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i></button>
+                    </div>
                   </div>
                   <div>
-                    <label>سرعة الحركة</label>
-                    <select id="custNameAnimSpeed">
-                      <option value="slow">بطيء (ناعم)</option>
-                      <option value="normal">متوسط (قياسي)</option>
-                      <option value="fast">سريع (نابض)</option>
-                    </select>
+                    <label>رابط MP3 خارجي (اختياري)</label>
+                    <input type="text" id="custMusicCustomUrl" placeholder="https://..." style="width:100%;" />
                   </div>
                 </div>
-                <div id="custNameAnimPills" class="name-anim-pills-row"></div>
+              </div>
+            </div>
+
+            <!-- TAB 3: الإطارات والخلفيات (دمج الإطارات، الخلفيات المتحركة، الأجنحة، واللمعات في شبكة واحدة موحدة) -->
+            <div id="custPane_frames_bg" class="cust-pane hidden">
+              <div id="custAddonsLockNotice" class="lock-notice hidden">
+                <i class="fa-solid fa-crown"></i> هذه الميزة حصرية لأصحاب الرتب الملكية وعضويات VIP
               </div>
 
-              <div style="margin-top:8px;">
-                <button type="button" id="saveNameStyleQuickBtn" class="btn-primary btn-sm btn-full"><i class="fa-solid fa-check"></i> حفظ ألوان والخط والحركة وتطبيقها فوراً</button>
-              </div>
-              <div class="form-grid-2" style="margin-top:6px;">
-                <div>
-                  <label>موسيقى البروفايل</label>
-                  <div class="inline-row">
-                    <select id="custMusicPreset" style="flex:1">
-                      <option value="">بدون موسيقى</option>
-                      <option value="preset:calm_lofi">أنغام هادئة</option>
-                      <option value="preset:royal_oud">نغمة ملكية</option>
-                      <option value="preset:ambient_stars">أوتار ليلية</option>
-                    </select>
-                    <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i></button>
-                  </div>
+              <div class="addon-block unified-addons-block">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-crown" style="color:#fbbf24;"></i> الإطارات والخلفيات المتحركة والأجنحة واللمعات</h4>
+                  <label class="switch-label">
+                    <input type="checkbox" id="custVipWingsToggle" />
+                    <span><i class="fa-solid fa-feather-pointed" style="color:#fbbf24;"></i> أجنحة VIP</span>
+                  </label>
                 </div>
-                <div>
-                  <label>رابط MP3 خارجي (اختياري)</label>
-                  <input type="text" id="custMusicCustomUrl" placeholder="https://..." style="width:100%;" />
-                </div>
-              </div>
-            </div>
 
-            <!-- ADD-ONS (FRAMES + SHINES + NAMEPLATES + ANIMATED PROFILE BACKGROUNDS) -->
-            <div id="custAddonsLockNotice" class="lock-notice hidden">
-              <i class="fa-solid fa-lock"></i> الإضافات الملكية غير مفعلة لرتبتك الحالية. يمكن للإدارة تفعيلها من منشئ الرتب.
-            </div>
-
-            <div class="addon-block">
-              <div class="addon-block-head">
-                <h4><i class="fa-solid fa-sparkles"></i> خلفيات بطاقة الملف المتحركة</h4>
-              </div>
-              <div id="custBgEffectsGrid" class="shine-grid"></div>
-            </div>
-
-            <div class="addon-block">
-              <div class="addon-block-head">
-                <h4><i class="fa-solid fa-crown"></i> إطارات الصورة المتحركة وتاج الملوك</h4>
-              </div>
-              <div id="custFramesGrid" class="frames-addon-grid"></div>
-            </div>
-
-            <div class="addon-block">
-              <div class="addon-block-head">
-                <h4><i class="fa-solid fa-wand-magic-sparkles"></i> لمعة الاسم والأجنحة</h4>
-                <label class="switch-label">
-                  <input type="checkbox" id="custVipWingsToggle" />
-                  <span><i class="fa-solid fa-feather-pointed"></i> أجنحة VIP</span>
-                </label>
-              </div>
-              <div id="custShineGrid" class="shine-grid"></div>
-              <div id="custNameplatesGrid" class="nameplates-grid" style="margin-top:8px;"></div>
-            </div>
-
-            <!-- EMAIL & PASSWORD EDIT -->
-            <div class="addon-block">
-              <div class="addon-block-head">
-                <h4><i class="fa-solid fa-shield-halved"></i> تعديل البريد الإلكتروني وكلمة المرور</h4>
-              </div>
-              <div class="form-grid-2">
-                <input type="email" id="custCredEmail" placeholder="البريد الإلكتروني" />
-                <input type="password" id="custCredCurrentPass" placeholder="كلمة المرور الحالية (للتأكيد)" />
-                <input type="password" id="custCredNewPass" placeholder="كلمة المرور الجديدة (اختياري)" />
-                <button type="button" id="custSaveCredsBtn" class="btn-secondary btn-sm"><i class="fa-solid fa-key"></i> تحديث بيانات الدخول</button>
-              </div>
-            </div>
-
-            <!-- PRIVACY SWITCHES, SMART NOTIFICATIONS & STEALTH & LOGOUT -->
-            <div class="addon-block">
-              <div class="addon-block-head">
-                <h4><i class="fa-solid fa-user-lock"></i> إعدادات الخصوصية والإشعارات والتخفي</h4>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:8px;">
-                <label class="switch-label">
-                  <input type="checkbox" id="custAllowCallsToggle" checked />
-                  <span><i class="fa-solid fa-phone-volume"></i> السماح باستقبال المكالمات والمايكات</span>
-                </label>
-                <label class="switch-label">
-                  <input type="checkbox" id="custAllowPmToggle" checked />
-                  <span><i class="fa-solid fa-envelope-open-text"></i> السماح باستقبال الرسائل الخاصة</span>
-                </label>
-                <label class="switch-label">
-                  <input type="checkbox" id="custMuteSoundsToggle" />
-                  <span><i class="fa-solid fa-volume-xmark"></i> كتم أصوات التنبيهات والرسائل الواردة</span>
-                </label>
-                <div class="inline-row" style="justify-content:space-between;gap:8px;">
-                  <span style="font-size:12px;color:#cbd5e1;"><i class="fa-solid fa-bell"></i> إشعارات المتصفح عند تصغير النافذة (Web Push)</span>
-                  <button type="button" id="custEnableWebPushBtn" class="btn-secondary btn-xs">تفعيل الإشعارات</button>
-                </div>
-              </div>
-
-              <div id="custMoreLogoutWrap" style="margin-top:10px;">
-                <button type="button" id="custMoreLogoutBtn" class="btn-danger btn-sm" style="width:100%;">
-                  <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج من الحساب
+                <div class="unified-section-subhead"><i class="fa-solid fa-circle-user" style="color:#fbbf24;"></i> إطارات الصورة المتحركة وتاج الملوك</div>
+                <div id="custFramesGrid" class="unified-addons-grid"></div>
+                <button type="button" id="custOpenStoreFromFramesBtn" class="btn-primary btn-sm btn-full" style="margin-top:8px;">
+                  <i class="fa-solid fa-store"></i> فتح المتجر لشراء إطارات ورتب جديدة
                 </button>
+
+                <div class="unified-section-subhead" style="margin-top:12px;"><i class="fa-solid fa-sparkles" style="color:#38bdf8;"></i> خلفيات بطاقة الملف المتحركة</div>
+                <div id="custBgEffectsGrid" class="unified-addons-grid"></div>
+
+                <div class="unified-section-subhead" style="margin-top:12px;"><i class="fa-solid fa-wand-magic-sparkles" style="color:#c084fc;"></i> لمعات الاسم والقوالب الملكية</div>
+                <div id="custShineGrid" class="unified-addons-grid"></div>
+                <div id="custNameplatesGrid" class="unified-addons-grid" style="margin-top:8px;"></div>
+              </div>
+            </div>
+
+            <!-- TAB 4: الأصدقاء والهدايا (إحصائيات مفصولة + سجل الهدايا + الأصدقاء والعلاقات) -->
+            <div id="custPane_friends_gifts" class="cust-pane hidden">
+              <div class="gifts-wallet-summary separated-stat-cards">
+                <div class="stat-mini stat-card-ruby">
+                  <span><i class="fa-solid fa-gem" style="color:#f43f5e;"></i> رصيد الروبي</span>
+                  <strong id="custCoinsBalance">0</strong>
+                </div>
+                <div class="stat-mini stat-card-received">
+                  <span><i class="fa-solid fa-box-open" style="color:#38bdf8;"></i> هدايا مستلمة</span>
+                  <strong id="custGiftsReceivedCount">0</strong>
+                </div>
+                <div class="stat-mini stat-card-sent">
+                  <span><i class="fa-solid fa-paper-plane" style="color:#a78bfa;"></i> هدايا مرسلة</span>
+                  <strong id="custGiftsSentCount">0</strong>
+                </div>
+                <div class="stat-mini stat-card-activity">
+                  <span><i class="fa-solid fa-fire" style="color:#fb923c;"></i> التفاعل</span>
+                  <strong id="custActivityPoints">0</strong>
+                </div>
+              </div>
+
+              <div class="addon-block" style="margin-top:10px;">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-gifts" style="color:#fb7185;"></i> سجل الهدايا المستلمة</h4>
+                </div>
+                <div id="custReceivedGiftsList" class="received-gifts-grid"></div>
+              </div>
+
+              <div class="addon-block" style="margin-top:10px;">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-user-group" style="color:#38bdf8;"></i> الأصدقاء والعلاقات</h4>
+                </div>
+                <div id="custRelationsBox" class="news-feed-list" style="margin-bottom:8px;"></div>
+                <div id="custFriendsList" class="news-feed-list"></div>
+              </div>
+            </div>
+
+            <!-- TAB 5: المنشورات (نموذج النشر وعرض الحائط) -->
+            <div id="custPane_posts" class="cust-pane hidden">
+              <div class="news-composer" id="custWallComposerBox">
+                <textarea id="custWallInput" rows="2" placeholder="شارك منشوراً في ملفك وجدار الموقع..."></textarea>
+                <button type="button" id="custWallSubmitBtn" class="btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> نشر على الجدار</button>
+              </div>
+              <div id="custUserPostsList" class="news-feed-list" style="margin-top:8px;"></div>
+            </div>
+
+            <!-- TAB 6: الحساب والخصوصية (مخفي للزائر) -->
+            <div id="custPane_account_privacy" class="cust-pane hidden">
+              <div class="addon-block">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-shield-halved" style="color:#38bdf8;"></i> تعديل البريد الإلكتروني وكلمة المرور</h4>
+                </div>
+                <div class="form-grid-2">
+                  <input type="email" id="custCredEmail" placeholder="البريد الإلكتروني" />
+                  <input type="password" id="custCredCurrentPass" placeholder="كلمة المرور الحالية (للتأكيد)" />
+                  <input type="password" id="custCredNewPass" placeholder="كلمة المرور الجديدة (اختياري)" />
+                  <button type="button" id="custSaveCredsBtn" class="btn-secondary btn-sm"><i class="fa-solid fa-key"></i> تحديث بيانات الدخول</button>
+                </div>
+              </div>
+
+              <div class="addon-block" style="margin-top:10px;">
+                <div class="addon-block-head">
+                  <h4><i class="fa-solid fa-user-lock" style="color:#fbbf24;"></i> إعدادات الخصوصية والإشعارات</h4>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <label class="switch-label">
+                    <input type="checkbox" id="custAllowCallsToggle" checked />
+                    <span><i class="fa-solid fa-phone-volume"></i> السماح باستقبال المكالمات والمايكات</span>
+                  </label>
+                  <label class="switch-label">
+                    <input type="checkbox" id="custAllowPmToggle" checked />
+                    <span><i class="fa-solid fa-envelope-open-text"></i> السماح باستقبال الرسائل الخاصة</span>
+                  </label>
+                  <label class="switch-label">
+                    <input type="checkbox" id="custMuteSoundsToggle" />
+                    <span><i class="fa-solid fa-volume-xmark"></i> كتم أصوات التنبيهات والرسائل الواردة</span>
+                  </label>
+                  <div class="inline-row" style="justify-content:space-between;gap:8px;">
+                    <span style="font-size:12px;color:#cbd5e1;"><i class="fa-solid fa-bell"></i> إشعارات المتصفح عند تصغير النافذة (Web Push)</span>
+                    <button type="button" id="custEnableWebPushBtn" class="btn-secondary btn-xs">تفعيل الإشعارات</button>
+                  </div>
+                </div>
+
+                <div id="custMoreLogoutWrap" style="margin-top:12px;">
+                  <button type="button" id="custMoreLogoutBtn" class="btn-danger btn-sm" style="width:100%;">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> تسجيل الخروج من الحساب
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="modal-footer-actions">
-            <button type="button" id="saveCustomizeBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ التغييرات وتطبيقها</button>
-          </div>
+          <div class="modal-footer-actions profile-sticky-footer" id="custModalFooter">
+            <button type="button" id="saveCustomizeBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ جميع التغييرات</button>
           </div>
         </div>
       </div>
@@ -1135,18 +1130,19 @@
               <i class="fa-solid fa-trash-can"></i> إزالة الخلفية
             </button>
           </div>
-          <div class="form-grid-2">
-            <div>
+          <div class="form-grid-2" id="rmSettingsIdentityGrid">
+            <div id="rmSettingsNameWrap">
               <label>اسم الغرفة</label>
               <input type="text" id="rmSettingsName" maxlength="60" />
             </div>
-            <div>
+            <div id="rmSettingsDescWrap">
               <label>وصف الغرفة</label>
               <input type="text" id="rmSettingsDesc" maxlength="120" />
             </div>
             <div>
-              <label>لون السمة الافتراضي</label>
+              <label>لون ونمط الغرفة</label>
               <select id="rmSettingsTheme">
+                <option value="classic_light">كلاسيكي فاتح (#f8fafc)</option>
                 <option value="warm_peach">خوخ دافئ</option>
                 <option value="sunset_rose">وردي غروب</option>
                 <option value="sky_breeze">سماوي نقي</option>
@@ -1158,17 +1154,18 @@
               <input type="text" id="rmSettingsWelcome" maxlength="200" placeholder="تظهر في شريط الموضوع..." />
             </div>
           </div>
-          <div>
+          <div id="rmSettingsPassGroup">
             <label>كلمة مرور الغرفة (اتركها فارغة لإبقاء الحالي، أو اكتب كلمة جديدة)</label>
             <input type="text" id="rmSettingsPass" maxlength="50" placeholder="اختياري..." />
           </div>
-          <label class="switch-label">
+          <label class="switch-label" id="rmSettingsMicsWrap">
             <input type="checkbox" id="rmSettingsMicsEnabled" checked />
             <span><i class="fa-solid fa-microphone"></i> تفعيل المايكات الصوتية في الغرفة</span>
           </label>
           <input type="hidden" id="rmSettingsWpUrl" value="" />
-          <div class="inline-row" style="gap:8px;margin-top:4px;">
-            <button type="button" id="rmSettingsSaveBtn" class="btn-primary btn-full"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الغرفة وتطبيقها</button>
+          <div class="inline-row" style="gap:8px;margin-top:4px;flex-wrap:wrap;">
+            <button type="button" id="rmSettingsSaveBtn" class="btn-primary" style="flex:1;"><i class="fa-solid fa-floppy-disk"></i> حفظ إعدادات الغرفة وتطبيقها</button>
+            <button type="button" id="rmSettingsAdvancedBtn" class="btn-secondary btn-sm hidden"><i class="fa-solid fa-gears"></i> إدارة متقدمة</button>
           </div>
         </div>
       </div>

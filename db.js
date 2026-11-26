@@ -42,6 +42,47 @@ function isSupremeOwnerEmail(email) {
   return String(email || '').trim().toLowerCase() === SUPREME_OWNER_EMAIL;
 }
 
+function sanitizePlainText(input, maxLen = 4000) {
+  let s = String(input ?? '');
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  s = s.replace(/<\/?[a-zA-Z!][^>]*>/g, '');
+  s = s.replace(/\b(?:javascript|vbscript)\s*:/gi, '');
+  s = s.replace(/\bon(?:click|load|error|mouseover|focus|blur|input|submit)\s*=/gi, '');
+  s = s.trim();
+  if (maxLen > 0 && s.length > maxLen) s = s.slice(0, maxLen);
+  return s;
+}
+
+function sanitizeSafeUrl(rawUrl, { allowDataImage = true, maxLen = 600 } = {}) {
+  const s = String(rawUrl || '').trim();
+  if (!s) return '';
+  if (/[\u0000-\u001F\s<>'"`\\]/.test(s.slice(0, 120)) && !s.startsWith('data:image/')) {
+    return '';
+  }
+  if (s.startsWith('/uploads/') || s.startsWith('/assets/') || s.startsWith('/api/profile-media/')) {
+    return s.replace(/[<>"'`]/g, '').slice(0, maxLen);
+  }
+  if (s.startsWith('preset:')) {
+    return /^preset:[a-zA-Z0-9_-]{1,40}$/.test(s) ? s : '';
+  }
+  if (allowDataImage && /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(s)) {
+    return s.slice(0, Math.max(maxLen, 65000));
+  }
+  if (/^https:\/\//i.test(s)) {
+    try {
+      const parsed = new URL(s);
+      if (parsed.protocol === 'https:') {
+        return parsed.href.slice(0, maxLen);
+      }
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
 function isProtectedSupremeOwnerKey(targetKey) {
   if (!targetKey || !String(targetKey).startsWith('user:')) return false;
   const uid = Number(String(targetKey).replace('user:', ''));
@@ -483,9 +524,9 @@ const DEFAULT_SITE_SETTINGS = {
   welcome_message: '',
   owner_join_message: '',
   maintenance_mode: 0,
-  top_bar_color: '#18181b',
-  bottom_bar_color: '#18181b',
-  button_color: '#18181b',
+  top_bar_color: '#0f2342',
+  bottom_bar_color: '#0f2342',
+  button_color: '#1d4ed8',
   font_family: 'Cairo',
   font_size: 14,
   custom_css: '',
@@ -526,8 +567,11 @@ const DEFAULT_SITE_SETTINGS = {
   fx_mic_waves: 1,
   fx_cinematic_entrance: 1,
   fx_typing_avatars: 1,
-  fx_night_atmosphere: 'always_on',
+  fx_night_atmosphere: 'off',
   guest_can_chat: 1,
+  allow_guests: 1,
+  allow_register: 1,
+  global_chat_mute: 0,
   min_rank_pm: 'member',
   min_rank_chat_media: 'member',
   min_rank_mic: 'guest',
@@ -559,6 +603,7 @@ const DEFAULT_SITE_SETTINGS = {
   rank_price_royal_vip: 600,
   rank_price_premium: 1200,
   frame_price_overrides: {},
+  ad_units: [],
   updated_at: new Date().toISOString()
 };
 
@@ -569,7 +614,7 @@ const DEFAULT_ROOMS = [
     description: 'الغرفة الرئيسية للتعارف والدردشة المباشرة للجميع',
     icon: '💬',
     image_url: '/assets/rooms/general.svg',
-    bg_theme: 'warm_peach',
+    bg_theme: 'classic_light',
     wallpaper_url: '',
     bg_custom: '',
     welcome_message: '',
@@ -722,7 +767,8 @@ function buildOrganizedJsonBuckets() {
     'rooms.json': {
       updatedAt: nowIso(),
       rooms: Array.from(store.roomsById.values()),
-      roomStaff: Array.from(store.roomStaffByKey.values())
+      roomStaff: Array.from(store.roomStaffByKey.values()),
+      roomBans: Array.from(store.roomBansByKey.values())
     },
     'messages.json': {
       updatedAt: nowIso(),
@@ -744,6 +790,7 @@ function buildOrganizedJsonBuckets() {
       reports: Array.from(store.reportsById.values()),
       adminLogs: Array.from(store.adminLogsById.values()),
       pmLinkAlerts: Array.from(store.pmLinkAlertsById.values()),
+      violationLogs: Array.from(store.violationLogsById.values()),
       notifications: Array.from(store.notificationsById.values())
     },
     'sessions.json': {
@@ -875,6 +922,14 @@ function hydrateMissingStoreFromOrganizedJson({ hasSiteSettings = false } = {}) 
       }
     }
   }
+  if (Array.isArray(roomsJson?.roomBans)) {
+    for (const rb of roomsJson.roomBans) {
+      if (rb?.room_id && rb?.target_key) {
+        const rbk = `${rb.room_id}::${rb.target_key}`;
+        if (!store.roomBansByKey.has(rbk)) store.roomBansByKey.set(rbk, rb);
+      }
+    }
+  }
 
   const messagesJson = readJsonFileSafe('messages.json');
   if (Array.isArray(messagesJson?.items)) {
@@ -947,6 +1002,12 @@ function hydrateMissingStoreFromOrganizedJson({ hasSiteSettings = false } = {}) 
     }
     for (const al of modJson.pmLinkAlerts || []) {
       if (al?.id && !store.pmLinkAlertsById.has(Number(al.id))) store.pmLinkAlertsById.set(Number(al.id), al);
+    }
+    for (const vl of modJson.violationLogs || []) {
+      if (vl?.id && !store.violationLogsById.has(Number(vl.id))) {
+        store.violationLogsById.set(Number(vl.id), vl);
+        store.counters.violation_logs = Math.max(store.counters.violation_logs || 0, Number(vl.id));
+      }
     }
     for (const nt of modJson.notifications || []) {
       if (nt?.id && !store.notificationsById.has(Number(nt.id))) store.notificationsById.set(Number(nt.id), nt);
@@ -1248,6 +1309,7 @@ const store = {
   siteSettings: { ...DEFAULT_SITE_SETTINGS },
   roomsById: new Map(),
   roomStaffByKey: new Map(),
+  roomBansByKey: new Map(),
   messagesById: new Map(),
   mutesByKey: new Map(),
   bansByKey: new Map(),
@@ -1261,6 +1323,7 @@ const store = {
   reportsById: new Map(),
   adminLogsById: new Map(),
   pmLinkAlertsById: new Map(),
+  violationLogsById: new Map(),
   notificationsById: new Map(),
   profileMediaById: new Map(),
   sessionsById: new Map(),
@@ -1275,6 +1338,7 @@ const store = {
     reports: 0,
     admin_logs: 0,
     pm_link_alerts: 0,
+    violation_logs: 0,
     notifications: 0
   }
 };
@@ -1357,6 +1421,7 @@ function normalizeUserDoc(docId, data) {
     country: String(data.country || ''),
     allow_calls: data.allow_calls === 0 || data.allow_calls === false ? 0 : 1,
     allow_pm: data.allow_pm === 0 || data.allow_pm === false ? 0 : 1,
+    visitors_count: Math.max(0, Number(data.visitors_count) || 0),
     likes_count: Number(data.likes_count) || 0,
     rating_sum: Number(data.rating_sum) || 0,
     rating_count: Number(data.rating_count) || 0,
@@ -1497,16 +1562,25 @@ function normalizeRoomDoc(docId, data) {
     pinned_by: String(data.pinned_by || ''),
     pinned_at: String(data.pinned_at || ''),
     owner_user_id: data.owner_user_id ? Number(data.owner_user_id) : null,
-    owner_name: String(data.owner_name || ''),
+    owner_name: sanitizePlainText(data.owner_name || '', 60),
+    owner_perms: {
+      style_bg: data.owner_perms?.style_bg !== false,
+      kick: data.owner_perms?.kick !== false,
+      room_ban: data.owner_perms?.room_ban !== false,
+      assign_roles: Boolean(data.owner_perms?.assign_roles)
+    },
+    owner_allowed_roles: Array.isArray(data.owner_allowed_roles)
+      ? data.owner_allowed_roles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest').slice(0, 30)
+      : [],
     card_bg_color: String(data.card_bg_color || ''),
     card_text_color: String(data.card_text_color || ''),
     activity_points: Number(data.activity_points) || 0,
     youtube_video_id: String(data.youtube_video_id || ''),
-    youtube_title: String(data.youtube_title || ''),
+    youtube_title: sanitizePlainText(data.youtube_title || '', 120),
     youtube_is_playing: data.youtube_is_playing ? 1 : 0,
     youtube_mini_mode: data.youtube_mini_mode ? 1 : 0,
     youtube_by_key: String(data.youtube_by_key || ''),
-    youtube_by_name: String(data.youtube_by_name || ''),
+    youtube_by_name: sanitizePlainText(data.youtube_by_name || '', 60),
     youtube_updated_at: String(data.youtube_updated_at || ''),
     isActive: data.isActive === false ? false : true,
     created_by: String(data.created_by || 'system'),
@@ -1560,10 +1634,10 @@ function normalizeRankDoc(docId, data) {
 
   const obj = {
     key,
-    label: String(data.label || canonicalDef?.label || docId),
+    label: sanitizePlainText(data.label || canonicalDef?.label || docId, 32) || String(canonicalDef?.label || docId),
     icon: resolvedIcon,
     badge_style: String(data.badge_style || defaultBadgeStyle),
-    image_url: String(data.image_url || ''),
+    image_url: sanitizeSafeUrl(data.image_url || ''),
     bg_color: String(data.bg_color || canonicalDef?.bg_color || '#334155'),
     text_color: String(data.text_color || canonicalDef?.text_color || '#ffffff'),
     power,
@@ -1595,6 +1669,11 @@ function normalizeRankDoc(docId, data) {
       : data.max_assignable_rank !== undefined
         ? Math.max(0, Math.min(14, Number(data.max_assignable_rank) > 15 ? Math.max(0, power - 1) : Number(data.max_assignable_rank) || 0))
         : defaultMaxAssign,
+    assignable_roles: isOwner
+      ? []
+      : Array.isArray(data.assignable_roles)
+        ? data.assignable_roles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest').slice(0, 40)
+        : [],
     isActive: data.isActive === false ? false : true,
     created_at: String(data.created_at || nowIso())
   };
@@ -1927,6 +2006,26 @@ function attachRealtimeListeners() {
           }
           continue;
         }
+        if (String(ch.id).startsWith('vio_') || d.log_type === 'violation_log') {
+          const vid = Number(d.id || String(ch.id).replace('vio_', ''));
+          if (ch.type === 'removed') store.violationLogsById.delete(vid);
+          else if (vid) {
+            store.violationLogsById.set(vid, { ...d, id: vid });
+            store.counters.violation_logs = Math.max(store.counters.violation_logs || 0, vid);
+          }
+          continue;
+        }
+        if (String(ch.id).startsWith('rban_') || d.log_type === 'room_ban') {
+          const rbk = d.room_id && d.target_key ? `${d.room_id}::${d.target_key}` : '';
+          if (ch.type === 'removed') {
+            for (const [k] of store.roomBansByKey.entries()) {
+              if (`rban_${safeDocId(k)}` === ch.id || k === rbk) store.roomBansByKey.delete(k);
+            }
+          } else if (rbk) {
+            store.roomBansByKey.set(rbk, d);
+          }
+          continue;
+        }
         const id = Number(ch.id);
         if (ch.type === 'removed') store.reportsById.delete(id);
         else if (id) {
@@ -2224,6 +2323,20 @@ async function init(eventHooks = {}) {
         }
         continue;
       }
+      if (String(d.id).startsWith('vio_') || data.log_type === 'violation_log') {
+        const vid = Number(data.id || String(d.id).replace('vio_', ''));
+        if (vid) {
+          store.violationLogsById.set(vid, { ...data, id: vid });
+          store.counters.violation_logs = Math.max(store.counters.violation_logs || 0, vid);
+        }
+        continue;
+      }
+      if (String(d.id).startsWith('rban_') || data.log_type === 'room_ban') {
+        if (data.room_id && data.target_key) {
+          store.roomBansByKey.set(`${data.room_id}::${data.target_key}`, data);
+        }
+        continue;
+      }
       const id = Number(d.id) || Number(data.id);
       if (id) {
         store.reportsById.set(id, { id, ...data });
@@ -2475,6 +2588,11 @@ function mapRankRow(row) {
         : row.perm_set_rank === 1
           ? Math.max(0, power - 1)
           : 0,
+    assignable_roles: isOwner
+      ? []
+      : Array.isArray(row.assignable_roles)
+        ? row.assignable_roles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest')
+        : [],
     permissions
   };
 }
@@ -2512,6 +2630,31 @@ function getMaxAssignablePower(role) {
   return Math.min(ownPower - 1, Math.max(0, ceiling));
 }
 
+function canAssignRankTo(actorRole, targetRoleKey, { roomId = null, actorUserId = null } = {}) {
+  if (!targetRoleKey || !isValidRank(targetRoleKey) || targetRoleKey === 'site_owner' || targetRoleKey === 'guest') {
+    return false;
+  }
+  if (actorRole === 'site_owner') return true;
+  const row = store.ranksByKey.get(actorRole);
+  if (row && row.perm_set_rank === 1) {
+    const allowedList = Array.isArray(row.assignable_roles) ? row.assignable_roles : [];
+    if (allowedList.includes(targetRoleKey)) return true;
+    const maxPower = getMaxAssignablePower(actorRole);
+    const targetPower = getRankPower(targetRoleKey);
+    if (maxPower >= 0 && targetPower <= maxPower) return true;
+  }
+  if (roomId && actorUserId) {
+    const rm = store.roomsById.get(roomId);
+    if (rm && rm.owner_user_id && Number(rm.owner_user_id) === Number(actorUserId)) {
+      if (rm.owner_perms?.assign_roles) {
+        const roomAllowed = Array.isArray(rm.owner_allowed_roles) ? rm.owner_allowed_roles : [];
+        if (roomAllowed.includes(targetRoleKey)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 function getRankSortWeight(role) {
   const row = store.ranksByKey.get(role);
   return row ? (Number(row.power) || 0) * 100 + (Number(row.tier_order) || 0) : 0;
@@ -2539,12 +2682,7 @@ function sanitizeHexColor(val, fallback) {
 }
 
 function sanitizeRankImageUrl(rawUrl) {
-  const val = String(rawUrl || '').trim();
-  if (!val) return '';
-  if (val.startsWith('data:image/')) {
-    return val.slice(0, 65000);
-  }
-  return val.slice(0, 500);
+  return sanitizeSafeUrl(rawUrl, { allowDataImage: true, maxLen: 500 });
 }
 
 function createRank({
@@ -2557,9 +2695,10 @@ function createRank({
   textColor,
   power,
   maxAssignableRank,
+  assignableRoles,
   permissions = {}
 }) {
-  const cleanLabel = String(label || '').trim().slice(0, 32);
+  const cleanLabel = sanitizePlainText(label || '', 32);
   if (cleanLabel.length < 2) return { error: 'اسم الرتبة يجب أن يكون حرفين على الأقل.' };
   const safeKey =
     String(key || '')
@@ -2573,6 +2712,9 @@ function createRank({
   const clampedPower = Math.max(1, Math.min(14, Number(power) || 2));
   const rawMaxAssign =
     maxAssignableRank !== undefined ? Number(maxAssignableRank) || 0 : permissions.set_rank ? Math.max(0, clampedPower - 1) : 0;
+  const cleanAssignableRoles = Array.isArray(assignableRoles)
+    ? assignableRoles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest').slice(0, 40)
+    : [];
 
   const permFields = {};
   for (const p of ALL_RANK_PERMISSIONS) {
@@ -2588,7 +2730,7 @@ function createRank({
   const docObj = {
     key: safeKey,
     label: cleanLabel,
-    icon: String(icon || '⭐').trim().slice(0, 8) || '⭐',
+    icon: sanitizePlainText(icon || '⭐', 8) || '⭐',
     badge_style: String(badgeStyle || 'royal_shield').trim().slice(0, 40) || 'royal_shield',
     image_url: sanitizeRankImageUrl(imageUrl),
     bg_color: sanitizeHexColor(bgColor, '#334155'),
@@ -2598,6 +2740,7 @@ function createRank({
     is_system: 0,
     ...permFields,
     max_assignable_rank: Math.max(0, Math.min(14, rawMaxAssign)),
+    assignable_roles: cleanAssignableRoles,
     created_at: nowIso()
   };
 
@@ -2606,12 +2749,12 @@ function createRank({
   return { rank: getRankByKey(safeKey) };
 }
 
-function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor, power, maxAssignableRank, permissions }) {
+function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor, power, maxAssignableRank, assignableRoles, permissions }) {
   const existing = store.ranksByKey.get(key);
   if (!existing) return { error: 'الرتبة غير موجودة.' };
 
-  const nextLabel = label !== undefined && String(label).trim() ? String(label).trim().slice(0, 32) : existing.label;
-  const nextIcon = icon !== undefined ? String(icon).trim().slice(0, 8) || '⭐' : existing.icon;
+  const nextLabel = label !== undefined && sanitizePlainText(label, 32) ? sanitizePlainText(label, 32) : existing.label;
+  const nextIcon = icon !== undefined ? sanitizePlainText(icon, 8) || '⭐' : existing.icon;
   const nextBadgeStyle =
     badgeStyle !== undefined && String(badgeStyle).trim()
       ? String(badgeStyle).trim().slice(0, 40)
@@ -2638,6 +2781,13 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
       : existing.max_assignable_rank !== undefined
         ? Math.min(14, Number(existing.max_assignable_rank) || 0)
         : Math.max(0, nextPower - 1);
+  const nextAssignableRoles = isOwner
+    ? []
+    : Array.isArray(assignableRoles)
+      ? assignableRoles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest').slice(0, 40)
+      : Array.isArray(existing.assignable_roles)
+        ? existing.assignable_roles
+        : [];
 
   const permPatch = {};
   for (const permName of ALL_RANK_PERMISSIONS) {
@@ -2665,7 +2815,8 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
     text_color: nextText,
     power: nextPower,
     ...permPatch,
-    max_assignable_rank: nextMaxAssign
+    max_assignable_rank: nextMaxAssign,
+    assignable_roles: nextAssignableRoles
   };
 
   store.ranksByKey.set(key, updated);
@@ -2921,15 +3072,15 @@ function updateSiteSettings(patch = {}) {
   const cur = getSiteSettings();
   const next = {
     id: 1,
-    site_name: patch.site_name !== undefined ? String(patch.site_name).trim().slice(0, 60) || cur.site_name : cur.site_name,
+    site_name: patch.site_name !== undefined ? sanitizePlainText(patch.site_name, 60) || cur.site_name : cur.site_name,
     site_description:
-      patch.site_description !== undefined ? String(patch.site_description).trim().slice(0, 180) : cur.site_description,
-    site_logo: patch.site_logo !== undefined ? String(patch.site_logo).trim().slice(0, 260) : cur.site_logo,
+      patch.site_description !== undefined ? sanitizePlainText(patch.site_description, 180) : cur.site_description,
+    site_logo: patch.site_logo !== undefined ? sanitizeSafeUrl(patch.site_logo, { maxLen: 260 }) : cur.site_logo,
     welcome_message:
-      patch.welcome_message !== undefined ? String(patch.welcome_message).trim().slice(0, 400) : cur.welcome_message,
+      patch.welcome_message !== undefined ? sanitizePlainText(patch.welcome_message, 400) : cur.welcome_message,
     owner_join_message:
       patch.owner_join_message !== undefined
-        ? String(patch.owner_join_message).trim().slice(0, 220)
+        ? sanitizePlainText(patch.owner_join_message, 220)
         : String(cur.owner_join_message || ''),
     maintenance_mode:
       patch.maintenance_mode !== undefined ? (patch.maintenance_mode ? 1 : 0) : cur.maintenance_mode,
@@ -2941,7 +3092,7 @@ function updateSiteSettings(patch = {}) {
         : cur.bottom_bar_color,
     button_color:
       patch.button_color !== undefined ? sanitizeHexColor(patch.button_color, cur.button_color) : cur.button_color,
-    font_family: patch.font_family !== undefined ? String(patch.font_family).trim().slice(0, 50) || 'Cairo' : cur.font_family,
+    font_family: patch.font_family !== undefined ? sanitizePlainText(patch.font_family, 50) || 'Cairo' : cur.font_family,
     font_size:
       patch.font_size !== undefined ? Math.max(12, Math.min(22, Number(patch.font_size) || 15)) : cur.font_size,
     custom_css: patch.custom_css !== undefined ? String(patch.custom_css).slice(0, 8000) : cur.custom_css,
@@ -3004,16 +3155,16 @@ function updateSiteSettings(patch = {}) {
       patch.quiz_custom_questions !== undefined
         ? (Array.isArray(patch.quiz_custom_questions) ? patch.quiz_custom_questions : [])
             .map((item, idx) => {
-              const q = String(item?.q || '').trim().slice(0, 240);
-              const displayAnswer = String(item?.displayAnswer || (Array.isArray(item?.a) ? item.a[0] : '') || '').trim().slice(0, 80);
+              const q = sanitizePlainText(item?.q || '', 240);
+              const displayAnswer = sanitizePlainText(item?.displayAnswer || (Array.isArray(item?.a) ? item.a[0] : '') || '', 80);
               const answers = Array.isArray(item?.a)
-                ? item.a.map((s) => String(s || '').trim().slice(0, 80)).filter(Boolean)
-                : String(item?.a || displayAnswer).split(/[,،|]/).map((s) => s.trim()).filter(Boolean);
+                ? item.a.map((s) => sanitizePlainText(s || '', 80)).filter(Boolean)
+                : String(item?.a || displayAnswer).split(/[,،|]/).map((s) => sanitizePlainText(s, 80)).filter(Boolean);
               if (!q || (!displayAnswer && answers.length === 0)) return null;
               const finalAnswers = answers.length > 0 ? answers : [displayAnswer];
               return {
                 id: String(item?.id || `q_${Date.now()}_${idx}`).slice(0, 50),
-                category: String(item?.category || 'مخصصة').trim().slice(0, 30) || 'مخصصة',
+                category: sanitizePlainText(item?.category || 'مخصصة', 30) || 'مخصصة',
                 q,
                 displayAnswer: displayAnswer || finalAnswers[0],
                 a: finalAnswers.slice(0, 10)
@@ -3034,15 +3185,15 @@ function updateSiteSettings(patch = {}) {
           : 'assistant',
     welcome_bot_name:
       patch.welcome_bot_name !== undefined
-        ? String(patch.welcome_bot_name).trim().slice(0, 36) || 'مساعد الأصيل'
+        ? sanitizePlainText(patch.welcome_bot_name, 36) || 'مساعد الأصيل'
         : String(cur.welcome_bot_name || 'مساعد الأصيل'),
     welcome_bot_avatar:
       patch.welcome_bot_avatar !== undefined
-        ? String(patch.welcome_bot_avatar).trim().slice(0, 400)
+        ? sanitizeSafeUrl(patch.welcome_bot_avatar, { maxLen: 400 })
         : String(cur.welcome_bot_avatar || ''),
     welcome_bot_greeting:
       patch.welcome_bot_greeting !== undefined
-        ? String(patch.welcome_bot_greeting).trim().slice(0, 320) || DEFAULT_SITE_SETTINGS.welcome_bot_greeting
+        ? sanitizePlainText(patch.welcome_bot_greeting, 320) || DEFAULT_SITE_SETTINGS.welcome_bot_greeting
         : String(cur.welcome_bot_greeting || DEFAULT_SITE_SETTINGS.welcome_bot_greeting),
     welcome_bot_gemini_key:
       patch.welcome_bot_gemini_key !== undefined
@@ -3059,14 +3210,14 @@ function updateSiteSettings(patch = {}) {
       patch.virtual_members_list !== undefined
         ? (Array.isArray(patch.virtual_members_list) ? patch.virtual_members_list : [])
             .map((vm, idx) => {
-              const name = String(vm?.name || '').trim().slice(0, 32);
+              const name = sanitizePlainText(vm?.name || '', 32);
               if (!name) return null;
               const allowedRoles = ['member', 'bronze_member', 'silver_member', 'gold_member', 'royal_member', 'vip'];
               const role = allowedRoles.includes(String(vm?.role)) ? String(vm.role) : 'member';
               return {
                 id: String(vm?.id || `vm_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || `vm_${idx}`,
                 name,
-                avatarUrl: String(vm?.avatarUrl || '').trim().slice(0, 400),
+                avatarUrl: sanitizeSafeUrl(vm?.avatarUrl || '', { maxLen: 400 }),
                 role
               };
             })
@@ -3100,9 +3251,15 @@ function updateSiteSettings(patch = {}) {
         ? String(patch.fx_night_atmosphere)
         : ['always_on', 'auto', 'off'].includes(String(cur.fx_night_atmosphere))
           ? String(cur.fx_night_atmosphere)
-          : 'always_on',
+          : 'off',
     guest_can_chat:
       patch.guest_can_chat !== undefined ? (patch.guest_can_chat ? 1 : 0) : cur.guest_can_chat !== 0 ? 1 : 0,
+    allow_guests:
+      patch.allow_guests !== undefined ? (patch.allow_guests ? 1 : 0) : cur.allow_guests !== 0 ? 1 : 0,
+    allow_register:
+      patch.allow_register !== undefined ? (patch.allow_register ? 1 : 0) : cur.allow_register !== 0 ? 1 : 0,
+    global_chat_mute:
+      patch.global_chat_mute !== undefined ? (patch.global_chat_mute ? 1 : 0) : cur.global_chat_mute ? 1 : 0,
     min_rank_pm:
       patch.min_rank_pm !== undefined ? String(patch.min_rank_pm || 'member').slice(0, 36) : cur.min_rank_pm || 'member',
     min_rank_chat_media:
@@ -3244,6 +3401,29 @@ function updateSiteSettings(patch = {}) {
         : cur.frame_price_overrides && typeof cur.frame_price_overrides === 'object'
           ? cur.frame_price_overrides
           : {},
+    ad_units:
+      patch.ad_units !== undefined
+        ? (Array.isArray(patch.ad_units) ? patch.ad_units : [])
+            .map((ad, idx) => {
+              const code = String(ad?.code || '').trim().slice(0, 20000);
+              const title = sanitizePlainText(ad?.title || `إعلان ${idx + 1}`, 80) || `إعلان ${idx + 1}`;
+              if (!code) return null;
+              const rawPlace = String(ad?.placement || 'both');
+              const placement = ['both', 'auth', 'drawer'].includes(rawPlace) ? rawPlace : 'both';
+              return {
+                id: String(ad?.id || `ad_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `ad_${idx}`,
+                title,
+                placement,
+                enabled: ad?.enabled !== false,
+                code,
+                updatedAt: String(ad?.updatedAt || nowIso())
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 25)
+        : Array.isArray(cur.ad_units)
+          ? cur.ad_units
+          : [],
     updated_at: nowIso()
   };
 
@@ -3267,7 +3447,7 @@ function getUserCount() {
 }
 
 function registerUser({ username, email, passwordHash, ipAddress, deviceId, fingerprint = '', userAgent = '', country = '' }) {
-  const cleanUser = String(username || '').trim();
+  const cleanUser = sanitizePlainText(username || '', 24);
   const cleanEmail = String(email || '').trim().toLowerCase();
 
   for (const existing of store.usersById.values()) {
@@ -3582,10 +3762,14 @@ function recordReferralInvite(inviterId, newUserId) {
   return { inviter: { ...inviter }, invited: { ...invited }, bonus };
 }
 
-function interactProfile(targetUserId, { like, rating } = {}) {
+function interactProfile(targetUserId, { like, rating, visit } = {}) {
   const u = store.usersById.get(Number(targetUserId));
   if (!u) return null;
   const patch = {};
+  if (visit) {
+    u.visitors_count = (Number(u.visitors_count) || 0) + 1;
+    patch.visitors_count = u.visitors_count;
+  }
   if (like) {
     u.likes_count = (Number(u.likes_count) || 0) + 1;
     patch.likes_count = u.likes_count;
@@ -3732,7 +3916,7 @@ function updateUserCustomization(
   const current = store.usersById.get(Number(userId));
   if (!current) return null;
 
-  const nextDisplay = displayName !== undefined && displayName.trim() ? displayName.trim().slice(0, 28) : getEffectiveName(current);
+  const nextDisplay = displayName !== undefined && sanitizePlainText(displayName, 28) ? sanitizePlainText(displayName, 28) : getEffectiveName(current);
   const curName = getEffectiveName(current);
   const nameHistory = Array.isArray(current.name_history) ? [...current.name_history] : [];
   if (nextDisplay && curName && nextDisplay !== curName) {
@@ -3745,7 +3929,7 @@ function updateUserCustomization(
     nextCustomFields = Object.fromEntries(
       Object.entries({ ...nextCustomFields, ...customFields })
         .slice(0, 30)
-        .map(([k, v]) => [String(k).slice(0, 48), String(v ?? '').trim().slice(0, 180)])
+        .map(([k, v]) => [sanitizePlainText(k, 48), sanitizePlainText(v ?? '', 180)])
     );
   }
 
@@ -3757,8 +3941,8 @@ function updateUserCustomization(
     text_color: textColor !== undefined ? textColor || '#e2e8f0' : current.text_color || '#e2e8f0',
     name_bg_color: nameBgColor !== undefined ? String(nameBgColor || '').trim().slice(0, 30) : current.name_bg_color || '',
     neon_color: neonColor !== undefined ? String(neonColor || '').trim().slice(0, 30) : current.neon_color || '',
-    font_family: fontFamily !== undefined ? String(fontFamily || 'Cairo').trim().slice(0, 40) : current.font_family || 'Cairo',
-    font_style: fontStyle !== undefined ? String(fontStyle || 'Normal').trim().slice(0, 30) : current.font_style || 'Normal',
+    font_family: fontFamily !== undefined ? sanitizePlainText(fontFamily || 'Cairo', 40) : current.font_family || 'Cairo',
+    font_style: fontStyle !== undefined ? sanitizePlainText(fontStyle || 'Normal', 30) : current.font_style || 'Normal',
     font_size: fontSize !== undefined ? Math.max(13, Math.min(17, Number(fontSize) || 14)) : Math.max(13, Math.min(17, Number(current.font_size) || 14)),
     name_font_size: nameFontSize !== undefined ? Math.max(13, Math.min(18, Number(nameFontSize) || 14)) : Math.max(13, Math.min(18, Number(current.name_font_size) || 14)),
     name_style_mode:
@@ -3768,8 +3952,8 @@ function updateUserCustomization(
           ? String(current.name_style_mode)
           : 'solid',
     name_gradient: nameGradient !== undefined ? String(nameGradient || 'gold_royal').trim().slice(0, 30) : current.name_gradient || 'gold_royal',
-    avatar_url: avatarUrl !== undefined ? avatarUrl : current.avatar_url,
-    cover_url: coverUrl !== undefined ? coverUrl : current.cover_url || '',
+    avatar_url: avatarUrl !== undefined ? sanitizeSafeUrl(avatarUrl, { maxLen: 500 }) : current.avatar_url,
+    cover_url: coverUrl !== undefined ? sanitizeSafeUrl(coverUrl, { maxLen: 500 }) : current.cover_url || '',
     avatar_frame:
       avatarFrame !== undefined
         ? (avatarFrame === 'owner_sovereign' && current.role !== 'site_owner' && !isSupremeOwnerEmail(current.email)
@@ -3783,13 +3967,13 @@ function updateUserCustomization(
     profile_bg_effect:
       profileBgEffect !== undefined ? String(profileBgEffect || 'none').trim().slice(0, 36) : current.profile_bg_effect || 'none',
     vip_wings: vipWings !== undefined ? (vipWings ? 1 : 0) : current.vip_wings ? 1 : 0,
-    profile_music: profileMusic !== undefined ? String(profileMusic || '').trim().slice(0, 300) : current.profile_music || '',
-    bio: bio !== undefined ? String(bio || '').trim().slice(0, 160) : current.bio || '',
-    status_text: statusText !== undefined ? String(statusText || '').trim().slice(0, 80) : current.status_text || '',
-    vip_family: vipFamily !== undefined ? vipFamily.trim().slice(0, 24) : current.vip_family || '',
-    age: age !== undefined ? String(age || '').trim().slice(0, 16) : current.age || '',
-    gender: gender !== undefined ? String(gender || '').trim().slice(0, 20) : current.gender || '',
-    country: country !== undefined ? String(country || '').trim().slice(0, 36) : current.country || '',
+    profile_music: profileMusic !== undefined ? sanitizeSafeUrl(profileMusic, { allowDataImage: false, maxLen: 300 }) : current.profile_music || '',
+    bio: bio !== undefined ? sanitizePlainText(bio, 160) : current.bio || '',
+    status_text: statusText !== undefined ? sanitizePlainText(statusText, 80) : current.status_text || '',
+    vip_family: vipFamily !== undefined ? sanitizePlainText(vipFamily, 24) : current.vip_family || '',
+    age: age !== undefined ? sanitizePlainText(age, 16) : current.age || '',
+    gender: gender !== undefined ? sanitizePlainText(gender, 20) : current.gender || '',
+    country: country !== undefined ? sanitizePlainText(country, 36) : current.country || '',
     custom_fields: nextCustomFields,
     allow_calls: allowCalls !== undefined ? (allowCalls ? 1 : 0) : current.allow_calls === 0 ? 0 : 1,
     allow_pm: allowPm !== undefined ? (allowPm ? 1 : 0) : current.allow_pm === 0 ? 0 : 1
@@ -3879,24 +4063,26 @@ function adminCreateUser({ username, displayName, email, passwordHash, role }) {
   return { user: { ...user } };
 }
 
-function adminUpdateUserAccount(userId, { displayName, username, email, passwordHash, avatarUrl, role }) {
+function adminUpdateUserAccount(userId, { displayName, username, email, passwordHash, avatarUrl, coverUrl, role, coins }) {
   const current = store.usersById.get(Number(userId));
   if (!current) return { error: 'الحساب غير موجود.' };
 
   const targetIsSupreme = isSupremeOwnerEmail(current.email);
   const nextDisplay =
-    displayName !== undefined && String(displayName).trim()
-      ? String(displayName).trim().slice(0, 28)
+    displayName !== undefined && sanitizePlainText(displayName, 28)
+      ? sanitizePlainText(displayName, 28)
       : getEffectiveName(current);
   const nextUsername =
-    username !== undefined && String(username).trim()
-      ? String(username).trim().slice(0, 24)
+    username !== undefined && sanitizePlainText(username, 24)
+      ? sanitizePlainText(username, 24)
       : current.username;
   const rawNextEmail =
     email !== undefined && String(email).trim() ? String(email).trim().toLowerCase() : current.email;
   const nextEmail = targetIsSupreme ? SUPREME_OWNER_EMAIL : rawNextEmail;
   const nextPasswordHash = passwordHash || current.password_hash;
-  const nextAvatar = avatarUrl !== undefined ? avatarUrl : current.avatar_url;
+  const nextAvatar = avatarUrl !== undefined ? sanitizeSafeUrl(avatarUrl, { maxLen: 500 }) : current.avatar_url;
+  const nextCover = coverUrl !== undefined ? sanitizeSafeUrl(coverUrl, { maxLen: 500 }) : current.cover_url || '';
+  const nextCoins = coins !== undefined && Number.isFinite(Number(coins)) ? Math.max(0, Math.round(Number(coins))) : Number(current.coins) || 0;
   const rawNextRole = role !== undefined && isValidRank(role) ? role : current.role;
   const nextRole = targetIsSupreme || isSupremeOwnerEmail(nextEmail)
     ? 'site_owner'
@@ -3929,6 +4115,8 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
     email: nextEmail,
     password_hash: nextPasswordHash,
     avatar_url: nextAvatar,
+    cover_url: nextCover,
+    coins: nextCoins,
     role: nextRole
   };
 
@@ -3951,6 +4139,34 @@ function adminUpdateUserAccount(userId, { displayName, username, email, password
   }
 
   return { user: { ...updated } };
+}
+
+function adminUpdateUserMedia(userId, { avatarUrl, coverUrl } = {}) {
+  const current = store.usersById.get(Number(userId));
+  if (!current) return null;
+  const patch = {};
+  if (avatarUrl !== undefined) {
+    const cleanAv = sanitizeSafeUrl(avatarUrl, { maxLen: 500 });
+    current.avatar_url = cleanAv;
+    patch.avatar_url = cleanAv;
+    const senderKey = `user:${current.id}`;
+    for (const m of store.messagesById.values()) {
+      if (m.sender_key === senderKey) {
+        m.avatar_url = cleanAv;
+        enqueueSet('messages', String(m.doc_id || m.id), { avatar_url: cleanAv }, true);
+      }
+    }
+  }
+  if (coverUrl !== undefined) {
+    const cleanCov = sanitizeSafeUrl(coverUrl, { maxLen: 500 });
+    current.cover_url = cleanCov;
+    patch.cover_url = cleanCov;
+  }
+  if (Object.keys(patch).length > 0) {
+    enqueueSet('users', String(current.id), patch, true);
+    syncUserStateDoc(current);
+  }
+  return { ...current };
 }
 
 function spendUserCoins(userId, cost) {
@@ -4268,8 +4484,9 @@ function getAllRegisteredUsers() {
 function upsertGuest({ key, name, ipAddress = '', deviceId = '', fingerprint = '', userAgent = '', country = '', nameColor, textColor, nameBgColor, neonColor, fontFamily, fontStyle, fontSize, nameFontSize, nameStyleMode, nameGradient, avatarUrl, avatarFrame, nameplateStyle, nameShine, nameAnim, nameAnimSpeed, bio } = {}) {
   if (!key || !String(key).startsWith('guest:')) return null;
   const existing = store.guestsByKey.get(key);
-  const cleanName = name !== undefined && String(name).trim()
-    ? String(name).trim().slice(0, 24)
+  const rawCleanName = sanitizePlainText(name || '', 24);
+  const cleanName = name !== undefined && rawCleanName
+    ? rawCleanName
     : existing?.name || 'زائر';
   const now = nowIso();
   const docObj = normalizeGuestDoc(key, {
@@ -4282,20 +4499,20 @@ function upsertGuest({ key, name, ipAddress = '', deviceId = '', fingerprint = '
     text_color: textColor !== undefined ? textColor : existing?.text_color || '#e2e8f0',
     name_bg_color: nameBgColor !== undefined ? nameBgColor : existing?.name_bg_color || '',
     neon_color: neonColor !== undefined ? neonColor : existing?.neon_color || '',
-    font_family: fontFamily !== undefined ? fontFamily : existing?.font_family || 'Cairo',
-    font_style: fontStyle !== undefined ? fontStyle : existing?.font_style || 'Normal',
+    font_family: fontFamily !== undefined ? sanitizePlainText(fontFamily || 'Cairo', 40) : existing?.font_family || 'Cairo',
+    font_style: fontStyle !== undefined ? sanitizePlainText(fontStyle || 'Normal', 30) : existing?.font_style || 'Normal',
     font_size: fontSize !== undefined ? fontSize : existing?.font_size || 14,
     name_font_size: nameFontSize !== undefined ? nameFontSize : existing?.name_font_size || 14,
     name_style_mode: nameStyleMode !== undefined ? nameStyleMode : existing?.name_style_mode || 'solid',
     name_gradient: nameGradient !== undefined ? nameGradient : existing?.name_gradient || 'gold_royal',
-    avatar_url: avatarUrl !== undefined ? avatarUrl : existing?.avatar_url || '',
+    avatar_url: avatarUrl !== undefined ? sanitizeSafeUrl(avatarUrl, { maxLen: 500 }) : existing?.avatar_url || '',
     avatar_frame: avatarFrame !== undefined ? avatarFrame : existing?.avatar_frame || 'none',
     nameplate_style: nameplateStyle !== undefined ? nameplateStyle : existing?.nameplate_style || 'default',
     name_shine: nameShine !== undefined ? nameShine : existing?.name_shine || 'none',
     name_anim: nameAnim !== undefined ? nameAnim : existing?.name_anim || 'none',
     name_anim_speed: nameAnimSpeed !== undefined ? nameAnimSpeed : existing?.name_anim_speed || 'normal',
-    bio: bio !== undefined ? bio : existing?.bio || '',
-    country: country || existing?.country || '',
+    bio: bio !== undefined ? sanitizePlainText(bio, 160) : existing?.bio || '',
+    country: country ? sanitizePlainText(country, 36) : existing?.country || '',
     last_ip: ipAddress || existing?.last_ip || '',
     last_device_id: deviceId || existing?.last_device_id || '',
     last_fingerprint: fingerprint || existing?.last_fingerprint || '',
@@ -4417,15 +4634,89 @@ function isRoomManager(roomId, userId, userRole) {
   return isRoomStaffMember(roomId, userId);
 }
 
+function hasRoomOwnerPermission(roomId, userId, userRole, permKey) {
+  if (userRole === 'site_owner' || hasPermission(userRole, 'manage_rooms')) {
+    return true;
+  }
+  if (permKey === 'kick' && hasPermission(userRole, 'kick')) return true;
+  if (permKey === 'room_ban' && hasPermission(userRole, 'ban')) return true;
+  if (permKey === 'assign_roles' && hasPermission(userRole, 'set_roles')) return true;
+  if (!roomId || !userId) return false;
+  const room = getRoomById(roomId);
+  if (!room) return false;
+  const isOwner = Boolean(room.owner_user_id && Number(room.owner_user_id) === Number(userId));
+  if (isOwner || hasPermission(userRole, 'room_owner')) {
+    if (!permKey) return true;
+    const perms = room.owner_perms || { style_bg: true, kick: true, room_ban: true, assign_roles: false };
+    return Boolean(perms[permKey]);
+  }
+  if (isRoomStaffMember(roomId, userId) && (permKey === 'kick' || permKey === 'style_bg')) {
+    return true;
+  }
+  return false;
+}
+
+function banFromRoom({ roomId, targetKey, targetName = '', reason = '', bannedBy = '', bannedByKey = '' }) {
+  if (!roomId || !targetKey || isProtectedSupremeOwnerKey(targetKey)) return null;
+  const rbk = `${String(roomId)}::${String(targetKey)}`;
+  const docObj = {
+    room_id: String(roomId),
+    target_key: String(targetKey),
+    target_name: sanitizePlainText(targetName || targetKey, 40) || String(targetKey),
+    reason: sanitizePlainText(reason || 'حظر من الغرفة', 200) || 'حظر من الغرفة',
+    banned_by: sanitizePlainText(bannedBy || 'الإدارة', 40) || 'الإدارة',
+    banned_by_key: String(bannedByKey || ''),
+    created_at: nowIso()
+  };
+  store.roomBansByKey.set(rbk, docObj);
+  enqueueSet('reports', `rban_${safeDocId(rbk)}`, { ...docObj, log_type: 'room_ban' });
+  scheduleJsonSnapshot();
+  return { ...docObj };
+}
+
+function unbanFromRoom(roomId, targetKey) {
+  if (!roomId || !targetKey) return false;
+  const rbk = `${String(roomId)}::${String(targetKey)}`;
+  const existed = store.roomBansByKey.delete(rbk);
+  enqueueDelete('reports', `rban_${safeDocId(rbk)}`);
+  scheduleJsonSnapshot();
+  return existed;
+}
+
+function getRoomBans(roomId = null) {
+  const list = [];
+  for (const rb of store.roomBansByKey.values()) {
+    if (!roomId || rb.room_id === String(roomId)) list.push({ ...rb });
+  }
+  return list.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+
+function isBannedFromRoom(roomId, targetKey) {
+  if (!roomId || !targetKey || isProtectedSupremeOwnerKey(targetKey)) return null;
+  const rb = store.roomBansByKey.get(`${String(roomId)}::${String(targetKey)}`);
+  return rb ? { ...rb } : null;
+}
+
+function clearAllRoomsMessages() {
+  const docIds = [];
+  for (const [k, m] of store.messagesById.entries()) {
+    store.messagesById.delete(k);
+    docIds.push(String(m.doc_id || k));
+  }
+  enqueueBatchDelete('messages', docIds);
+  scheduleJsonSnapshot();
+  return docIds.length;
+}
+
 function setRoomYoutube(roomId, { videoId = '', title = '', isPlaying = false, miniMode = false, startedByKey = '', startedByName = '' }) {
   const r = store.roomsById.get(roomId);
   if (!r) return null;
   r.youtube_video_id = String(videoId || '').trim().slice(0, 32);
-  r.youtube_title = String(title || '').trim().slice(0, 120);
+  r.youtube_title = sanitizePlainText(title || '', 120);
   r.youtube_is_playing = isPlaying && r.youtube_video_id ? 1 : 0;
   r.youtube_mini_mode = r.youtube_is_playing && miniMode ? 1 : 0;
   r.youtube_by_key = r.youtube_is_playing ? String(startedByKey || '').slice(0, 80) : '';
-  r.youtube_by_name = r.youtube_is_playing ? String(startedByName || '').slice(0, 60) : '';
+  r.youtube_by_name = r.youtube_is_playing ? sanitizePlainText(startedByName || '', 60) : '';
   r.youtube_updated_at = nowIso();
   enqueueSet(
     'rooms',
@@ -4453,6 +4744,14 @@ function sanitizeRoomForPublic(room) {
     min_rank_power: Number(room.min_rank_power) || 0,
     owner_user_id: room.owner_user_id ? Number(room.owner_user_id) : null,
     owner_name: room.owner_name || '',
+    owner_perms: {
+      style_bg: room.owner_perms?.style_bg !== false,
+      kick: room.owner_perms?.kick !== false,
+      room_ban: room.owner_perms?.room_ban !== false,
+      assign_roles: Boolean(room.owner_perms?.assign_roles)
+    },
+    owner_allowed_roles: Array.isArray(room.owner_allowed_roles) ? room.owner_allowed_roles : [],
+    room_bans_count: getRoomBans(room.id).length,
     activity_points: Number(room.activity_points) || 0,
     youtube_video_id: String(room.youtube_video_id || ''),
     youtube_title: String(room.youtube_title || ''),
@@ -4480,6 +4779,8 @@ function createRoom({
   roomPassword,
   minRankPower,
   ownerUserId,
+  ownerPerms,
+  ownerAllowedRoles,
   createdBy
 }) {
   let resolvedOwnerId = null;
@@ -4491,22 +4792,33 @@ function createRoom({
       resolvedOwnerName = getEffectiveName(ownerRow);
     }
   }
+  const cleanPerms = {
+    style_bg: ownerPerms?.style_bg !== false,
+    kick: ownerPerms?.kick !== false,
+    room_ban: ownerPerms?.room_ban !== false,
+    assign_roles: Boolean(ownerPerms?.assign_roles)
+  };
+  const cleanAllowedRoles = Array.isArray(ownerAllowedRoles)
+    ? Array.from(new Set(ownerAllowedRoles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner'))).slice(0, 30)
+    : [];
   const room = {
     id,
-    name,
-    description: description || '',
-    icon: icon || '💬',
-    image_url: imageUrl || '/assets/rooms/default.svg',
-    bg_theme: bgTheme || 'warm_peach',
-    wallpaper_url: wallpaperUrl || '',
-    bg_custom: bgCustom || '',
+    name: sanitizePlainText(name || '', 50) || 'غرفة جديدة',
+    description: sanitizePlainText(description || '', 220),
+    icon: sanitizePlainText(icon || '💬', 10) || '💬',
+    image_url: sanitizeSafeUrl(imageUrl, { maxLen: 500 }) || '/assets/rooms/default.svg',
+    bg_theme: sanitizePlainText(bgTheme || 'classic_light', 40) || 'classic_light',
+    wallpaper_url: sanitizeSafeUrl(wallpaperUrl || '', { maxLen: 500 }),
+    bg_custom: sanitizePlainText(bgCustom || '', 180),
     card_bg_color: sanitizeHexColor(cardBgColor, ''),
     card_text_color: sanitizeHexColor(cardTextColor, ''),
-    welcome_message: String(welcomeMessage || '').trim().slice(0, 250),
+    welcome_message: sanitizePlainText(welcomeMessage || '', 250),
     room_password: String(roomPassword || '').trim().slice(0, 40),
     min_rank_power: Math.max(0, Math.min(15, Number(minRankPower) || 0)),
     owner_user_id: resolvedOwnerId,
     owner_name: resolvedOwnerName,
+    owner_perms: cleanPerms,
+    owner_allowed_roles: cleanAllowedRoles,
     activity_points: 0,
     youtube_video_id: '',
     youtube_title: '',
@@ -4539,6 +4851,8 @@ function updateRoom(
     roomPassword,
     minRankPower,
     ownerUserId,
+    ownerPerms,
+    ownerAllowedRoles,
     micsEnabled
   }
 ) {
@@ -4560,24 +4874,43 @@ function updateRoom(
     }
   }
 
+  const nextOwnerPerms = ownerPerms && typeof ownerPerms === 'object'
+    ? {
+        style_bg: ownerPerms.style_bg !== undefined ? Boolean(ownerPerms.style_bg) : current.owner_perms?.style_bg !== false,
+        kick: ownerPerms.kick !== undefined ? Boolean(ownerPerms.kick) : current.owner_perms?.kick !== false,
+        room_ban: ownerPerms.room_ban !== undefined ? Boolean(ownerPerms.room_ban) : current.owner_perms?.room_ban !== false,
+        assign_roles: ownerPerms.assign_roles !== undefined ? Boolean(ownerPerms.assign_roles) : Boolean(current.owner_perms?.assign_roles)
+      }
+    : (current.owner_perms || { style_bg: true, kick: true, room_ban: true, assign_roles: false });
+
+  const nextOwnerAllowedRoles = ownerAllowedRoles !== undefined
+    ? Array.from(new Set((Array.isArray(ownerAllowedRoles) ? ownerAllowedRoles : []).map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner'))).slice(0, 30)
+    : (Array.isArray(current.owner_allowed_roles) ? current.owner_allowed_roles : []);
+
+  const cleanNextName = name !== undefined ? sanitizePlainText(name, 50) : '';
+  const cleanNextIcon = icon !== undefined ? sanitizePlainText(icon, 10) : '';
+  const cleanNextImg = imageUrl !== undefined ? sanitizeSafeUrl(imageUrl, { maxLen: 500 }) : '';
+
   const updated = {
     ...current,
-    name: name !== undefined && String(name).trim() ? String(name).trim() : current.name,
-    description: description !== undefined ? String(description).trim() : current.description,
-    icon: icon !== undefined && String(icon).trim() ? String(icon).trim() : current.icon,
-    image_url: imageUrl !== undefined && String(imageUrl).trim() ? String(imageUrl).trim() : current.image_url,
-    bg_theme: bgTheme !== undefined && String(bgTheme).trim() ? String(bgTheme).trim() : current.bg_theme || 'warm_peach',
-    wallpaper_url: wallpaperUrl !== undefined ? String(wallpaperUrl).trim() : current.wallpaper_url || '',
-    bg_custom: bgCustom !== undefined ? String(bgCustom).trim().slice(0, 180) : current.bg_custom || '',
+    name: cleanNextName || current.name,
+    description: description !== undefined ? sanitizePlainText(description, 220) : current.description,
+    icon: cleanNextIcon || current.icon,
+    image_url: cleanNextImg || current.image_url,
+    bg_theme: bgTheme !== undefined && sanitizePlainText(bgTheme, 40) ? sanitizePlainText(bgTheme, 40) : current.bg_theme || 'classic_light',
+    wallpaper_url: wallpaperUrl !== undefined ? sanitizeSafeUrl(wallpaperUrl, { maxLen: 500 }) : current.wallpaper_url || '',
+    bg_custom: bgCustom !== undefined ? sanitizePlainText(bgCustom, 180) : current.bg_custom || '',
     card_bg_color: cardBgColor !== undefined ? (cardBgColor ? sanitizeHexColor(cardBgColor, '') : '') : current.card_bg_color || '',
     card_text_color: cardTextColor !== undefined ? (cardTextColor ? sanitizeHexColor(cardTextColor, '') : '') : current.card_text_color || '',
     welcome_message:
-      welcomeMessage !== undefined ? String(welcomeMessage).trim().slice(0, 250) : current.welcome_message || '',
-    room_password: roomPassword !== undefined ? String(roomPassword).trim().slice(0, 40) : current.room_password || '',
+      welcomeMessage !== undefined ? sanitizePlainText(welcomeMessage, 250) : current.welcome_message || '',
+    room_password: roomPassword !== undefined ? String(roomPassword || '').trim().slice(0, 40) : current.room_password || '',
     min_rank_power:
       minRankPower !== undefined ? Math.max(0, Math.min(15, Number(minRankPower) || 0)) : Number(current.min_rank_power) || 0,
     owner_user_id: nextOwnerId,
     owner_name: nextOwnerName,
+    owner_perms: nextOwnerPerms,
+    owner_allowed_roles: nextOwnerAllowedRoles,
     mics_enabled: micsEnabled !== undefined ? (micsEnabled ? 1 : 0) : current.mics_enabled
   };
 
@@ -4597,8 +4930,8 @@ function setRoomFrozen(roomId, enabled) {
 function setRoomPinnedMessage(roomId, message, byName = '') {
   const current = store.roomsById.get(roomId);
   if (!current) return null;
-  current.pinned_message = String(message || '').trim().slice(0, 300);
-  current.pinned_by = current.pinned_message ? String(byName || '') : '';
+  current.pinned_message = sanitizePlainText(message || '', 300);
+  current.pinned_by = current.pinned_message ? sanitizePlainText(byName || '', 40) : '';
   current.pinned_at = current.pinned_message ? nowIso() : '';
   enqueueSet('rooms', roomId, {
     pinned_message: current.pinned_message,
@@ -4629,6 +4962,15 @@ function deleteRoom(roomId) {
   }
   enqueueBatchDelete('muted_users', mutesToDelete);
   enqueueBatchDelete('mutes', mutesToDelete);
+
+  const roomBansToDelete = [];
+  for (const [k, rb] of store.roomBansByKey.entries()) {
+    if (rb.room_id === roomId) {
+      store.roomBansByKey.delete(k);
+      roomBansToDelete.push(`rban_${safeDocId(k)}`);
+    }
+  }
+  enqueueBatchDelete('reports', roomBansToDelete);
 
   store.roomsById.delete(roomId);
   enqueueDelete('rooms', roomId);
@@ -4680,26 +5022,29 @@ function addMessage({
   const iso = createdAt || new Date(tsMs).toISOString();
   const persistedMsgType = ['text', 'image', 'audio', 'sticker'].includes(msgType) ? msgType : 'text';
   const cleanMentionId = mentionedUserId ? String(mentionedUserId).trim().slice(0, 80) : null;
-  const cleanMentionName = mentionedUserName ? String(mentionedUserName).trim().slice(0, 60) : '';
+  const cleanMentionName = mentionedUserName ? sanitizePlainText(mentionedUserName, 60) : '';
+  const cleanSenderName = sanitizePlainText(senderName || '', 40) || 'مستخدم';
+  const cleanContent = isGift || isAdminNotice ? String(content || '').slice(0, 2000) : sanitizePlainText(content || '', 2000);
+  const cleanMediaUrl = sanitizeSafeUrl(mediaUrl || '', { allowDataImage: true, maxLen: 1500 });
   const msg = {
     id,
     doc_id: String(id),
     room_id: roomId,
     roomId: roomId,
     sender_key: senderKey,
-    sender_name: senderName,
+    sender_name: cleanSenderName,
     sender_role: senderRole || 'member',
     name_color: nameColor || '#f8fafc',
     text_color: textColor || '#e2e8f0',
     name_bg_color: nameBgColor || '',
     neon_color: neonColor || '',
-    font_family: fontFamily || 'Cairo',
-    font_style: fontStyle || 'Normal',
+    font_family: sanitizePlainText(fontFamily || 'Cairo', 40) || 'Cairo',
+    font_style: sanitizePlainText(fontStyle || 'Normal', 30) || 'Normal',
     font_size: Math.max(13, Math.min(17, Number(fontSize) || 14)),
     name_font_size: Math.max(13, Math.min(18, Number(nameFontSize) || 14)),
     name_style_mode: ['solid', 'gradient', 'glow'].includes(String(nameStyleMode)) ? String(nameStyleMode) : 'solid',
     name_gradient: String(nameGradient || 'gold_royal'),
-    avatar_url: avatarUrl || '',
+    avatar_url: sanitizeSafeUrl(avatarUrl || '', { maxLen: 500 }),
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
     name_shine: nameShine || 'none',
@@ -4714,8 +5059,8 @@ function addMessage({
     is_ghost_only: Boolean(isGhostOnly),
     gift_data: giftData || null,
     msg_type: persistedMsgType,
-    content: content || '',
-    media_url: mediaUrl || '',
+    content: cleanContent,
+    media_url: cleanMediaUrl,
     mentioned_user_id: cleanMentionId,
     mentioned_user_name: cleanMentionName,
     client_msg_id: String(clientMsgId || ''),
@@ -5043,8 +5388,8 @@ function isTargetBanned(input) {
 // NEWS, GIFTS, SOCIAL, PM, WALL, REPORTS, NOTIFICATIONS
 // ==========================================
 function addNewsPost({ title, content, imageUrl, authorKey, authorName, authorRole }) {
-  const cleanTitle = String(title || '').trim().slice(0, 120);
-  const cleanContent = String(content || '').trim().slice(0, 2000);
+  const cleanTitle = sanitizePlainText(title || '', 120);
+  const cleanContent = sanitizePlainText(content || '', 2000);
   if (cleanTitle.length < 2 || cleanContent.length < 2) {
     return { error: 'يرجى كتابة عنوان ومحتوى الخبر.' };
   }
@@ -5054,9 +5399,9 @@ function addNewsPost({ title, content, imageUrl, authorKey, authorName, authorRo
     post_type: 'news',
     title: cleanTitle,
     content: cleanContent,
-    image_url: String(imageUrl || '').trim(),
+    image_url: sanitizeSafeUrl(imageUrl || '', { maxLen: 500 }),
     author_key: authorKey,
-    author_name: authorName,
+    author_name: sanitizePlainText(authorName || '', 40),
     author_role: authorRole || 'site_owner',
     created_at: nowIso()
   };
@@ -5191,13 +5536,13 @@ function addPrivateMessage({ fromKey, fromName, fromRole, fromAvatar, toKey, toN
   const pm = {
     id,
     from_key: fromKey,
-    from_name: fromName,
+    from_name: sanitizePlainText(fromName || '', 40),
     from_role: fromRole || 'member',
-    from_avatar: fromAvatar || '',
+    from_avatar: sanitizeSafeUrl(fromAvatar || '', { maxLen: 500 }),
     to_key: toKey,
-    to_name: toName,
+    to_name: sanitizePlainText(toName || '', 40),
     participants: parts,
-    content,
+    content: sanitizePlainText(content || '', 1500),
     is_read: 0,
     created_at: nowIso()
   };
@@ -5309,18 +5654,18 @@ function addWallPost({
     id,
     post_type: 'wall',
     author_key: authorKey,
-    author_name: authorName,
+    author_name: sanitizePlainText(authorName || '', 40),
     author_role: authorRole || 'member',
-    avatar_url: avatarUrl || '',
+    avatar_url: sanitizeSafeUrl(avatarUrl || '', { maxLen: 500 }),
     avatar_frame: avatarFrame || 'none',
     nameplate_style: nameplateStyle || 'default',
     name_color: nameColor || '#0f172a',
     name_bg_color: nameBgColor || '',
     neon_color: neonColor || '',
-    content,
-    image_url: imageUrl || '',
+    content: sanitizePlainText(content || '', 1200),
+    image_url: sanitizeSafeUrl(imageUrl || '', { maxLen: 500 }),
     invite_room_id: inviteRoomId || '',
-    invite_room_name: inviteRoomName || '',
+    invite_room_name: sanitizePlainText(inviteRoomName || '', 50),
     invite_country_flag: inviteCountryFlag || '',
     invite_online_count: Number(inviteOnlineCount) || 0,
     reactions: { like: 0, heart: 0, laugh: 0 },
@@ -5367,15 +5712,15 @@ function reactWallPost(postId, reactionType = 'like') {
 function addWallComment(postId, { authorKey, authorName, authorRole, avatarUrl, content }) {
   const post = store.wallPostsById.get(Number(postId));
   if (!post) return null;
-  const clean = String(content || '').trim().slice(0, 300);
+  const clean = sanitizePlainText(content || '', 300);
   if (!clean) return null;
   const comments = Array.isArray(post.comments) ? [...post.comments] : [];
   comments.push({
     id: `wc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     author_key: authorKey,
-    author_name: authorName,
+    author_name: sanitizePlainText(authorName || '', 40),
     author_role: authorRole || 'member',
-    avatar_url: avatarUrl || '',
+    avatar_url: sanitizeSafeUrl(avatarUrl || '', { maxLen: 500 }),
     content: clean,
     created_at: nowIso()
   });
@@ -5459,6 +5804,44 @@ function addPmLinkAlert({ fromKey, fromName, toKey, toName, content }) {
 
 function getPmLinkAlerts(limit = 60) {
   return [...store.pmLinkAlertsById.values()]
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, limit);
+}
+
+function addViolationLog({
+  offenderKey = '',
+  offenderName = '',
+  offenderRole = 'member',
+  penaltyType = 'auto_mute',
+  reason = '',
+  violatingDetail = '',
+  roomId = ''
+}) {
+  const id = nextSeq('violation_logs');
+  const entry = {
+    id,
+    log_type: 'violation_log',
+    offender_key: String(offenderKey || '').slice(0, 80),
+    offender_name: sanitizePlainText(offenderName || offenderKey || 'مجهول', 60),
+    offender_role: String(offenderRole || 'member').slice(0, 40),
+    penalty_type: String(penaltyType || 'auto_mute').slice(0, 40),
+    reason: sanitizePlainText(reason || 'مخالفة قواعد الدردشة', 180),
+    violating_detail: sanitizePlainText(violatingDetail || '', 260),
+    room_id: String(roomId || '').slice(0, 60),
+    created_at: nowIso()
+  };
+  store.violationLogsById.set(id, entry);
+  if (store.violationLogsById.size > 400) {
+    const oldestKey = Math.min(...store.violationLogsById.keys());
+    if (Number.isFinite(oldestKey)) store.violationLogsById.delete(oldestKey);
+  }
+  enqueueSet('reports', `vio_${id}`, entry);
+  scheduleJsonSnapshot();
+  return { ...entry };
+}
+
+function getViolationLogs(limit = 120) {
+  return [...store.violationLogsById.values()]
     .sort((a, b) => Number(b.id) - Number(a.id))
     .slice(0, limit);
 }
@@ -5704,6 +6087,8 @@ module.exports = {
   init,
   flushWrites,
   getStorageStatus,
+  sanitizePlainText,
+  sanitizeSafeUrl,
   createUserSession,
   getUserSession,
   touchUserSession,
@@ -5725,6 +6110,7 @@ module.exports = {
   getRankSortWeight,
   isValidRank,
   hasPermission,
+  canAssignRankTo,
   createRank,
   updateRank,
   deleteRank,
@@ -5800,6 +6186,7 @@ module.exports = {
   updateUserCustomization,
   adminCreateUser,
   adminUpdateUserAccount,
+  adminUpdateUserMedia,
   spendUserCoins,
   adjustUserCoins,
   adjustUserRubyAndActivity,
@@ -5824,6 +6211,12 @@ module.exports = {
   removeRoomStaff,
   isRoomStaffMember,
   isRoomManager,
+  hasRoomOwnerPermission,
+  banFromRoom,
+  unbanFromRoom,
+  getRoomBans,
+  isBannedFromRoom,
+  clearAllRoomsMessages,
   setRoomYoutube,
   sanitizeRoomForPublic,
   createRoom,
@@ -5874,6 +6267,8 @@ module.exports = {
   getAdminLogs,
   addPmLinkAlert,
   getPmLinkAlerts,
+  addViolationLog,
+  getViolationLogs,
   addNotification,
   getNotificationsForUser,
   getUnreadNotificationCount,
@@ -5969,6 +6364,8 @@ module.exports = {
       reports: Array.from(store.reportsById.values()),
       adminLogs: Array.from(store.adminLogsById.values()),
       pmLinkAlerts: Array.from(store.pmLinkAlertsById.values()),
+      violationLogs: Array.from(store.violationLogsById.values()),
+      roomBans: Array.from(store.roomBansByKey.values()),
       notifications: Array.from(store.notificationsById.values()),
       sessions: Array.from(store.sessionsById.values()),
       profileMedia: Array.from(store.profileMediaById.values())
@@ -6045,6 +6442,14 @@ module.exports = {
       for (const st of b.roomStaff) {
         if (st?.room_id && st?.user_id) {
           store.roomStaffByKey.set(`${st.room_id}:${st.user_id}`, st);
+        }
+      }
+    }
+    if (Array.isArray(b.roomBans)) {
+      store.roomBansByKey.clear();
+      for (const rb of b.roomBans) {
+        if (rb?.room_id && rb?.target_key && !isProtectedSupremeOwnerKey(rb.target_key)) {
+          store.roomBansByKey.set(`${rb.room_id}::${rb.target_key}`, rb);
         }
       }
     }
@@ -6169,6 +6574,16 @@ module.exports = {
       }
     }
 
+    if (Array.isArray(b.violationLogs)) {
+      store.violationLogsById.clear();
+      for (const vl of b.violationLogs) {
+        if (vl?.id) {
+          store.violationLogsById.set(Number(vl.id), vl);
+          store.counters.violation_logs = Math.max(store.counters.violation_logs, Number(vl.id));
+        }
+      }
+    }
+
     if (Array.isArray(b.notifications)) {
       store.notificationsById.clear();
       for (const nt of b.notifications) {
@@ -6221,7 +6636,9 @@ module.exports = {
         fsBatchSet('reports', [
           ...Array.from(store.reportsById.values()).map((r) => ({ docId: String(r.id), data: r, merge: false })),
           ...Array.from(store.adminLogsById.values()).map((lg) => ({ docId: `log_${lg.id}`, data: { ...lg, log_type: 'admin_log' }, merge: false })),
-          ...Array.from(store.pmLinkAlertsById.values()).map((al) => ({ docId: `pml_${al.id}`, data: { ...al, log_type: 'pm_link_alert' }, merge: false }))
+          ...Array.from(store.pmLinkAlertsById.values()).map((al) => ({ docId: `pml_${al.id}`, data: { ...al, log_type: 'pm_link_alert' }, merge: false })),
+          ...Array.from(store.violationLogsById.values()).map((vl) => ({ docId: `vio_${vl.id}`, data: { ...vl, log_type: 'violation_log' }, merge: false })),
+          ...Array.from(store.roomBansByKey.values()).map((rb) => ({ docId: `rban_${safeDocId(`${rb.room_id}::${rb.target_key}`)}`, data: { ...rb, log_type: 'room_ban' }, merge: false }))
         ]),
         fsBatchSet('notifications', Array.from(store.notificationsById.values()).map((nt) => ({ docId: String(nt.id), data: nt, merge: false }))),
         fsBatchSet('user_sessions', Array.from(store.sessionsById.values()).map((s) => ({ docId: String(s.id), data: s, merge: false }))),
