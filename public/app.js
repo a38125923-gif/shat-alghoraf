@@ -19,6 +19,24 @@
     { id: 'neon_flicker', label: 'وميض النيون' }
   ];
 
+  const DEFAULT_AVATAR_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1e3a8a"/><stop offset="100%" stop-color="#0f172a"/></linearGradient></defs><rect width="100" height="100" rx="50" fill="url(#g)"/><circle cx="50" cy="38" r="17" fill="#93c5fd"/><path d="M22 86c4-17 17-25 28-25s24 8 28 25" fill="#93c5fd"/></svg>'
+  );
+  const DEFAULT_LOGO_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f2342"/><stop offset="100%" stop-color="#1d4ed8"/></linearGradient></defs><rect width="120" height="120" rx="28" fill="url(#lg)"/><path d="M60 22l12 24 26 4-19 18 5 26-24-13-24 13 5-26-19-18 26-4z" fill="#fbbf24"/></svg>'
+  );
+  const DEFAULT_ROOM_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f2342"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><rect width="100" height="100" rx="20" fill="url(#rg)"/><path d="M24 34h52v32a6 6 0 0 1-6 6H42l-14 10V66h-4a6 6 0 0 1-6-6V40a6 6 0 0 1 6-6z" fill="#f8fafc" opacity="0.92"/><circle cx="39" cy="50" r="4" fill="#1d4ed8"/><circle cx="50" cy="50" r="4" fill="#1d4ed8"/><circle cx="61" cy="50" r="4" fill="#1d4ed8"/></svg>'
+  );
+
+  const MSG_REACTION_META = [
+    { key: 'heart', emoji: '❤️', label: 'أحببته' },
+    { key: 'ok', emoji: '👍', label: 'أعجبني' },
+    { key: 'broken', emoji: '💔', label: 'حزين' },
+    { key: 'laugh', emoji: '😂', label: 'أضحكني' },
+    { key: 'fire', emoji: '🔥', label: 'ناري' }
+  ];
+
   function getOrCreateDeviceId() {
     let did = localStorage.getItem(DEVICE_ID_KEY);
     if (!did) {
@@ -574,7 +592,8 @@
     activeMute: null,
     muteTimer: null,
     ownerModAlertTimer: null,
-    guestRegisterReturnToChat: false
+    guestRegisterReturnToChat: false,
+    replyTo: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -607,7 +626,7 @@
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
       new Notification(String(title || 'شات عربي الاصيل'), {
         body: String(body || '').slice(0, 140),
-        icon: '/assets/rooms/general.svg',
+        icon: DEFAULT_ROOM_SVG,
         tag: 'arabic-chat-alert'
       });
     } catch {
@@ -671,6 +690,17 @@
     }
   }
 
+  function syncMusicButtonIcons(playingRef = '') {
+    const isPlaying = Boolean(playingRef);
+    const html = isPlaying ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
+    const previewBtn = $('custMusicPreviewBtn');
+    if (previewBtn) previewBtn.innerHTML = isPlaying ? '<i class="fa-solid fa-stop"></i> إيقاف' : '<i class="fa-solid fa-play"></i> تشغيل';
+    const custMiniBtn = $('custMiniMusicPlayBtn');
+    if (custMiniBtn) custMiniBtn.innerHTML = html;
+    const quBtn = $('quMusicToggleBtn');
+    if (quBtn) quBtn.innerHTML = html;
+  }
+
   function stopProfileMusic() {
     if (state.profileAudioEl) {
       try {
@@ -686,21 +716,17 @@
       state.profileSynthTimer = null;
     }
     state.activeMusicRef = '';
-    const previewBtn = $('custMusicPreviewBtn');
-    if (previewBtn) previewBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-    const custMiniBtn = $('custMiniMusicPlayBtn');
-    if (custMiniBtn) custMiniBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-    const quBtn = $('quMusicToggleBtn');
-    if (quBtn) quBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    syncMusicButtonIcons('');
   }
 
-  function playProfileMusic(musicRef) {
+  function playProfileMusic(musicRef, opts = {}) {
     const ref = String(musicRef || '').trim();
+    const silentAutoplayError = Boolean(opts?.silentAutoplayError);
     if (!ref) {
       stopProfileMusic();
       return false;
     }
-    if (state.activeMusicRef === ref) {
+    if (state.activeMusicRef === ref && !opts?.forceRestart) {
       stopProfileMusic();
       return false;
     }
@@ -718,7 +744,7 @@
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) {
         stopProfileMusic();
-        showToast('المتصفح لا يدعم تشغيل النغمات.', true);
+        if (!silentAutoplayError) showToast('المتصفح لا يدعم تشغيل النغمات.', true);
         return false;
       }
       const playStep = () => {
@@ -743,6 +769,7 @@
       };
       playStep();
       state.profileSynthTimer = setInterval(playStep, 620);
+      syncMusicButtonIcons(ref);
       return true;
     }
 
@@ -750,11 +777,18 @@
       const audio = new Audio(ref);
       audio.loop = true;
       audio.volume = 0.45;
-      audio.play().catch(() => {
-        showToast('تعذر تشغيل رابط الصوت المباشر.', true);
-        stopProfileMusic();
-      });
+      audio.onended = () => stopProfileMusic();
       state.profileAudioEl = audio;
+      syncMusicButtonIcons(ref);
+      const p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          stopProfileMusic();
+          if (!silentAutoplayError) {
+            showToast('تعذر تشغيل مقطع الصوت مباشرة، اضغط تشغيل مجدداً.', true);
+          }
+        });
+      }
       return true;
     } catch {
       stopProfileMusic();
@@ -1340,7 +1374,10 @@
 
   function resolveFontFamilyCss(ff) {
     const clean = String(ff || '').trim();
-    const allowed = ['Cairo', 'Tajawal', 'Amiri', 'Reem Kufi', 'Aref Ruqaa', 'Almarai'];
+    const allowed = [
+      'Cairo', 'Tajawal', 'Amiri', 'Lemonada', 'Aref Ruqaa',
+      'Reem Kufi', 'Lalezar', 'Changa', 'Marhey', 'Rakkas', 'Almarai'
+    ];
     if (!clean || clean === 'Normal' || !allowed.includes(clean)) return "'Cairo', 'Tajawal', sans-serif";
     return `'${escapeHtml(clean)}', 'Cairo', sans-serif`;
   }
@@ -1422,7 +1459,7 @@
     const nameBg = userObj.name_bg_color || userObj.nameBgColor || '';
     const neon = userObj.neon_color || userObj.neonColor || '';
     const ff = userObj.font_family || userObj.fontFamily || 'Cairo';
-    const fs = userObj.font_style || userObj.fontStyle || 'Normal';
+    const fs = userObj.name_font_style || userObj.nameFontStyle || userObj.font_style || userObj.fontStyle || 'Normal';
     const nameFontSize = Math.max(13, Math.min(18, Number(userObj.name_font_size || userObj.nameFontSize) || 14));
     const nameStyleMode = ['solid', 'gradient', 'glow'].includes(String(userObj.name_style_mode || userObj.nameStyleMode || ''))
       ? String(userObj.name_style_mode || userObj.nameStyleMode)
@@ -1458,8 +1495,8 @@
       styles.push(`text-shadow:0 0 8px ${escapeHtml(glowHex)}, 0 0 16px ${escapeHtml(glowHex)}`);
     }
     styles.push(`font-family:${resolveFontFamilyCss(ff)}`);
-    if (fs === 'Bold') styles.push('font-weight:800');
-    if (fs === 'Italic') styles.push('font-style:italic');
+    if (fs === 'Bold' || fs === 'BoldItalic') styles.push('font-weight:800');
+    if (fs === 'Italic' || fs === 'BoldItalic') styles.push('font-style:italic');
     styles.push(`font-size:${nameFontSize}px`);
 
     const leftWing = wings ? '<span class="vip-wing">🪽</span>' : isExclusiveOwner ? '<span class="vip-wing">👑</span>' : '';
@@ -1913,6 +1950,7 @@
     const canYtUi = !state.user || isOwnerSelf || (ytEnabled && hasPerm('youtube'));
     const canWallUi = !state.user || isOwnerSelf || (wallEnabled && hasPerm('wall'));
     const canStoreUi = !state.user || isOwnerSelf || storeEnabled;
+    const canMsgStyleUi = Boolean(state.user && !state.user.isGuest && (isOwnerSelf || passesSettingRankThreshold('min_rank_msg_style', 'member')));
 
     $('micsCollapsibleWrap')?.classList.toggle('hidden', !micsEnabled || state.micsCollapsed);
     $('toggleYoutubeBarBtn')?.classList.toggle('hidden', !canYtUi);
@@ -1924,6 +1962,8 @@
     $('quickImageUploadBtn')?.classList.toggle('hidden', !canMediaUi);
     $('plusUploadImageBtn')?.classList.toggle('hidden', !canMediaUi);
     $('voiceRecordBtn')?.classList.toggle('hidden', !canMediaUi);
+    $('quickTextStyleBtn')?.classList.toggle('hidden', !canMsgStyleUi);
+    if (!canMsgStyleUi) $('inlineMsgStyleBar')?.classList.add('hidden');
     document.querySelector('.drawer-item[data-drawer="store"]')?.classList.toggle('hidden', !canStoreUi);
     renderDynamicDrawerSections(s);
     const allowReg = Number(s.allow_register ?? 1) !== 0;
@@ -2153,10 +2193,13 @@
     const mediaOn = isOwner || (passesSettingRankThreshold('min_rank_chat_media') && hasPerm('chat_media'));
     const ytOn = Number(s.feat_youtube ?? 1) !== 0 && (isOwner || hasPerm('youtube'));
     const wallOn = Number(s.feat_wall ?? 1) !== 0 && (isOwner || hasPerm('wall'));
+    const canMsgStyleOn = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_msg_style', 'member'));
     $('topPmBtn')?.classList.toggle('hidden', !pmOn);
     $('quickImageUploadBtn')?.classList.toggle('hidden', !mediaOn);
     $('plusUploadImageBtn')?.classList.toggle('hidden', !mediaOn);
     $('voiceRecordBtn')?.classList.toggle('hidden', !mediaOn);
+    $('quickTextStyleBtn')?.classList.toggle('hidden', !canMsgStyleOn);
+    if (!canMsgStyleOn) $('inlineMsgStyleBar')?.classList.add('hidden');
     $('toggleYoutubeBarBtn')?.classList.toggle('hidden', !ytOn);
     $('plusYoutubeBtn')?.classList.toggle('hidden', !ytOn);
     $('footerWallBtn')?.classList.toggle('hidden', !wallOn);
@@ -2169,7 +2212,7 @@
     if (!r) return;
     $('roomBannerName').textContent = `${r.name}${r.is_frozen ? ' ❄️' : ''}`;
     $('roomBannerDesc').textContent = r.description || '';
-    $('roomBannerImg').src = r.image_url || '/assets/rooms/default.svg';
+    $('roomBannerImg').src = r.image_url || DEFAULT_ROOM_SVG;
     $('roomActivityBadge').innerHTML = `<i class="fa-solid fa-fire"></i> ${r.activity_points || 0} تفاعل`;
     $('roomSettingsBtn')?.classList.toggle('hidden', !(state.isRoomManager || state.canStyleRoom));
 
@@ -2754,6 +2797,70 @@
   // ==========================================
   // CHAT FEED RENDERING (MOBILE-FIRST CHARCOAL & WHITE)
   // ==========================================
+  function setReplyTarget(msg) {
+    if (!msg) return;
+    const rawSnippet = msg.msg_type === 'image'
+      ? '🖼️ صورة'
+      : msg.msg_type === 'audio'
+        ? '🎙️ رسالة صوتية'
+        : String(msg.content || '').trim();
+    state.replyTo = {
+      id: msg.id ? String(msg.id) : null,
+      senderName: String(msg.sender_name || 'عضو').slice(0, 60),
+      senderKey: String(msg.sender_key || '').slice(0, 80),
+      content: rawSnippet.slice(0, 140)
+    };
+    const bar = $('chatReplyBar');
+    if (bar) {
+      if ($('chatReplySender')) $('chatReplySender').textContent = state.replyTo.senderName;
+      if ($('chatReplySnippet')) $('chatReplySnippet').textContent = state.replyTo.content || '...';
+      bar.classList.remove('hidden');
+    }
+    $('messageInput')?.focus();
+  }
+
+  function clearReplyTarget() {
+    state.replyTo = null;
+    $('chatReplyBar')?.classList.add('hidden');
+  }
+
+  async function reactToMessage(msgId, reactionKey) {
+    if (!msgId || !reactionKey || !state.token) return;
+    try {
+      const res = await api(`/api/chat/messages/${encodeURIComponent(String(msgId))}/react`, {
+        method: 'POST',
+        body: { reaction: reactionKey }
+      });
+      if (res?.message) {
+        const idx = state.messages.findIndex((m) => String(m.id) === String(msgId));
+        if (idx !== -1) state.messages[idx] = { ...state.messages[idx], ...res.message };
+        const existingRow = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(String(msgId))}"]`);
+        if (existingRow) {
+          const wasOpen = !existingRow.querySelector('.msg-click-action-bar')?.classList.contains('hidden');
+          const fresh = createMessageRowElement(res.message);
+          if (wasOpen) fresh.querySelector('.msg-click-action-bar')?.classList.remove('hidden');
+          existingRow.replaceWith(fresh);
+        }
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function renderMessageReactionsHtml(msg) {
+    if (!msg?.id) return '';
+    const reactions = (msg.reactions && typeof msg.reactions === 'object') ? msg.reactions : {};
+    const myKey = String(state.user?.key || '');
+    const pills = MSG_REACTION_META.map((meta) => {
+      const arr = Array.isArray(reactions[meta.key]) ? reactions[meta.key] : [];
+      if (!arr.length) return '';
+      const reacted = myKey && arr.includes(myKey);
+      return `<button type="button" class="msg-reaction-pill${reacted ? ' reacted' : ''}" data-react-key="${meta.key}" title="${meta.label}">${meta.emoji} <span>${arr.length}</span></button>`;
+    }).filter(Boolean);
+    if (!pills.length) return '';
+    return `<div class="msg-reactions-bar">${pills.join('')}</div>`;
+  }
+
   function createMessageRowElement(msg) {
     const row = document.createElement('div');
     const isQuizBotMsg = msg.sender_key === 'system:quizbot';
@@ -2822,8 +2929,9 @@
         }
       }
       const ff = `font-family:${resolveFontFamilyCss(msg.font_family || 'Cairo')};`;
-      const fw = msg.font_style === 'Bold' ? 'font-weight:800;' : '';
-      const fi = msg.font_style === 'Italic' ? 'font-style:italic;' : '';
+      const mfs = String(msg.font_style || 'Normal');
+      const fw = (mfs === 'Bold' || mfs === 'BoldItalic') ? 'font-weight:800;' : '';
+      const fi = (mfs === 'Italic' || mfs === 'BoldItalic') ? 'font-style:italic;' : '';
       const colorCss = readableColor ? `color:${readableColor};` : '';
       inlineTextHtml = `<span class="msg-text-inline ${readableColor ? '' : 'msg-auto-color'}" style="${colorCss}font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
@@ -2843,6 +2951,7 @@
 
     const isMe = state.user && msg.sender_key === state.user.key;
     const isOwner = state.user?.role === 'site_owner';
+    const isSupremeOwner = Boolean(isOwner || String(state.user?.email || '').toLowerCase() === 'a38125923@gmail.com');
     const targetObj = {
       key: msg.sender_key,
       name: msg.sender_name,
@@ -2859,23 +2968,39 @@
       nameBgColor: msg.name_bg_color,
       neonColor: msg.neon_color,
       nameFontSize: msg.name_font_size || 14,
+      nameFontStyle: msg.name_font_style || msg.font_style || 'Normal',
       nameStyleMode: msg.name_style_mode || 'solid',
       nameGradient: msg.name_gradient || 'gold_royal'
     };
     const isBotTarget = isQuizBotMsg || isWelcomeBotMsg;
     const canActOnTarget = !isMe && !isBotTarget && canManageTargetUser(targetObj);
     const canClearRoom = isOwner || state.isRoomManager || hasPerm('clear_room');
-    const canDelete = (isMe && Boolean(msg.id)) || (Boolean(msg.id) && (isOwner || (canActOnTarget && (state.isRoomManager || hasPerm('delete_msg') || hasPerm('clear_room')))));
+    const canDelete = Boolean(msg.id) && (isSupremeOwner || isMe || (canActOnTarget && (state.isRoomManager || hasPerm('delete_msg') || hasPerm('clear_room'))));
     const canWarn = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('mute') || hasPerm('kick') || hasPerm('ban'));
     const canMute = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('mute'));
     const canKick = canActOnTarget && (isOwner || state.isRoomManager || hasPerm('kick'));
     const canBan = canActOnTarget && (isOwner || hasPerm('ban'));
     const canRank = canActOnTarget && String(msg.sender_key || '').startsWith('user:') && (isOwner || hasPerm('set_rank'));
 
+    const replyQuoteHtml = msg.reply_to && (msg.reply_to.senderName || msg.reply_to.content)
+      ? `<div class="msg-reply-quote"><span class="msg-reply-quote-sender"><i class="fa-solid fa-reply"></i> ${escapeHtml(msg.reply_to.senderName || 'عضو')}</span><span class="msg-reply-quote-text">${escapeHtml(msg.reply_to.content || '')}</span></div>`
+      : '';
+    const reactionsBarHtml = renderMessageReactionsHtml(msg);
+    const clickBarHtml = `
+      <div class="msg-click-action-bar hidden">
+        ${msg.id ? MSG_REACTION_META.map((m) => `<button type="button" class="msg-act-emoji-btn" data-react-key="${m.key}" title="${m.label}">${m.emoji}</button>`).join('') : ''}
+        <button type="button" class="msg-act-pill-btn" data-bar-act="reply"><i class="fa-solid fa-reply"></i> رد</button>
+        ${msg.msg_type === 'text' ? '<button type="button" class="msg-act-pill-btn" data-bar-act="copy"><i class="fa-solid fa-copy"></i> نسخ</button>' : ''}
+        ${!isMe && !isBotTarget ? '<button type="button" class="msg-act-pill-btn" data-bar-act="report"><i class="fa-solid fa-flag"></i> إبلاغ</button>' : ''}
+        ${isSupremeOwner && msg.id ? '<button type="button" class="msg-act-pill-btn danger" data-bar-act="delete"><i class="fa-solid fa-trash"></i> حذف</button>' : ''}
+      </div>
+    `;
+
     row.innerHTML = `
       ${useOwnerPortal ? '<span class="owner-portal-edge-dots" aria-hidden="true"></span>' : ''}
       <div class="msg-avatar-trigger" style="cursor:pointer" title="عرض البطاقة">${formatAvatarHTML(msg, '')}</div>
       <div class="msg-body-col">
+        ${replyQuoteHtml}
         <div class="msg-head-line">
           <div class="msg-inline-main">
             ${roleBadgeHTML(msg.sender_role, true)}
@@ -2893,6 +3018,7 @@
                   <button type="button" class="btn-secondary btn-xs msg-dots-close-btn" style="padding:2px 8px;min-height:24px;">✕</button>
                 </div>
                 <button type="button" data-msg-act="mention"><i class="fa-solid fa-bullhorn"></i> نداء العضو</button>
+                <button type="button" data-msg-act="reply"><i class="fa-solid fa-reply"></i> رد / اقتباس</button>
                 ${!isMe && !isBotTarget ? '<button type="button" data-msg-act="pm"><i class="fa-solid fa-envelope"></i> رسالة خاصة</button>' : ''}
                 <button type="button" data-msg-act="profile"><i class="fa-solid fa-id-card"></i> بطاقة العضو</button>
                 ${isOwner && msg.msg_type === 'text' ? '<button type="button" data-msg-act="pin"><i class="fa-solid fa-thumbtack"></i> تثبيت في الغرفة</button>' : ''}
@@ -2908,6 +3034,8 @@
           </div>
         </div>
         ${mediaBelowHtml}
+        ${reactionsBarHtml}
+        ${clickBarHtml}
       </div>
     `;
 
@@ -2933,6 +3061,71 @@
       });
     });
 
+    row.querySelectorAll('[data-react-key]').forEach((rBtn) => {
+      rBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reactToMessage(msg.id, rBtn.dataset.reactKey);
+      });
+    });
+
+    const clickBar = row.querySelector('.msg-click-action-bar');
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, img, audio, .msg-avatar-trigger, .msg-name-trigger, .mention-inline-badge, .mention-plain-name, .msg-actions-wrap, .msg-click-action-bar, .msg-reactions-bar')) {
+        return;
+      }
+      if (!clickBar) return;
+      const willShow = clickBar.classList.contains('hidden');
+      $('chatFeed')?.querySelectorAll('.msg-click-action-bar').forEach((b) => b.classList.add('hidden'));
+      if (willShow) clickBar.classList.remove('hidden');
+    });
+
+    const runDeleteMessage = async () => {
+      if (!msg.id) return;
+      try {
+        await api(`/api/chat/messages/${encodeURIComponent(String(msg.id))}?roomId=${encodeURIComponent(String(state.currentRoom?.id || ''))}`, { method: 'DELETE' });
+        state.messages = state.messages.filter((m) => String(m.id) !== String(msg.id));
+        const el = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(String(msg.id))}"]`);
+        if (el) el.remove();
+        showToast('تم حذف الرسالة للجميع.');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+
+    clickBar?.querySelectorAll('[data-bar-act]').forEach((barBtn) => {
+      barBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const act = barBtn.dataset.barAct;
+        clickBar.classList.add('hidden');
+        if (act === 'reply') {
+          setReplyTarget(msg);
+        } else if (act === 'copy') {
+          try {
+            await navigator.clipboard.writeText(String(msg.content || ''));
+            showToast('تم نسخ نص الرسالة.');
+          } catch {
+            showToast('تعذر النسخ التلقائي.', true);
+          }
+        } else if (act === 'report') {
+          try {
+            await api('/api/reports', {
+              method: 'POST',
+              body: {
+                targetName: String(msg.sender_name || 'عضو'),
+                reason: `بلاغ على رسالة: ${String(msg.content || '').slice(0, 180)}`,
+                roomId: state.currentRoom?.id || ''
+              }
+            });
+            showToast('تم إرسال البلاغ للإدارة بنجاح.');
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        } else if (act === 'delete') {
+          await runDeleteMessage();
+        }
+      });
+    });
+
     const dotsBtn = row.querySelector('.msg-dots-btn');
     const dotsMenu = row.querySelector('.msg-dots-menu');
     dotsBtn.addEventListener('click', (e) => {
@@ -2952,6 +3145,8 @@
         const act = actBtn.dataset.msgAct;
         if (act === 'mention') {
           insertMention(msg.sender_name, msg.sender_key);
+        } else if (act === 'reply') {
+          setReplyTarget(msg);
         } else if (act === 'pm') {
           openSlideSheetDrawer('pm', targetObj);
         } else if (act === 'profile') {
@@ -2967,14 +3162,7 @@
             showToast(err.message, true);
           }
         } else if (act === 'delete' && msg.id) {
-          try {
-            await api(`/api/chat/messages/${encodeURIComponent(String(msg.id))}`, { method: 'DELETE' });
-            state.messages = state.messages.filter((m) => String(m.id) !== String(msg.id));
-            const el = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(String(msg.id))}"]`);
-            if (el) el.remove();
-          } catch (err) {
-            showToast(err.message, true);
-          }
+          await runDeleteMessage();
         } else if (act === 'clear_room') {
           if (confirm('مسح جميع رسائل هذه الغرفة؟')) {
             try {
@@ -3211,9 +3399,11 @@
     const mentionedUserId = hasValidMention ? state.mentionedUserId : null;
     const mentionedUserName = hasValidMention ? state.mentionedUserName : '';
 
-    // Reset mention ID immediately on send
+    // Reset mention ID & reply quote immediately on send
     state.mentionedUserId = null;
     state.mentionedUserName = '';
+    const replyPayload = state.replyTo ? { ...state.replyTo } : null;
+    clearReplyTarget();
 
     const optimistic = {
       client_msg_id: clientMsgId,
@@ -3227,6 +3417,7 @@
       neon_color: u.neonColor,
       font_family: u.fontFamily,
       font_style: u.fontStyle,
+      name_font_style: u.nameFontStyle || u.fontStyle || 'Normal',
       font_size: u.fontSize || 14,
       name_font_size: u.nameFontSize || 14,
       name_style_mode: u.nameStyleMode || 'solid',
@@ -3241,6 +3432,7 @@
       is_admin_notice: isAdminNotice,
       msg_type: 'text',
       content: text,
+      reply_to: replyPayload,
       mentioned_user_id: mentionedUserId,
       mentioned_user_name: mentionedUserName,
       created_at: new Date().toISOString(),
@@ -3265,7 +3457,8 @@
           clientMsgId,
           isAdminNotice,
           mentionedUserId,
-          mentionedUserName
+          mentionedUserName,
+          replyTo: replyPayload
         }
       });
       if (res?.message) appendOrReconcileMessage(res.message);
@@ -3383,7 +3576,7 @@
       'preset:royal_oud': 'نغمة ملكية',
       'preset:ambient_stars': 'أوتار ليلية'
     };
-    const musicLabel = hasMusic ? (musicLabelMap[u.profileMusic] || 'موسيقى بروفايل مخصصة') : '';
+    const musicLabel = hasMusic ? (musicLabelMap[u.profileMusic] || 'أغنية البروفايل (MP3)') : '';
     const { richRank, interactionRank } = computeUserRanks(u.key);
     const avgRating = !isReg ? '-' : (u.ratingCount > 0 ? (Number(u.ratingSum || 0) / Number(u.ratingCount)).toFixed(1) : '5.0');
     const bgEffectClass = u.profileBgEffect && u.profileBgEffect !== 'none' ? `bg-effect-${u.profileBgEffect}` : '';
@@ -3421,7 +3614,6 @@
           ${isTargetOwnerGalaxy ? '<div class="owner-cosmic-cover-vortex" aria-hidden="true"></div>' : ''}
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
           <div class="profile-cover-overlay"></div>
-          ${isTargetOwnerGalaxy ? '<span class="owner-galaxy-corner-seal"><i class="fa-solid fa-crown"></i> مؤسس ومالك الشات</span>' : ''}
           <div class="profile-cover-top-actions cover-actions-left">
             <button type="button" class="rtl-back-pill cover-close-x-btn" id="quHeroCloseBtn" title="رجوع"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة الغلاف والبطاقة"><i class="fa-solid fa-eye"></i></button>
@@ -4270,6 +4462,9 @@
     }
 
     openModal('quickUserModal');
+    if (hasMusic) {
+      playProfileMusic(u.profileMusic, { silentAutoplayError: true, forceRestart: true });
+    }
 
     if (opts?.initialTab === 'admin' && showAdminTab) {
       $('quTabsBar')?.querySelector('.qu-tab[data-qu-tab="admin"]')?.click();
@@ -4423,37 +4618,20 @@
     }
     $('custGuestUpgradeCard')?.classList.toggle('hidden', !isGuestUser);
     $('custProfileLinkWrap')?.classList.toggle('hidden', isGuestUser);
+    $('custInfoIdentityGrid')?.classList.toggle('hidden', isGuestUser);
+    $('custInfoLocationGrid')?.classList.toggle('hidden', isGuestUser);
+    $('custBioWrap')?.classList.toggle('hidden', isGuestUser);
+    $('custBelowCoverActionsBar')?.classList.toggle('hidden', isGuestUser);
+    $('custWallComposerBox')?.classList.toggle('hidden', isGuestUser);
+    $('custModalFooter')?.classList.toggle('hidden', isGuestUser);
 
-    if ($('custDisplayName')) {
-      $('custDisplayName').value = u.displayName || u.name || '';
-      $('custDisplayName').disabled = isGuestUser;
-    }
-    if ($('custVipFamily')) {
-      $('custVipFamily').value = u.vipFamily || '';
-      $('custVipFamily').disabled = isGuestUser;
-    }
-    if ($('custStatusInput')) {
-      $('custStatusInput').value = u.statusText || '';
-      $('custStatusInput').disabled = isGuestUser;
-    }
-    if ($('custBioInput')) {
-      $('custBioInput').value = u.bio || '';
-      $('custBioInput').disabled = isGuestUser;
-    }
-    if ($('custAgeInput')) {
-      $('custAgeInput').value = u.age ? String(u.age) : '';
-      $('custAgeInput').disabled = isGuestUser;
-    }
-    if ($('custGenderSelect')) {
-      $('custGenderSelect').value = u.gender || '';
-      $('custGenderSelect').disabled = isGuestUser;
-    }
-    if ($('custCountryInput')) {
-      $('custCountryInput').value = u.country || '';
-      $('custCountryInput').disabled = isGuestUser;
-    }
-    if ($('custWallInput')) $('custWallInput').disabled = isGuestUser;
-    if ($('custWallSubmitBtn')) $('custWallSubmitBtn').disabled = isGuestUser;
+    if ($('custDisplayName')) $('custDisplayName').value = u.displayName || u.name || '';
+    if ($('custVipFamily')) $('custVipFamily').value = u.vipFamily || '';
+    if ($('custStatusInput')) $('custStatusInput').value = u.statusText || '';
+    if ($('custBioInput')) $('custBioInput').value = u.bio || '';
+    if ($('custAgeInput')) $('custAgeInput').value = u.age ? String(u.age) : '';
+    if ($('custGenderSelect')) $('custGenderSelect').value = u.gender || '';
+    if ($('custCountryInput')) $('custCountryInput').value = u.country || '';
 
     $('custNameColor').value = /^#[0-9a-f]{6}$/i.test(u.nameColor || '') ? u.nameColor : '#f8fafc';
     $('custTextColor').value = /^#[0-9a-f]{6}$/i.test(u.textColor || '') ? u.textColor : '#e2e8f0';
@@ -4466,6 +4644,9 @@
       const wanted = u.fontFamily || 'Cairo';
       const hasOption = Array.from(fontSelect.options).some((opt) => opt.value === wanted);
       fontSelect.value = hasOption ? wanted : 'Cairo';
+    }
+    if ($('custNameFontStyle')) {
+      $('custNameFontStyle').value = u.nameFontStyle || u.fontStyle || 'Normal';
     }
     $('custFontStyle').value = u.fontStyle || 'Normal';
     if ($('custNameFontSize')) {
@@ -4499,17 +4680,17 @@
     if ($('custCredCurrentPass')) $('custCredCurrentPass').value = '';
     if ($('custCredNewPass')) $('custCredNewPass').value = '';
 
-    const pmusic = u.profileMusic || '';
-    if (pmusic.startsWith('preset:') || pmusic === '') {
-      $('custMusicPreset').value = pmusic;
-      $('custMusicCustomUrl').value = '';
-    } else {
-      $('custMusicPreset').value = '';
-      $('custMusicCustomUrl').value = pmusic;
+    const pmusic = String(u.profileMusic || '').trim();
+    if ($('custDeleteMusicBtn')) $('custDeleteMusicBtn').classList.toggle('hidden', !pmusic);
+    if ($('custMusicPreviewBtn')) $('custMusicPreviewBtn').classList.toggle('hidden', !pmusic);
+    if ($('custMusicFileLabel')) {
+      $('custMusicFileLabel').textContent = pmusic
+        ? 'تم رفع أغنية البروفايل بنجاح (جاهزة للتشغيل تلقائياً لزوار ملفك).'
+        : 'لا توجد أغنية مرفوعة حالياً (الحد الأقصى: MP3 حتى 40 ثانية و 2MB).';
     }
 
     const isOwner = u.role === 'site_owner';
-    const canStealth = isOwner || hasPerm('stealth');
+    const canStealth = !isGuestUser && (isOwner || hasPerm('stealth'));
     $('custStealthCard')?.classList.toggle('hidden', !canStealth);
     if ($('custStealthToggle')) $('custStealthToggle').checked = Boolean(u.isStealth);
 
@@ -4608,70 +4789,92 @@
         : `<div class="muted" style="text-align:center;padding:10px;">${isGuestUser ? 'النشر على الجدار متاح للأعضاء المسجلين فقط.' : 'لم تنشر منشورات على حائطك بعد.'}</div>`;
     }
 
-    // Addons & Rank Threshold Gating
+    // Global Profile Feature Toggles + Total UI Concealment Gating
+    const featLikes = isFeatureEnabled('feat_profile_likes');
+    const featRating = isFeatureEnabled('feat_profile_rating') && !isGuestUser;
+    const featMusic = isFeatureEnabled('feat_profile_music');
+    const featFriends = isFeatureEnabled('feat_profile_friends') && !isGuestUser;
+    const featGifts = isFeatureEnabled('feat_profile_gifts') && !isGuestUser;
+    const featRelations = isFeatureEnabled('feat_profile_relations') && !isGuestUser;
+    const featWall = isFeatureEnabled('feat_profile_wall') && !isGuestUser;
+
+    const canChangeName = !isGuestUser && (isOwner || hasPerm('change_name'));
     const canAddons = !isGuestUser && (isOwner || hasPerm('use_addons'));
     const canAvatar = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_avatar', 'member'));
     const canCover = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_cover', 'member'));
     const canBgEff = canAddons && passesSettingRankThreshold('min_rank_bg_effect', 'member');
-    const canMusic = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_music', 'member'));
+    const canMusic = !isGuestUser && featMusic && (isOwner || (hasPerm('profile_music') && passesSettingRankThreshold('min_rank_music', 'member')));
     const canNameStyle = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_name_style', 'member'));
     const canMsgStyle = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_msg_style', 'member'));
 
-    $('custAddonsLockNotice').classList.toggle('hidden', canAddons);
-    $('custVipWingsToggle').disabled = !canAddons;
-    if ($('custAvatarFile')) $('custAvatarFile').disabled = !canAvatar;
-    if ($('custUploadAvatarBtn')) {
-      $('custUploadAvatarBtn').classList.toggle('is-disabled', !canAvatar);
-      $('custUploadAvatarBtn').setAttribute('aria-disabled', canAvatar ? 'false' : 'true');
-    }
-    if ($('custCoverFile')) $('custCoverFile').disabled = !canCover;
-    if ($('custUploadCoverBtn')) $('custUploadCoverBtn').disabled = !canCover;
-    if ($('custMusicPreset')) $('custMusicPreset').disabled = !canMusic;
-    if ($('custMusicCustomUrl')) $('custMusicCustomUrl').disabled = !canMusic;
-    if ($('custNameColor')) $('custNameColor').disabled = !canNameStyle;
-    if ($('custNameGradient')) $('custNameGradient').disabled = !canNameStyle;
-    if ($('custNeonColor')) $('custNeonColor').disabled = !canNameStyle;
-    if ($('custNameBgColor')) $('custNameBgColor').disabled = !canNameStyle;
-    if ($('custNameFontSize')) $('custNameFontSize').disabled = !canNameStyle;
-    if ($('custNameAnim')) $('custNameAnim').disabled = !canNameStyle;
-    if ($('custNameAnimSpeed')) $('custNameAnimSpeed').disabled = !canNameStyle;
-    if ($('custTextColor')) $('custTextColor').disabled = !canMsgStyle;
-    if ($('custFontFamily')) $('custFontFamily').disabled = !canMsgStyle;
-    if ($('custFontStyle')) $('custFontStyle').disabled = !canMsgStyle;
-    if ($('custFontSize')) $('custFontSize').disabled = !canMsgStyle;
-    if ($('saveCustomizeBtn')) {
-      $('saveCustomizeBtn').disabled = isGuestUser;
-      $('saveCustomizeBtn').innerHTML = isGuestUser
-        ? '<i class="fa-solid fa-lock"></i> الحفظ متاح للأعضاء المسجلين فقط'
-        : '<i class="fa-solid fa-floppy-disk"></i> حفظ جميع التغييرات';
-    }
+    // Total concealment: hide unavailable fields, buttons, and tabs instead of disabling
+    $('custDisplayNameWrap')?.classList.toggle('hidden', !canChangeName);
+    $('custUploadAvatarBtn')?.classList.toggle('hidden', !canAvatar);
+    $('custDeleteAvatarBtn')?.classList.toggle('hidden', !canAvatar || !u.avatarUrl);
+    $('custUploadCoverBtn')?.classList.toggle('hidden', !canCover);
+    $('custDeleteCoverBtn')?.classList.toggle('hidden', !canCover || !u.coverUrl);
 
-    // Global Profile Feature Toggles + Dynamic Profile Fields
-    const featLikes = isFeatureEnabled('feat_profile_likes');
-    const featRating = isFeatureEnabled('feat_profile_rating') && !isGuestUser;
-    const featMusic = isFeatureEnabled('feat_profile_music');
-    const featFriends = isFeatureEnabled('feat_profile_friends');
-    const featGifts = isFeatureEnabled('feat_profile_gifts');
-    const featRelations = isFeatureEnabled('feat_profile_relations');
-    const featWall = isFeatureEnabled('feat_profile_wall');
+    $('custProfileMusicSection')?.classList.toggle('hidden', !canMusic);
+    $('custMiniMusicPlayer')?.classList.toggle('hidden', !canMusic);
 
+    $('nameStyleSubTabs')?.classList.toggle('hidden', !canNameStyle);
+    $('nameColorSwatches')?.classList.toggle('hidden', !canNameStyle);
+    ['color', 'gradient', 'neon', 'bg'].forEach((t) => {
+      if (!canNameStyle) $(`nameStylePane_${t}`)?.classList.add('hidden');
+    });
+    $('custNameFontStyleWrap')?.classList.toggle('hidden', !canNameStyle);
+    $('custNameFontSizeWrap')?.classList.toggle('hidden', !canNameStyle);
+    $('custNameAnimSection')?.classList.toggle('hidden', !canNameStyle);
+
+    $('custTextColorWrap')?.classList.toggle('hidden', !canMsgStyle);
+    $('custFontFamilyWrap')?.classList.toggle('hidden', !canMsgStyle);
+    $('custMsgFontStyleWrap')?.classList.toggle('hidden', !canMsgStyle);
+    $('custFontSizeWrap')?.classList.toggle('hidden', !canMsgStyle);
+    $('custFontColorsGrid')?.classList.toggle('hidden', !canMsgStyle);
+    $('custFontStylesGrid')?.classList.toggle('hidden', !canNameStyle && !canMsgStyle);
+    $('custFontSizesGrid')?.classList.toggle('hidden', !canNameStyle && !canMsgStyle);
+    $('custNameStyleSection')?.classList.toggle('hidden', !canNameStyle && !canMsgStyle);
+
+    $('custAddonsLockNotice')?.classList.add('hidden');
+    $('custVipWingsToggle')?.closest('label')?.classList.toggle('hidden', !canAddons);
+    const bgSubhead = $('custBgEffectsGrid')?.previousElementSibling;
+    if (bgSubhead?.classList?.contains('unified-section-subhead')) {
+      bgSubhead.classList.toggle('hidden', !canBgEff);
+    }
+    $('custBgEffectsGrid')?.classList.toggle('hidden', !canBgEff);
+    const shineSubhead = $('custShineGrid')?.previousElementSibling;
+    if (shineSubhead?.classList?.contains('unified-section-subhead')) {
+      shineSubhead.classList.toggle('hidden', !canAddons);
+    }
+    $('custShineGrid')?.classList.toggle('hidden', !canAddons);
+    $('custNameplatesGrid')?.classList.toggle('hidden', !canAddons);
+
+    const showAppearanceTab = !isGuestUser && (canNameStyle || canMsgStyle || canMusic);
+    const showFramesTab = !isGuestUser;
     $('custLikesStatPill')?.classList.toggle('hidden', !featLikes);
     $('custRatingStatPill')?.classList.toggle('hidden', !featRating);
-    $('custMiniMusicPlayer')?.classList.toggle('hidden', !featMusic);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="appearance"]')?.classList.toggle('hidden', !showAppearanceTab);
+    document.querySelector('#customizeModal .cust-tab[data-cust-tab="frames_bg"]')?.classList.toggle('hidden', !showFramesTab);
     document.querySelector('#customizeModal .cust-tab[data-cust-tab="friends_gifts"]')?.classList.toggle('hidden', !(featFriends || featGifts || featRelations));
     document.querySelector('#customizeModal .cust-tab[data-cust-tab="posts"]')?.classList.toggle('hidden', !featWall);
     document.querySelector('#customizeModal .cust-tab[data-cust-tab="account_privacy"]')?.classList.toggle('hidden', isGuestUser);
 
+    if ($('saveCustomizeBtn')) {
+      $('saveCustomizeBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> حفظ جميع التغييرات';
+    }
+
     const dynWrap = $('custDynamicProfileFieldsWrap');
     if (dynWrap) {
-      const enabledDynFields = (state.settings?.custom_profile_fields || []).filter((f) => f && f.enabled !== false && f.label);
+      const enabledDynFields = isGuestUser
+        ? []
+        : (state.settings?.custom_profile_fields || []).filter((f) => f && f.enabled !== false && f.label);
       const uCustom = (u.customFields && typeof u.customFields === 'object') ? u.customFields : {};
       if (enabledDynFields.length) {
         dynWrap.classList.remove('hidden');
         dynWrap.innerHTML = enabledDynFields.map((fld) => `
           <div>
             <label class="muted">${escapeHtml(fld.label)}</label>
-            <input type="text" class="cust-dynamic-field-inp" data-field-id="${escapeHtml(fld.id)}" value="${escapeHtml(uCustom[fld.id] || '')}" placeholder="${escapeHtml(fld.placeholder || fld.label)}" maxlength="120" ${isGuestUser ? 'disabled' : ''} />
+            <input type="text" class="cust-dynamic-field-inp" data-field-id="${escapeHtml(fld.id)}" value="${escapeHtml(uCustom[fld.id] || '')}" placeholder="${escapeHtml(fld.placeholder || fld.label)}" maxlength="120" />
           </div>
         `).join('');
       } else {
@@ -4682,10 +4885,12 @@
 
     renderCustomizeAddonsGrids(canAddons, canBgEff);
     const initialModeTab = state.nameStyleMode === 'gradient' ? 'gradient' : (state.nameStyleMode === 'glow' ? 'neon' : (state.activeNameStyleTab || 'color'));
-    switchNameStyleTab(initialModeTab);
+    if (canNameStyle) switchNameStyleTab(initialModeTab);
 
     let resolvedTab = normalizeCustomizeTabKey(initialTab);
     if (
+      (resolvedTab === 'appearance' && !showAppearanceTab) ||
+      (resolvedTab === 'frames_bg' && !showFramesTab) ||
       (resolvedTab === 'friends_gifts' && !(featFriends || featGifts || featRelations)) ||
       (resolvedTab === 'posts' && !featWall) ||
       (resolvedTab === 'account_privacy' && isGuestUser)
@@ -4695,7 +4900,7 @@
     switchCustomizeTab(resolvedTab);
     updateCustomizePreview();
     openModal('customizeModal');
-    if (initialTab === 'options' || initialTab === 'appearance') {
+    if ((initialTab === 'options' || initialTab === 'appearance') && showAppearanceTab) {
       setTimeout(() => {
         $('custNameStyleSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 60);
@@ -4763,15 +4968,18 @@
     const allFrames = (state.shopItems.frames || []).filter((f) => f.id !== 'none' && (!f.ownerOnly || isOwnerSelf));
     const renderFramesCardList = (list) => list.map((f) => {
       const price = Number(f.price || 0);
-      const owned = isOwnerSelf || ownedFramesList.includes(f.id);
+      const isFreeFrame = !f.ownerOnly && (Boolean(f.isFree) || price === 0);
+      const owned = isOwnerSelf || isFreeFrame || ownedFramesList.includes(f.id);
       const canAfford = (Number(u.coins) || 0) >= price;
       return `
         <div class="addon-card store-frame-card ${u.avatarFrame === f.id ? 'active' : ''}">
           <div class="store-avatar-stage">${formatAvatarHTML({ ...u, avatarFrame: f.id }, 'lg')}</div>
           <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
-          ${owned
-            ? '<span class="store-owned-badge"><i class="fa-solid fa-check"></i> مملوك</span>'
-            : `<span class="store-price-pill"><i class="fa-solid fa-gem"></i> ${price} روبي</span>`}
+          ${isFreeFrame
+            ? '<span class="store-free-badge"><i class="fa-solid fa-sparkles"></i> مجاني للأعضاء</span>'
+            : owned
+              ? '<span class="store-owned-badge"><i class="fa-solid fa-check"></i> مملوك</span>'
+              : `<span class="store-price-pill"><i class="fa-solid fa-gem"></i> ${price} روبي</span>`}
           <div class="addon-card-actions">
             ${u.avatarFrame === f.id
               ? '<button type="button" class="btn-danger btn-xs remove-frame-btn">إزالة</button>'
@@ -4894,6 +5102,7 @@
       neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
       fontFamily: $('custFontFamily').value,
       fontStyle: $('custFontStyle').value,
+      nameFontStyle: $('custNameFontStyle') ? $('custNameFontStyle').value : (u.nameFontStyle || $('custFontStyle').value || 'Normal'),
       fontSize: $('custFontSize') ? Number($('custFontSize').value) : (u.fontSize || 14),
       nameFontSize: $('custNameFontSize') ? Number($('custNameFontSize').value) : (u.nameFontSize || 14),
       nameStyleMode: state.nameStyleMode || u.nameStyleMode || 'solid',
@@ -4945,8 +5154,9 @@
       $('custPreviewAvatarLetter').classList.remove('hidden');
       $('custPreviewAvatarLetter').textContent = (previewObj.name || 'ع').slice(0, 1);
     }
+    const canAv = !u.isGuest && (isOwner || passesSettingRankThreshold('min_rank_avatar', 'member'));
     if ($('custDeleteAvatarBtn')) {
-      $('custDeleteAvatarBtn').classList.toggle('hidden', !u.avatarUrl);
+      $('custDeleteAvatarBtn').classList.toggle('hidden', !canAv || !u.avatarUrl);
     }
 
     if ($('custCoverImg') && $('custCoverHero')) {
@@ -4970,14 +5180,11 @@
         vortex.className = 'owner-cosmic-cover-vortex';
         vortex.setAttribute('aria-hidden', 'true');
         hero.insertBefore(vortex, hero.firstChild);
-        const seal = document.createElement('span');
-        seal.className = 'owner-galaxy-corner-seal';
-        seal.innerHTML = '<i class="fa-solid fa-crown"></i> مؤسس ومالك الشات';
-        hero.appendChild(seal);
       }
     }
+    const canCov = !u.isGuest && (isOwner || passesSettingRankThreshold('min_rank_cover', 'member'));
     if ($('custDeleteCoverBtn')) {
-      $('custDeleteCoverBtn').classList.toggle('hidden', !u.coverUrl);
+      $('custDeleteCoverBtn').classList.toggle('hidden', !canCov || !u.coverUrl);
     }
 
     const card = document.querySelector('#customizeModal .profile-luxury-card');
@@ -5014,8 +5221,9 @@
       const fontCss = resolveFontFamilyCss(previewObj.fontFamily);
       const rawTxtCol = $('custTextColor')?.value || u.textColor || '#e2e8f0';
       const txtCol = escapeHtml(isReadableOnDarkBg(rawTxtCol) ? rawTxtCol : '#e2e8f0');
-      const fWeight = previewObj.fontStyle === 'Bold' ? '800' : '600';
-      const fStyle = previewObj.fontStyle === 'Italic' ? 'italic' : 'normal';
+      const mfs = String(previewObj.fontStyle || 'Normal');
+      const fWeight = (mfs === 'Bold' || mfs === 'BoldItalic') ? '800' : '600';
+      const fStyle = (mfs === 'Italic' || mfs === 'BoldItalic') ? 'italic' : 'normal';
       const fSz = Math.max(13, Math.min(17, Number(previewObj.fontSize) || 14));
       liveBox.innerHTML = `
         <div class="namestyle-live-row">
@@ -5028,7 +5236,7 @@
     $('custNameAnimPills')?.querySelectorAll('.name-anim-pill-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.animId === selectedAnim);
     });
-    const activeMusicRef = ($('custMusicCustomUrl')?.value.trim() || $('custMusicPreset')?.value || u.profileMusic || '').trim();
+    const activeMusicRef = String(u.profileMusic || '').trim();
     const musicLabels = {
       'preset:calm_lofi': 'أنغام هادئة',
       'preset:royal_oud': 'نغمة ملكية',
@@ -5036,9 +5244,16 @@
     };
     if ($('custMiniMusicLabel')) {
       $('custMiniMusicLabel').textContent = activeMusicRef
-        ? (musicLabels[activeMusicRef] || 'أغنية بروفايل مخصصة')
+        ? (musicLabels[activeMusicRef] || 'أغنية البروفايل (MP3)')
         : 'أغنية البروفايل: بدون أغنية';
     }
+    if ($('custMusicFileLabel')) {
+      $('custMusicFileLabel').textContent = activeMusicRef
+        ? 'تم رفع أغنية البروفايل بنجاح (جاهزة للتشغيل تلقائياً لزوار ملفك).'
+        : 'لا توجد أغنية مرفوعة حالياً (الحد الأقصى: MP3 حتى 40 ثانية و 2MB).';
+    }
+    if ($('custDeleteMusicBtn')) $('custDeleteMusicBtn').classList.toggle('hidden', !activeMusicRef);
+    if ($('custMusicPreviewBtn')) $('custMusicPreviewBtn').classList.toggle('hidden', !activeMusicRef);
     if ($('custMiniMusicPlayBtn')) {
       const playingThis = Boolean(activeMusicRef && state.activeMusicRef === activeMusicRef);
       $('custMiniMusicPlayBtn').innerHTML = playingThis ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
@@ -5074,44 +5289,42 @@
     }
     try {
       const textColVal = $('custTextColor').value || '#0f172a';
-      const customUrl = $('custMusicCustomUrl')?.value.trim() || '';
-      if (customUrl && !isSafeHttpsOrLocalUrlClient(customUrl, false)) {
-        return showToast('رابط موسيقى البروفايل يجب أن يبدأ بـ https:// أو http://.', true);
-      }
-      const profileMusic = customUrl || ($('custMusicPreset')?.value || '');
       const customFields = { ...((state.user?.customFields && typeof state.user.customFields === 'object') ? state.user.customFields : {}) };
       document.querySelectorAll('#custDynamicProfileFieldsWrap .cust-dynamic-field-inp').forEach((inp) => {
         const fid = String(inp.dataset.fieldId || '').trim();
         if (fid) customFields[fid] = inp.value.trim();
       });
+      const bodyPayload = {
+        vipFamily: $('custVipFamily').value,
+        statusText: $('custStatusInput')?.value || '',
+        bio: $('custBioInput').value,
+        age: $('custAgeInput')?.value ? Number($('custAgeInput').value) : 0,
+        gender: $('custGenderSelect')?.value || '',
+        country: $('custCountryInput')?.value || '',
+        allowCalls: $('custAllowCallsToggle') ? $('custAllowCallsToggle').checked : true,
+        allowPm: $('custAllowPmToggle') ? $('custAllowPmToggle').checked : true,
+        nameColor: $('custNameColor').value,
+        textColor: textColVal,
+        nameBgColor: $('custNameBgColor').dataset.cleared === '1' ? '' : $('custNameBgColor').value,
+        neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
+        fontFamily: $('custFontFamily').value,
+        fontStyle: $('custFontStyle').value,
+        nameFontStyle: $('custNameFontStyle') ? $('custNameFontStyle').value : ($('custFontStyle').value || 'Normal'),
+        fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
+        nameFontSize: $('custNameFontSize') ? Number($('custNameFontSize').value) : 14,
+        nameStyleMode: state.nameStyleMode || 'solid',
+        nameGradient: $('custNameGradient') ? $('custNameGradient').value : 'gold_royal',
+        nameAnim: $('custNameAnim')?.value || 'none',
+        nameAnimSpeed: $('custNameAnimSpeed')?.value || 'normal',
+        vipWings: $('custVipWingsToggle').checked,
+        customFields
+      };
+      if (!$('custDisplayNameWrap')?.classList.contains('hidden') && $('custDisplayName')) {
+        bodyPayload.displayName = $('custDisplayName').value;
+      }
       const res = await api('/api/profile/customize', {
         method: 'POST',
-        body: {
-          displayName: $('custDisplayName').value,
-          vipFamily: $('custVipFamily').value,
-          statusText: $('custStatusInput')?.value || '',
-          bio: $('custBioInput').value,
-          age: $('custAgeInput')?.value ? Number($('custAgeInput').value) : 0,
-          gender: $('custGenderSelect')?.value || '',
-          country: $('custCountryInput')?.value || '',
-          allowCalls: $('custAllowCallsToggle') ? $('custAllowCallsToggle').checked : true,
-          allowPm: $('custAllowPmToggle') ? $('custAllowPmToggle').checked : true,
-          nameColor: $('custNameColor').value,
-          textColor: textColVal,
-          nameBgColor: $('custNameBgColor').dataset.cleared === '1' ? '' : $('custNameBgColor').value,
-          neonColor: $('custNeonColor').dataset.cleared === '1' ? '' : $('custNeonColor').value,
-          fontFamily: $('custFontFamily').value,
-          fontStyle: $('custFontStyle').value,
-          fontSize: $('custFontSize') ? Number($('custFontSize').value) : 14,
-          nameFontSize: $('custNameFontSize') ? Number($('custNameFontSize').value) : 14,
-          nameStyleMode: state.nameStyleMode || 'solid',
-          nameGradient: $('custNameGradient') ? $('custNameGradient').value : 'gold_royal',
-          nameAnim: $('custNameAnim')?.value || 'none',
-          nameAnimSpeed: $('custNameAnimSpeed')?.value || 'normal',
-          vipWings: $('custVipWingsToggle').checked,
-          profileMusic,
-          customFields
-        }
+        body: bodyPayload
       });
       state.user = res.user;
       persistSessionState(state.user, state.token);
@@ -5197,7 +5410,7 @@
         <div class="admin-list-card">
           <div style="display:flex;align-items:center;gap:10px;">
             <strong>#${i + 1}</strong>
-            <img src="${escapeHtml(r.image_url || '/assets/rooms/default.svg')}" style="width:36px;height:36px;border-radius:9px;" alt="" />
+            <img src="${escapeHtml(r.image_url || DEFAULT_ROOM_SVG)}" style="width:36px;height:36px;border-radius:9px;" alt="" />
             <div>
               <strong>${escapeHtml(r.icon)} ${escapeHtml(r.name)}</strong>
               <div class="muted">👥 ${r.onlineCount || 0} متواجد • 🔥 ${r.activity_points || 0} نقطة تفاعل</div>
@@ -5337,7 +5550,8 @@
     const renderFrameCards = (framesList) => `<div class="frames-addon-grid">${framesList.map((f) => {
       const price = Number(f.price || 0);
       const isCurrent = u.avatarFrame === f.id;
-      const owned = isOwner || f.id === 'none' || ownedFramesList.includes(f.id);
+      const isFreeFrame = !f.ownerOnly && f.id !== 'none' && (Boolean(f.isFree) || price === 0);
+      const owned = isOwner || f.id === 'none' || isFreeFrame || ownedFramesList.includes(f.id);
       const canAfford = (Number(u.coins) || 0) >= price;
       return `
         <div class="addon-card store-frame-card ${isCurrent ? 'active' : ''}">
@@ -5347,9 +5561,11 @@
           <strong style="font-size:12px;">${escapeHtml(f.label)}</strong>
           ${f.id === 'none'
             ? '<span class="muted" style="font-size:11px;">افتراضي مجاني</span>'
-            : owned
-              ? '<span class="store-owned-badge"><i class="fa-solid fa-check"></i> مملوك</span>'
-              : `<span class="store-price-pill"><i class="fa-solid fa-gem"></i> ${price} روبي</span>`}
+            : isFreeFrame
+              ? '<span class="store-free-badge"><i class="fa-solid fa-sparkles"></i> مجاني للأعضاء</span>'
+              : owned
+                ? '<span class="store-owned-badge"><i class="fa-solid fa-check"></i> مملوك</span>'
+                : `<span class="store-price-pill"><i class="fa-solid fa-gem"></i> ${price} روبي</span>`}
           ${isCurrent
             ? '<button type="button" class="btn-secondary btn-xs" disabled style="width:100%;">مفعل حالياً</button>'
             : owned
@@ -5366,7 +5582,8 @@
     } else if (activeTab === 'my_frames') {
       const ownedOnly = (state.shopItems.frames || []).filter((f) => {
         if (f.ownerOnly && !isOwner) return false;
-        return isOwner || f.id === 'none' || ownedFramesList.includes(f.id);
+        const isFreeFrame = !f.ownerOnly && (Boolean(f.isFree) || Number(f.price || 0) === 0);
+        return isOwner || f.id === 'none' || isFreeFrame || ownedFramesList.includes(f.id);
       });
       itemsHtml = ownedOnly.length
         ? renderFrameCards(ownedOnly)
@@ -5721,7 +5938,7 @@
       bodyEl.innerHTML = state.rooms.map((r) => `
         <div class="admin-list-card" data-drawer-room-id="${escapeHtml(r.id)}">
           <div style="display:flex;align-items:center;gap:10px;">
-            <img src="${escapeHtml(r.image_url || '/assets/rooms/default.svg')}" style="width:42px;height:42px;border-radius:8px;object-fit:cover;" alt="" />
+            <img src="${escapeHtml(r.image_url || DEFAULT_ROOM_SVG)}" style="width:42px;height:42px;border-radius:8px;object-fit:cover;" alt="" />
             <div>
               <strong>${escapeHtml(r.icon)} ${escapeHtml(r.name)} ${r.hasPassword ? '🔒' : ''}</strong>
               <div class="muted">${escapeHtml(r.description || '')}</div>
@@ -6352,12 +6569,46 @@
             renderAllMessages();
             return;
           }
+          let changed = false;
+          if (meta.fromSnapshot) {
+            const snapMap = new Map(msgs.map((m) => [String(m.id), m]));
+            const numericIds = msgs.map((m) => Number(m.id)).filter((n) => Number.isFinite(n) && n > 0);
+            const minSnapId = numericIds.length ? Math.min(...numericIds) : 0;
+            const keep = [];
+            for (const oldMsg of state.messages || []) {
+              const sid = String(oldMsg.id || '');
+              const numId = Number(sid);
+              const inWindow = !msgs.length || msgs.length < 40 || (Number.isFinite(numId) && numId >= minSnapId);
+              if (sid && inWindow && !snapMap.has(sid)) {
+                const domEl = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(sid)}"]`);
+                if (domEl) domEl.remove();
+                changed = true;
+                continue;
+              }
+              const fresh = snapMap.get(sid);
+              if (fresh && JSON.stringify(oldMsg.reactions || {}) !== JSON.stringify(fresh.reactions || {})) {
+                const updated = { ...oldMsg, ...fresh };
+                keep.push(updated);
+                const domEl = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(sid)}"]`);
+                if (domEl) {
+                  const wasOpen = !domEl.querySelector('.msg-click-action-bar')?.classList.contains('hidden');
+                  const newRow = createMessageRowElement(updated);
+                  if (wasOpen) newRow.querySelector('.msg-click-action-bar')?.classList.remove('hidden');
+                  domEl.replaceWith(newRow);
+                }
+                changed = true;
+              } else {
+                keep.push(oldMsg);
+              }
+            }
+            if (changed) state.messages = keep;
+          }
           const incomingNew = msgs.filter((m) => !prevIds.has(String(m.id)));
           for (const m of incomingNew) {
             appendOrReconcileMessage(m);
             handleIncomingRoomMessageEffects(m, prevIds.size > 0);
           }
-          if (incomingNew.length) syncLocalMirror();
+          if (incomingNew.length || changed) syncLocalMirror();
         },
         onDeltaMessages(msgs, roomId) {
           if (roomId !== state.currentRoom?.id || !Array.isArray(msgs)) return;
@@ -6374,6 +6625,37 @@
             if (isNew) handleIncomingRoomMessageEffects(m, true);
           }
           syncLocalMirror();
+        },
+        onDeletedMessages(ids, roomId) {
+          if ((roomId && roomId !== state.currentRoom?.id) || !Array.isArray(ids) || !ids.length) return;
+          const delSet = new Set(ids.map((x) => String(x)));
+          state.messages = (state.messages || []).filter((m) => !delSet.has(String(m.id)));
+          delSet.forEach((id) => {
+            const el = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
+            if (el) el.remove();
+          });
+          syncLocalMirror();
+        },
+        onUpdatedMessages(msgs, roomId) {
+          if ((roomId && roomId !== state.currentRoom?.id) || !Array.isArray(msgs) || !msgs.length) return;
+          let updatedAny = false;
+          for (const upd of msgs) {
+            const idStr = String(upd?.id || '');
+            if (!idStr) continue;
+            const idx = (state.messages || []).findIndex((m) => String(m.id) === idStr);
+            if (idx !== -1) {
+              state.messages[idx] = { ...state.messages[idx], ...upd };
+              updatedAny = true;
+            }
+            const domEl = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(idStr)}"]`);
+            if (domEl) {
+              const wasOpen = !domEl.querySelector('.msg-click-action-bar')?.classList.contains('hidden');
+              const fresh = createMessageRowElement(upd);
+              if (wasOpen) fresh.querySelector('.msg-click-action-bar')?.classList.remove('hidden');
+              domEl.replaceWith(fresh);
+            }
+          }
+          if (updatedAny) syncLocalMirror();
         },
         onRoomUsers(users, roomKingKey) {
           const kingChanged = roomKingKey !== undefined && roomKingKey !== state.roomKingKey;
@@ -6704,36 +6986,6 @@
         });
         enterApp(res.user, res.token);
       } catch (err) {
-        $('authError').textContent = err.message;
-        $('authError').classList.remove('hidden');
-      }
-    });
-
-    $('googleLoginBtn')?.addEventListener('click', async () => {
-      try {
-        const gRes = await window.AsilRealtime?.signInWithGoogle(state.firebaseWebConfig);
-        if (!gRes || gRes.error) {
-          throw new Error(gRes?.error || 'تعذر تسجيل الدخول عبر جوجل.');
-        }
-        const invitedBy = localStorage.getItem(REF_KEY) || '';
-        const authRes = await api('/api/auth/firebase', {
-          method: 'POST',
-          body: {
-            idToken: gRes.idToken,
-            firebaseUid: gRes.firebaseUid,
-            email: gRes.email,
-            displayName: gRes.displayName,
-            avatarUrl: gRes.photoURL,
-            invitedBy
-          }
-        });
-        localStorage.removeItem(REF_KEY);
-        enterApp(authRes.user, authRes.token);
-      } catch (err) {
-        if (err?.banned) {
-          showBanBlockedScreen();
-          return;
-        }
         $('authError').textContent = err.message;
         $('authError').classList.remove('hidden');
       }
@@ -7247,7 +7499,28 @@
       }
     });
 
+    // Global broken-image SVG fallback protection
+    document.addEventListener('error', (e) => {
+      const img = e.target;
+      if (!img || img.tagName !== 'IMG' || img.dataset.fallbackApplied === '1') return;
+      img.dataset.fallbackApplied = '1';
+      if (img.classList.contains('avatar-frame-img-overlay')) {
+        img.classList.add('hidden');
+        return;
+      }
+      if (img.id === 'roomBannerImg' || img.closest('[data-drawer-room-id]') || img.src.includes('/assets/rooms/')) {
+        img.src = DEFAULT_ROOM_SVG;
+        return;
+      }
+      if (img.id === 'authSiteLogo') {
+        img.src = DEFAULT_LOGO_SVG;
+        return;
+      }
+      img.src = DEFAULT_AVATAR_SVG;
+    }, true);
+
     // Bottom bar & messaging
+    $('cancelReplyBtn')?.addEventListener('click', clearReplyTarget);
     $('sendMsgBtn').addEventListener('click', sendTextMessage);
     $('messageInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -7386,19 +7659,16 @@
       openCustomizeModal('appearance');
     });
     $('custMiniMusicPlayBtn')?.addEventListener('click', () => {
-      const ref = ($('custMusicCustomUrl')?.value.trim() || $('custMusicPreset')?.value || state.user?.profileMusic || '').trim();
+      const ref = String(state.user?.profileMusic || '').trim();
       if (!ref) {
         stopProfileMusic();
-        return showToast('اختر نغمة أو أضف رابط MP3 من التخصيص أولاً.', true);
+        return showToast('ارفع مقطع MP3 من التخصيص أولاً.', true);
       }
-      const playing = playProfileMusic(ref);
-      if ($('custMiniMusicPlayBtn')) {
-        $('custMiniMusicPlayBtn').innerHTML = playing ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
-      }
+      playProfileMusic(ref);
     });
     $('custMiniMusicEditBtn')?.addEventListener('click', () => {
       switchCustomizeTab('appearance');
-      setTimeout(() => $('custMusicPreset')?.focus(), 80);
+      setTimeout(() => $('custProfileMusicSection')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
     });
     $('custCoverPreviewToggleBtn')?.addEventListener('click', () => {
       const hero = $('custCoverHero');
@@ -7413,18 +7683,12 @@
       }
       showToast(clean ? 'وضع المعاينة الكاملة للغلاف والبطاقة مفعّل' : 'تمت العودة لوضع تعديل الملف الشخصي');
     });
-    $('custStatusPresets')?.querySelectorAll('.cust-status-chip').forEach((chip) => {
-      chip.addEventListener('click', () => {
-        if ($('custStatusInput')) $('custStatusInput').value = chip.dataset.status || '';
-        updateCustomizePreview();
-      });
-    });
     $('nameStyleSubTabs')?.querySelectorAll('.sub-pill-tab').forEach((b) => {
       b.addEventListener('click', () => switchNameStyleTab(b.dataset.namestyleTab));
     });
     [
       'custDisplayName', 'custStatusInput', 'custBioInput', 'custNameColor', 'custTextColor',
-      'custFontFamily', 'custFontStyle', 'custFontSize', 'custNameFontSize',
+      'custFontFamily', 'custNameFontStyle', 'custFontStyle', 'custFontSize', 'custNameFontSize',
       'custNameGradient', 'custNameAnim', 'custNameAnimSpeed', 'custVipWingsToggle'
     ].forEach((id) => {
       $(id)?.addEventListener('input', updateCustomizePreview);
@@ -7683,17 +7947,77 @@
       closeModal('customizeModal');
       logoutUser({ explicit: true });
     });
+    $('custMusicFile')?.addEventListener('change', async () => {
+      const file = $('custMusicFile').files?.[0];
+      if (!file) return;
+      try {
+        const isAudio = String(file.type || '').startsWith('audio/') || /\.(mp3|m4a|aac|ogg|wav)$/i.test(file.name || '');
+        if (!isAudio) {
+          throw new Error('يرجى اختيار ملف صوتي MP3 صالح من الجوال.');
+        }
+        if (file.size > 2 * 1024 * 1024) {
+          throw new Error('حجم المقطع يتجاوز الحد الأقصى المسموح (2MB).');
+        }
+        const duration = await new Promise((resolve, reject) => {
+          const objUrl = URL.createObjectURL(file);
+          const probe = new Audio();
+          probe.preload = 'metadata';
+          probe.onloadedmetadata = () => {
+            const d = Number(probe.duration);
+            URL.revokeObjectURL(objUrl);
+            resolve(d);
+          };
+          probe.onerror = () => {
+            URL.revokeObjectURL(objUrl);
+            reject(new Error('تعذر قراءة مدة الملف الصوتي.'));
+          };
+          probe.src = objUrl;
+        });
+        if (!Number.isFinite(duration) || duration <= 0) {
+          throw new Error('ملف صوتي غير صالح.');
+        }
+        if (duration > 40) {
+          throw new Error(`مدة المقطع (${Math.ceil(duration)} ثانية) تتجاوز الحد الأقصى المسموح (40 ثانية).`);
+        }
+        if ($('custMusicFileLabel')) $('custMusicFileLabel').textContent = 'جاري رفع وحفظ الأغنية...';
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await api('/api/upload/profile-music', { method: 'POST', body: fd });
+        if (res?.user) state.user = res.user;
+        else if (state.user && res?.url) state.user.profileMusic = res.url;
+        persistSessionState(state.user, state.token);
+        updateCustomizePreview();
+        renderUserIdentity();
+        showToast('تم رفع وحفظ أغنية البروفايل بنجاح!');
+      } catch (err) {
+        updateCustomizePreview();
+        showToast(err.message || 'فشل رفع الأغنية.', true);
+      } finally {
+        $('custMusicFile').value = '';
+      }
+    });
+    $('custDeleteMusicBtn')?.addEventListener('click', async () => {
+      if (!confirm('حذف أغنية البروفايل الحالية؟')) return;
+      try {
+        stopProfileMusic();
+        const res = await api('/api/profile/music', { method: 'DELETE' });
+        if (res?.user) state.user = res.user;
+        else if (state.user) state.user.profileMusic = '';
+        persistSessionState(state.user, state.token);
+        updateCustomizePreview();
+        renderUserIdentity();
+        showToast('تم حذف أغنية البروفايل.');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
     $('custMusicPreviewBtn')?.addEventListener('click', () => {
-      const ref = $('custMusicCustomUrl').value.trim() || $('custMusicPreset').value;
+      const ref = String(state.user?.profileMusic || '').trim();
       if (!ref) {
         stopProfileMusic();
-        return showToast('اختر نغمة أو أضف رابط MP3 أولاً.', true);
+        return showToast('ارفع مقطع MP3 أولاً.', true);
       }
-      const playing = playProfileMusic(ref);
-      $('custMusicPreviewBtn').innerHTML = playing ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
-      if ($('custMiniMusicPlayBtn')) {
-        $('custMiniMusicPlayBtn').innerHTML = playing ? '<i class="fa-solid fa-stop"></i>' : '<i class="fa-solid fa-play"></i>';
-      }
+      playProfileMusic(ref);
     });
     $('saveCustomizeBtn').addEventListener('click', () => saveCustomizeProfile(true));
 
@@ -7758,31 +8082,27 @@
     const isGuest = !u || u.isGuest;
     const isOwner = u.role === 'site_owner';
     const canMsgStyle = !isGuest && (isOwner || passesSettingRankThreshold('min_rank_msg_style', 'member'));
+    const canNameStyle = !isGuest && (isOwner || passesSettingRankThreshold('min_rank_name_style', 'member'));
+    if (!canMsgStyle) {
+      bar.classList.add('hidden');
+      return;
+    }
+    $('inlineMsgNameCustBtn')?.classList.toggle('hidden', !canNameStyle);
 
     const lockNote = $('inlineMsgLockNote');
-    if (lockNote) {
-      if (isGuest) {
-        lockNote.textContent = 'تلوين وتنسيق خط الرسائل متاح للأعضاء المسجلين فقط.';
-        lockNote.classList.remove('hidden');
-      } else if (!canMsgStyle) {
-        lockNote.textContent = 'تخصيص لون وحجم خط الرسائل مقيّد حالياً لرتبة أعلى من رتبتك.';
-        lockNote.classList.remove('hidden');
-      } else {
-        lockNote.classList.add('hidden');
-      }
-    }
+    if (lockNote) lockNote.classList.add('hidden');
 
     const activeColor = (u.textColor || '#e2e8f0').toLowerCase();
     if ($('inlineMsgColorPicker')) {
       $('inlineMsgColorPicker').value = /^#[0-9a-f]{6}$/i.test(activeColor) ? activeColor : '#e2e8f0';
-      $('inlineMsgColorPicker').disabled = !canMsgStyle;
+      $('inlineMsgColorPicker').disabled = false;
     }
 
     const swatchesEl = $('inlineMsgColorSwatches');
     if (swatchesEl) {
       swatchesEl.innerHTML = NAME_COLOR_SWATCHES.slice(0, 12).map((hex) => {
         const isAct = activeColor === hex.toLowerCase();
-        return `<button type="button" class="inline-swatch-btn${isAct ? ' active' : ''}" data-msg-color="${hex}" style="background:${hex};" title="${hex}" ${!canMsgStyle ? 'disabled' : ''}>${isAct ? '✓' : ''}</button>`;
+        return `<button type="button" class="inline-swatch-btn${isAct ? ' active' : ''}" data-msg-color="${hex}" style="background:${hex};" title="${hex}">${isAct ? '✓' : ''}</button>`;
       }).join('');
       swatchesEl.querySelectorAll('.inline-swatch-btn').forEach((b) => {
         b.addEventListener('click', () => saveInlineMsgStyle({ textColor: b.dataset.msgColor }));
@@ -7792,12 +8112,12 @@
     const curSize = Math.max(12, Math.min(20, Number(u.fontSize) || 14));
     bar.querySelectorAll('[data-msg-size]').forEach((b) => {
       b.classList.toggle('active', Number(b.dataset.msgSize) === curSize);
-      b.disabled = !canMsgStyle;
+      b.disabled = false;
     });
     const curStyle = u.fontStyle || 'Normal';
     bar.querySelectorAll('[data-msg-style]').forEach((b) => {
       b.classList.toggle('active', b.dataset.msgStyle === curStyle);
-      b.disabled = !canMsgStyle;
+      b.disabled = false;
     });
   }
 

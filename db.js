@@ -187,7 +187,9 @@ const ALL_RANK_PERMISSIONS = [
   'access_panel',
   'room_owner',
   'publish_news',
-  'send_links'
+  'send_links',
+  'change_name',
+  'profile_music'
 ];
 
 function makeRankPerms(enabledList = []) {
@@ -329,7 +331,8 @@ const DEFAULT_RANKS = [
     ...makeRankPerms([
       'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
       'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank',
-      'clear_room', 'access_panel', 'room_owner', 'publish_news', 'send_links'
+      'clear_room', 'access_panel', 'room_owner', 'publish_news', 'send_links',
+      'change_name', 'profile_music'
     ])
   },
   {
@@ -347,7 +350,8 @@ const DEFAULT_RANKS = [
     ...makeRankPerms([
       'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
       'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank',
-      'clear_room', 'access_panel', 'room_owner', 'send_links'
+      'clear_room', 'access_panel', 'room_owner', 'send_links',
+      'change_name', 'profile_music'
     ])
   },
   {
@@ -365,7 +369,8 @@ const DEFAULT_RANKS = [
     ...makeRankPerms([
       'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
       'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank',
-      'clear_room', 'access_panel', 'room_owner', 'send_links'
+      'clear_room', 'access_panel', 'room_owner', 'send_links',
+      'change_name', 'profile_music'
     ])
   },
   {
@@ -382,7 +387,8 @@ const DEFAULT_RANKS = [
     max_assignable_rank: 0,
     ...makeRankPerms([
       'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
-      'delete_msg', 'mute', 'kick', 'ban', 'clear_room', 'access_panel', 'send_links'
+      'delete_msg', 'mute', 'kick', 'ban', 'clear_room', 'access_panel', 'send_links',
+      'change_name', 'profile_music'
     ])
   },
   {
@@ -399,7 +405,8 @@ const DEFAULT_RANKS = [
     max_assignable_rank: 0,
     ...makeRankPerms([
       'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
-      'delete_msg', 'mute', 'kick', 'clear_room', 'access_panel'
+      'delete_msg', 'mute', 'kick', 'clear_room', 'access_panel',
+      'change_name', 'profile_music'
     ])
   },
   {
@@ -414,7 +421,7 @@ const DEFAULT_RANKS = [
     tier_order: 8,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune', 'send_links'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune', 'send_links', 'change_name', 'profile_music'])
   },
   {
     key: 'royal_vip',
@@ -428,7 +435,7 @@ const DEFAULT_RANKS = [
     tier_order: 7,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune', 'change_name', 'profile_music'])
   },
   {
     key: 'royal_member',
@@ -442,7 +449,7 @@ const DEFAULT_RANKS = [
     tier_order: 6,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'change_name', 'profile_music'])
   },
   {
     key: 'gold_member',
@@ -456,7 +463,7 @@ const DEFAULT_RANKS = [
     tier_order: 5,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'change_name', 'profile_music'])
   },
   {
     key: 'silver_member',
@@ -470,7 +477,7 @@ const DEFAULT_RANKS = [
     tier_order: 4,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'change_name', 'profile_music'])
   },
   {
     key: 'bronze_member',
@@ -484,7 +491,7 @@ const DEFAULT_RANKS = [
     tier_order: 3,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'change_name', 'profile_music'])
   },
   {
     key: 'member',
@@ -498,7 +505,7 @@ const DEFAULT_RANKS = [
     tier_order: 2,
     is_system: 1,
     max_assignable_rank: 0,
-    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons'])
+    ...makeRankPerms(['pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'change_name', 'profile_music'])
   },
   {
     key: 'guest',
@@ -1398,6 +1405,7 @@ function normalizeUserDoc(docId, data) {
     neon_color: String(data.neon_color || ''),
     font_family: String(data.font_family || 'Cairo'),
     font_style: String(data.font_style || 'Normal'),
+    name_font_style: String(data.name_font_style || data.font_style || 'Normal'),
     font_size: Math.max(13, Math.min(17, Number(data.font_size) || 14)),
     name_font_size: Math.max(13, Math.min(18, Number(data.name_font_size) || 14)),
     name_style_mode: ['solid', 'gradient', 'glow'].includes(String(data.name_style_mode)) ? String(data.name_style_mode) : 'solid',
@@ -1478,6 +1486,7 @@ function normalizeGuestDoc(docId, data = {}) {
     neon_color: String(data.neon_color || ''),
     font_family: String(data.font_family || 'Cairo'),
     font_style: String(data.font_style || 'Normal'),
+    name_font_style: String(data.name_font_style || data.font_style || 'Normal'),
     font_size: Math.max(13, Math.min(17, Number(data.font_size) || 14)),
     name_font_size: Math.max(13, Math.min(18, Number(data.name_font_size) || 14)),
     name_style_mode: ['solid', 'gradient', 'glow'].includes(String(data.name_style_mode)) ? String(data.name_style_mode) : 'solid',
@@ -1516,6 +1525,7 @@ function normalizeMessageDoc(docId, data) {
     neon_color: String(data.neon_color || ''),
     font_family: String(data.font_family || 'Cairo'),
     font_style: String(data.font_style || 'Normal'),
+    name_font_style: String(data.name_font_style || data.font_style || 'Normal'),
     font_size: Math.max(13, Math.min(17, Number(data.font_size) || 14)),
     name_font_size: Math.max(13, Math.min(18, Number(data.name_font_size) || 14)),
     name_style_mode: ['solid', 'gradient', 'glow'].includes(String(data.name_style_mode)) ? String(data.name_style_mode) : 'solid',
@@ -1537,6 +1547,27 @@ function normalizeMessageDoc(docId, data) {
     msg_type: String(data.msg_type || 'text'),
     content: String(data.content || ''),
     media_url: String(data.media_url || ''),
+    reply_to: data.reply_to && typeof data.reply_to === 'object'
+      ? {
+          id: String(data.reply_to.id || '').slice(0, 60),
+          senderName: sanitizePlainText(data.reply_to.senderName || '', 40),
+          senderKey: String(data.reply_to.senderKey || '').slice(0, 80),
+          content: sanitizePlainText(data.reply_to.content || '', 160)
+        }
+      : null,
+    reactions: (() => {
+      const base = { heart: [], ok: [], broken: [], laugh: [], fire: [] };
+      if (data.reactions && typeof data.reactions === 'object') {
+        for (const k of Object.keys(base)) {
+          if (Array.isArray(data.reactions[k])) {
+            base[k] = data.reactions[k].map((x) => String(x || '')).filter(Boolean).slice(0, 500);
+          }
+        }
+      }
+      return base;
+    })(),
+    mentioned_user_id: data.mentioned_user_id ? String(data.mentioned_user_id) : null,
+    mentioned_user_name: String(data.mentioned_user_name || ''),
     client_msg_id: String(data.client_msg_id || ''),
     created_at: String(data.created_at || nowIso()),
     created_at_ms: Number(data.created_at_ms) || toMs(data.created_at)
@@ -1664,6 +1695,8 @@ function normalizeRankDoc(docId, data) {
     perm_room_owner: isOwner ? 1 : fallbackPerms('room_owner', data.perm_manage_rooms ? 1 : 0),
     perm_publish_news: isOwner ? 1 : fallbackPerms('publish_news', power >= 13 ? 1 : 0),
     perm_send_links: isOwner ? 1 : fallbackPerms('send_links', power >= 8 ? 1 : 0),
+    perm_change_name: isOwner ? 1 : fallbackPerms('change_name', key === 'guest' ? 0 : 1),
+    perm_profile_music: isOwner ? 1 : fallbackPerms('profile_music', key === 'guest' ? 0 : 1),
     max_assignable_rank: isOwner
       ? 15
       : data.max_assignable_rank !== undefined
@@ -2406,7 +2439,11 @@ async function init(eventHooks = {}) {
       const rawExisting = rawRanksByKey.get(dr.key);
       const legacyLabels = legacyDefaultsMap[dr.key] || [];
       const hadOldPowerScale = rawExisting && Number(rawExisting.power) !== dr.power;
-      const missingNewPerms = rawExisting && rawExisting.perm_pm === undefined;
+      const missingNewPerms = rawExisting && (
+        rawExisting.perm_pm === undefined ||
+        rawExisting.perm_change_name === undefined ||
+        rawExisting.perm_profile_music === undefined
+      );
       const memberHadStar = dr.key === 'member' && existing && existing.icon === '⭐';
       if (!existing) {
         const norm = normalizeRankDoc(dr.key, dr);
@@ -2905,13 +2942,16 @@ function loadCustomFramesCatalogFromDoc(docData) {
   const items = Array.isArray(docData?.items) ? docData.items : [];
   for (const item of items) {
     if (!item || !item.id || !item.imageUrl) continue;
+    const price = Math.max(0, Number(item.price) || 0);
+    const isFree = Boolean(item.isFree || price === 0);
     store.customFramesById.set(String(item.id), {
       id: String(item.id),
       label: String(item.label || 'إطار مخصص').trim().slice(0, 60),
       imageUrl: String(item.imageUrl || '').trim(),
-      price: Math.max(0, Number(item.price) || 0),
+      price: isFree ? 0 : price,
+      isFree,
       durationType: item.durationType === 'monthly' ? 'monthly' : 'permanent',
-      tier: 'ruby',
+      tier: isFree ? 'free' : 'ruby',
       isCustom: true,
       preview: String(item.preview || '#3b82f6'),
       createdBy: String(item.createdBy || ''),
@@ -2931,21 +2971,28 @@ function getAllCustomFrames() {
   );
 }
 
-function addCustomFrame({ label, imageUrl, price = 0, durationType = 'permanent', preview = '#3b82f6', createdBy = '' }) {
+function addCustomFrame({ label, imageUrl, price = 0, isFree = false, durationType = 'permanent', preview = '#3b82f6', createdBy = '' }) {
   const cleanLabel = String(label || '').trim().slice(0, 60);
   const cleanUrl = String(imageUrl || '').trim();
   if (cleanLabel.length < 2) return { error: 'أدخل اسم الإطار (حرفان على الأقل).' };
-  if (!cleanUrl || !cleanUrl.startsWith('/uploads/frames/')) {
+  const isAllowedFrameUrl =
+    cleanUrl.startsWith('/uploads/frames/') ||
+    cleanUrl.startsWith('/api/profile-media/') ||
+    cleanUrl.startsWith('https://');
+  if (!cleanUrl || !isAllowedFrameUrl) {
     return { error: 'يرجى رفع صورة الإطار (GIF / WebP / PNG) أولاً.' };
   }
+  const resolvedPrice = isFree ? 0 : Math.max(0, Math.round(Number(price) || 0));
+  const resolvedFree = Boolean(isFree || resolvedPrice === 0);
   const id = `cframe_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const frame = {
     id,
     label: cleanLabel,
     imageUrl: cleanUrl,
-    price: Math.max(0, Math.round(Number(price) || 0)),
+    price: resolvedPrice,
+    isFree: resolvedFree,
     durationType: durationType === 'monthly' ? 'monthly' : 'permanent',
-    tier: 'ruby',
+    tier: resolvedFree ? 'free' : 'ruby',
     isCustom: true,
     preview: sanitizeHexColor(preview, '#3b82f6'),
     createdBy: String(createdBy || ''),
@@ -2958,7 +3005,14 @@ function addCustomFrame({ label, imageUrl, price = 0, durationType = 'permanent'
 
 function deleteCustomFrame(frameId) {
   const id = String(frameId || '').trim();
-  if (!store.customFramesById.has(id)) return false;
+  const existing = store.customFramesById.get(id);
+  if (!existing) return false;
+  if (existing.imageUrl && existing.imageUrl.startsWith('/api/profile-media/')) {
+    const mediaId = existing.imageUrl.replace('/api/profile-media/', '').split('?')[0];
+    if (mediaId) {
+      Promise.resolve(fsDeleteDoc('profile_media', safeDocId(mediaId))).catch(() => {});
+    }
+  }
   store.customFramesById.delete(id);
   persistCustomFramesCatalog();
   const affectedUserIds = [];
@@ -3888,6 +3942,7 @@ function updateUserCustomization(
     neonColor,
     fontFamily,
     fontStyle,
+    nameFontStyle,
     fontSize,
     nameFontSize,
     nameStyleMode,
@@ -3943,6 +3998,7 @@ function updateUserCustomization(
     neon_color: neonColor !== undefined ? String(neonColor || '').trim().slice(0, 30) : current.neon_color || '',
     font_family: fontFamily !== undefined ? sanitizePlainText(fontFamily || 'Cairo', 40) : current.font_family || 'Cairo',
     font_style: fontStyle !== undefined ? sanitizePlainText(fontStyle || 'Normal', 30) : current.font_style || 'Normal',
+    name_font_style: nameFontStyle !== undefined ? sanitizePlainText(nameFontStyle || 'Normal', 30) : current.name_font_style || current.font_style || 'Normal',
     font_size: fontSize !== undefined ? Math.max(13, Math.min(17, Number(fontSize) || 14)) : Math.max(13, Math.min(17, Number(current.font_size) || 14)),
     name_font_size: nameFontSize !== undefined ? Math.max(13, Math.min(18, Number(nameFontSize) || 14)) : Math.max(13, Math.min(18, Number(current.name_font_size) || 14)),
     name_style_mode:
@@ -4990,6 +5046,7 @@ function addMessage({
   neonColor,
   fontFamily,
   fontStyle,
+  nameFontStyle,
   fontSize,
   nameFontSize,
   nameStyleMode,
@@ -5011,6 +5068,7 @@ function addMessage({
   msgType,
   content,
   mediaUrl,
+  replyTo,
   mentionedUserId,
   mentionedUserName,
   clientMsgId,
@@ -5026,6 +5084,14 @@ function addMessage({
   const cleanSenderName = sanitizePlainText(senderName || '', 40) || 'مستخدم';
   const cleanContent = isGift || isAdminNotice ? String(content || '').slice(0, 2000) : sanitizePlainText(content || '', 2000);
   const cleanMediaUrl = sanitizeSafeUrl(mediaUrl || '', { allowDataImage: true, maxLen: 1500 });
+  const cleanReplyTo = replyTo && typeof replyTo === 'object' && replyTo.id
+    ? {
+        id: String(replyTo.id).slice(0, 60),
+        senderName: sanitizePlainText(replyTo.senderName || '', 40),
+        senderKey: String(replyTo.senderKey || '').slice(0, 80),
+        content: sanitizePlainText(replyTo.content || '', 160)
+      }
+    : null;
   const msg = {
     id,
     doc_id: String(id),
@@ -5040,6 +5106,7 @@ function addMessage({
     neon_color: neonColor || '',
     font_family: sanitizePlainText(fontFamily || 'Cairo', 40) || 'Cairo',
     font_style: sanitizePlainText(fontStyle || 'Normal', 30) || 'Normal',
+    name_font_style: sanitizePlainText(nameFontStyle || fontStyle || 'Normal', 30) || 'Normal',
     font_size: Math.max(13, Math.min(17, Number(fontSize) || 14)),
     name_font_size: Math.max(13, Math.min(18, Number(nameFontSize) || 14)),
     name_style_mode: ['solid', 'gradient', 'glow'].includes(String(nameStyleMode)) ? String(nameStyleMode) : 'solid',
@@ -5061,6 +5128,8 @@ function addMessage({
     msg_type: persistedMsgType,
     content: cleanContent,
     media_url: cleanMediaUrl,
+    reply_to: cleanReplyTo,
+    reactions: { heart: [], ok: [], broken: [], laugh: [], fire: [] },
     mentioned_user_id: cleanMentionId,
     mentioned_user_name: cleanMentionName,
     client_msg_id: String(clientMsgId || ''),
@@ -5136,6 +5205,39 @@ function deleteMessageById(msgId) {
       store.messagesById.delete(k);
       enqueueBatchDelete('messages', [String(m.doc_id || k)]);
       return m;
+    }
+  }
+  return null;
+}
+
+function toggleMessageReaction(msgId, reactionKey, actorKey) {
+  const allowed = ['heart', 'ok', 'broken', 'laugh', 'fire'];
+  const cleanReact = String(reactionKey || '').trim();
+  const cleanActor = String(actorKey || '').trim();
+  if (!allowed.includes(cleanReact) || !cleanActor) return null;
+  const idStr = String(msgId || '').trim();
+  if (!idStr) return null;
+  for (const [k, m] of store.messagesById.entries()) {
+    if (String(m.id) === idStr || String(k) === idStr || String(m.doc_id) === idStr) {
+      const base = { heart: [], ok: [], broken: [], laugh: [], fire: [] };
+      const cur = m.reactions && typeof m.reactions === 'object' ? m.reactions : {};
+      for (const rk of allowed) {
+        base[rk] = Array.isArray(cur[rk]) ? cur[rk].map(String) : [];
+      }
+      const list = base[cleanReact];
+      const idx = list.indexOf(cleanActor);
+      if (idx >= 0) {
+        list.splice(idx, 1);
+      } else {
+        for (const rk of allowed) {
+          const otherIdx = base[rk].indexOf(cleanActor);
+          if (otherIdx >= 0) base[rk].splice(otherIdx, 1);
+        }
+        list.push(cleanActor);
+      }
+      m.reactions = base;
+      enqueueSet('messages', String(m.doc_id || k), { reactions: base }, true);
+      return { ...m };
     }
   }
   return null;
@@ -6229,6 +6331,7 @@ module.exports = {
   getRoomMessagesAfter,
   clearRoomMessages,
   deleteMessageById,
+  toggleMessageReaction,
   setMute,
   removeMute,
   getActiveMute,
@@ -6277,22 +6380,51 @@ module.exports = {
   async saveProfileMedia(mediaId, { mimeType, dataBase64, kind = 'avatar', userId = null } = {}) {
     const cleanId = safeDocId(String(mediaId || ''));
     if (!cleanId || !dataBase64) return false;
-    const record = {
+    const rawB64 = String(dataBase64);
+    const allowedKinds = new Set(['avatar', 'cover', 'music', 'frame', 'bot_avatar']);
+    const safeKind = allowedKinds.has(String(kind)) ? String(kind) : 'avatar';
+    const chunkSize = 750000;
+    const fullRecord = {
       id: cleanId,
-      mimeType: String(mimeType || 'image/jpeg').slice(0, 64),
-      dataBase64: String(dataBase64),
-      kind: kind === 'cover' ? 'cover' : 'avatar',
+      mimeType: String(mimeType || 'image/jpeg').slice(0, 80),
+      dataBase64: rawB64,
+      kind: safeKind,
       userId: userId ? Number(userId) : null,
       updatedAt: nowIso()
     };
-    store.profileMediaById.set(cleanId, record);
+    store.profileMediaById.set(cleanId, fullRecord);
     if (store.profileMediaById.size > 250) {
       const oldestKey = store.profileMediaById.keys().next().value;
       if (oldestKey) store.profileMediaById.delete(oldestKey);
     }
     scheduleJsonSnapshot();
     try {
-      await fsSetDoc('profile_media', cleanId, record, false);
+      if (rawB64.length <= chunkSize) {
+        await fsSetDoc('profile_media', cleanId, fullRecord, false);
+        return true;
+      }
+      const chunks = [];
+      for (let i = 0; i < rawB64.length; i += chunkSize) {
+        chunks.push(rawB64.slice(i, i + chunkSize));
+      }
+      const metaDoc = {
+        id: cleanId,
+        mimeType: fullRecord.mimeType,
+        kind: safeKind,
+        userId: fullRecord.userId,
+        isChunked: true,
+        totalChunks: chunks.length,
+        updatedAt: fullRecord.updatedAt
+      };
+      await fsSetDoc('profile_media', cleanId, metaDoc, false);
+      for (let idx = 0; idx < chunks.length; idx++) {
+        await fsSetDoc('profile_media', `${cleanId}_chunk_${idx}`, {
+          parentId: cleanId,
+          chunkIndex: idx,
+          dataBase64: chunks[idx],
+          updatedAt: fullRecord.updatedAt
+        }, false);
+      }
       return true;
     } catch {
       return false;
@@ -6304,7 +6436,24 @@ module.exports = {
     if (store.profileMediaById.has(cleanId)) return store.profileMediaById.get(cleanId);
     try {
       const docData = await fsGetDoc('profile_media', cleanId);
-      if (docData && docData.dataBase64) {
+      if (!docData) return null;
+      if (docData.isChunked && Number(docData.totalChunks) > 0) {
+        const total = Number(docData.totalChunks);
+        const parts = [];
+        for (let idx = 0; idx < total; idx++) {
+          const chDoc = await fsGetDoc('profile_media', `${cleanId}_chunk_${idx}`);
+          if (!chDoc || !chDoc.dataBase64) return null;
+          parts.push(String(chDoc.dataBase64));
+        }
+        const reassembled = { ...docData, dataBase64: parts.join('') };
+        store.profileMediaById.set(cleanId, reassembled);
+        if (store.profileMediaById.size > 250) {
+          const oldestKey = store.profileMediaById.keys().next().value;
+          if (oldestKey) store.profileMediaById.delete(oldestKey);
+        }
+        return reassembled;
+      }
+      if (docData.dataBase64) {
         store.profileMediaById.set(cleanId, docData);
         if (store.profileMediaById.size > 250) {
           const oldestKey = store.profileMediaById.keys().next().value;
@@ -6323,6 +6472,13 @@ module.exports = {
     store.profileMediaById.delete(cleanId);
     scheduleJsonSnapshot();
     try {
+      const existing = await fsGetDoc('profile_media', cleanId);
+      if (existing && existing.isChunked && Number(existing.totalChunks) > 0) {
+        const total = Number(existing.totalChunks);
+        for (let idx = 0; idx < total; idx++) {
+          await fsDeleteDoc('profile_media', `${cleanId}_chunk_${idx}`).catch(() => {});
+        }
+      }
       await fsDeleteDoc('profile_media', cleanId);
     } catch {
       // ignore delete failure

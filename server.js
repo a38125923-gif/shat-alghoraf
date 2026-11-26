@@ -147,13 +147,20 @@ const PROFILE_MUSIC_PRESETS = [
 ];
 
 const ALLOWED_PROFILE_FONTS = new Set([
+  'Lemonada',
   'Cairo',
-  'Tajawal',
   'Amiri',
-  'Reem Kufi',
   'Aref Ruqaa',
+  'Reem Kufi',
+  'Tajawal',
+  'Lalezar',
+  'Changa',
+  'Marhey',
+  'Rakkas',
   'Almarai'
 ]);
+
+const ALLOWED_FONT_STYLES = new Set(['Normal', 'Bold', 'Italic', 'BoldItalic']);
 
 function normalizeProfileFont(raw) {
   const clean = String(raw || '').trim();
@@ -162,6 +169,14 @@ function normalizeProfileFont(raw) {
     if (f.toLowerCase() === clean.toLowerCase()) return f;
   }
   return 'Cairo';
+}
+
+function normalizeFontStyle(raw) {
+  const clean = String(raw || '').trim();
+  for (const s of ALLOWED_FONT_STYLES) {
+    if (s.toLowerCase() === clean.toLowerCase()) return s;
+  }
+  return 'Normal';
 }
 
 function parseHexColorRgb(hex) {
@@ -196,12 +211,12 @@ function getRelativeLuminance(hex) {
 function isReadableDarkBgColor(hex) {
   if (!hex || typeof hex !== 'string') return true;
   if (!parseHexColorRgb(hex)) return true;
-  return getRelativeLuminance(hex) >= 0.12;
+  return getRelativeLuminance(hex) >= 0.02;
 }
 
-function ensureDarkReadableColor(hex, fallback = '#e2e8f0') {
+function ensureDarkReadableColor(hex, fallback = '#0f172a') {
   if (!hex || !parseHexColorRgb(hex)) return fallback;
-  return isReadableDarkBgColor(hex) ? hex : fallback;
+  return hex;
 }
 
 function validateHttpsOrLocalUrl(rawUrl, { allowDataImage = false, allowPreset = false } = {}) {
@@ -647,12 +662,13 @@ function mapUserRow(u) {
     role: u.role,
     rank,
     level: Number(rank?.power || 2),
-    nameColor: u.name_bg_color ? u.name_color || '#f8fafc' : ensureDarkReadableColor(u.name_color, '#f8fafc'),
-    textColor: ensureDarkReadableColor(u.text_color, '#e2e8f0'),
+    nameColor: u.name_bg_color ? u.name_color || '#0f172a' : ensureDarkReadableColor(u.name_color, '#0f172a'),
+    textColor: ensureDarkReadableColor(u.text_color, '#0f172a'),
     nameBgColor: u.name_bg_color || '',
     neonColor: u.neon_color || '',
     fontFamily: normalizeProfileFont(u.font_family),
-    fontStyle: u.font_style || 'Normal',
+    fontStyle: normalizeFontStyle(u.font_style),
+    nameFontStyle: normalizeFontStyle(u.name_font_style || u.font_style),
     fontSize: Math.max(13, Math.min(17, Number(u.font_size) || 14)),
     nameFontSize: Math.max(13, Math.min(18, Number(u.name_font_size) || 14)),
     nameStyleMode: ['solid', 'gradient', 'glow'].includes(String(u.name_style_mode)) ? String(u.name_style_mode) : 'solid',
@@ -712,12 +728,13 @@ function mapGuestRow(g, fallbackKey = '', fallbackName = 'زائر') {
     role: 'guest',
     rank: guestRank,
     level: Number(guestRank?.power || 1),
-    nameColor: ensureDarkReadableColor(g?.name_color, '#f8fafc'),
-    textColor: ensureDarkReadableColor(g?.text_color, '#e2e8f0'),
+    nameColor: ensureDarkReadableColor(g?.name_color, '#0f172a'),
+    textColor: ensureDarkReadableColor(g?.text_color, '#0f172a'),
     nameBgColor: g?.name_bg_color || '',
     neonColor: g?.neon_color || '',
     fontFamily: normalizeProfileFont(g?.font_family),
-    fontStyle: g?.font_style || 'Normal',
+    fontStyle: normalizeFontStyle(g?.font_style),
+    nameFontStyle: normalizeFontStyle(g?.name_font_style || g?.font_style),
     fontSize: Math.max(13, Math.min(17, Number(g?.font_size) || 14)),
     nameFontSize: Math.max(13, Math.min(18, Number(g?.name_font_size) || 14)),
     nameStyleMode: ['solid', 'gradient', 'glow'].includes(String(g?.name_style_mode)) ? String(g.name_style_mode) : 'solid',
@@ -926,11 +943,32 @@ const uploadEmoji = makeUploader('emojis', 'image/', 8 * 1024 * 1024);
 const uploadRankIcon = makeUploader('rank_icons', 'image/', 6 * 1024 * 1024);
 const uploadNewsImg = makeUploader('news', 'image/', 12 * 1024 * 1024);
 const uploadFrame = makeUploader('frames', 'image/', 12 * 1024 * 1024);
+const uploadProfileMusic = makeUploader('music', 'audio/', 2 * 1024 * 1024);
 
 // ==========================================
 // REAL-TIME PRESENCE & ROOM STATE MAPS (FIRESTORE-BACKED, ZERO SOCKET.IO)
 // ==========================================
 const onlinePresenceMap = new Map(); // userKey -> presence entry
+const recentDeletedMsgLog = new Map(); // msgId -> deletedAtMs
+const recentUpdatedMsgLog = new Map(); // msgId -> updatedAtMs
+function recordDeletedMessage(msgId) {
+  const id = String(msgId || '').trim();
+  if (!id) return;
+  const now = Date.now();
+  recentDeletedMsgLog.set(id, now);
+  for (const [k, ts] of recentDeletedMsgLog.entries()) {
+    if (now - ts > 65000) recentDeletedMsgLog.delete(k);
+  }
+}
+function recordUpdatedMessage(msgId) {
+  const id = String(msgId || '').trim();
+  if (!id) return;
+  const now = Date.now();
+  recentUpdatedMsgLog.set(id, now);
+  for (const [k, ts] of recentUpdatedMsgLog.entries()) {
+    if (now - ts > 65000) recentUpdatedMsgLog.delete(k);
+  }
+}
 const roomMics = new Map(); // roomId -> [slot1..slot5]
 const pendingGrace = new Map(); // key -> { timeout, lastRoomId }
 const recentRoomPresence = new Map(); // key -> { roomId, at }
@@ -1291,11 +1329,12 @@ function buildPersistentMembersList() {
       isGhosted: Boolean(u.is_ghosted),
       isStealth,
       level: Number(db.getRankPower(u.role) || 2),
-      nameColor: u.name_bg_color ? u.name_color || '#f8fafc' : ensureDarkReadableColor(u.name_color, '#f8fafc'),
+      nameColor: u.name_bg_color ? u.name_color || '#0f172a' : ensureDarkReadableColor(u.name_color, '#0f172a'),
       nameBgColor: u.name_bg_color || '',
       neonColor: u.neon_color || '',
       fontFamily: normalizeProfileFont(u.font_family),
-      fontStyle: u.font_style || 'Normal',
+      fontStyle: normalizeFontStyle(u.font_style),
+      nameFontStyle: normalizeFontStyle(u.name_font_style || u.font_style),
       nameFontSize: Math.max(13, Math.min(18, Number(u.name_font_size) || 14)),
       nameStyleMode: ['solid', 'gradient', 'glow'].includes(String(u.name_style_mode)) ? String(u.name_style_mode) : 'solid',
       nameGradient: u.name_gradient || 'gold_royal',
@@ -1342,11 +1381,12 @@ function buildPersistentMembersList() {
       ratingCount: 0,
       isGhosted: false,
       isStealth: false,
-      nameColor: ensureDarkReadableColor(g.name_color, '#f8fafc'),
+      nameColor: ensureDarkReadableColor(g.name_color, '#0f172a'),
       nameBgColor: g.name_bg_color || '',
       neonColor: g.neon_color || '',
       fontFamily: normalizeProfileFont(g.font_family),
-      fontStyle: g.font_style || 'Normal',
+      fontStyle: normalizeFontStyle(g.font_style),
+      nameFontStyle: normalizeFontStyle(g.name_font_style || g.font_style),
       nameFontSize: Math.max(13, Math.min(18, Number(g.name_font_size) || 14)),
       nameStyleMode: ['solid', 'gradient', 'glow'].includes(String(g.name_style_mode)) ? String(g.name_style_mode) : 'solid',
       nameGradient: g.name_gradient || 'gold_royal',
@@ -1406,12 +1446,13 @@ function buildPublicPresenceDoc(entry) {
     role: entry.role || (entry.isGuest ? 'guest' : 'member'),
     rank: rankObj,
     level: Number(rankObj?.power || (entry.isGuest ? 1 : 2)),
-    nameColor: entry.nameColor || '#f8fafc',
-    textColor: entry.textColor || '#e2e8f0',
+    nameColor: entry.nameColor || '#0f172a',
+    textColor: entry.textColor || '#0f172a',
     nameBgColor: entry.nameBgColor || '',
     neonColor: entry.neonColor || '',
     fontFamily: normalizeProfileFont(entry.fontFamily),
-    fontStyle: entry.fontStyle || 'Normal',
+    fontStyle: normalizeFontStyle(entry.fontStyle),
+    nameFontStyle: normalizeFontStyle(entry.nameFontStyle || entry.fontStyle),
     fontSize: Math.max(13, Math.min(17, Number(entry.fontSize) || 14)),
     nameFontSize: Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)),
     nameStyleMode: entry.nameStyleMode || 'solid',
@@ -2230,9 +2271,104 @@ app.post('/api/upload/emoji', requirePanelAccess, uploadEmoji.single('file'), (r
   return res.json({ url: `/uploads/emojis/${req.file.filename}` });
 });
 
-app.post('/api/upload/frame', requireOwner, uploadFrame.single('file'), (req, res) => {
+app.post('/api/upload/frame', requireOwner, uploadFrame.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة أو GIF الإطار.' });
-  return res.json({ url: `/uploads/frames/${req.file.filename}` });
+  const fallbackUrl = `/uploads/frames/${req.file.filename}`;
+  let finalUrl = fallbackUrl;
+  let savedInFirebase = false;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 5 * 1024 * 1024) {
+      const mediaId = `frame_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/png',
+        dataBase64: buf.toString('base64'),
+        kind: 'frame',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        savedInFirebase = true;
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  } catch {
+    // fallback to disk upload
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, url: finalUrl, savedInFirebase });
+});
+
+app.post('/api/upload/profile-music', requireRegistered, (req, res, next) => {
+  if (Number(db.getSiteSettings().feat_profile_music ?? 1) === 0 && req.authUser.role !== 'site_owner') {
+    return res.status(403).json({ error: 'ميزة أغنية البروفايل متوقفة مؤقتاً من قبل المالك.' });
+  }
+  if (req.authUser.role !== 'site_owner' && (!canDo(req.authUser.role, 'profile_music') || !canPassSettingThreshold(req.authUser, 'min_rank_music', 'member'))) {
+    return res.status(403).json({ error: 'رفع أغنية البروفايل غير متاح لرتبتك الحالية.' });
+  }
+  return uploadProfileMusic.single('file')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'الحد الأقصى لحجم أغنية البروفايل هو 2 ميجابايت.' });
+      }
+      return res.status(400).json({ error: err.message || 'تعذر رفع الملف الصوتي.' });
+    }
+    return next();
+  });
+}, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق ملف صوتي.' });
+  const mime = String(req.file.mimetype || '').toLowerCase();
+  const origName = String(req.file.originalname || '').toLowerCase();
+  if (!mime.startsWith('audio/') && !origName.endsWith('.mp3')) {
+    if (req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    return res.status(400).json({ error: 'يُسمح فقط برفع ملفات صوتية بصيغة MP3 أو Audio.' });
+  }
+  if ((req.file.size || 0) > 2 * 1024 * 1024) {
+    if (req.file.path) fs.promises.unlink(req.file.path).catch(() => {});
+    return res.status(400).json({ error: 'الحد الأقصى لحجم أغنية البروفايل هو 2 ميجابايت.' });
+  }
+  const fallbackUrl = `/uploads/music/${req.file.filename}`;
+  let finalUrl = fallbackUrl;
+  let savedInFirebase = false;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    const mediaId = `music_${req.authUser.userId}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const ok = await db.saveProfileMedia(mediaId, {
+      mimeType: mime || 'audio/mpeg',
+      dataBase64: buf.toString('base64'),
+      kind: 'music',
+      userId: req.authUser.userId
+    });
+    if (ok) {
+      finalUrl = `/api/profile-media/${mediaId}`;
+      savedInFirebase = true;
+      fs.promises.unlink(req.file.path).catch(() => {});
+    }
+  } catch {
+    // fallback
+  }
+  const prevUrl = String(req.authUser.profileMusic || '');
+  if (prevUrl.startsWith('/api/profile-media/')) {
+    const oldMediaId = prevUrl.replace('/api/profile-media/', '').split('?')[0];
+    if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+  }
+  const updated = db.updateUserCustomization(req.authUser.userId, { profileMusic: finalUrl });
+  syncUserPresence(req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ ok: true, url: finalUrl, savedInFirebase, user: updated ? mapUserRow(updated) : null });
+});
+
+app.delete('/api/profile/music', requireRegistered, async (req, res) => {
+  const prevUrl = String(req.authUser.profileMusic || '');
+  if (prevUrl.startsWith('/api/profile-media/')) {
+    const oldMediaId = prevUrl.replace('/api/profile-media/', '').split('?')[0];
+    if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+  }
+  const updated = db.updateUserCustomization(req.authUser.userId, { profileMusic: '' });
+  if (!updated) return res.status(404).json({ error: 'الحساب غير موجود.' });
+  syncUserPresence(req.authUser.userId);
+  await db.flushWrites();
+  return res.json({ ok: true, user: mapUserRow(updated) });
 });
 
 app.post('/api/upload/rank-icon', requirePanelAccess, uploadRankIcon.single('file'), (req, res) => {
@@ -2488,6 +2624,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     neonColor,
     fontFamily,
     fontStyle,
+    nameFontStyle,
     fontSize,
     nameFontSize,
     nameStyleMode,
@@ -2513,13 +2650,22 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     customFields
   } = req.body || {};
 
-  if (textColor !== undefined && !isReadableDarkBgColor(textColor)) {
-    return res.status(400).json({ error: 'لون النص داكن جداً ولا يظهر بوضوح على الخلفية الليلية؛ اختر لوناً أفتح.' });
+  if (textColor !== undefined && textColor !== '' && !parseHexColorRgb(textColor)) {
+    return res.status(400).json({ error: 'صيغة لون النص غير صالحة.' });
   }
-  const effectiveNameMode = nameStyleMode !== undefined ? nameStyleMode : req.authUser.nameStyleMode || 'solid';
-  const effectiveBg = nameBgColor !== undefined ? nameBgColor : req.authUser.nameBgColor || '';
-  if (effectiveNameMode === 'solid' && !effectiveBg && nameColor !== undefined && !isReadableDarkBgColor(nameColor)) {
-    return res.status(400).json({ error: 'لون الاسم داكن جداً على الخلفية الليلية؛ اختر لوناً أفتح أو فعّل خلفية للاسم.' });
+  if (nameColor !== undefined && nameColor !== '' && !parseHexColorRgb(nameColor)) {
+    return res.status(400).json({ error: 'صيغة لون الاسم غير صالحة.' });
+  }
+
+  const currentEffectiveName = String(req.authUser.displayName || req.authUser.name || '').trim();
+  const nextCleanDisplayName = displayName !== undefined ? db.sanitizePlainText(String(displayName || ''), 28) : currentEffectiveName;
+  if (
+    displayName !== undefined &&
+    nextCleanDisplayName !== currentEffectiveName &&
+    req.authUser.role !== 'site_owner' &&
+    !canDo(req.authUser.role, 'change_name')
+  ) {
+    return res.status(403).json({ error: 'تغيير الاسم المستعار غير متاح لرتبتك الحالية.' });
   }
 
   const canUseAddons = req.authUser.role === 'site_owner' || canDo(req.authUser.role, 'use_addons');
@@ -2527,8 +2673,7 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     (nameplateStyle !== undefined && nameplateStyle !== 'default' && nameplateStyle !== req.authUser.nameplateStyle) ||
     (nameShine !== undefined && nameShine !== 'none' && nameShine !== req.authUser.nameShine) ||
     (profileBgEffect !== undefined && profileBgEffect !== 'none' && profileBgEffect !== req.authUser.profileBgEffect) ||
-    (vipWings === true && !req.authUser.vipWings) ||
-    (profileMusic !== undefined && profileMusic !== '' && profileMusic !== req.authUser.profileMusic);
+    (vipWings === true && !req.authUser.vipWings);
 
   if (avatarFrame === 'owner_sovereign' && req.authUser.role !== 'site_owner' && !db.isSupremeOwnerEmail(req.authUser.email)) {
     return res.status(403).json({ error: 'إطار الكسوف الملكي حصري للمالك فقط.' });
@@ -2536,35 +2681,45 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
   if (avatarFrame !== undefined && avatarFrame !== 'none' && avatarFrame !== req.authUser.avatarFrame && req.authUser.role !== 'site_owner') {
     const foundFrame = getEffectiveFramesCatalog().find((f) => f.id === avatarFrame);
     const curUserRow = db.findUserById(req.authUser.userId);
-    const frameAllowed = foundFrame && db.isFrameOwnedAndValid(curUserRow, foundFrame.id);
+    const frameAllowed =
+      foundFrame &&
+      !foundFrame.ownerOnly &&
+      (foundFrame.isFree || Number(foundFrame.price || 0) === 0 || db.isFrameOwnedAndValid(curUserRow, foundFrame.id));
     if (!frameAllowed) {
       return res.status(403).json({ error: 'المتجر مقفل: يجب شراء الإطار بالروبي من المتجر أولاً قبل تفعيله.' });
     }
   }
   if (wantsAddonEquip && !canUseAddons) {
-    return res.status(403).json({ error: 'استخدام الإضافات (اللمعة والموسيقى والقوالب) غير مفعّل لرتبتك الحالية.' });
+    return res.status(403).json({ error: 'استخدام الإضافات (اللمعة والقوالب والخلفيات) غير مفعّل لرتبتك الحالية.' });
   }
   if (profileBgEffect !== undefined && profileBgEffect !== 'none' && profileBgEffect !== req.authUser.profileBgEffect && !canPassSettingThreshold(req.authUser, 'min_rank_bg_effect', 'member')) {
     return res.status(403).json({ error: 'خلفيات الملف المتحركة مقيّدة حالياً لرتبة أعلى من رتبتك.' });
   }
-  if (profileMusic !== undefined && profileMusic !== '' && profileMusic !== req.authUser.profileMusic && !canPassSettingThreshold(req.authUser, 'min_rank_music', 'member')) {
-    return res.status(403).json({ error: 'إضافة أغنية الملف الشخصي مقيّدة حالياً لرتبة أعلى من رتبتك.' });
+  if (
+    profileMusic !== undefined &&
+    profileMusic !== '' &&
+    profileMusic !== req.authUser.profileMusic &&
+    req.authUser.role !== 'site_owner' &&
+    (!canDo(req.authUser.role, 'profile_music') || !canPassSettingThreshold(req.authUser, 'min_rank_music', 'member'))
+  ) {
+    return res.status(403).json({ error: 'إضافة أو تغيير أغنية الملف الشخصي غير متاح لرتبتك الحالية.' });
   }
   const changingNameStyle =
     (nameColor !== undefined && nameColor !== req.authUser.nameColor) ||
     (nameBgColor !== undefined && nameBgColor !== req.authUser.nameBgColor) ||
     (neonColor !== undefined && neonColor !== req.authUser.neonColor) ||
     (nameFontSize !== undefined && Number(nameFontSize) !== Number(req.authUser.nameFontSize || 14)) ||
+    (nameFontStyle !== undefined && normalizeFontStyle(nameFontStyle) !== normalizeFontStyle(req.authUser.nameFontStyle || req.authUser.fontStyle)) ||
     (nameStyleMode !== undefined && nameStyleMode !== (req.authUser.nameStyleMode || 'solid')) ||
     (nameGradient !== undefined && nameGradient !== (req.authUser.nameGradient || 'gold_royal'));
   if (changingNameStyle && !canPassSettingThreshold(req.authUser, 'min_rank_name_style', 'member')) {
-    return res.status(403).json({ error: 'تخصيص لون الاسم وتوهج النيون مقيّد حالياً لرتبة أعلى.' });
+    return res.status(403).json({ error: 'تخصيص لون وخط الاسم وتوهج النيون مقيّد حالياً لرتبة أعلى.' });
   }
   const changingMsgStyle =
     (textColor !== undefined && textColor !== req.authUser.textColor) ||
     (fontSize !== undefined && Number(fontSize) !== Number(req.authUser.fontSize || 14)) ||
     (fontFamily !== undefined && normalizeProfileFont(fontFamily) !== normalizeProfileFont(req.authUser.fontFamily)) ||
-    (fontStyle !== undefined && fontStyle !== req.authUser.fontStyle);
+    (fontStyle !== undefined && normalizeFontStyle(fontStyle) !== normalizeFontStyle(req.authUser.fontStyle));
   if (changingMsgStyle && !canPassSettingThreshold(req.authUser, 'min_rank_msg_style', 'member')) {
     return res.status(403).json({ error: 'تلوين وتكبير خط الرسائل مقيّد حالياً لرتبة أعلى من رتبتك.' });
   }
@@ -2586,13 +2741,14 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
   const clampedNameSize = nameFontSize !== undefined ? Math.max(13, Math.min(18, Number(nameFontSize) || 14)) : undefined;
 
   const updated = db.updateUserCustomization(req.authUser.userId, {
-    displayName,
+    displayName: displayName !== undefined && !canDo(req.authUser.role, 'change_name') && req.authUser.role !== 'site_owner' ? undefined : displayName,
     nameColor,
     textColor,
     nameBgColor,
     neonColor,
     fontFamily: fontFamily !== undefined ? normalizeProfileFont(fontFamily) : undefined,
-    fontStyle,
+    fontStyle: fontStyle !== undefined ? normalizeFontStyle(fontStyle) : undefined,
+    nameFontStyle: nameFontStyle !== undefined ? normalizeFontStyle(nameFontStyle) : undefined,
     fontSize: clampedMsgSize,
     nameFontSize: clampedNameSize,
     nameStyleMode,
@@ -2695,6 +2851,7 @@ app.post('/api/shop/equip', requireRegistered, async (req, res) => {
     const isFreeOrOwned =
       req.authUser.role === 'site_owner' ||
       found.id === 'none' ||
+      (!found.ownerOnly && (found.isFree || Number(found.price || 0) === 0)) ||
       db.isFrameOwnedAndValid(curUser, found.id);
     if (!isFreeOrOwned) {
       return res.status(403).json({ error: 'المتجر مقفل: يجب شراء الإطار بالروبي أولاً (أو انتهت مدة صلاحيته).' });
@@ -3088,9 +3245,12 @@ app.delete('/api/wall/:id', requireAuth, async (req, res) => {
 });
 
 app.post('/api/reports', requireAuth, async (req, res) => {
-  const targetName = String(req.body?.targetName || '').trim().slice(0, 40);
-  const reason = String(req.body?.reason || '').trim().slice(0, 300);
-  const roomId = String(req.body?.roomId || '');
+  if (!checkRateLimit(`report:${req.authUser.key}`, 8, 60000)) {
+    return res.status(429).json({ error: 'تم إرسال عدة بلاغات مؤخراً؛ انتظر دقيقة ثم حاول مجدداً.' });
+  }
+  const targetName = db.sanitizePlainText(String(req.body?.targetName || '').trim(), 40);
+  const reason = db.sanitizePlainText(String(req.body?.reason || '').trim(), 300);
+  const roomId = db.sanitizePlainText(String(req.body?.roomId || ''), 60);
   if (!targetName || !reason) return res.status(400).json({ error: 'يرجى تحديد المبلغ عنه وسبب البلاغ.' });
   const report = db.addReport({
     reporterKey: req.authUser.key,
@@ -3492,15 +3652,17 @@ app.delete('/api/admin/emojis/:id', requirePanelAccess, async (req, res) => {
 });
 
 app.post('/api/admin/store/frames', requireOwner, async (req, res) => {
-  const { label, imageUrl, price, durationType } = req.body || {};
+  const { label, imageUrl, price, durationType, isFree } = req.body || {};
   if (imageUrl) {
     const chk = validateHttpsOrLocalUrl(imageUrl, { allowDataImage: true });
     if (!chk.ok) return res.status(400).json({ error: chk.error });
   }
+  const freeFlag = Boolean(isFree) || Number(price) === 0;
   const result = db.addCustomFrame({
     label,
     imageUrl,
-    price,
+    price: freeFlag ? 0 : Math.max(0, Number(price) || 0),
+    isFree: freeFlag,
     durationType,
     createdBy: req.authUser.name
   });
@@ -5912,9 +6074,25 @@ app.post('/api/chat/heartbeat', requireAuth, (req, res) => {
   const activeMute = db.getActiveMute(entry.key, roomId);
   const qBot = roomQuizBots.get(roomId);
 
+  const nowMs = Date.now();
+  const deletedMsgIds = [];
+  for (const [mid, ts] of recentDeletedMsgLog.entries()) {
+    if (nowMs - ts <= 45000) deletedMsgIds.push(mid);
+  }
+  const updatedMessages = [];
+  if (recentUpdatedMsgLog.size > 0) {
+    const roomMsgsNow = db.getRoomMessages(roomId, 120, entry.key);
+    for (const [mid, ts] of recentUpdatedMsgLog.entries()) {
+      if (nowMs - ts <= 45000) {
+        const found = roomMsgsNow.find((m) => String(m.id) === mid || String(m.doc_id) === mid);
+        if (found) updatedMessages.push(found);
+      }
+    }
+  }
+
   return res.json({
     ok: true,
-    ts: Date.now(),
+    ts: nowMs,
     roomId,
     isRoomManager: db.isRoomManager(roomId, entry.userId, entry.role),
     canStyleRoom: db.hasRoomOwnerPermission(roomId, entry.userId, entry.role, 'style_bg'),
@@ -5923,6 +6101,8 @@ app.post('/api/chat/heartbeat', requireAuth, (req, res) => {
     roomUsers: getRoomUsersList(roomId),
     mics: getPublicMicSlots(roomId),
     messages: req.body?.includeMessages ? db.getRoomMessages(roomId, 80, entry.key) : undefined,
+    deletedMsgIds,
+    updatedMessages,
     activeMute: buildSanitizedMutePayload(activeMute, roomId),
     unreadNotifCount: db.getUnreadNotificationCount(entry.key),
     quizBot: {
@@ -6171,17 +6351,28 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
     const isGhostOnly =
       entry.role !== 'site_owner' &&
       (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
+    const rawReply = payload.replyTo && typeof payload.replyTo === 'object' ? payload.replyTo : null;
+    const replyTo = rawReply && rawReply.senderName && rawReply.content
+      ? {
+          id: rawReply.id ? String(rawReply.id).slice(0, 60) : '',
+          senderName: db.sanitizePlainText(String(rawReply.senderName || ''), 40),
+          senderKey: String(rawReply.senderKey || '').slice(0, 80),
+          content: db.sanitizePlainText(String(rawReply.content || ''), 160)
+        }
+      : null;
+
     const msg = db.addMessage({
       roomId: targetRoomId,
       senderKey: entry.key,
       senderName: entry.name,
       senderRole: entry.role,
-      nameColor: allowNameStyle ? (entry.nameBgColor ? entry.nameColor : ensureDarkReadableColor(entry.nameColor, '#f8fafc')) : '#f8fafc',
-      textColor: allowMsgStyle ? ensureDarkReadableColor(entry.textColor, '#e2e8f0') : '#e2e8f0',
+      nameColor: allowNameStyle ? (entry.nameBgColor ? entry.nameColor : ensureDarkReadableColor(entry.nameColor, '#0f172a')) : '#0f172a',
+      textColor: allowMsgStyle ? ensureDarkReadableColor(entry.textColor, '#0f172a') : '#0f172a',
       nameBgColor: allowNameStyle ? entry.nameBgColor : '',
       neonColor: allowNameStyle ? entry.neonColor : '',
       fontFamily: allowMsgStyle ? normalizeProfileFont(entry.fontFamily) : 'Cairo',
-      fontStyle: allowMsgStyle ? entry.fontStyle : 'Normal',
+      fontStyle: allowMsgStyle ? normalizeFontStyle(entry.fontStyle) : 'Normal',
+      nameFontStyle: allowNameStyle ? normalizeFontStyle(entry.nameFontStyle || entry.fontStyle) : 'Normal',
       fontSize: allowMsgStyle ? Math.max(13, Math.min(17, Number(entry.fontSize) || 14)) : 14,
       nameFontSize: allowNameStyle ? Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)) : 14,
       nameStyleMode: allowNameStyle ? entry.nameStyleMode || 'solid' : 'solid',
@@ -6200,6 +6391,7 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
       mediaUrl,
       mentionedUserId,
       mentionedUserName,
+      replyTo,
       clientMsgId
     });
 
@@ -6352,13 +6544,32 @@ app.post('/api/chat/messages', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/chat/messages/:id/react', requireAuth, async (req, res) => {
+  const entry = resolveOnlineSessionFromRequest(req);
+  if (!checkRateLimit(`react:${entry.key}`, 35, 10000)) {
+    return res.status(429).json({ error: 'تم التفاعل بسرعة كبيرة، انتظر ثوانٍ قليلة.' });
+  }
+  const msgId = String(req.params.id || '').trim();
+  const reaction = String(req.body?.reaction || '').trim();
+  if (!['heart', 'ok', 'broken', 'laugh', 'fire'].includes(reaction)) {
+    return res.status(400).json({ error: 'نوع التفاعل غير صالح.' });
+  }
+  const updated = db.toggleMessageReaction(msgId, reaction, entry.key);
+  if (!updated) return res.status(404).json({ error: 'الرسالة غير موجودة.' });
+  recordUpdatedMessage(updated.id || msgId);
+  await db.flushWrites();
+  return res.json({ ok: true, message: updated });
+});
+
 app.delete('/api/chat/messages/:id', requireAuth, async (req, res) => {
   const entry = resolveOnlineSessionFromRequest(req);
   const msgId = String(req.params.id || '').trim();
   const roomId = String(req.query?.roomId || entry.roomId || '').trim();
   if (!roomId || !msgId) return res.status(400).json({ error: 'بيانات ناقصة.' });
 
+  const isSupreme = db.isSupremeOwnerEmail(entry.email) || entry.role === 'site_owner';
   const isMgr =
+    isSupreme ||
     db.isRoomManager(roomId, entry.userId, entry.role) ||
     canDo(entry.role, 'delete_msg') ||
     canDo(entry.role, 'clear_room');
@@ -6368,11 +6579,12 @@ app.delete('/api/chat/messages/:id', requireAuth, async (req, res) => {
   if (!isMgr && target.sender_key !== entry.key) {
     return res.status(403).json({ error: 'ليست لديك صلاحية حذف هذه الرسالة.' });
   }
-  if (target.sender_key !== entry.key && entry.role !== 'site_owner') {
+  if (target.sender_key !== entry.key && !isSupreme) {
     const check = canModerateWithImmunity(entry, target.sender_key);
     if (!check.allowed) return res.status(403).json({ error: check.reason });
   }
   db.deleteMessageById(msgId);
+  recordDeletedMessage(target.id || msgId);
   if (target.sender_key !== entry.key) {
     db.addAdminLog({
       actorKey: entry.key,
@@ -6385,7 +6597,7 @@ app.delete('/api/chat/messages/:id', requireAuth, async (req, res) => {
     });
   }
   await db.flushWrites();
-  return res.json({ ok: true, msgId });
+  return res.json({ ok: true, msgId: String(target.id || msgId) });
 });
 
 app.post('/api/chat/typing', requireAuth, (req, res) => {

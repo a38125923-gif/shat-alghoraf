@@ -342,6 +342,12 @@
     if (Array.isArray(data.typingUsers) && typeof cb.onTypingUsers === 'function') cb.onTypingUsers(data.typingUsers);
     if (Array.isArray(data.ranks) && typeof cb.onRanks === 'function') cb.onRanks(data.ranks);
     if (data.settings && typeof cb.onSettings === 'function') cb.onSettings(data.settings);
+    if (Array.isArray(data.deletedMsgIds) && data.deletedMsgIds.length && typeof cb.onDeletedMessages === 'function') {
+      cb.onDeletedMessages(data.deletedMsgIds, data.roomId || session.roomId);
+    }
+    if (Array.isArray(data.updatedMessages) && data.updatedMessages.length && typeof cb.onUpdatedMessages === 'function') {
+      cb.onUpdatedMessages(data.updatedMessages, data.roomId || session.roomId);
+    }
     if (Array.isArray(data.messages) && data.messages.length && typeof cb.onDeltaMessages === 'function') {
       const maxId = Number(data.messages[data.messages.length - 1]?.id) || 0;
       if (maxId > session.lastMsgId) session.lastMsgId = maxId;

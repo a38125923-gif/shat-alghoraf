@@ -35,7 +35,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=Amiri:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Cairo:wght@400;600;700;800&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Aref+Ruqaa:wght@400;700&family=Cairo:wght@400;600;700;800&family=Changa:wght@400;600;700;800&family=Lalezar&family=Lemonada:wght@400;600;700&family=Marhey:wght@400;600;700&family=Rakkas&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -73,9 +73,6 @@
           <label>كلمة المرور</label>
           <input type="password" id="loginPassword" placeholder="••••••••" required />
           <button type="submit" class="btn-primary btn-full"><i class="fa-solid fa-right-to-bracket"></i> دخول إلى الشات</button>
-          <button type="button" id="googleLoginBtn" class="btn-secondary btn-full" style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px;">
-            <i class="fa-brands fa-google" style="color:#f87171;"></i> تسجيل الدخول السريع عبر Google
-          </button>
         </form>
 
         <form id="registerForm" class="auth-form hidden">
@@ -169,6 +166,16 @@
         </div>
       </header>
       <div id="urgentBroadcastBar" class="urgent-broadcast-bar hidden"></div>
+
+      <!-- TOPIC BANNER DIRECTLY BELOW TOP BAR -->
+      <div id="topicBannerBar" class="topic-banner-bar">
+        <div class="topic-banner-content">
+          <span class="topic-warn-ico"><i class="fa-solid fa-bullhorn"></i></span>
+          <strong class="topic-title-lbl">الموضوع:</strong>
+          <span id="topicBannerText" class="topic-text-val">أهلاً بكم في شات عربي الاصيل، نتمنى لكم أطيب الأوقات!</span>
+        </div>
+        <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+      </div>
 
       <!-- MICS 1..5 (#1a237e) + BLUE DIVIDER BUTTONS + YOUTUBE BAR -->
       <section class="mics-and-room-strip">
@@ -302,16 +309,6 @@
         </aside>
       </div>
 
-      <!-- TOPIC BANNER ABOVE INPUT BAR -->
-      <div id="topicBannerBar" class="topic-banner-bar">
-        <div class="topic-banner-content">
-          <span class="topic-warn-ico"><i class="fa-solid fa-bullhorn"></i></span>
-          <strong class="topic-title-lbl">الموضوع:</strong>
-          <span id="topicBannerText" class="topic-text-val">أهلاً بكم في شات عربي الاصيل، نتمنى لكم أطيب الأوقات!</span>
-        </div>
-        <button type="button" id="closeTopicBannerBtn" class="topic-close-btn" title="إغلاق"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
       <div id="frozenUserBanner" class="frozen-user-banner hidden"></div>
       <div id="mutedAlertBanner" class="muted-alert-banner hidden"></div>
       <!-- INLINE MESSAGE FONT & COLOR BAR -->
@@ -338,8 +335,21 @@
             <button type="button" class="inline-msg-pill active" data-msg-style="Normal">عادي</button>
             <button type="button" class="inline-msg-pill" data-msg-style="Bold">عريض</button>
             <button type="button" class="inline-msg-pill" data-msg-style="Italic">مائل</button>
+            <button type="button" class="inline-msg-pill" data-msg-style="BoldItalic">عريض ومائل</button>
           </div>
         </div>
+      </div>
+
+      <!-- REPLY QUOTE PREVIEW BAR ABOVE INPUT -->
+      <div id="chatReplyBar" class="chat-reply-bar hidden">
+        <div class="chat-reply-bar-main">
+          <i class="fa-solid fa-reply"></i>
+          <div class="chat-reply-bar-text">
+            <strong id="chatReplySender"></strong>
+            <span id="chatReplySnippet"></span>
+          </div>
+        </div>
+        <button type="button" id="cancelReplyBtn" class="chat-reply-cancel-btn" title="إلغاء الرد"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <!-- BOTTOM INPUT BAR -->
@@ -519,6 +529,9 @@
             <button type="button" id="custUploadCoverBtn" class="hero-circle-glass-btn cover-cam-icon-btn" title="تغيير صورة الغلاف (يدعم GIF و PNG و JPG)">
               <i class="fa-solid fa-camera"></i>
             </button>
+            <button type="button" id="custDeleteCoverBtn" class="hero-circle-glass-btn cover-del-x-btn hidden" title="حذف صورة الغلاف">
+              ✕
+            </button>
           </div>
 
           <div class="profile-cover-bottom-bar">
@@ -561,9 +574,6 @@
           </button>
           <button type="button" id="custQuickBgEffectsBtn" class="below-cover-pill-btn" title="الإطارات والخلفيات المتحركة">
             <i class="fa-solid fa-sparkles"></i> <span>الإطارات والخلفيات</span>
-          </button>
-          <button type="button" id="custDeleteCoverBtn" class="below-cover-pill-btn danger-pill hidden" title="حذف صورة الغلاف">
-            <i class="fa-solid fa-trash-can"></i> <span>حذف الغلاف</span>
           </button>
         </div>
 
@@ -622,20 +632,20 @@
               </div>
               <div id="custReferralBox" class="referral-invite-box hidden"></div>
 
-              <div class="form-grid-2">
-                <div>
+              <div class="form-grid-2" id="custInfoIdentityGrid">
+                <div id="custDisplayNameWrap">
                   <label>الاسم المستعار</label>
                   <input type="text" id="custDisplayName" maxlength="28" />
                 </div>
-                <div>
+                <div id="custVipFamilyWrap">
                   <label>عائلة VIP</label>
                   <input type="text" id="custVipFamily" maxlength="24" placeholder="مثال: ملوك العرب" />
                 </div>
-                <div>
+                <div id="custAgeWrap">
                   <label>العمر</label>
                   <input type="text" id="custAgeInput" maxlength="10" placeholder="مثال: 24" />
                 </div>
-                <div>
+                <div id="custGenderWrap">
                   <label>الجنس</label>
                   <select id="custGenderSelect">
                     <option value="">غير محدد</option>
@@ -645,30 +655,18 @@
                 </div>
               </div>
 
-              <div class="form-grid-2">
-                <div>
+              <div class="form-grid-2" id="custInfoLocationGrid">
+                <div id="custCountryWrap">
                   <label>البلد / الإقامة</label>
                   <input type="text" id="custCountryInput" maxlength="40" placeholder="مثال: السعودية، مصر، العراق..." />
                 </div>
-                <div>
+                <div id="custStatusWrap">
                   <label>الحالة الآن</label>
-                  <input type="text" id="custStatusInput" maxlength="80" placeholder="مثال: متاح للدردشة ✨..." />
+                  <input type="text" id="custStatusInput" maxlength="80" placeholder="اكتب حالتك الحالية بحرية..." />
                 </div>
               </div>
 
-              <div class="cust-status-presets-wrap">
-                <span class="muted" style="font-size:11.5px;display:block;margin-bottom:5px;"><i class="fa-solid fa-face-smile"></i> الحالة السريعة:</span>
-                <div id="custStatusPresets" class="cust-status-chips-row">
-                  <button type="button" class="cust-status-chip" data-status="🟢 متاح للدردشة">🟢 متاح للدردشة</button>
-                  <button type="button" class="cust-status-chip" data-status="🎧 أستمع للموسيقى">🎧 أستمع للموسيقى</button>
-                  <button type="button" class="cust-status-chip" data-status="☕ رايق ومزاج عالي">☕ رايق</button>
-                  <button type="button" class="cust-status-chip" data-status="⛔ مشغول حالياً">⛔ مشغول</button>
-                  <button type="button" class="cust-status-chip" data-status="✈️ مسافر">✈️ مسافر</button>
-                  <button type="button" class="cust-status-chip" data-status="">✕ مسح</button>
-                </div>
-              </div>
-
-              <div style="margin-top:8px;">
+              <div id="custBioWrap" style="margin-top:8px;">
                 <label>النبذة (رسالة معلوماتي)</label>
                 <textarea id="custBioInput" rows="2" maxlength="160" placeholder="اكتب نبذة مختصرة عنك لتظهر للجميع في بطاقتك..."></textarea>
               </div>
@@ -724,46 +722,62 @@
                   </div>
                 </div>
 
-                <div class="form-grid-2" style="margin-top:10px;">
-                  <div>
-                    <label>لون نص الرسائل (متباين مع الليلي)</label>
+                <div class="form-grid-2" style="margin-top:10px;" id="custFontColorsGrid">
+                  <div id="custTextColorWrap">
+                    <label>لون نص الرسائل</label>
                     <div class="inline-row" style="gap:6px;">
-                      <input type="color" id="custTextColor" value="#e2e8f0" />
+                      <input type="color" id="custTextColor" value="#0f172a" />
                       <button type="button" id="custResetTextColorBtn" class="btn-secondary btn-xs">افتراضي</button>
                     </div>
                     <div id="custContrastHint" class="form-hint hidden" style="color:#f87171;font-size:11px;margin-top:4px;"></div>
                   </div>
-                  <div>
-                    <label>الخط العربي</label>
+                  <div id="custFontFamilyWrap">
+                    <label>الخط العربي (10 خطوط)</label>
                     <select id="custFontFamily">
                       <option value="Cairo">Cairo (كايرو - قياسي)</option>
                       <option value="Tajawal">Tajawal (تجوال - عصري)</option>
                       <option value="Amiri">Amiri (أميري - كلاسيكي)</option>
-                      <option value="Reem Kufi">Reem Kufi (ريم كوفي)</option>
+                      <option value="Lemonada">Lemonada (ليمونادا)</option>
                       <option value="Aref Ruqaa">Aref Ruqaa (عارف رقعة)</option>
-                      <option value="Almarai">Almarai (المراعي)</option>
+                      <option value="Reem Kufi">Reem Kufi (ريم كوفي)</option>
+                      <option value="Lalezar">Lalezar (لاليزار - عريض)</option>
+                      <option value="Changa">Changa (تشانجا)</option>
+                      <option value="Marhey">Marhey (مرحي)</option>
+                      <option value="Rakkas">Rakkas (رقاص - فني)</option>
                     </select>
                   </div>
                 </div>
 
-                <div class="form-grid-2" style="margin-top:6px;">
-                  <div>
-                    <label>نمط الخط</label>
-                    <select id="custFontStyle">
-                      <option value="Normal">عادي Normal</option>
-                      <option value="Bold">عريض Bold</option>
-                      <option value="Italic">مائل Italic</option>
+                <div class="form-grid-2" style="margin-top:6px;" id="custFontStylesGrid">
+                  <div id="custNameFontStyleWrap">
+                    <label>نمط خط الاسم</label>
+                    <select id="custNameFontStyle">
+                      <option value="Normal">عادي</option>
+                      <option value="Bold">عريض</option>
+                      <option value="Italic">مائل</option>
+                      <option value="BoldItalic">عريض ومائل</option>
                     </select>
                   </div>
-                  <div>
+                  <div id="custMsgFontStyleWrap">
+                    <label>نمط خط الرسائل</label>
+                    <select id="custFontStyle">
+                      <option value="Normal">عادي</option>
+                      <option value="Bold">عريض</option>
+                      <option value="Italic">مائل</option>
+                      <option value="BoldItalic">عريض ومائل</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-grid-2" style="margin-top:6px;" id="custFontSizesGrid">
+                  <div id="custNameFontSizeWrap">
                     <label>حجم خط الاسم (<span id="custNameFontSizeVal">14</span>px)</label>
                     <input type="range" id="custNameFontSize" min="13" max="18" step="1" value="14" style="width:100%;padding:4px 0;" />
                   </div>
-                </div>
-
-                <div style="margin-top:6px;">
-                  <label>حجم خط الرسالة (<span id="custFontSizeVal">14</span>px)</label>
-                  <input type="range" id="custFontSize" min="13" max="17" step="1" value="14" style="width:100%;padding:4px 0;" />
+                  <div id="custFontSizeWrap">
+                    <label>حجم خط الرسالة (<span id="custFontSizeVal">14</span>px)</label>
+                    <input type="range" id="custFontSize" min="13" max="17" step="1" value="14" style="width:100%;padding:4px 0;" />
+                  </div>
                 </div>
 
                 <!-- ANIMATED NAME CONTROLS -->
@@ -798,29 +812,20 @@
                 </div>
               </div>
 
-              <!-- PROFILE MUSIC -->
-              <div class="addon-block" style="margin-top:10px;">
+              <!-- PROFILE MUSIC (MOBILE MP3 UPLOAD <= 40s / 2MB) -->
+              <div class="addon-block" id="custProfileMusicSection" style="margin-top:10px;">
                 <div class="addon-block-head">
-                  <h4><i class="fa-solid fa-music" style="color:#38bdf8;"></i> موسيقى البروفايل</h4>
+                  <h4><i class="fa-solid fa-music" style="color:#38bdf8;"></i> أغنية البروفايل (MP3 من الجوال)</h4>
                 </div>
-                <div class="form-grid-2">
-                  <div>
-                    <label>اختيار نغمة</label>
-                    <div class="inline-row">
-                      <select id="custMusicPreset" style="flex:1">
-                        <option value="">بدون موسيقى</option>
-                        <option value="preset:calm_lofi">أنغام هادئة</option>
-                        <option value="preset:royal_oud">نغمة ملكية</option>
-                        <option value="preset:ambient_stars">أوتار ليلية</option>
-                      </select>
-                      <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i></button>
-                    </div>
-                  </div>
-                  <div>
-                    <label>رابط MP3 خارجي (اختياري)</label>
-                    <input type="text" id="custMusicCustomUrl" placeholder="https://..." style="width:100%;" />
-                  </div>
+                <div class="inline-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
+                  <label for="custMusicFile" id="custUploadMusicBtn" class="btn-primary btn-xs" style="cursor:pointer;">
+                    <i class="fa-solid fa-mobile-screen-button"></i> رفع مقطع MP3 من الجوال
+                  </label>
+                  <input type="file" id="custMusicFile" accept="audio/mpeg,.mp3,audio/*" class="sr-file-input" />
+                  <button type="button" id="custMusicPreviewBtn" class="btn-secondary btn-xs" title="تشغيل / إيقاف المعاينة"><i class="fa-solid fa-play"></i> تشغيل</button>
+                  <button type="button" id="custDeleteMusicBtn" class="btn-danger btn-xs hidden" title="حذف أغنية البروفايل"><i class="fa-solid fa-trash-can"></i> حذف الأغنية</button>
                 </div>
+                <div id="custMusicFileLabel" class="muted" style="font-size:11.5px;margin-top:6px;">لا توجد أغنية مرفوعة حالياً (الحد الأقصى: MP3 حتى 40 ثانية و 2MB).</div>
               </div>
             </div>
 

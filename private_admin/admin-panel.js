@@ -567,7 +567,9 @@
         { key: 'access_panel', label: 'دخول لوحة التحكم' },
         { key: 'room_owner', label: 'إدارة الغرف كـ مالك غرفة' },
         { key: 'publish_news', label: 'نشر الأخبار' },
-        { key: 'send_links', label: 'إرسال الروابط' }
+        { key: 'send_links', label: 'إرسال الروابط' },
+        { key: 'change_name', label: 'تغيير الاسم المستعار' },
+        { key: 'profile_music', label: 'رفع أغنية البروفايل 40 ثانية' }
       ];
       const prot = suite.protections || ov.settings || {};
       const allRanksSorted = [...(suite.ranks || ov.ranks || state.ranks || [])].sort((a, b) => (Number(a.power) || 0) - (Number(b.power) || 0));
@@ -585,7 +587,8 @@
         { id: 'mute', label: 'كتم' }, { id: 'kick', label: 'طرد' }, { id: 'ban', label: 'حظر' },
         { id: 'manage_rooms', label: 'إدارة الغرف' }, { id: 'set_rank', label: 'تغيير الرتب' }, { id: 'stealth', label: 'تخفي' },
         { id: 'give_coins', label: 'منح روبي' }, { id: 'clear_room', label: 'مسح الغرفة' }, { id: 'access_panel', label: 'دخول اللوحة' },
-        { id: 'room_owner', label: 'مالك غرفة' }, { id: 'publish_news', label: 'نشر أخبار' }, { id: 'send_links', label: 'الروابط' }
+        { id: 'room_owner', label: 'مالك غرفة' }, { id: 'publish_news', label: 'نشر أخبار' }, { id: 'send_links', label: 'الروابط' },
+        { id: 'change_name', label: 'تغيير الاسم' }, { id: 'profile_music', label: 'أغنية البروفايل' }
       ];
       const framesCat = (suite.framesCatalog || ov.framesCatalog || state.shopItems?.frames || []).filter((f) => f.id !== 'none' && !f.ownerOnly);
 
@@ -1297,22 +1300,26 @@
 
         <div class="${sub === 'frames' ? '' : 'hidden'}" style="display:flex;flex-direction:column;gap:10px;">
           <div class="news-composer">
-            <strong><i class="fa-solid fa-wand-sparkles" style="color:#F59E0B;"></i> إضافة إطار صورة ملكي مخصص للمتجر</strong>
+            <strong><i class="fa-solid fa-wand-sparkles" style="color:#F59E0B;"></i> إضافة إطار صورة ملكي مخصص للمتجر والملفات</strong>
             <div class="form-grid-2">
               <input type="text" id="sfLabel" placeholder="اسم الإطار" />
+              <select id="sfFrameMode">
+                <option value="paid">مدفوع بالروبي</option>
+                <option value="free">مجاني للأعضاء</option>
+              </select>
               <input type="number" id="sfPrice" min="0" value="300" placeholder="السعر بالروبي" />
               <select id="sfDuration">
                 <option value="permanent">دائم</option>
                 <option value="monthly">شهري (30 يوماً)</option>
               </select>
-              <input type="text" id="sfImgUrl" placeholder="رابط صورة الإطار (PNG / SVG / GIF)" />
+              <input type="text" id="sfImgUrl" placeholder="رابط صورة الإطار (PNG / SVG / GIF) أو ارفع من الجوال" style="grid-column:1 / -1;" />
             </div>
             <div class="inline-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
               <img id="sfFramePreviewImg" class="hidden" style="width:42px;height:42px;object-fit:contain;border-radius:50%;border:1px solid rgba(251,191,36,0.45);background:rgba(15,23,42,0.8);" alt="" />
               <label for="sfImgFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-mobile-screen-button"></i> رفع إطار من الجوال (PNG / SVG / GIF)</label>
               <input type="file" id="sfImgFile" accept="image/png,image/svg+xml,image/gif,image/webp,image/*" style="display:none;" />
               <span id="sfFileNameLbl" class="muted" style="font-size:11px;"></span>
-              <button type="button" id="sfAddFrameBtn" class="btn-primary btn-sm"><i class="fa-solid fa-plus"></i> إضافة الإطار للمتجر</button>
+              <button type="button" id="sfAddFrameBtn" class="btn-primary btn-sm"><i class="fa-solid fa-plus"></i> إضافة الإطار</button>
             </div>
           </div>
 
@@ -1320,7 +1327,7 @@
             <strong><i class="fa-solid fa-gift"></i> منح إطار لعضو مجاناً من المالك</strong>
             <div class="inline-row" style="flex-wrap:wrap;">
               <select id="sfGrantUserSel" style="flex:1;min-width:150px;">${userOpts}</select>
-              <select id="sfGrantFrameSel" style="flex:1;min-width:150px;">${allFrames.map((f) => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.label)} (${Number(f.price || 0)} 💎)</option>`).join('')}</select>
+              <select id="sfGrantFrameSel" style="flex:1;min-width:150px;">${allFrames.map((f) => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.label)} (${f.isFree || Number(f.price || 0) === 0 ? 'مجاني' : `${Number(f.price || 0)} 💎`})</option>`).join('')}</select>
               <select id="sfGrantDurationSel"><option value="permanent">دائم</option><option value="monthly">شهري</option></select>
               <button type="button" id="sfGrantBtn" class="btn-primary btn-xs">منح الإطار</button>
             </div>
@@ -1331,7 +1338,7 @@
               <div class="admin-list-card">
                 <div style="display:flex;align-items:center;gap:8px;">
                   ${f.imageUrl ? `<img src="${escapeHtml(f.imageUrl)}" style="width:36px;height:36px;object-fit:contain;border-radius:8px;" alt="" />` : ''}
-                  <div><strong>${escapeHtml(f.label)}</strong><div class="muted">💎 ${Number(f.price || 0)} • ${f.durationType === 'monthly' ? 'شهري' : 'دائم'}</div></div>
+                  <div><strong>${escapeHtml(f.label)}</strong><div class="muted">${f.isFree || Number(f.price || 0) === 0 ? '✨ مجاني للأعضاء' : `💎 ${Number(f.price || 0)} روبي`} • ${f.durationType === 'monthly' ? 'شهري' : 'دائم'}</div></div>
                 </div>
                 <button type="button" class="btn-danger btn-xs sf-del-frame-btn" data-fid="${escapeHtml(f.id)}">حذف</button>
               </div>
@@ -1394,6 +1401,15 @@
         } catch (err) { showToast(err.message, true); }
       });
 
+      $('sfFrameMode')?.addEventListener('change', () => {
+        const isFree = $('sfFrameMode')?.value === 'free';
+        if ($('sfPrice')) {
+          $('sfPrice').classList.toggle('hidden', isFree);
+          if (isFree) $('sfPrice').value = '0';
+          else if (Number($('sfPrice').value) === 0) $('sfPrice').value = '300';
+        }
+      });
+
       $('sfImgFile')?.addEventListener('change', (e) => {
         const f = e.target.files?.[0];
         const prev = $('sfFramePreviewImg');
@@ -1415,16 +1431,18 @@
             const up = await api('/api/upload/frame', { method: 'POST', body: fd });
             imageUrl = up.url;
           }
+          const isFree = $('sfFrameMode')?.value === 'free';
           await api('/api/admin/store/frames', {
             method: 'POST',
             body: {
               label: $('sfLabel').value,
-              price: Number($('sfPrice').value) || 0,
+              isFree,
+              price: isFree ? 0 : (Number($('sfPrice').value) || 0),
               durationType: $('sfDuration').value,
               imageUrl
             }
           });
-          showToast('تمت إضافة الإطار للمتجر بنجاح!');
+          showToast('تمت إضافة الإطار وحفظه بنجاح!');
           refreshPanel('store_gifts', null, 'frames');
         } catch (err) { showToast(err.message, true); }
       });
