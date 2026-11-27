@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const { Server: SocketIOServer } = require('socket.io');
 const db = require('./db');
 
 const rawEnvPort = Number(process.env.PORT);
@@ -762,28 +763,25 @@ function mapGuestRow(g, fallbackKey = '', fallbackName = 'زائر') {
   };
 }
 
-function resolveAuthFromRequest(req, tokenOverride = '') {
-  const auth = req.headers.authorization || '';
-  const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  const token = String(tokenOverride || bearer || '').trim();
-  const payload = verifyToken(token);
+function resolveAuthUserFromToken(token, telemetry = {}, outMeta = null) {
+  const cleanToken = String(token || '').trim();
+  const payload = verifyToken(cleanToken);
   if (!payload) return null;
 
-  const telemetry = getClientTelemetry(req);
   const { ip, deviceId, fingerprint } = telemetry;
 
   if (payload.isGuest) {
     const ban = db.isTargetBanned({ targetKey: payload.key, ipAddress: ip, deviceId, fingerprint });
     if (ban) {
-      return {
-        banned: true
-      };
+      return { banned: true };
     }
     if (!validateAndTouchSession(payload, { role: 'guest', telemetry })) return null;
     const saved = db.findGuestByKey(payload.key);
     const guestObj = saved || db.upsertGuest({ key: payload.key, name: payload.name || 'زائر' });
-    req._authTokenPayload = payload;
-    req._authRawToken = token;
+    if (outMeta) {
+      outMeta.payload = payload;
+      outMeta.rawToken = cleanToken;
+    }
     return mapGuestRow(guestObj, payload.key, payload.name || 'زائر');
   }
 
@@ -804,19 +802,33 @@ function resolveAuthFromRequest(req, tokenOverride = '') {
         fingerprint
       });
       if (ban || freshRow.isBanned === true || freshRow.is_banned === 1) {
-        return {
-          banned: true
-        };
+        return { banned: true };
       }
     }
     if (!validateAndTouchSession(payload, { role: freshRow.role, telemetry, userRow: freshRow })) {
       return null;
     }
-    req._authTokenPayload = payload;
-    req._authRawToken = token;
+    if (outMeta) {
+      outMeta.payload = payload;
+      outMeta.rawToken = cleanToken;
+    }
     return mapUserRow(freshRow);
   }
   return null;
+}
+
+function resolveAuthFromRequest(req, tokenOverride = '') {
+  const auth = req.headers.authorization || '';
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  const token = String(tokenOverride || bearer || '').trim();
+  const telemetry = getClientTelemetry(req);
+  const meta = {};
+  const user = resolveAuthUserFromToken(token, telemetry, meta);
+  if (user && !user.banned && meta.payload) {
+    req._authTokenPayload = meta.payload;
+    req._authRawToken = meta.rawToken;
+  }
+  return user;
 }
 
 function requireAuth(req, res, next) {
@@ -946,9 +958,24 @@ const uploadFrame = makeUploader('frames', 'image/', 12 * 1024 * 1024);
 const uploadProfileMusic = makeUploader('music', 'audio/', 2 * 1024 * 1024);
 
 // ==========================================
-// REAL-TIME PRESENCE & ROOM STATE MAPS (FIRESTORE-BACKED, ZERO SOCKET.IO)
+// REAL-TIME PRESENCE, SOCKET.IO & ROOM STATE MAPS
 // ==========================================
+let io = null;
+const userSocketsMap = new Map(); // userKey -> Set<Socket>
+const socketGraceTimers = new Map(); // userKey -> timeout
 const onlinePresenceMap = new Map(); // userKey -> presence entry
+function emitToUserKey(targetKey, event, payload) {
+  if (!io || !targetKey || !event) return;
+  const set = userSocketsMap.get(String(targetKey));
+  if (!set || !set.size) return;
+  for (const sock of set) {
+    try {
+      sock.emit(event, payload);
+    } catch {
+      // ignore closed socket
+    }
+  }
+}
 const recentDeletedMsgLog = new Map(); // msgId -> deletedAtMs
 const recentUpdatedMsgLog = new Map(); // msgId -> updatedAtMs
 function recordDeletedMessage(msgId) {
@@ -1139,7 +1166,11 @@ function getPublicMicSlots(roomId) {
 
 function syncRoomMicsToFirestore(roomId) {
   if (!roomId) return;
-  db.syncRoomMicsDoc(roomId, getPublicMicSlots(roomId));
+  const slots = getPublicMicSlots(roomId);
+  db.syncRoomMicsDoc(roomId, slots);
+  if (io) {
+    io.to(roomId).emit('room_mics', { roomId, slots });
+  }
 }
 
 function isStealthEntry(entry) {
@@ -1347,59 +1378,7 @@ function buildPersistentMembersList() {
     };
   });
 
-  const guestRank = db.getRankByKey('guest');
-  const persistedGuests = db.getAllGuests().map((g) => {
-    const live = onlineByKey.get(g.key);
-    return {
-      key: g.key,
-      userId: null,
-      isGuest: true,
-      username: g.name,
-      name: g.name,
-      displayName: g.display_name || g.name,
-      role: 'guest',
-      rank: guestRank,
-      level: Number(guestRank?.power || 1),
-      avatarUrl: g.avatar_url || '',
-      coverUrl: g.cover_url || '',
-      avatarFrame: g.avatar_frame || 'none',
-      nameplateStyle: g.nameplate_style || 'default',
-      nameShine: g.name_shine || 'none',
-      nameAnim: normalizeNameAnim(g.name_anim),
-      nameAnimSpeed: normalizeNameAnimSpeed(g.name_anim_speed),
-      profileBgEffect: 'none',
-      vipWings: Boolean(g.vip_wings),
-      profileMusic: '',
-      bio: g.bio || '',
-      age: '',
-      gender: '',
-      country: g.country || '',
-      allowCalls: true,
-      allowPm: true,
-      likesCount: 0,
-      ratingAvg: 5.0,
-      ratingCount: 0,
-      isGhosted: false,
-      isStealth: false,
-      nameColor: ensureDarkReadableColor(g.name_color, '#0f172a'),
-      nameBgColor: g.name_bg_color || '',
-      neonColor: g.neon_color || '',
-      fontFamily: normalizeProfileFont(g.font_family),
-      fontStyle: normalizeFontStyle(g.font_style),
-      nameFontStyle: normalizeFontStyle(g.name_font_style || g.font_style),
-      nameFontSize: Math.max(13, Math.min(18, Number(g.name_font_size) || 14)),
-      nameStyleMode: ['solid', 'gradient', 'glow'].includes(String(g.name_style_mode)) ? String(g.name_style_mode) : 'solid',
-      nameGradient: g.name_gradient || 'gold_royal',
-      vipFamily: '',
-      coins: 0,
-      activityPoints: 0,
-      giftsReceived: 0,
-      roomId: live?.roomId || null,
-      online: Boolean(live)
-    };
-  });
-
-  return [...registered, ...persistedGuests]
+  return [...registered]
     .filter((m) => !m.isStealth)
     .sort(
       (a, b) =>
@@ -1526,6 +1505,9 @@ function upsertOnlinePresence(authUser, telemetry = {}, roomId = null, extra = {
     const row = db.findUserById(entry.userId);
     if (row) db.syncUserStateDoc(row);
   }
+  if (entry.roomId) broadcastRoomUsers(entry.roomId);
+  broadcastGlobalOnlineUsers();
+  broadcastRoomsList();
   return entry;
 }
 
@@ -1539,12 +1521,47 @@ function removeOnlinePresence(targetKey) {
   if (existing?.roomId) {
     releaseUserMicsInRoom(key, existing.roomId);
     pauseQuizBotIfRoomEmpty(existing.roomId);
+    broadcastRoomUsers(existing.roomId);
   }
+  broadcastGlobalOnlineUsers();
+  broadcastRoomsList();
 }
 
-function broadcastRoomUsers() {}
-function broadcastGlobalOnlineUsers() {}
-function broadcastRoomsList() {}
+function broadcastRoomUsers(roomId) {
+  if (!io || !roomId) return;
+  io.to(roomId).emit('room_users', {
+    roomId,
+    users: getRoomUsersList(roomId),
+    roomKingKey: computeRoomKingKey(roomId)
+  });
+}
+
+function broadcastGlobalOnlineUsers() {
+  if (!io) return;
+  io.emit('online_users', buildGlobalOnlineUsers());
+}
+
+function broadcastRoomsList() {
+  if (!io) return;
+  io.emit('rooms', buildRoomsPayload());
+}
+
+function broadcastTypingUsers(roomId) {
+  if (!io || !roomId) return;
+  const now = Date.now();
+  const users = [];
+  for (const e of onlinePresenceMap.values()) {
+    if (e.roomId === roomId && !isStealthEntry(e) && e.typingInRoom === roomId && now - (Number(e.typingAt) || 0) < 5000) {
+      users.push({
+        key: e.key,
+        name: e.name,
+        avatarUrl: e.avatarUrl || '',
+        role: e.role || 'member'
+      });
+    }
+  }
+  io.to(roomId).emit('typing_users', { roomId, users });
+}
 
 function syncUserPresence(userId) {
   const row = db.findUserById(userId);
@@ -1555,7 +1572,10 @@ function syncUserPresence(userId) {
   if (existing) {
     Object.assign(existing, mapped, { firebaseUid: row.firebase_uid || existing.firebaseUid || '' });
     db.syncOnlinePresenceDoc(buildPublicPresenceDoc(existing));
+    if (existing.roomId) broadcastRoomUsers(existing.roomId);
   }
+  emitToUserKey(mapped.key, 'session_patch', mapped);
+  broadcastGlobalOnlineUsers();
 }
 
 function syncUserAcrossSockets(_ioUnused, userId) {
@@ -1564,12 +1584,15 @@ function syncUserAcrossSockets(_ioUnused, userId) {
 
 function emitNotificationToUser(_ioUnused, targetKey, notifObj) {
   if (!targetKey || !notifObj) return;
-  if (targetKey !== '*') {
-    db.patchUserStateDoc(targetKey, {
-      lastNotifAt: Date.now(),
-      unreadNotifCount: db.getUnreadNotificationCount(targetKey)
-    });
+  if (targetKey === '*') {
+    if (io) io.emit('notification', notifObj);
+    return;
   }
+  db.patchUserStateDoc(targetKey, {
+    lastNotifAt: Date.now(),
+    unreadNotifCount: db.getUnreadNotificationCount(targetKey)
+  });
+  emitToUserKey(targetKey, 'notification', notifObj);
 }
 
 function formatMuteDurationArabic(mins) {
@@ -1611,14 +1634,20 @@ function emitMuteStateToUser(targetKey, roomId) {
   const active = db.getActiveMute(targetKey, roomId);
   const payload = buildSanitizedMutePayload(active, roomId);
   db.patchUserStateDoc(targetKey, { activeMute: payload });
+  emitToUserKey(targetKey, 'mute_state', payload);
 }
 
 function kickTargetFromPresence(targetKey, { reason = 'تم طردك من الغرفة', banned = false } = {}) {
   if (!targetKey) return;
+  const cleanReason = banned ? 'تم حظرك من الشات' : String(reason || 'تم طردك من الغرفة');
   db.patchUserStateDoc(targetKey, {
     kickedAt: Date.now(),
-    kickedReason: banned ? 'تم حظرك من الشات' : String(reason || 'تم طردك من الغرفة'),
+    kickedReason: cleanReason,
     isBanned: Boolean(banned)
+  });
+  emitToUserKey(targetKey, banned ? 'banned' : 'kicked', {
+    reason: cleanReason,
+    banned: Boolean(banned)
   });
   removeOnlinePresence(targetKey);
 }
@@ -3589,6 +3618,7 @@ app.put('/api/admin/settings', requirePanelAccess, async (req, res) => {
   }
   db.updateSiteSettings(body);
   const pubSettings = db.getPublicSiteSettings();
+  if (io) io.emit('settings', pubSettings);
   await db.flushWrites();
   return res.json({ settings: pubSettings });
 });
@@ -3600,6 +3630,7 @@ app.post('/api/admin/ranks', requireOwner, async (req, res) => {
   }
   const result = db.createRank(req.body || {});
   if (result.error) return res.status(400).json({ error: result.error });
+  if (io) io.emit('ranks', db.getAllRanks());
   await db.flushWrites();
   return res.json({ rank: result.rank });
 });
@@ -3616,6 +3647,7 @@ app.put('/api/admin/ranks/:key', requireOwner, async (req, res) => {
       syncUserPresence(entry.userId);
     }
   }
+  if (io) io.emit('ranks', db.getAllRanks());
   await db.flushWrites();
   return res.json({ rank: result.rank });
 });
@@ -3626,6 +3658,7 @@ app.delete('/api/admin/ranks/:key', requireOwner, async (req, res) => {
   for (const uid of result.affectedUserIds || []) {
     syncUserPresence(uid);
   }
+  if (io) io.emit('ranks', db.getAllRanks());
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -3755,6 +3788,7 @@ app.post('/api/admin/rooms', requirePanelAccess, async (req, res) => {
     ownerAllowedRoles,
     createdBy: req.authUser.name
   });
+  broadcastRoomsList();
   await db.flushWrites();
   return res.json({ room: db.sanitizeRoomForPublic(room) });
 });
@@ -3781,8 +3815,11 @@ app.put('/api/admin/rooms/:id', requireRegistered, async (req, res) => {
     delete patch.ownerAllowedRoles;
   }
   const updated = db.updateRoom(rm.id, patch);
+  const pubRoom = db.sanitizeRoomForPublic(updated);
+  if (io && pubRoom) io.to(rm.id).emit('room_updated', pubRoom);
+  broadcastRoomsList();
   await db.flushWrites();
-  return res.json({ room: db.sanitizeRoomForPublic(updated) });
+  return res.json({ room: pubRoom });
 });
 
 app.put('/api/rooms/:id/style', requireRegistered, async (req, res) => {
@@ -3804,8 +3841,11 @@ app.put('/api/rooms/:id/style', requireRegistered, async (req, res) => {
     bgCustom,
     welcomeMessage
   });
+  const pubRoom = db.sanitizeRoomForPublic(updated);
+  if (io && pubRoom) io.to(rm.id).emit('room_updated', pubRoom);
+  broadcastRoomsList();
   await db.flushWrites();
-  return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+  return res.json({ ok: true, room: pubRoom });
 });
 
 app.delete('/api/admin/rooms/:id', requirePanelAccess, async (req, res) => {
@@ -3819,12 +3859,13 @@ app.delete('/api/admin/rooms/:id', requirePanelAccess, async (req, res) => {
   if (!rm) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
   for (const entry of onlinePresenceMap.values()) {
     if (entry.roomId === rm.id) {
-      entry.roomId = 'general';
-      db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+      movePresenceToRoom(entry, 'general', {}, true);
       db.patchUserStateDoc(entry.key, { forceRoomId: 'general', forceRoomAt: Date.now() });
+      emitToUserKey(entry.key, 'forced_room_move', { roomId: 'general' });
     }
   }
   db.deleteRoom(rm.id);
+  broadcastRoomsList();
   await db.flushWrites();
   return res.json({ ok: true });
 });
@@ -5310,6 +5351,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       db.syncOnlinePresenceDoc(buildPublicPresenceDoc(liveEntry));
     }
     db.patchUserStateDoc(targetKey, { isFrozen: Boolean(enabled) });
+    emitToUserKey(targetKey, 'user_state', { isFrozen: Boolean(enabled) });
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'تجميد عضو' : 'فك تجميد عضو', targetKey, targetName: targetKey });
     await db.flushWrites();
     return res.json({ ok: true });
@@ -5327,6 +5369,10 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         forceRoomNotice: `تم سحبك ونقلك إلى غرفة "${destRoom.name}" بواسطة المالك.`,
         forceRoomAt: Date.now()
       });
+      emitToUserKey(targetKey, 'forced_room_move', {
+        roomId: toRoomId,
+        notice: `تم سحبك ونقلك إلى غرفة "${destRoom.name}" بواسطة المالك.`
+      });
       moved = 1;
     }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'سحب ونقل عضو', targetKey, details: `إلى ${destRoom.name} (${moved})` });
@@ -5337,13 +5383,16 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'freeze_room') {
     const updated = db.setRoomFrozen(roomId, Boolean(enabled));
     if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+    const pubRoom = db.sanitizeRoomForPublic(updated);
+    if (io && pubRoom) io.to(roomId).emit('room_updated', pubRoom);
+    broadcastRoomsList();
     emitRoomNoticeMessage(
       roomId,
       enabled ? `❄️ تم تجميد الغرفة (للقراءة فقط) بواسطة ${actor.name}.` : `🔥 تم فك تجميد الغرفة بواسطة ${actor.name}.`
     );
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: enabled ? 'تجميد غرفة' : 'فك تجميد غرفة', targetKey: roomId, targetName: updated.name });
     await db.flushWrites();
-    return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+    return res.json({ ok: true, room: pubRoom });
   }
 
   if (action === 'clear_room') {
@@ -5363,6 +5412,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         sl.isAdminMuted = true;
         sl.isSpeaking = false;
         db.patchUserStateDoc(sl.holderKey, { micForceMuteAt: Date.now(), micForceMuted: true });
+        emitToUserKey(sl.holderKey, 'user_state', { micForceMuteAt: Date.now(), micForceMuted: true });
       }
     }
     syncRoomMicsToFirestore(roomId);
@@ -5375,9 +5425,12 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'pin_message') {
     const updated = db.setRoomPinnedMessage(roomId, message || '', actor.name);
     if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+    const pubRoom = db.sanitizeRoomForPublic(updated);
+    if (io && pubRoom) io.to(roomId).emit('room_updated', pubRoom);
+    broadcastRoomsList();
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: message ? 'تثبيت رسالة ملكية' : 'إزالة الرسالة المثبتة', targetKey: roomId, details: String(message || '').slice(0, 80) });
     await db.flushWrites();
-    return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+    return res.json({ ok: true, room: pubRoom });
   }
 
   if (action === 'send_as') {
@@ -5465,6 +5518,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         goldenRainAmount: amt,
         goldenRainBy: actor.name
       });
+      emitToUserKey(`user:${uid}`, 'gold_rain', { amount: amt, by: actor.name });
     }
     const roomsToAnnounce = targetRoomId === 'all' ? db.getAllRooms().map((r) => r.id) : [targetRoomId];
     for (const rid of roomsToAnnounce) {
@@ -5929,6 +5983,22 @@ function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconne
   if (telemetry.fingerprint) entry.fingerprint = telemetry.fingerprint;
   db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
 
+  const sockSet = userSocketsMap.get(entry.key);
+  if (sockSet && sockSet.size) {
+    for (const sock of sockSet) {
+      try {
+        if (oldRoomId && oldRoomId !== targetRoomId) sock.leave(oldRoomId);
+        sock.join(targetRoomId);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  if (oldRoomId && oldRoomId !== targetRoomId) broadcastRoomUsers(oldRoomId);
+  broadcastRoomUsers(targetRoomId);
+  broadcastGlobalOnlineUsers();
+  broadcastRoomsList();
+
   ensureCompetitionsQuizBotRunning(targetRoomId);
   const qBot = roomQuizBots.get(targetRoomId);
   const messages = db.getRoomMessages(targetRoomId, 100, entry.key);
@@ -6152,392 +6222,403 @@ app.post('/api/chat/rooms/:roomId/join', requireAuth, async (req, res) => {
   return res.json({ ok: true, ...roomState, rooms: buildRoomsPayload(), onlineUsers: buildGlobalOnlineUsers() });
 });
 
-app.post('/api/chat/messages', requireAuth, async (req, res) => {
-  try {
-    const payload = req.body || {};
-    const entry = resolveOnlineSessionFromRequest(req, payload.roomId || null);
-    const targetRoomId = String(payload.roomId || entry.roomId || '').trim();
-    if (!targetRoomId || !db.getRoomById(targetRoomId)) {
-      return res.status(400).json({ error: 'لست داخل غرفة.' });
-    }
-    entry.roomId = targetRoomId;
+async function processIncomingChatMessage(entry, payload = {}) {
+  const targetRoomId = String(payload.roomId || entry.roomId || '').trim();
+  if (!targetRoomId || !db.getRoomById(targetRoomId)) {
+    return { status: 400, error: 'لست داخل غرفة.' };
+  }
+  entry.roomId = targetRoomId;
+  entry.lastSeenMs = Date.now();
+  entry.lastHeartbeat = Date.now();
 
-    const isOwnerOrMod = entry.role === 'site_owner' || canDo(entry.role, 'manage_rooms');
-    if (!isOwnerOrMod && db.isBannedFromRoom(targetRoomId, entry.key)) {
-      return res.status(403).json({ error: 'تم حظرك من هذه الغرفة ولا يمكنك الإرسال فيها.', roomBanned: true });
-    }
+  const isOwnerOrMod = entry.role === 'site_owner' || canDo(entry.role, 'manage_rooms');
+  if (!isOwnerOrMod && db.isBannedFromRoom(targetRoomId, entry.key)) {
+    return { status: 403, error: 'تم حظرك من هذه الغرفة ولا يمكنك الإرسال فيها.', extra: { roomBanned: true } };
+  }
 
-    const siteSettings = db.getSiteSettings();
-    if (Number(siteSettings.global_chat_mute) === 1 && entry.role !== 'site_owner') {
-      return res.status(403).json({ error: 'الدردشة العامة مكتومة حالياً بأمر صاحب الموقع.' });
-    }
+  const siteSettings = db.getSiteSettings();
+  if (Number(siteSettings.global_chat_mute) === 1 && entry.role !== 'site_owner') {
+    return { status: 403, error: 'الدردشة العامة مكتومة حالياً بأمر صاحب الموقع.' };
+  }
 
-    if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
-      return res.status(403).json({ error: 'أنت مجمد حالياً بأمر المالك ولا يمكنك الإرسال.' });
-    }
-    const currentRm = db.getRoomById(targetRoomId);
-    if (currentRm && Number(currentRm.is_frozen) === 1 && !db.isRoomManager(targetRoomId, entry.userId, entry.role)) {
-      return res.status(403).json({ error: 'الغرفة مجمدة مؤقتاً للقراءة فقط.' });
-    }
+  if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
+    return { status: 403, error: 'أنت مجمد حالياً بأمر المالك ولا يمكنك الإرسال.' };
+  }
+  const currentRm = db.getRoomById(targetRoomId);
+  if (currentRm && Number(currentRm.is_frozen) === 1 && !db.isRoomManager(targetRoomId, entry.userId, entry.role)) {
+    return { status: 403, error: 'الغرفة مجمدة مؤقتاً للقراءة فقط.' };
+  }
 
-    const mute = entry.role !== 'site_owner' ? db.getActiveMute(entry.key, targetRoomId) : null;
-    if (mute) {
-      const mins = Math.max(1, Math.ceil((mute.expires_at - Date.now()) / 60000));
-      return res.status(403).json({
-        error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}`,
-        activeMute: buildSanitizedMutePayload(mute, targetRoomId)
-      });
-    }
+  const mute = entry.role !== 'site_owner' ? db.getActiveMute(entry.key, targetRoomId) : null;
+  if (mute) {
+    const mins = Math.max(1, Math.ceil((mute.expires_at - Date.now()) / 60000));
+    return {
+      status: 403,
+      error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}`,
+      extra: { activeMute: buildSanitizedMutePayload(mute, targetRoomId) }
+    };
+  }
 
-    if (entry.role !== 'site_owner') {
-      const now = Date.now();
-      if (Number(siteSettings.antiflood_enabled ?? 1) !== 0 && !canDo(entry.role, 'immune')) {
-        const maxMsgs = Math.max(2, Number(siteSettings.antiflood_max_msgs) || 6);
-        const windowMs = Math.max(3, Number(siteSettings.antiflood_window_sec) || 10) * 1000;
-        const muteMins = Math.max(1, Number(siteSettings.antiflood_mute_mins) || 5);
-        const prevTimes = (floodTimestampsByKey.get(entry.key) || []).filter((ts) => now - ts <= windowMs);
-        prevTimes.push(now);
-        floodTimestampsByKey.set(entry.key, prevTimes);
-        if (prevTimes.length > maxMsgs) {
-          floodTimestampsByKey.set(entry.key, []);
-          const floodReason = 'مخالفة قواعد الدردشة التلقائية';
-          db.setMute(entry.key, targetRoomId, muteMins * 60 * 1000, 'نظام الحماية التلقائي', floodReason, {
-            targetName: entry.name,
-            mutedByKey: 'system:antiflood'
-          });
-          activeMutedKeysTracker.add(entry.key);
-          releaseUserMicsInRoom(entry.key, targetRoomId);
-          emitMuteStateToUser(entry.key, targetRoomId);
-          notifyUserMutedNotification(entry.key, muteMins);
-          db.addViolationLog({
-            offenderKey: entry.key,
-            offenderName: entry.name,
-            offenderRole: entry.role,
-            penaltyType: 'antiflood_mute',
-            reason: 'التكرار المفرط (Anti-Flood)',
-            violatingDetail: `تجاوز ${maxMsgs} رسائل خلال ${Math.round(windowMs / 1000)} ثوانٍ (${muteMins} دقيقة)`,
-            roomId: targetRoomId
-          });
-          db.addAdminLog({
-            actorKey: 'system:antiflood',
-            actorName: '🛡️ نظام الحماية Anti-Flood',
-            actorRole: 'site_owner',
-            action: 'كتم تلقائي (Anti-Flood)',
-            targetKey: entry.key,
-            targetName: entry.name,
-            details: `كتم ${muteMins} دقيقة لتجاوز ${maxMsgs} رسائل خلال ${Math.round(windowMs / 1000)} ثوانٍ`
-          });
-          notifyOwnersModerationEvent({
-            actorName: '🛡️ نظام الحماية Anti-Flood',
-            actorKey: 'system:antiflood',
-            targetName: entry.name,
-            targetKey: entry.key,
-            actionType: 'antiflood_mute',
-            reason: 'التكرار المفرط (Anti-Flood)',
-            durationMins: muteMins,
-            roomId: targetRoomId
-          });
-          await db.flushWrites();
-          return res.status(429).json({ error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(muteMins)}` });
-        }
-      }
-      const spam = roomActivitySpam.get(entry.key) || { count: 0, resetAt: now + 5000 };
-      if (now > spam.resetAt) {
-        spam.count = 0;
-        spam.resetAt = now + 5000;
-      }
-      spam.count += 1;
-      roomActivitySpam.set(entry.key, spam);
-      if (spam.count > 8) {
-        return res.status(429).json({ error: 'يرجى التمهل قليلاً قبل إرسال رسالة أخرى.' });
+  if (entry.role !== 'site_owner') {
+    const now = Date.now();
+    if (Number(siteSettings.antiflood_enabled ?? 1) !== 0 && !canDo(entry.role, 'immune')) {
+      const maxMsgs = Math.max(2, Number(siteSettings.antiflood_max_msgs) || 6);
+      const windowMs = Math.max(3, Number(siteSettings.antiflood_window_sec) || 10) * 1000;
+      const muteMins = Math.max(1, Number(siteSettings.antiflood_mute_mins) || 5);
+      const prevTimes = (floodTimestampsByKey.get(entry.key) || []).filter((ts) => now - ts <= windowMs);
+      prevTimes.push(now);
+      floodTimestampsByKey.set(entry.key, prevTimes);
+      if (prevTimes.length > maxMsgs) {
+        floodTimestampsByKey.set(entry.key, []);
+        const floodReason = 'مخالفة قواعد الدردشة التلقائية';
+        db.setMute(entry.key, targetRoomId, muteMins * 60 * 1000, 'نظام الحماية التلقائي', floodReason, {
+          targetName: entry.name,
+          mutedByKey: 'system:antiflood'
+        });
+        activeMutedKeysTracker.add(entry.key);
+        releaseUserMicsInRoom(entry.key, targetRoomId);
+        emitMuteStateToUser(entry.key, targetRoomId);
+        notifyUserMutedNotification(entry.key, muteMins);
+        db.addViolationLog({
+          offenderKey: entry.key,
+          offenderName: entry.name,
+          offenderRole: entry.role,
+          penaltyType: 'antiflood_mute',
+          reason: 'التكرار المفرط (Anti-Flood)',
+          violatingDetail: `تجاوز ${maxMsgs} رسائل خلال ${Math.round(windowMs / 1000)} ثوانٍ (${muteMins} دقيقة)`,
+          roomId: targetRoomId
+        });
+        db.addAdminLog({
+          actorKey: 'system:antiflood',
+          actorName: '🛡️ نظام الحماية Anti-Flood',
+          actorRole: 'site_owner',
+          action: 'كتم تلقائي (Anti-Flood)',
+          targetKey: entry.key,
+          targetName: entry.name,
+          details: `كتم ${muteMins} دقيقة لتجاوز ${maxMsgs} رسائل خلال ${Math.round(windowMs / 1000)} ثوانٍ`
+        });
+        notifyOwnersModerationEvent({
+          actorName: '🛡️ نظام الحماية Anti-Flood',
+          actorKey: 'system:antiflood',
+          targetName: entry.name,
+          targetKey: entry.key,
+          actionType: 'antiflood_mute',
+          reason: 'التكرار المفرط (Anti-Flood)',
+          durationMins: muteMins,
+          roomId: targetRoomId
+        });
+        await db.flushWrites();
+        return { status: 429, error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(muteMins)}` };
       }
     }
+    const spam = roomActivitySpam.get(entry.key) || { count: 0, resetAt: now + 5000 };
+    if (now > spam.resetAt) {
+      spam.count = 0;
+      spam.resetAt = now + 5000;
+    }
+    spam.count += 1;
+    roomActivitySpam.set(entry.key, spam);
+    if (spam.count > 8) {
+      return { status: 429, error: 'يرجى التمهل قليلاً قبل إرسال رسالة أخرى.' };
+    }
+  }
 
-    const msgType = ['text', 'image', 'audio', 'sticker'].includes(payload.msgType) ? payload.msgType : 'text';
-    let content = db.sanitizePlainText(String(payload.content || ''), 1000);
-    const mediaUrlRaw = String(payload.mediaUrl || '').trim().slice(0, 500);
-    let mediaUrl = mediaUrlRaw;
-    if (mediaUrlRaw) {
-      const mChk = validateHttpsOrLocalUrl(mediaUrlRaw, { allowDataImage: true });
-      if (!mChk.ok) return res.status(400).json({ error: mChk.error });
-      mediaUrl = mChk.value;
-    }
-    const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
-    let mentionedUserId = payload.mentionedUserId ? String(payload.mentionedUserId).trim().slice(0, 80) : null;
-    let mentionedUserName = db.sanitizePlainText(String(payload.mentionedUserName || '').replace(/^@+/, ''), 60);
-    const isAdminNotice =
-      Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
+  const msgType = ['text', 'image', 'audio', 'sticker'].includes(payload.msgType) ? payload.msgType : 'text';
+  let content = db.sanitizePlainText(String(payload.content || ''), 1000);
+  const mediaUrlRaw = String(payload.mediaUrl || '').trim().slice(0, 500);
+  let mediaUrl = mediaUrlRaw;
+  if (mediaUrlRaw) {
+    const mChk = validateHttpsOrLocalUrl(mediaUrlRaw, { allowDataImage: true });
+    if (!mChk.ok) return { status: 400, error: mChk.error };
+    mediaUrl = mChk.value;
+  }
+  const clientMsgId = String(payload.clientMsgId || '').slice(0, 80);
+  let mentionedUserId = payload.mentionedUserId ? String(payload.mentionedUserId).trim().slice(0, 80) : null;
+  let mentionedUserName = db.sanitizePlainText(String(payload.mentionedUserName || '').replace(/^@+/, ''), 60);
+  const isAdminNotice =
+    Boolean(payload.isAdminNotice) && (entry.role === 'site_owner' || canDo(entry.role, 'access_panel'));
 
-    if (entry.isGuest && Number(siteSettings.guest_can_chat) === 0) {
-      return res.status(403).json({ error: 'الكتابة في الغرف العامة مقيّدة حالياً للأعضاء المسجلين فقط.' });
+  if (entry.isGuest && Number(siteSettings.guest_can_chat) === 0) {
+    return { status: 403, error: 'الكتابة في الغرف العامة مقيّدة حالياً للأعضاء المسجلين فقط.' };
+  }
+  if (msgType === 'image' && entry.isGuest && Number(siteSettings.lock_guest_images) === 1) {
+    return { status: 403, error: 'تم إقفال إرسال الصور للزوار من قبل المالك.' };
+  }
+  if (msgType === 'image' || msgType === 'sticker' || msgType === 'audio') {
+    if (entry.role !== 'site_owner' && !canDo(entry.role, 'chat_media')) {
+      return { status: 403, error: 'إرسال الصور والملصقات والصوتيات غير متاح لرتبتك الحالية.' };
     }
-    if (msgType === 'image' && entry.isGuest && Number(siteSettings.lock_guest_images) === 1) {
-      return res.status(403).json({ error: 'تم إقفال إرسال الصور للزوار من قبل المالك.' });
+    if (!canPassSettingThreshold(entry, 'min_rank_chat_media', 'member')) {
+      return { status: 403, error: 'إرسال الصور والملصقات والصوتيات مقيّد لرتبة أعلى من رتبتك.' };
     }
-    if (msgType === 'image' || msgType === 'sticker' || msgType === 'audio') {
-      if (entry.role !== 'site_owner' && !canDo(entry.role, 'chat_media')) {
-        return res.status(403).json({ error: 'إرسال الصور والملصقات والصوتيات غير متاح لرتبتك الحالية.' });
+  }
+  if (msgType === 'text' && !content) {
+    return { status: 400, error: 'الرسالة فارغة.' };
+  }
+  if (msgType === 'text' && entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(content)) {
+    db.addViolationLog({
+      offenderKey: entry.key,
+      offenderName: entry.name,
+      offenderRole: entry.role,
+      penaltyType: 'blocked_link',
+      reason: 'محاولة إرسال رابط غير مسموح في الغرفة',
+      violatingDetail: content.slice(0, 220),
+      roomId: targetRoomId
+    });
+    await db.flushWrites();
+    return { status: 403, error: 'إرسال الروابط غير مسموح لرتبتك الحالية.' };
+  }
+
+  if (msgType !== 'text') {
+    mentionedUserId = null;
+    mentionedUserName = '';
+  } else if (mentionedUserId) {
+    let resolvedName = mentionedUserName;
+    if (mentionedUserId === 'system:welcomebot') {
+      resolvedName = String(siteSettings.welcome_bot_name || 'مساعد الأصيل').trim();
+    } else if (mentionedUserId === 'system:quizbot') {
+      resolvedName = '🤖 بوت المسابقات';
+    } else if (mentionedUserId.startsWith('virtual:')) {
+      const vm = getActiveVirtualMembersForRooms().find((v) => v.key === mentionedUserId);
+      if (vm?.name) resolvedName = vm.name;
+    } else if (mentionedUserId.startsWith('user:')) {
+      const u = db.findUserById(Number(mentionedUserId.slice(5)));
+      if (u) resolvedName = db.getEffectiveName(u);
+    } else {
+      const o = onlinePresenceMap.get(mentionedUserId);
+      if (o?.name) resolvedName = o.name;
+      if (!resolvedName && mentionedUserId.startsWith('guest:')) {
+        const g = db.findGuestByKey(mentionedUserId);
+        if (g?.name) resolvedName = g.name;
       }
-      if (!canPassSettingThreshold(entry, 'min_rank_chat_media', 'member')) {
-        return res.status(403).json({ error: 'إرسال الصور والملصقات والصوتيات مقيّد لرتبة أعلى من رتبتك.' });
-      }
     }
-    if (msgType === 'text' && !content) {
-      return res.status(400).json({ error: 'الرسالة فارغة.' });
-    }
-    if (msgType === 'text' && entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(content)) {
-      db.addViolationLog({
-        offenderKey: entry.key,
-        offenderName: entry.name,
-        offenderRole: entry.role,
-        penaltyType: 'blocked_link',
-        reason: 'محاولة إرسال رابط غير مسموح في الغرفة',
-        violatingDetail: content.slice(0, 220),
-        roomId: targetRoomId
-      });
-      await db.flushWrites();
-      return res.status(403).json({ error: 'إرسال الروابط غير مسموح لرتبتك الحالية.' });
-    }
-
-    if (msgType !== 'text') {
+    const checkCandidate = String(resolvedName || mentionedUserName || '').replace(/^@+/, '').trim();
+    if (!checkCandidate || (!textContainsMemberName(content, checkCandidate) && !textContainsNormalizedBotName(content, checkCandidate))) {
       mentionedUserId = null;
       mentionedUserName = '';
-    } else if (mentionedUserId) {
-      let resolvedName = mentionedUserName;
-      if (mentionedUserId === 'system:welcomebot') {
-        resolvedName = String(siteSettings.welcome_bot_name || 'مساعد الأصيل').trim();
-      } else if (mentionedUserId === 'system:quizbot') {
-        resolvedName = '🤖 بوت المسابقات';
-      } else if (mentionedUserId.startsWith('virtual:')) {
-        const vm = getActiveVirtualMembersForRooms().find((v) => v.key === mentionedUserId);
-        if (vm?.name) resolvedName = vm.name;
-      } else if (mentionedUserId.startsWith('user:')) {
-        const u = db.findUserById(Number(mentionedUserId.slice(5)));
-        if (u) resolvedName = db.getEffectiveName(u);
-      } else {
-        const o = onlinePresenceMap.get(mentionedUserId);
-        if (o?.name) resolvedName = o.name;
-        if (!resolvedName && mentionedUserId.startsWith('guest:')) {
-          const g = db.findGuestByKey(mentionedUserId);
-          if (g?.name) resolvedName = g.name;
-        }
+    } else {
+      mentionedUserName = checkCandidate;
+    }
+  }
+
+  let matchedBannedWord = null;
+  if (msgType === 'text' && entry.role !== 'site_owner') {
+    const maskedRes = maskBannedWords(content);
+    if (maskedRes.matchedWord) {
+      matchedBannedWord = maskedRes.matchedWord;
+      content = maskedRes.maskedText.trim() || '***';
+    }
+  }
+  if ((msgType === 'image' || msgType === 'audio') && !mediaUrl) {
+    return { status: 400, error: 'الملف غير موجود.' };
+  }
+  if (msgType === 'sticker' && !content && !mediaUrl) {
+    return { status: 400, error: 'الملصق فارغ.' };
+  }
+
+  const allowNameStyle = canPassSettingThreshold(entry, 'min_rank_name_style', 'member');
+  const allowMsgStyle = canPassSettingThreshold(entry, 'min_rank_msg_style', 'member');
+  const isGhostOnly =
+    entry.role !== 'site_owner' &&
+    (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
+  const rawReply = payload.replyTo && typeof payload.replyTo === 'object' ? payload.replyTo : null;
+  const replyTo = rawReply && rawReply.senderName && rawReply.content
+    ? {
+        id: rawReply.id ? String(rawReply.id).slice(0, 60) : '',
+        senderName: db.sanitizePlainText(String(rawReply.senderName || ''), 40),
+        senderKey: String(rawReply.senderKey || '').slice(0, 80),
+        content: db.sanitizePlainText(String(rawReply.content || ''), 160)
       }
-      const checkCandidate = String(resolvedName || mentionedUserName || '').replace(/^@+/, '').trim();
-      if (!checkCandidate || (!textContainsMemberName(content, checkCandidate) && !textContainsNormalizedBotName(content, checkCandidate))) {
-        mentionedUserId = null;
-        mentionedUserName = '';
-      } else {
-        mentionedUserName = checkCandidate;
-      }
-    }
+    : null;
 
-    let matchedBannedWord = null;
-    if (msgType === 'text' && entry.role !== 'site_owner') {
-      const maskedRes = maskBannedWords(content);
-      if (maskedRes.matchedWord) {
-        matchedBannedWord = maskedRes.matchedWord;
-        content = maskedRes.maskedText.trim() || '***';
-      }
-    }
-    if ((msgType === 'image' || msgType === 'audio') && !mediaUrl) {
-      return res.status(400).json({ error: 'الملف غير موجود.' });
-    }
-    if (msgType === 'sticker' && !content && !mediaUrl) {
-      return res.status(400).json({ error: 'الملصق فارغ.' });
-    }
+  const msg = db.addMessage({
+    roomId: targetRoomId,
+    senderKey: entry.key,
+    senderName: entry.name,
+    senderRole: entry.role,
+    nameColor: allowNameStyle ? (entry.nameBgColor ? entry.nameColor : ensureDarkReadableColor(entry.nameColor, '#0f172a')) : '#0f172a',
+    textColor: allowMsgStyle ? ensureDarkReadableColor(entry.textColor, '#0f172a') : '#0f172a',
+    nameBgColor: allowNameStyle ? entry.nameBgColor : '',
+    neonColor: allowNameStyle ? entry.neonColor : '',
+    fontFamily: allowMsgStyle ? normalizeProfileFont(entry.fontFamily) : 'Cairo',
+    fontStyle: allowMsgStyle ? normalizeFontStyle(entry.fontStyle) : 'Normal',
+    nameFontStyle: allowNameStyle ? normalizeFontStyle(entry.nameFontStyle || entry.fontStyle) : 'Normal',
+    fontSize: allowMsgStyle ? Math.max(13, Math.min(17, Number(entry.fontSize) || 14)) : 14,
+    nameFontSize: allowNameStyle ? Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)) : 14,
+    nameStyleMode: allowNameStyle ? entry.nameStyleMode || 'solid' : 'solid',
+    nameGradient: allowNameStyle ? entry.nameGradient || 'gold_royal' : 'gold_royal',
+    avatarUrl: entry.avatarUrl,
+    avatarFrame: entry.avatarFrame,
+    nameplateStyle: entry.nameplateStyle,
+    nameShine: entry.nameShine,
+    nameAnim: entry.nameAnim || 'none',
+    nameAnimSpeed: entry.nameAnimSpeed || 'normal',
+    vipWings: entry.vipWings,
+    isAdminNotice,
+    isGhostOnly,
+    msgType,
+    content,
+    mediaUrl,
+    mentionedUserId,
+    mentionedUserName,
+    replyTo,
+    clientMsgId
+  });
 
-    const allowNameStyle = canPassSettingThreshold(entry, 'min_rank_name_style', 'member');
-    const allowMsgStyle = canPassSettingThreshold(entry, 'min_rank_msg_style', 'member');
-    const isGhostOnly =
-      entry.role !== 'site_owner' &&
-      (Boolean(entry.isGhosted) || Boolean(entry.isShadowMuted) || guestShadowMutedKeys.has(entry.key));
-    const rawReply = payload.replyTo && typeof payload.replyTo === 'object' ? payload.replyTo : null;
-    const replyTo = rawReply && rawReply.senderName && rawReply.content
-      ? {
-          id: rawReply.id ? String(rawReply.id).slice(0, 60) : '',
-          senderName: db.sanitizePlainText(String(rawReply.senderName || ''), 40),
-          senderKey: String(rawReply.senderKey || '').slice(0, 80),
-          content: db.sanitizePlainText(String(rawReply.content || ''), 160)
-        }
-      : null;
-
-    const msg = db.addMessage({
-      roomId: targetRoomId,
-      senderKey: entry.key,
-      senderName: entry.name,
-      senderRole: entry.role,
-      nameColor: allowNameStyle ? (entry.nameBgColor ? entry.nameColor : ensureDarkReadableColor(entry.nameColor, '#0f172a')) : '#0f172a',
-      textColor: allowMsgStyle ? ensureDarkReadableColor(entry.textColor, '#0f172a') : '#0f172a',
-      nameBgColor: allowNameStyle ? entry.nameBgColor : '',
-      neonColor: allowNameStyle ? entry.neonColor : '',
-      fontFamily: allowMsgStyle ? normalizeProfileFont(entry.fontFamily) : 'Cairo',
-      fontStyle: allowMsgStyle ? normalizeFontStyle(entry.fontStyle) : 'Normal',
-      nameFontStyle: allowNameStyle ? normalizeFontStyle(entry.nameFontStyle || entry.fontStyle) : 'Normal',
-      fontSize: allowMsgStyle ? Math.max(13, Math.min(17, Number(entry.fontSize) || 14)) : 14,
-      nameFontSize: allowNameStyle ? Math.max(13, Math.min(18, Number(entry.nameFontSize) || 14)) : 14,
-      nameStyleMode: allowNameStyle ? entry.nameStyleMode || 'solid' : 'solid',
-      nameGradient: allowNameStyle ? entry.nameGradient || 'gold_royal' : 'gold_royal',
-      avatarUrl: entry.avatarUrl,
-      avatarFrame: entry.avatarFrame,
-      nameplateStyle: entry.nameplateStyle,
-      nameShine: entry.nameShine,
-      nameAnim: entry.nameAnim || 'none',
-      nameAnimSpeed: entry.nameAnimSpeed || 'normal',
-      vipWings: entry.vipWings,
-      isAdminNotice,
-      isGhostOnly,
-      msgType,
-      content,
-      mediaUrl,
-      mentionedUserId,
-      mentionedUserName,
-      replyTo,
-      clientMsgId
-    });
-
-    if (isGhostOnly) {
-      await db.flushWrites();
-      return res.json({ ok: true, id: msg.id, message: msg });
-    }
-
-    if (matchedBannedWord) {
-      const banWordMuteMins = Math.max(1, Number(siteSettings.banned_word_mute_mins) || 10);
-      const safeGenericReason = 'مخالفة قواعد الدردشة التلقائية';
-      db.setMute(entry.key, targetRoomId, banWordMuteMins * 60 * 1000, 'نظام الحماية التلقائي', safeGenericReason, {
-        targetName: entry.name,
-        mutedByKey: 'system:wordfilter'
-      });
-      activeMutedKeysTracker.add(entry.key);
-      releaseUserMicsInRoom(entry.key, targetRoomId);
-      emitMuteStateToUser(entry.key, targetRoomId);
-      notifyUserMutedNotification(entry.key, banWordMuteMins);
-      db.addViolationLog({
-        offenderKey: entry.key,
-        offenderName: entry.name,
-        offenderRole: entry.role,
-        penaltyType: 'banned_word_mute',
-        reason: 'استخدام كلمة محظورة في الغرفة',
-        violatingDetail: matchedBannedWord,
-        roomId: targetRoomId
-      });
-      db.addAdminLog({
-        actorKey: 'system:wordfilter',
-        actorName: '🛡️ فلتر الكلمات المحظورة',
-        actorRole: 'site_owner',
-        action: 'تشفير كلمة محظورة + كتم تلقائي',
-        targetKey: entry.key,
-        targetName: entry.name,
-        details: `كتم ${banWordMuteMins} دقيقة • الكلمة: "${matchedBannedWord}" • الغرفة: ${targetRoomId}`
-      });
-      notifyOwnersModerationEvent({
-        actorName: '🛡️ فلتر الكلمات المحظورة',
-        actorKey: 'system:wordfilter',
-        targetName: entry.name,
-        targetKey: entry.key,
-        actionType: 'banned_word_mute',
-        reason: 'استخدام كلمة محظورة',
-        durationMins: banWordMuteMins,
-        roomId: targetRoomId,
-        violatingWord: matchedBannedWord
-      });
-      await db.flushWrites();
-      return res.json({ ok: true, id: msg.id, message: msg, autoMuted: true, muteMins: banWordMuteMins });
-    }
-
-    // Registered Members Auto-Ruby & Activity Engine:
-    // +10 Ruby every 50 genuine text messages (reset counter), ONLY if >= 3 min since lastRewardAt
-    let rubyRewardResult = null;
-    if (msgType === 'text' && !entry.isGuest && entry.userId) {
-      const nowTs = Date.now();
-      const normBody = normalizeArabicText(content);
-      const rewardKey = String(entry.userId);
-      const prevReward = lastMessageRewardByUser.get(rewardKey);
-      const isDuplicateMsg = prevReward && prevReward.text === normBody;
-      const tooFast = prevReward && nowTs - prevReward.at < 3000;
-      if (normBody.length > 0 && !isDuplicateMsg && !tooFast) {
-        lastMessageRewardByUser.set(rewardKey, { text: normBody, at: nowTs });
-        db.incrementActivityPoints({
-          userId: entry.userId,
-          roomId: targetRoomId,
-          userDelta: 2,
-          roomDelta: 2
-        });
-        entry.activityPoints = (Number(entry.activityPoints) || 0) + 2;
-        rubyRewardResult = db.processMessageAutoRubyReward(entry.userId, nowTs);
-        if (rubyRewardResult?.awarded) {
-          entry.coins = rubyRewardResult.coins;
-        }
-
-        const promo = db.checkAndApplyAutoPromotion(entry.userId);
-        if (promo?.promoted) {
-          entry.role = promo.newRole;
-          const pRank = promo.rank || db.getRankByKey(promo.newRole);
-          emitRoomNoticeMessage(
-            targetRoomId,
-            `🎖️ تهانينا! تمت ترقية "${entry.name}" تلقائياً إلى رتبة (${pRank.icon} ${pRank.label}) لتفاعله النشط!`
-          );
-          const promoNotif = db.addNotification({
-            targetKey: entry.key,
-            title: `🎖️ ترقية تلقائية إلى ${pRank.label}!`,
-            body: `مبارك! وصلت نقاط تفاعلك إلى ${entry.activityPoints} وتمت ترقيتك تلقائياً إلى "${pRank.label}".`,
-            category: 'system'
-          });
-          emitNotificationToUser(null, entry.key, promoNotif);
-        }
-        syncUserPresence(entry.userId);
-      }
-    }
-
-    if (msgType === 'text') {
-      checkQuizBotAnswer(entry, content);
-      maybeHandleWelcomeBotMention(entry, targetRoomId, content, { mentionedUserId }).catch(() => {});
-    }
-
-    // Recipient-Only Mention Chime (never writes into general notifications)
-    if (msgType === 'text' && content) {
-      const mentionedKeys = new Set();
-      if (
-        mentionedUserId &&
-        mentionedUserId !== entry.key &&
-        !mentionedUserId.startsWith('system:') &&
-        !mentionedUserId.startsWith('virtual:')
-      ) {
-        mentionedKeys.add(mentionedUserId);
-      } else if (!mentionedUserId) {
-        for (const other of onlinePresenceMap.values()) {
-          if (other.key === entry.key || isStealthEntry(other)) continue;
-          const n1 = String(other.name || '').trim();
-          const n2 = String(other.username || '').trim();
-          if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
-            mentionedKeys.add(other.key);
-          }
-        }
-      }
-      for (const tKey of mentionedKeys) {
-        db.patchUserStateDoc(tKey, {
-          lastMentionAt: Date.now(),
-          lastMentionData: {
-            fromKey: entry.key,
-            fromName: entry.name,
-            fromAvatar: entry.avatarUrl || '',
-            fromRole: entry.role || 'member',
-            roomId: targetRoomId,
-            msgId: msg.id,
-            mentionedUserId: tKey,
-            content: content.slice(0, 120)
-          }
-        });
-      }
-    }
-
+  if (isGhostOnly) {
     await db.flushWrites();
-    return res.json({
+    return { status: 200, data: { ok: true, id: msg.id, message: msg } };
+  }
+
+  if (matchedBannedWord) {
+    const banWordMuteMins = Math.max(1, Number(siteSettings.banned_word_mute_mins) || 10);
+    const safeGenericReason = 'مخالفة قواعد الدردشة التلقائية';
+    db.setMute(entry.key, targetRoomId, banWordMuteMins * 60 * 1000, 'نظام الحماية التلقائي', safeGenericReason, {
+      targetName: entry.name,
+      mutedByKey: 'system:wordfilter'
+    });
+    activeMutedKeysTracker.add(entry.key);
+    releaseUserMicsInRoom(entry.key, targetRoomId);
+    emitMuteStateToUser(entry.key, targetRoomId);
+    notifyUserMutedNotification(entry.key, banWordMuteMins);
+    db.addViolationLog({
+      offenderKey: entry.key,
+      offenderName: entry.name,
+      offenderRole: entry.role,
+      penaltyType: 'banned_word_mute',
+      reason: 'استخدام كلمة محظورة في الغرفة',
+      violatingDetail: matchedBannedWord,
+      roomId: targetRoomId
+    });
+    db.addAdminLog({
+      actorKey: 'system:wordfilter',
+      actorName: '🛡️ فلتر الكلمات المحظورة',
+      actorRole: 'site_owner',
+      action: 'تشفير كلمة محظورة + كتم تلقائي',
+      targetKey: entry.key,
+      targetName: entry.name,
+      details: `كتم ${banWordMuteMins} دقيقة • الكلمة: "${matchedBannedWord}" • الغرفة: ${targetRoomId}`
+    });
+    notifyOwnersModerationEvent({
+      actorName: '🛡️ فلتر الكلمات المحظورة',
+      actorKey: 'system:wordfilter',
+      targetName: entry.name,
+      targetKey: entry.key,
+      actionType: 'banned_word_mute',
+      reason: 'استخدام كلمة محظورة',
+      durationMins: banWordMuteMins,
+      roomId: targetRoomId,
+      violatingWord: matchedBannedWord
+    });
+    await db.flushWrites();
+    return { status: 200, data: { ok: true, id: msg.id, message: msg, autoMuted: true, muteMins: banWordMuteMins } };
+  }
+
+  let rubyRewardResult = null;
+  if (msgType === 'text' && !entry.isGuest && entry.userId) {
+    const nowTs = Date.now();
+    const normBody = normalizeArabicText(content);
+    const rewardKey = String(entry.userId);
+    const prevReward = lastMessageRewardByUser.get(rewardKey);
+    const isDuplicateMsg = prevReward && prevReward.text === normBody;
+    const tooFast = prevReward && nowTs - prevReward.at < 3000;
+    if (normBody.length > 0 && !isDuplicateMsg && !tooFast) {
+      lastMessageRewardByUser.set(rewardKey, { text: normBody, at: nowTs });
+      db.incrementActivityPoints({
+        userId: entry.userId,
+        roomId: targetRoomId,
+        userDelta: 2,
+        roomDelta: 2
+      });
+      entry.activityPoints = (Number(entry.activityPoints) || 0) + 2;
+      rubyRewardResult = db.processMessageAutoRubyReward(entry.userId, nowTs);
+      if (rubyRewardResult?.awarded) {
+        entry.coins = rubyRewardResult.coins;
+      }
+
+      const promo = db.checkAndApplyAutoPromotion(entry.userId);
+      if (promo?.promoted) {
+        entry.role = promo.newRole;
+        const pRank = promo.rank || db.getRankByKey(promo.newRole);
+        emitRoomNoticeMessage(
+          targetRoomId,
+          `🎖️ تهانينا! تمت ترقية "${entry.name}" تلقائياً إلى رتبة (${pRank.icon} ${pRank.label}) لتفاعله النشط!`
+        );
+        const promoNotif = db.addNotification({
+          targetKey: entry.key,
+          title: `🎖️ ترقية تلقائية إلى ${pRank.label}!`,
+          body: `مبارك! وصلت نقاط تفاعلك إلى ${entry.activityPoints} وتمت ترقيتك تلقائياً إلى "${pRank.label}".`,
+          category: 'system'
+        });
+        emitNotificationToUser(null, entry.key, promoNotif);
+      }
+      syncUserPresence(entry.userId);
+    }
+  }
+
+  if (msgType === 'text') {
+    checkQuizBotAnswer(entry, content);
+    maybeHandleWelcomeBotMention(entry, targetRoomId, content, { mentionedUserId }).catch(() => {});
+  }
+
+  if (msgType === 'text' && content) {
+    const mentionedKeys = new Set();
+    if (
+      mentionedUserId &&
+      mentionedUserId !== entry.key &&
+      !mentionedUserId.startsWith('system:') &&
+      !mentionedUserId.startsWith('virtual:')
+    ) {
+      mentionedKeys.add(mentionedUserId);
+    } else if (!mentionedUserId) {
+      for (const other of onlinePresenceMap.values()) {
+        if (other.key === entry.key || isStealthEntry(other)) continue;
+        const n1 = String(other.name || '').trim();
+        const n2 = String(other.username || '').trim();
+        if (textContainsMemberName(content, n1) || textContainsMemberName(content, n2)) {
+          mentionedKeys.add(other.key);
+        }
+      }
+    }
+    for (const tKey of mentionedKeys) {
+      db.patchUserStateDoc(tKey, {
+        lastMentionAt: Date.now(),
+        lastMentionData: {
+          fromKey: entry.key,
+          fromName: entry.name,
+          fromAvatar: entry.avatarUrl || '',
+          fromRole: entry.role || 'member',
+          roomId: targetRoomId,
+          msgId: msg.id,
+          mentionedUserId: tKey,
+          content: content.slice(0, 120)
+        }
+      });
+    }
+  }
+
+  await db.flushWrites();
+  return {
+    status: 200,
+    data: {
       ok: true,
       id: msg.id,
       message: msg,
       rubyReward: rubyRewardResult,
       user: !entry.isGuest && entry.userId ? mapUserRow(db.findUserById(entry.userId)) : undefined
-    });
+    }
+  };
+}
+
+app.post('/api/chat/messages', requireAuth, async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const entry = resolveOnlineSessionFromRequest(req, payload.roomId || null);
+    const result = await processIncomingChatMessage(entry, payload);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error, ...(result.extra || {}) });
+    }
+    return res.json(result.data);
   } catch (err) {
     console.error('POST /api/chat/messages error:', err);
     return res.status(500).json({ error: 'فشل إرسال الرسالة.' });
@@ -6607,6 +6688,7 @@ app.post('/api/chat/typing', requireAuth, (req, res) => {
   entry.typingInRoom = isTyping ? entry.roomId : '';
   entry.typingAt = isTyping ? Date.now() : 0;
   db.syncOnlinePresenceDoc(buildPublicPresenceDoc(entry));
+  broadcastTypingUsers(entry.roomId);
   return res.json({ ok: true });
 });
 
@@ -6718,6 +6800,7 @@ app.post('/api/chat/mics/admin-mute', requireAuth, async (req, res) => {
   targetSlot.isAdminMuted = Boolean(req.body?.muted);
   targetSlot.isSpeaking = !targetSlot.isSelfMuted && !targetSlot.isAdminMuted;
   db.patchUserStateDoc(targetSlot.holderKey, { micForceMuteAt: Date.now(), micForceMuted: targetSlot.isAdminMuted });
+  emitToUserKey(targetSlot.holderKey, 'user_state', { micForceMuteAt: Date.now(), micForceMuted: targetSlot.isAdminMuted });
   syncRoomMicsToFirestore(roomId);
   db.addAdminLog({
     actorKey: entry.key,
@@ -6757,6 +6840,7 @@ app.post('/api/chat/mics/kick', requireAuth, async (req, res) => {
   targetSlot.isSpeaking = false;
   targetSlot.speakingLevel = 0;
   db.patchUserStateDoc(kickedKey, { micKickedAt: Date.now(), micKickedBy: entry.name });
+  emitToUserKey(kickedKey, 'user_state', { micKickedAt: Date.now(), micKickedBy: entry.name });
   syncRoomMicsToFirestore(roomId);
   db.addAdminLog({
     actorKey: entry.key,
@@ -6791,11 +6875,10 @@ app.post('/api/chat/webrtc/signal', requireAuth, (req, res) => {
   const { type, toKey, slot, sdp, candidate, roomId } = req.body || {};
   const cleanType = ['ready', 'offer', 'answer', 'ice'].includes(type) ? type : '';
   if (!cleanType) return res.status(400).json({ error: 'نوع إشارة غير صالح.' });
-  const signalId = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-  db.pushWebRtcSignalDoc(signalId, {
-    id: signalId,
+  const targetRoomId = String(roomId || entry.roomId || 'general');
+  const sigObj = {
     type: cleanType,
-    roomId: String(roomId || entry.roomId || 'general'),
+    roomId: targetRoomId,
     fromKey: entry.key,
     fromName: entry.name,
     toKey: String(toKey || ''),
@@ -6803,7 +6886,14 @@ app.post('/api/chat/webrtc/signal', requireAuth, (req, res) => {
     sdp: sdp || null,
     candidate: candidate || null,
     createdAtMs: Date.now()
-  });
+  };
+  const signalId = db.pushWebRtcSignalDoc(sigObj);
+  sigObj.id = signalId;
+  if (sigObj.toKey) {
+    emitToUserKey(sigObj.toKey, 'webrtc_signal', sigObj);
+  } else if (io) {
+    io.to(targetRoomId).emit('webrtc_signal', sigObj);
+  }
   setTimeout(() => {
     db.deleteWebRtcSignalDoc(signalId);
   }, 45000);
@@ -6853,6 +6943,8 @@ app.post('/api/chat/youtube', requireAuth, async (req, res) => {
   });
   if (!updated) return res.status(500).json({ error: 'تعذر تحديث يوتيوب.' });
   const pub = db.sanitizeRoomForPublic(updated);
+  if (io && pub) io.to(targetRoomId).emit('room_updated', pub);
+  broadcastRoomsList();
   if (videoId) {
     emitRoomNoticeMessage(
       targetRoomId,
@@ -7073,10 +7165,12 @@ app.post('/api/mod/warn', requireAuth, async (req, res) => {
     category: 'warning'
   });
   emitNotificationToUser(null, targetKey, notif);
+  const warnPayload = { byName: entry.name, byRole: entry.role, reason: cleanReason, roomId };
   db.patchUserStateDoc(targetKey, {
     lastWarningAt: Date.now(),
-    lastWarning: { byName: entry.name, byRole: entry.role, reason: cleanReason, roomId }
+    lastWarning: warnPayload
   });
+  emitToUserKey(targetKey, 'warning', warnPayload);
   emitRoomNoticeMessage(roomId, `⚠️ وجّه "${entry.name}" تحذيراً إدارياً إلى "${check.info.targetName}": ${cleanReason}`);
   await db.flushWrites();
   return res.json({ ok: true });
@@ -7432,6 +7526,7 @@ app.post('/api/mod/force-name', requireAuth, async (req, res) => {
       upsertOnlinePresence(live, {}, live.roomId || 'general');
     }
     db.patchUserStateDoc(resolvedKey, { forcedNameAt: Date.now(), name: clean, displayName: clean });
+    emitToUserKey(resolvedKey, 'session_patch', { name: clean, displayName: clean });
     db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'تغيير اسم زائر', targetKey: resolvedKey, targetName: clean });
     await db.flushWrites();
     return res.json({ ok: true, name: clean, guest: updatedGuest });
@@ -7467,6 +7562,7 @@ app.post('/api/mod/clear-avatar', requireAuth, async (req, res) => {
       upsertOnlinePresence(live, {}, live.roomId || 'general');
     }
     db.patchUserStateDoc(resolvedKey, { avatarClearedAt: Date.now(), avatarUrl: '' });
+    emitToUserKey(resolvedKey, 'session_patch', { avatarUrl: '' });
     db.addAdminLog({ actorKey: entry.key, actorName: entry.name, actorRole: entry.role, action: 'مسح صورة زائر', targetKey: resolvedKey });
     await db.flushWrites();
     return res.json({ ok: true });
@@ -7548,8 +7644,11 @@ app.post('/api/mod/room-update', requireAuth, async (req, res) => {
   }
   const updated = db.updateRoom(rid, patch);
   if (!updated) return res.status(404).json({ error: 'الغرفة غير موجودة.' });
+  const pubRoom = db.sanitizeRoomForPublic(updated);
+  if (io && pubRoom) io.to(rid).emit('room_updated', pubRoom);
+  broadcastRoomsList();
   await db.flushWrites();
-  return res.json({ ok: true, room: db.sanitizeRoomForPublic(updated) });
+  return res.json({ ok: true, room: pubRoom });
 });
 
 // Handle Multer / Upload errors gracefully without crashing
@@ -7564,12 +7663,222 @@ app.use((err, _req, res, _next) => {
 });
 
 const server = http.createServer(app);
+io = new SocketIOServer(server, {
+  cors: { origin: true, credentials: true },
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 20000
+});
+
+io.use((socket, next) => {
+  try {
+    const authHeader = String(socket.handshake?.headers?.authorization || '');
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const token = String(socket.handshake?.auth?.token || bearer || '').trim();
+    const telemetry = getClientTelemetry(socket);
+    const user = resolveAuthUserFromToken(token, telemetry);
+    if (!user) return next(new Error('AUTH_REQUIRED'));
+    if (user.banned) return next(new Error('BANNED'));
+    socket.authUser = user;
+    socket.clientTelemetry = telemetry;
+    return next();
+  } catch {
+    return next(new Error('AUTH_ERROR'));
+  }
+});
+
+io.on('connection', (socket) => {
+  const authUser = socket.authUser;
+  if (!authUser || !authUser.key) {
+    socket.disconnect(true);
+    return;
+  }
+  const userKey = authUser.key;
+  const pendingTimer = socketGraceTimers.get(userKey);
+  if (pendingTimer) {
+    clearTimeout(pendingTimer);
+    socketGraceTimers.delete(userKey);
+  }
+  if (!userSocketsMap.has(userKey)) {
+    userSocketsMap.set(userKey, new Set());
+  }
+  userSocketsMap.get(userKey).add(socket);
+
+  const requestedRoom = String(socket.handshake?.auth?.roomId || '').trim();
+  const existingEntry = onlinePresenceMap.get(userKey);
+  const targetRoomId = requestedRoom && db.getRoomById(requestedRoom)
+    ? requestedRoom
+    : (existingEntry?.roomId && db.getRoomById(existingEntry.roomId) ? existingEntry.roomId : (db.getAllRooms()[0]?.id || 'general'));
+  const entry = upsertOnlinePresence(authUser, socket.clientTelemetry || {}, targetRoomId);
+  if (entry?.roomId) {
+    socket.join(entry.roomId);
+    socket.emit('room_users', {
+      roomId: entry.roomId,
+      users: getRoomUsersList(entry.roomId),
+      roomKingKey: computeRoomKingKey(entry.roomId)
+    });
+    socket.emit('room_mics', {
+      roomId: entry.roomId,
+      slots: getPublicMicSlots(entry.roomId)
+    });
+  }
+  socket.emit('online_users', buildGlobalOnlineUsers());
+  socket.emit('rooms', buildRoomsPayload());
+
+  socket.on('join_room', async (payload = {}, ack) => {
+    try {
+      const roomId = String(payload.roomId || '').trim();
+      const rm = db.getRoomById(roomId);
+      if (!rm) {
+        if (typeof ack === 'function') ack({ error: 'الغرفة غير موجودة.' });
+        return;
+      }
+      const live = onlinePresenceMap.get(userKey) || upsertOnlinePresence(authUser, socket.clientTelemetry || {}, roomId);
+      const isOwnerOrMod = live.role === 'site_owner' || canDo(live.role, 'manage_rooms');
+      if (!isOwnerOrMod && db.isBannedFromRoom(roomId, live.key)) {
+        if (typeof ack === 'function') ack({ error: 'تم حظرك من دخول هذه الغرفة.', roomBanned: true });
+        return;
+      }
+      if (!isOwnerOrMod && (Number(rm.min_rank_power) || 0) > db.getRankPower(live.role)) {
+        if (typeof ack === 'function') ack({ error: `الدخول لهذه الغرفة يتطلب رتبة بقوة ${rm.min_rank_power} فأعلى.` });
+        return;
+      }
+      if (!isOwnerOrMod && rm.room_password && rm.room_password.trim()) {
+        if (String(payload.password || '').trim() !== rm.room_password.trim()) {
+          if (typeof ack === 'function') ack({ error: 'كلمة مرور الغرفة غير صحيحة.', requiresPassword: true });
+          return;
+        }
+      }
+      const roomState = movePresenceToRoom(live, roomId, socket.clientTelemetry || {}, Boolean(payload.silent));
+      await db.flushWrites();
+      if (typeof ack === 'function') {
+        ack({ ok: true, ...roomState, rooms: buildRoomsPayload(), onlineUsers: buildGlobalOnlineUsers() });
+      }
+    } catch (err) {
+      if (typeof ack === 'function') ack({ error: err?.message || 'تعذر الانضمام للغرفة.' });
+    }
+  });
+
+  socket.on('send_message', async (payload = {}, ack) => {
+    try {
+      const live = onlinePresenceMap.get(userKey) || upsertOnlinePresence(authUser, socket.clientTelemetry || {}, payload?.roomId || 'general');
+      const result = await processIncomingChatMessage(live, payload || {});
+      if (result.error) {
+        if (typeof ack === 'function') ack({ error: result.error, status: result.status, ...(result.extra || {}) });
+        return;
+      }
+      if (typeof ack === 'function') ack(result.data);
+    } catch (err) {
+      if (typeof ack === 'function') ack({ error: err?.message || 'فشل إرسال الرسالة.' });
+    }
+  });
+
+  socket.on('typing', (payload = {}) => {
+    try {
+      const live = onlinePresenceMap.get(userKey);
+      if (!live || isStealthEntry(live)) return;
+      const roomId = String(payload.roomId || live.roomId || '').trim();
+      if (!roomId || roomId !== live.roomId) return;
+      const isTyping = Boolean(payload.isTyping);
+      live.typingInRoom = isTyping ? roomId : '';
+      live.typingAt = isTyping ? Date.now() : 0;
+      broadcastTypingUsers(roomId);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('webrtc_signal', (payload = {}) => {
+    try {
+      const live = onlinePresenceMap.get(userKey);
+      if (!live) return;
+      const cleanType = ['ready', 'offer', 'answer', 'ice'].includes(payload?.type) ? payload.type : '';
+      if (!cleanType) return;
+      const targetRoomId = String(payload.roomId || live.roomId || 'general');
+      const sigObj = {
+        id: `sig_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        type: cleanType,
+        roomId: targetRoomId,
+        fromKey: live.key,
+        fromName: live.name,
+        toKey: String(payload.toKey || ''),
+        slot: Number(payload.slot) || 1,
+        sdp: payload.sdp || null,
+        candidate: payload.candidate || null,
+        createdAtMs: Date.now()
+      };
+      if (sigObj.toKey) emitToUserKey(sigObj.toKey, 'webrtc_signal', sigObj);
+      else socket.to(targetRoomId).emit('webrtc_signal', sigObj);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('disconnect', () => {
+    const set = userSocketsMap.get(userKey);
+    if (set) {
+      set.delete(socket);
+      if (set.size === 0) userSocketsMap.delete(userKey);
+    }
+    if (!userSocketsMap.has(userKey)) {
+      const t = setTimeout(() => {
+        socketGraceTimers.delete(userKey);
+        const cur = onlinePresenceMap.get(userKey);
+        if (!userSocketsMap.has(userKey) && cur && Date.now() - (Number(cur.lastHeartbeat) || 0) > 12000) {
+          removeOnlinePresence(userKey);
+        }
+      }, 14000);
+      if (typeof t.unref === 'function') t.unref();
+      socketGraceTimers.set(userKey, t);
+    }
+  });
+});
 
 // ==========================================
 // STARTUP
 // ==========================================
 async function start() {
-  await db.init({});
+  await db.init({
+    onMessageAdded(msg) {
+      if (!io || !msg || !msg.room_id) return;
+      if (msg.is_ghost_only) {
+        emitToUserKey(msg.sender_key, 'new_message', msg);
+      } else {
+        io.to(msg.room_id).emit('new_message', msg);
+      }
+    },
+    onMessageUpdated(msg) {
+      if (!io || !msg || !msg.room_id) return;
+      io.to(msg.room_id).emit('message_updated', msg);
+    },
+    onMessageDeleted(msgId, roomId) {
+      if (!io || !roomId) return;
+      io.to(roomId).emit('message_deleted', { id: msgId, roomId });
+    },
+    onRoomCleared(roomId) {
+      if (!io || !roomId) return;
+      io.to(roomId).emit('room_cleared', { roomId });
+    },
+    onRoomClearedAll() {
+      if (!io) return;
+      for (const r of db.getAllRooms()) {
+        io.to(r.id).emit('room_cleared', { roomId: r.id });
+      }
+    },
+    onPrivateMessage(pm) {
+      if (!io || !pm) return;
+      if (pm.from_key) emitToUserKey(pm.from_key, 'private_message', pm);
+      if (pm.to_key && pm.to_key !== pm.from_key) emitToUserKey(pm.to_key, 'private_message', pm);
+    },
+    onNotification(notif) {
+      if (!io || !notif) return;
+      if (notif.target_key === '*') {
+        io.emit('notification', notif);
+      } else if (notif.target_key) {
+        emitToUserKey(notif.target_key, 'notification', notif);
+      }
+    }
+  });
 
   // Anti-AFK Policy: passive 5-minute online presence reward removed; rewards occur exclusively on genuine text chat activity.
   startVirtualMembersLoop();
@@ -7577,7 +7886,7 @@ async function start() {
   startPresenceSweeper();
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Arabic CodyChat Server (Firebase Real-Time) listening on http://0.0.0.0:${PORT}`);
+    console.log(`Arabic CodyChat Server (Socket.io + Firebase Real-Time) listening on http://0.0.0.0:${PORT}`);
   });
 }
 

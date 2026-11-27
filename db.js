@@ -1663,9 +1663,14 @@ function normalizeRankDoc(docId, data) {
         : '⭐';
   const resolvedIcon = key === 'member' && rawIcon === '⭐' ? '' : rawIcon;
 
+  const resolvedLabel =
+    key === 'guest'
+      ? 'زائر'
+      : sanitizePlainText(data.label || canonicalDef?.label || docId, 32) || String(canonicalDef?.label || docId);
+
   const obj = {
     key,
-    label: sanitizePlainText(data.label || canonicalDef?.label || docId, 32) || String(canonicalDef?.label || docId),
+    label: resolvedLabel,
     icon: resolvedIcon,
     badge_style: String(data.badge_style || defaultBadgeStyle),
     image_url: sanitizeSafeUrl(data.image_url || ''),
@@ -1792,23 +1797,6 @@ function attachRealtimeListeners() {
       }
       if (initialUsersReady && hooks.onUsersChanged) hooks.onUsersChanged();
       initialUsersReady = true;
-    })
-  );
-
-  let initialGuestsReady = false;
-  unsubscribers.push(
-    fsListen('guests', (changes) => {
-      for (const ch of changes) {
-        const d = ch.data || {};
-        const g = normalizeGuestDoc(ch.id, d);
-        if (ch.type === 'removed') {
-          store.guestsByKey.delete(g.key);
-        } else {
-          store.guestsByKey.set(g.key, g);
-        }
-      }
-      if (initialGuestsReady && hooks.onUsersChanged) hooks.onUsersChanged();
-      initialGuestsReady = true;
     })
   );
 
@@ -2115,7 +2103,6 @@ async function init(eventHooks = {}) {
     const fetchAllCollections = () =>
       Promise.all([
         fsGetAll('users'),
-        fsGetAll('guests'),
         fsGetAll('ranks'),
         fsGetAll('settings'),
         fsGetAll('rooms'),
@@ -2154,7 +2141,6 @@ async function init(eventHooks = {}) {
 
     const [
       usersDocs,
-      guestsDocs,
       ranksDocs,
       settingsDocs,
       roomsDocs,
@@ -2187,11 +2173,6 @@ async function init(eventHooks = {}) {
       const u = normalizeUserDoc(d.id, d.data);
       store.usersById.set(u.id, u);
       store.counters.users = Math.max(store.counters.users, u.id);
-    }
-
-    for (const d of guestsDocs) {
-      const g = normalizeGuestDoc(d.id, d.data);
-      store.guestsByKey.set(g.key, g);
     }
 
     for (const d of ranksDocs) {
@@ -2648,6 +2629,9 @@ function getAllRanks() {
 function getRankByKey(key) {
   const row = store.ranksByKey.get(key);
   if (row) return mapRankRow(row);
+  if (key === 'guest') {
+    return mapRankRow(DEFAULT_RANKS.find((r) => r.key === 'guest'));
+  }
   const member = store.ranksByKey.get('member');
   return mapRankRow(member) || mapRankRow(DEFAULT_RANKS.find((r) => r.key === 'member'));
 }
@@ -3656,6 +3640,7 @@ function syncUserStateDoc(userRow) {
 function patchUserStateDoc(userKey, patch = {}) {
   const key = String(userKey || '').trim();
   if (!key || !patch || typeof patch !== 'object') return;
+  if (key.startsWith('guest:')) return;
   const payload = {
     userKey: key,
     ...patch,
@@ -4577,7 +4562,6 @@ function upsertGuest({ key, name, ipAddress = '', deviceId = '', fingerprint = '
     created_at: existing?.created_at || now
   });
   store.guestsByKey.set(docObj.key, docObj);
-  enqueueSet('guests', safeDocId(docObj.key), docObj, true);
   return { ...docObj };
 }
 
@@ -4761,6 +4745,11 @@ function clearAllRoomsMessages() {
   }
   enqueueBatchDelete('messages', docIds);
   scheduleJsonSnapshot();
+  try {
+    hooks.onRoomClearedAll?.();
+  } catch {
+    // ignore
+  }
   return docIds.length;
 }
 
@@ -5146,6 +5135,11 @@ function addMessage({
 
   store.messagesById.set(String(id), msg);
   enqueueSet('messages', String(id), msg);
+  try {
+    hooks.onMessageAdded?.({ ...msg });
+  } catch {
+    // ignore
+  }
   return { ...msg };
 }
 
@@ -5195,6 +5189,11 @@ function clearRoomMessages(roomId) {
     }
   }
   enqueueBatchDelete('messages', docIds);
+  try {
+    hooks.onRoomCleared?.(roomId);
+  } catch {
+    // ignore
+  }
 }
 
 function deleteMessageById(msgId) {
@@ -5204,6 +5203,11 @@ function deleteMessageById(msgId) {
     if (String(m.id) === idStr || String(k) === idStr || String(m.doc_id) === idStr) {
       store.messagesById.delete(k);
       enqueueBatchDelete('messages', [String(m.doc_id || k)]);
+      try {
+        hooks.onMessageDeleted?.(String(m.id || m.doc_id || k), m.room_id);
+      } catch {
+        // ignore
+      }
       return m;
     }
   }
@@ -5237,6 +5241,11 @@ function toggleMessageReaction(msgId, reactionKey, actorKey) {
       }
       m.reactions = base;
       enqueueSet('messages', String(m.doc_id || k), { reactions: base }, true);
+      try {
+        hooks.onMessageUpdated?.({ ...m });
+      } catch {
+        // ignore
+      }
       return { ...m };
     }
   }
@@ -5396,8 +5405,6 @@ function banTarget({
       enqueueSet('users', String(uid), { is_banned: 1, isBanned: true, ban_reason: cleanReason }, true);
       syncUserStateDoc(u);
     }
-  } else {
-    enqueueSet('user_states', safeDocId(targetKey), { userKey: targetKey, isBanned: true, updatedAt: nowIso() }, true);
   }
   revokeAllSessionsForUser(targetKey);
   return true;
@@ -5417,8 +5424,6 @@ function unbanTarget(targetKey) {
       enqueueSet('users', String(uid), { is_banned: 0, isBanned: false, ban_reason: '' }, true);
       syncUserStateDoc(u);
     }
-  } else {
-    enqueueSet('user_states', safeDocId(targetKey), { userKey: targetKey, isBanned: false, updatedAt: nowIso() }, true);
   }
 }
 
@@ -5650,8 +5655,13 @@ function addPrivateMessage({ fromKey, fromName, fromRole, fromAvatar, toKey, toN
   };
   store.privateMessagesById.set(id, pm);
   enqueueSet('private_messages', String(id), pm);
-  if (toKey) {
+  if (toKey && !String(toKey).startsWith('guest:')) {
     enqueueSet('user_states', safeDocId(toKey), { userKey: toKey, lastPmAt: Date.now() }, true);
+  }
+  try {
+    hooks.onPrivateMessage?.({ ...pm });
+  } catch {
+    // ignore
   }
   return { ...pm };
 }
@@ -5965,6 +5975,11 @@ function addNotification({ targetKey, title, body, category = 'system' }) {
   };
   store.notificationsById.set(id, notif);
   enqueueSet('notifications', String(id), notif);
+  try {
+    hooks.onNotification?.({ ...notif });
+  } catch {
+    // ignore
+  }
   return { ...notif };
 }
 
@@ -6111,7 +6126,10 @@ function createUserSession({
     expires_at: now + Math.max(60000, Number(ttlMs) || 365 * 24 * 60 * 60 * 1000)
   };
   store.sessionsById.set(sid, record);
-  enqueueSet('user_sessions', sid, record, true);
+  const isGuestRecord = Boolean(record.is_guest || String(record.user_key || '').startsWith('guest:'));
+  if (!isGuestRecord) {
+    enqueueSet('user_sessions', sid, record, true);
+  }
   return { ...record };
 }
 
@@ -6138,7 +6156,8 @@ function touchUserSession(sessionId, { role, ipAddress, deviceId, fingerprint, t
   if (ipAddress) sess.ip_address = String(ipAddress).slice(0, 80);
   if (deviceId) sess.device_id = String(deviceId).slice(0, 128);
   if (fingerprint) sess.fingerprint = String(fingerprint).slice(0, 128);
-  if (stale || roleChanged || ipChanged) {
+  const isGuestSess = Boolean(sess.is_guest || String(sess.user_key || '').startsWith('guest:'));
+  if (!isGuestSess && (stale || roleChanged || ipChanged)) {
     enqueueSet(
       'user_sessions',
       sid,
@@ -6161,11 +6180,15 @@ function revokeUserSession(sessionId) {
   const sid = String(sessionId || '').trim();
   if (!sid) return false;
   const sess = store.sessionsById.get(sid);
+  let isGuestSess = false;
   if (sess) {
     sess.revoked = true;
     sess.revoked_at = nowIso();
+    isGuestSess = Boolean(sess.is_guest || String(sess.user_key || '').startsWith('guest:'));
   }
-  enqueueSet('user_sessions', sid, { revoked: true, revoked_at: nowIso() }, true);
+  if (!isGuestSess) {
+    enqueueSet('user_sessions', sid, { revoked: true, revoked_at: nowIso() }, true);
+  }
   return true;
 }
 
@@ -6178,7 +6201,10 @@ function revokeAllSessionsForUser(userKey) {
     if (sess.user_key === targetKey && !sess.revoked) {
       sess.revoked = true;
       sess.revoked_at = revokedAt;
-      enqueueSet('user_sessions', sess.id, { revoked: true, revoked_at: revokedAt }, true);
+      const isGuestSess = Boolean(sess.is_guest || String(sess.user_key || '').startsWith('guest:'));
+      if (!isGuestSess) {
+        enqueueSet('user_sessions', sess.id, { revoked: true, revoked_at: revokedAt }, true);
+      }
       count += 1;
     }
   }
@@ -6241,6 +6267,7 @@ module.exports = {
   updateGiftsCatalog,
   syncOnlinePresenceDoc(presenceEntry) {
     if (!presenceEntry || !presenceEntry.key) return;
+    if (presenceEntry.isGuest || String(presenceEntry.key).startsWith('guest:')) return;
     enqueueSet('online_presence', safeDocId(presenceEntry.key), {
       ...presenceEntry,
       updatedAtMs: Date.now(),
@@ -6248,7 +6275,7 @@ module.exports = {
     });
   },
   removeOnlinePresenceDoc(key) {
-    if (!key) return;
+    if (!key || String(key).startsWith('guest:')) return;
     enqueueDelete('online_presence', safeDocId(key));
   },
   syncRoomMicsDoc(roomId, slots = []) {

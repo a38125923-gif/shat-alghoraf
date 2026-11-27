@@ -705,7 +705,8 @@
     if (state.profileAudioEl) {
       try {
         state.profileAudioEl.pause();
-        state.profileAudioEl.src = '';
+        state.profileAudioEl.removeAttribute('src');
+        state.profileAudioEl.load();
       } catch {
         // ignore
       }
@@ -1915,6 +1916,9 @@
     if (s.site_logo && $('authSiteLogo')) {
       $('authSiteLogo').src = s.site_logo;
       $('authSiteLogo').classList.remove('hidden');
+    } else if ($('authSiteLogo')) {
+      $('authSiteLogo').src = DEFAULT_LOGO_SVG;
+      $('authSiteLogo').classList.add('hidden');
     }
     const root = document.documentElement.style;
     const normBarColor = (c, fb = '#0f2342') => (!c || c === '#1a45e5' || c === '#0b2239' || c === '#18181b' ? fb : c);
@@ -2159,6 +2163,7 @@
       $('topAvatarImg').classList.remove('hidden');
       $('topAvatarLetter').classList.add('hidden');
     } else {
+      $('topAvatarImg').src = DEFAULT_AVATAR_SVG;
       $('topAvatarImg').classList.add('hidden');
       $('topAvatarLetter').classList.remove('hidden');
       $('topAvatarLetter').textContent = (u.name || 'ع').slice(0, 1);
@@ -2360,8 +2365,8 @@
         ytPlayer.classList.add('hidden');
         ytPlayer.classList.remove('yt-audio-only-frame');
       }
-      if (ytIframe && ytIframe.src) {
-        ytIframe.src = '';
+      if (ytIframe && ytIframe.getAttribute('src') && ytIframe.getAttribute('src') !== 'about:blank') {
+        ytIframe.src = 'about:blank';
         delete ytIframe.dataset.videoId;
       }
       $('ytNowPlayingLabel').innerHTML = '<i class="fa-brands fa-youtube" style="color:#ef4444"></i> بحث وتشغيل يوتيوب الغرفة';
@@ -2443,7 +2448,8 @@
     if (state.radioAudioEl) {
       try {
         state.radioAudioEl.pause();
-        state.radioAudioEl.src = '';
+        state.radioAudioEl.removeAttribute('src');
+        state.radioAudioEl.load();
       } catch {
         // ignore
       }
@@ -3448,26 +3454,32 @@
     window.AsilRealtime?.setTyping(false);
 
     try {
-      const res = await api('/api/chat/messages', {
-        method: 'POST',
-        body: {
-          roomId: state.currentRoom.id,
-          msgType: 'text',
-          content: text,
-          clientMsgId,
-          isAdminNotice,
-          mentionedUserId,
-          mentionedUserName,
-          replyTo: replyPayload
-        }
-      });
-      if (res?.message) appendOrReconcileMessage(res.message);
-      if (res?.rubyReward?.awarded) {
-        if (state.user) state.user.coins = res.rubyReward.newCoins;
-        renderUserIdentity();
-        showToast(`💎 مبروك! ربحت +${res.rubyReward.awarded} روبي لتفاعلك النشط!`);
+      const msgPayload = {
+        roomId: state.currentRoom.id,
+        msgType: 'text',
+        content: text,
+        clientMsgId,
+        isAdminNotice,
+        mentionedUserId,
+        mentionedUserName,
+        replyTo: replyPayload
+      };
+      const res = typeof window.AsilRealtime?.sendMessage === 'function'
+        ? await window.AsilRealtime.sendMessage(msgPayload)
+        : await api('/api/chat/messages', { method: 'POST', body: msgPayload });
+      const savedMsg = res?.message || res?.msg;
+      if (savedMsg) appendOrReconcileMessage(savedMsg);
+      if (res?.user && state.user) {
+        state.user = { ...state.user, ...res.user };
+        if (state.token) persistSessionState(state.user, state.token);
       }
-      window.AsilRealtime?.triggerHeartbeatNow(true).catch(() => {});
+      const rewardDelta = Number(res?.rubyReward?.delta ?? res?.rubyReward?.awarded ?? 0);
+      if (rewardDelta > 0) {
+        const nextCoins = res?.rubyReward?.coins ?? res?.rubyReward?.newCoins;
+        if (state.user && nextCoins !== undefined) state.user.coins = Number(nextCoins) || 0;
+        renderUserIdentity();
+        showToast(`💎 مبروك! ربحت +${rewardDelta} روبي لتفاعلك النشط!`);
+      }
     } catch (err) {
       showToast(err.message, true);
       const el = $('chatFeed').querySelector(`[data-client-msg-id="${CSS.escape(clientMsgId)}"]`);
@@ -3615,7 +3627,7 @@
           ${u.coverUrl ? `<img src="${escapeHtml(u.coverUrl)}" class="profile-cover-img" alt="" />` : ''}
           <div class="profile-cover-overlay"></div>
           <div class="profile-cover-top-actions cover-actions-left">
-            <button type="button" class="rtl-back-pill cover-close-x-btn" id="quHeroCloseBtn" title="رجوع"><i class="fa-solid fa-arrow-right"></i> <span>رجوع</span></button>
+            <button type="button" class="hero-circle-glass-btn cover-close-x-btn" id="quHeroCloseBtn" title="إغلاق">✕</button>
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة الغلاف والبطاقة"><i class="fa-solid fa-eye"></i></button>
           </div>
           <div class="profile-cover-stats-bar">
@@ -3658,13 +3670,13 @@
         <div class="profile-lower-dark-stage">
           <div class="profile-6tabs-bar" id="quTabsBar">
             <button type="button" class="qu-tab active" data-qu-tab="info"><i class="fa-solid fa-circle-info"></i><span>المعلومات</span></button>
-            ${allowProfFriends ? '<button type="button" class="qu-tab" data-qu-tab="friends"><i class="fa-solid fa-user-group"></i><span>الأصدقاء</span></button>' : ''}
-            ${allowProfGifts ? '<button type="button" class="qu-tab" data-qu-tab="gifts"><i class="fa-solid fa-gift"></i><span>الهدايا</span></button>' : ''}
-            ${allowProfRelations ? '<button type="button" class="qu-tab" data-qu-tab="relations"><i class="fa-solid fa-heart-pulse"></i><span>العلاقات</span></button>' : ''}
-            ${allowProfWall ? '<button type="button" class="qu-tab" data-qu-tab="posts"><i class="fa-solid fa-newspaper"></i><span>المنشورات</span></button>' : ''}
+            ${allowProfFriends && isReg ? '<button type="button" class="qu-tab" data-qu-tab="friends"><i class="fa-solid fa-user-group"></i><span>الأصدقاء</span></button>' : ''}
+            ${allowProfGifts && isReg ? '<button type="button" class="qu-tab" data-qu-tab="gifts"><i class="fa-solid fa-gift"></i><span>الهدايا</span></button>' : ''}
+            ${allowProfRelations && isReg ? '<button type="button" class="qu-tab" data-qu-tab="relations"><i class="fa-solid fa-heart-pulse"></i><span>العلاقات</span></button>' : ''}
+            ${allowProfWall && isReg ? '<button type="button" class="qu-tab" data-qu-tab="posts"><i class="fa-solid fa-newspaper"></i><span>المنشورات</span></button>' : ''}
             ${showAdminTab
               ? '<button type="button" class="qu-tab admin-tab-pill" data-qu-tab="admin"><i class="fa-solid fa-shield-halved"></i><span>الإدارة</span></button>'
-              : '<button type="button" class="qu-tab" data-qu-tab="more"><i class="fa-solid fa-ellipsis"></i><span>المزيد</span></button>'}
+              : (isReg ? '<button type="button" class="qu-tab" data-qu-tab="more"><i class="fa-solid fa-ellipsis"></i><span>المزيد</span></button>' : '')}
           </div>
 
           <div class="profile-tab-content">
@@ -3689,10 +3701,11 @@
                 <div class="info-kv-row"><span><i class="fa-solid fa-bolt"></i> نقاط التفاعل</span><strong>${Number(u.activityPoints || 0)}</strong></div>
                 ${dynFieldsHtml}
               </div>
+              ${isReg ? `
               <div class="copy-link-box">
                 <input type="text" readonly value="${escapeHtml(profileLink)}" id="quProfileLinkInput" />
                 <button type="button" class="btn-secondary btn-xs" id="quCopyLinkBtn"><i class="fa-solid fa-copy"></i> نسخ</button>
-              </div>
+              </div>` : ''}
             </div>
 
             <div id="quPane_friends" class="qu-pane hidden">
@@ -5150,6 +5163,7 @@
       $('custPreviewAvatarImg').classList.remove('hidden');
       $('custPreviewAvatarLetter').classList.add('hidden');
     } else {
+      $('custPreviewAvatarImg').src = DEFAULT_AVATAR_SVG;
       $('custPreviewAvatarImg').classList.add('hidden');
       $('custPreviewAvatarLetter').classList.remove('hidden');
       $('custPreviewAvatarLetter').textContent = (previewObj.name || 'ع').slice(0, 1);
@@ -5170,6 +5184,7 @@
         hero.style.backgroundPosition = 'center';
         hero.style.width = '100%';
       } else {
+        $('custCoverImg').src = DEFAULT_ROOM_SVG;
         $('custCoverImg').classList.add('hidden');
         hero.classList.remove('has-cover-img');
         hero.style.backgroundImage = '';
@@ -6610,6 +6625,25 @@
           }
           if (incomingNew.length || changed) syncLocalMirror();
         },
+        onNewMessage(m) {
+          if (!m || (m.room_id && m.room_id !== state.currentRoom?.id)) return;
+          if (String(m.client_msg_id || '').startsWith('room_cleared:')) {
+            state.messages = [m];
+            renderAllMessages();
+            syncLocalMirror();
+            return;
+          }
+          const exists = (state.messages || []).some((old) => String(old.id) === String(m.id));
+          appendOrReconcileMessage(m);
+          if (!exists) handleIncomingRoomMessageEffects(m, true);
+          syncLocalMirror();
+        },
+        onRoomCleared(roomId) {
+          if (roomId && roomId !== state.currentRoom?.id) return;
+          state.messages = [];
+          renderAllMessages();
+          syncLocalMirror();
+        },
         onDeltaMessages(msgs, roomId) {
           if (roomId !== state.currentRoom?.id || !Array.isArray(msgs)) return;
           const prevIds = new Set((state.messages || []).map((m) => String(m.id)));
@@ -6673,7 +6707,22 @@
               state.quizBotState = { active: Boolean(fresh.quiz_bot_active) };
               renderRoomBanner();
               renderQuizBotRoomBar();
+              renderRoomYoutubeBar();
             }
+          }
+          syncLocalMirror();
+        },
+        onRoomUpdated(fresh) {
+          if (!fresh || !fresh.id) return;
+          const idx = (state.rooms || []).findIndex((r) => r.id === fresh.id);
+          if (idx !== -1) state.rooms[idx] = { ...state.rooms[idx], ...fresh };
+          else state.rooms.push(fresh);
+          if (state.currentRoom?.id === fresh.id) {
+            state.currentRoom = { ...state.currentRoom, ...fresh };
+            state.quizBotState = { active: Boolean(state.currentRoom.quiz_bot_active) };
+            renderRoomBanner();
+            renderQuizBotRoomBar();
+            renderRoomYoutubeBar();
           }
           syncLocalMirror();
         },
@@ -6699,7 +6748,8 @@
             renderMics();
           }
         },
-        onTypingUsers(list) {
+        onTypingUsers(list, roomId) {
+          if (roomId && roomId !== state.currentRoom?.id) return;
           const myKey = state.user?.key;
           state.typingUsers.clear();
           for (const t of list || []) {
@@ -6925,11 +6975,12 @@
           const clientMsgId = `stk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
           $('emojiPopover').classList.add('hidden');
           try {
-            const res = await api('/api/chat/messages', {
-              method: 'POST',
-              body: { roomId: state.currentRoom.id, msgType: 'sticker', content: payloadStr, clientMsgId }
-            });
-            if (res?.msg) appendOrReconcileMessage(res.msg);
+            const stkPayload = { roomId: state.currentRoom.id, msgType: 'sticker', content: payloadStr, clientMsgId };
+            const res = typeof window.AsilRealtime?.sendMessage === 'function'
+              ? await window.AsilRealtime.sendMessage(stkPayload)
+              : await api('/api/chat/messages', { method: 'POST', body: stkPayload });
+            const savedStk = res?.message || res?.msg;
+            if (savedStk) appendOrReconcileMessage(savedStk);
           } catch (err) {
             showToast(err.message, true);
           }
@@ -7272,7 +7323,7 @@
       const clean = String(url || '').trim();
       if ($('rmSettingsWpUrl')) $('rmSettingsWpUrl').value = clean;
       if ($('rmSettingsWpPreviewImg')) {
-        $('rmSettingsWpPreviewImg').src = clean;
+        $('rmSettingsWpPreviewImg').src = clean || DEFAULT_ROOM_SVG;
         $('rmSettingsWpPreviewImg').classList.toggle('hidden', !clean);
       }
       if ($('rmSettingsWpPlaceholder')) {
@@ -7555,11 +7606,12 @@
         const fd = new FormData();
         fd.append('file', file);
         const up = await api('/api/upload/image', { method: 'POST', body: fd });
-        const res = await api('/api/chat/messages', {
-          method: 'POST',
-          body: { roomId: state.currentRoom?.id, msgType: 'image', mediaUrl: up.url, clientMsgId: `img_${Date.now()}` }
-        });
-        if (res?.msg) appendOrReconcileMessage(res.msg);
+        const imgPayload = { roomId: state.currentRoom?.id, msgType: 'image', mediaUrl: up.url, clientMsgId: `img_${Date.now()}` };
+        const res = typeof window.AsilRealtime?.sendMessage === 'function'
+          ? await window.AsilRealtime.sendMessage(imgPayload)
+          : await api('/api/chat/messages', { method: 'POST', body: imgPayload });
+        const savedImg = res?.message || res?.msg;
+        if (savedImg) appendOrReconcileMessage(savedImg);
       } catch (err) {
         showToast(err.message, true);
       }
@@ -7621,11 +7673,12 @@
           fd.append('file', blob, 'voice.webm');
           try {
             const up = await api('/api/upload/audio', { method: 'POST', body: fd });
-            const res = await api('/api/chat/messages', {
-              method: 'POST',
-              body: { roomId: state.currentRoom?.id, msgType: 'audio', mediaUrl: up.url, clientMsgId: `aud_${Date.now()}` }
-            });
-            if (res?.msg) appendOrReconcileMessage(res.msg);
+            const audPayload = { roomId: state.currentRoom?.id, msgType: 'audio', mediaUrl: up.url, clientMsgId: `aud_${Date.now()}` };
+            const res = typeof window.AsilRealtime?.sendMessage === 'function'
+              ? await window.AsilRealtime.sendMessage(audPayload)
+              : await api('/api/chat/messages', { method: 'POST', body: audPayload });
+            const savedAud = res?.message || res?.msg;
+            if (savedAud) appendOrReconcileMessage(savedAud);
           } catch (err) {
             showToast(err.message, true);
           }

@@ -21,6 +21,8 @@
     apiFetch: null,
     callbacks: {},
     firestoreActive: false,
+    socket: null,
+    socketConnected: false,
     unsubs: [],
     roomUnsubs: [],
     heartbeatTimer: null,
@@ -404,11 +406,189 @@
     }
   }
 
+  function connectSocket() {
+    if (typeof globalScope.io !== 'function' || !session.active || !session.token) return null;
+    if (session.socket) {
+      try {
+        session.socket.removeAllListeners();
+        session.socket.disconnect();
+      } catch {
+        // ignore
+      }
+      session.socket = null;
+      session.socketConnected = false;
+    }
+
+    const sock = globalScope.io({
+      auth: { token: session.token, roomId: session.roomId },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000
+    });
+    session.socket = sock;
+
+    sock.on('connect', () => {
+      if (!session.active || session.socket !== sock) return;
+      session.socketConnected = true;
+      sock.auth = { token: session.token, roomId: session.roomId };
+      if (session.roomId) {
+        sock.emit('join_room', { roomId: session.roomId, silent: true }, () => {});
+      }
+      scheduleLoops();
+    });
+
+    sock.on('disconnect', () => {
+      if (session.socket !== sock) return;
+      session.socketConnected = false;
+      // Silent automatic reconnect — never show disconnect UI
+      scheduleLoops();
+    });
+
+    sock.on('connect_error', (err) => {
+      if (session.socket !== sock) return;
+      session.socketConnected = false;
+      if (err?.message === 'BANNED' && typeof session.callbacks?.onBanned === 'function') {
+        session.callbacks.onBanned({ reason: 'تم حظرك من الشات' });
+      }
+    });
+
+    sock.on('new_message', (msg) => {
+      if (!session.active || !msg) return;
+      const numId = Number(msg.id);
+      if (Number.isFinite(numId) && numId > session.lastMsgId) {
+        session.lastMsgId = numId;
+      }
+      const cb = session.callbacks || {};
+      if (typeof cb.onNewMessage === 'function') cb.onNewMessage(msg);
+      else if (typeof cb.onDeltaMessages === 'function') cb.onDeltaMessages([msg], msg.room_id || session.roomId);
+    });
+
+    sock.on('message_updated', (msg) => {
+      if (!session.active || !msg) return;
+      session.callbacks?.onUpdatedMessages?.([msg], msg.room_id || session.roomId);
+    });
+
+    sock.on('message_deleted', (data) => {
+      if (!session.active || !data?.id) return;
+      session.callbacks?.onDeletedMessages?.([data.id], data.roomId || session.roomId);
+    });
+
+    sock.on('room_cleared', (data) => {
+      if (!session.active) return;
+      session.callbacks?.onRoomCleared?.(data?.roomId || session.roomId);
+    });
+
+    sock.on('room_users', (data) => {
+      if (!session.active || !data) return;
+      if (data.roomId && data.roomId !== session.roomId) return;
+      session.callbacks?.onRoomUsers?.(data.users || [], data.roomKingKey);
+    });
+
+    sock.on('online_users', (list) => {
+      if (!session.active) return;
+      session.callbacks?.onGlobalOnlineUsers?.(list || []);
+    });
+
+    sock.on('rooms', (rooms) => {
+      if (!session.active) return;
+      session.callbacks?.onRooms?.(rooms || []);
+    });
+
+    sock.on('room_updated', (room) => {
+      if (!session.active || !room) return;
+      session.callbacks?.onRoomUpdated?.(room);
+    });
+
+    sock.on('room_mics', (data) => {
+      if (!session.active || !data) return;
+      session.callbacks?.onRoomMics?.(data.roomId || session.roomId, data.slots || []);
+    });
+
+    sock.on('typing_users', (data) => {
+      if (!session.active) return;
+      const users = Array.isArray(data) ? data : (data?.users || []);
+      const rId = Array.isArray(data) ? session.roomId : (data?.roomId || session.roomId);
+      session.callbacks?.onTypingUsers?.(users, rId);
+    });
+
+    sock.on('private_message', (pm) => {
+      if (!session.active) return;
+      syncSocialState();
+      session.callbacks?.onPrivateMessage?.(pm);
+    });
+
+    sock.on('notification', (notif) => {
+      if (!session.active) return;
+      syncSocialState();
+      session.callbacks?.onNotification?.(notif);
+    });
+
+    sock.on('session_patch', (patch) => {
+      if (!session.active || !patch) return;
+      session.callbacks?.onSessionPatch?.(patch);
+    });
+
+    sock.on('user_state', (st) => {
+      if (!session.active || !st) return;
+      handleUserStateSnapshot(st);
+    });
+
+    sock.on('mute_state', (payload) => {
+      if (!session.active) return;
+      session.callbacks?.onUserState?.({ activeMute: payload || null });
+    });
+
+    sock.on('kicked', (payload) => {
+      if (!session.active) return;
+      session.callbacks?.onKicked?.(payload || {});
+    });
+
+    sock.on('banned', (payload) => {
+      if (!session.active) return;
+      session.callbacks?.onBanned?.(payload || {});
+    });
+
+    sock.on('warning', (payload) => {
+      if (!session.active) return;
+      session.callbacks?.onWarning?.(payload || {});
+    });
+
+    sock.on('gold_rain', (payload) => {
+      if (!session.active) return;
+      session.callbacks?.onGoldRain?.(payload || {});
+    });
+
+    sock.on('forced_room_move', (payload) => {
+      if (!session.active || !payload?.roomId) return;
+      session.callbacks?.onForcedRoomMove?.(payload.roomId);
+    });
+
+    sock.on('ranks', (ranks) => {
+      if (!session.active) return;
+      session.callbacks?.onRanks?.(ranks || []);
+    });
+
+    sock.on('settings', (settings) => {
+      if (!session.active || !settings) return;
+      session.callbacks?.onSettings?.(settings);
+    });
+
+    sock.on('webrtc_signal', (sig) => {
+      if (!session.active || !sig || !sig.id || session.seenWebRtcIds.has(sig.id)) return;
+      session.seenWebRtcIds.add(sig.id);
+      session.callbacks?.onWebRtcSignal?.(sig);
+    });
+
+    return sock;
+  }
+
   function scheduleLoops() {
     if (session.heartbeatTimer) clearInterval(session.heartbeatTimer);
     if (session.socialTimer) clearInterval(session.socialTimer);
 
-    const hbMs = session.firestoreActive ? 9000 : 3500;
+    const hasLiveSocket = Boolean(session.socketConnected);
+    const hbMs = hasLiveSocket ? 15000 : (session.firestoreActive ? 9000 : 3500);
     session.heartbeatTimer = setInterval(async () => {
       if (!session.active || !session.apiFetch) return;
       try {
@@ -416,7 +596,7 @@
           method: 'POST',
           body: {
             roomId: session.roomId,
-            includeMessages: true,
+            includeMessages: !hasLiveSocket,
             lastMsgId: session.lastMsgId,
             typingInRoom: session.typingInRoom
           }
@@ -427,7 +607,7 @@
       }
     }, hbMs);
 
-    const socialMs = session.firestoreActive ? 14000 : 6000;
+    const socialMs = hasLiveSocket ? 18000 : (session.firestoreActive ? 14000 : 6000);
     session.socialTimer = setInterval(() => {
       syncSocialState();
     }, socialMs);
@@ -458,6 +638,7 @@
 
     const boot = await syncBootstrap(session.roomId);
     attachFirestoreRoomListeners(session.roomId);
+    connectSocket();
     scheduleLoops();
     if (typeof session.callbacks.onConnected === 'function') {
       session.callbacks.onConnected(boot);
@@ -476,6 +657,9 @@
       session.lastMsgId = Array.isArray(res.messages) && res.messages.length
         ? Number(res.messages[res.messages.length - 1]?.id) || 0
         : 0;
+      if (session.socket) {
+        session.socket.auth = { token: session.token, roomId: session.roomId };
+      }
       attachFirestoreRoomListeners(session.roomId);
     }
     return res;
@@ -496,11 +680,52 @@
     return res;
   }
 
+  async function sendMessage(payload = {}) {
+    if (!session.active || !session.apiFetch) throw new Error('الجلسة غير نشطة');
+    const body = { roomId: session.roomId, ...payload };
+    if (session.socket && session.socket.connected) {
+      try {
+        const ackRes = await new Promise((resolve, reject) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              reject(new Error('SOCKET_ACK_TIMEOUT'));
+            }
+          }, 5000);
+          session.socket.emit('send_message', body, (resp) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(resp);
+          });
+        });
+        if (ackRes?.error) {
+          const err = new Error(ackRes.error);
+          if (ackRes.status) err.status = ackRes.status;
+          throw err;
+        }
+        if (ackRes?.message?.id) {
+          const numId = Number(ackRes.message.id);
+          if (Number.isFinite(numId) && numId > session.lastMsgId) session.lastMsgId = numId;
+        }
+        return ackRes;
+      } catch (err) {
+        if (err?.message !== 'SOCKET_ACK_TIMEOUT') throw err;
+      }
+    }
+    return session.apiFetch('/api/chat/messages', { method: 'POST', body });
+  }
+
   function setTyping(isTyping) {
     if (!session.active || !session.apiFetch) return;
     const nextRoom = isTyping ? session.roomId : '';
     if (session.typingInRoom === nextRoom) return;
     session.typingInRoom = nextRoom;
+    if (session.socket && session.socket.connected) {
+      session.socket.emit('typing', { roomId: session.roomId, isTyping: Boolean(isTyping) });
+      return;
+    }
     session.apiFetch('/api/chat/typing', {
       method: 'POST',
       body: { roomId: session.roomId, isTyping: Boolean(isTyping) }
@@ -516,6 +741,16 @@
       session.apiFetch('/api/chat/logout', { method: 'POST', body: {} }).catch(() => {});
     }
     session.active = false;
+    if (session.socket) {
+      try {
+        session.socket.removeAllListeners();
+        session.socket.disconnect();
+      } catch {
+        // ignore
+      }
+      session.socket = null;
+      session.socketConnected = false;
+    }
     clearUnsubs(session.roomUnsubs);
     clearUnsubs(session.unsubs);
     session.firestoreActive = false;
@@ -539,9 +774,11 @@
     syncBootstrap,
     syncSocialState,
     triggerHeartbeatNow,
+    sendMessage,
     setTyping,
     updateUser,
     stop,
+    isSocketConnected: () => session.socketConnected,
     isFirestoreSdkActive: () => session.firestoreActive
   };
 })(window);

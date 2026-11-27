@@ -639,7 +639,7 @@
               <div class="rk-icon-40-preview" title="معاينة 40×40">
                 ${editRk?.image_url
                   ? `<img id="rkIconPreviewImg" src="${escapeHtml(editRk.image_url)}" alt="" />`
-                  : '<img id="rkIconPreviewImg" class="hidden" alt="" /><span id="rkIconPreviewPlaceholder" class="muted" style="font-size:10px;">40×40</span>'}
+                  : '<img id="rkIconPreviewImg" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201%201%22%2F%3E" class="hidden" alt="" /><span id="rkIconPreviewPlaceholder" class="muted" style="font-size:10px;">40×40</span>'}
               </div>
               <label for="rkIconFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-mobile-screen-button"></i> رفع أيقونة رتبة من الجوال (PNG / SVG / GIF)</label>
               <input type="file" id="rkIconFile" accept="image/png,image/svg+xml,image/gif,image/webp,image/jpeg,image/*" style="display:none;" />
@@ -789,7 +789,7 @@
         const ph = $('rkIconPreviewPlaceholder');
         if (!img) return;
         if (src) { img.src = src; img.classList.remove('hidden'); if (ph) ph.classList.add('hidden'); }
-        else { img.src = ''; img.classList.add('hidden'); if (ph) ph.classList.remove('hidden'); }
+        else { img.src = 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201%201%22%2F%3E'; img.classList.add('hidden'); if (ph) ph.classList.remove('hidden'); }
       };
       $('rkImgUrl')?.addEventListener('input', (e) => updateRkPreview(e.target.value.trim()));
       $('rkIconFile')?.addEventListener('change', async (e) => {
@@ -1315,7 +1315,7 @@
               <input type="text" id="sfImgUrl" placeholder="رابط صورة الإطار (PNG / SVG / GIF) أو ارفع من الجوال" style="grid-column:1 / -1;" />
             </div>
             <div class="inline-row" style="flex-wrap:wrap;gap:8px;align-items:center;">
-              <img id="sfFramePreviewImg" class="hidden" style="width:42px;height:42px;object-fit:contain;border-radius:50%;border:1px solid rgba(251,191,36,0.45);background:rgba(15,23,42,0.8);" alt="" />
+              <img id="sfFramePreviewImg" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201%201%22%2F%3E" class="hidden" style="width:42px;height:42px;object-fit:contain;border-radius:50%;border:1px solid rgba(251,191,36,0.45);background:rgba(15,23,42,0.8);" alt="" />
               <label for="sfImgFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-mobile-screen-button"></i> رفع إطار من الجوال (PNG / SVG / GIF)</label>
               <input type="file" id="sfImgFile" accept="image/png,image/svg+xml,image/gif,image/webp,image/*" style="display:none;" />
               <span id="sfFileNameLbl" class="muted" style="font-size:11px;"></span>
@@ -1659,7 +1659,7 @@
           <div style="margin-top:10px;">
             <label class="muted">صورة البوت الرئيسي</label>
             <div class="inline-row" style="gap:8px;align-items:center;flex-wrap:wrap;">
-              <img id="wbMainAvatarPreview" src="${escapeHtml(draft.avatar || '')}" alt="صورة البوت" class="wbot-avatar-preview ${draft.avatar ? '' : 'hidden'}" />
+              <img id="wbMainAvatarPreview" src="${escapeHtml(draft.avatar || 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201%201%22%2F%3E')}" alt="صورة البوت" class="wbot-avatar-preview ${draft.avatar ? '' : 'hidden'}" />
               <input type="text" id="wbAvatarInput" value="${escapeHtml(draft.avatar)}" placeholder="رابط الصورة..." style="flex:1;min-width:160px;" />
               <label class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-upload"></i> رفع صورة<input type="file" id="wbAvatarFile" accept="image/*" style="display:none;" /></label>
               ${draft.avatar ? '<button type="button" id="wbClearAvatarBtn" class="btn-danger btn-xs">إزالة</button>' : ''}
