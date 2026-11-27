@@ -592,6 +592,11 @@
       session.callbacks?.onEmojis?.(Array.isArray(emojis) ? emojis : []);
     });
 
+    sock.on('frames_catalog', (catalog) => {
+      if (!session.active) return;
+      session.callbacks?.onFramesCatalog?.(Array.isArray(catalog) ? catalog : []);
+    });
+
     sock.on('webrtc_signal', (sig) => {
       if (!session.active || !sig || !sig.id || session.seenWebRtcIds.has(sig.id)) return;
       session.seenWebRtcIds.add(sig.id);

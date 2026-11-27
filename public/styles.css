@@ -4001,7 +4001,9 @@ textarea:focus {
 .profile-card-preview-mode .avatar-inner-actions,
 .profile-card-preview-mode #custUploadCoverBtn,
 .profile-card-preview-mode #custDeleteCoverBtn,
-.profile-card-preview-mode #custSwitchToMoreBtn {
+.profile-card-preview-mode #custSwitchToMoreBtn,
+.profile-card-preview-mode #quOwnerUploadCoverBtn,
+.profile-card-preview-mode #quOwnerCoverDelBtn {
   opacity: 0;
   pointer-events: none;
 }
@@ -8963,42 +8965,6 @@ textarea:focus {
   border-color: rgba(251, 146, 60, 0.42) !important;
 }
 
-.qu-owner-secret-box {
-  margin: 12px 10px 4px;
-  padding: 12px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, rgba(24, 24, 27, 0.96), rgba(69, 26, 3, 0.36));
-  border: 1px solid rgba(251, 191, 36, 0.48);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-}
-
-.qu-owner-secret-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(251, 191, 36, 0.24);
-}
-
-.qu-owner-secret-head strong {
-  color: #fde68a;
-  font-size: 12.5px;
-}
-
-.qu-owner-secret-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.qu-owner-media-ctrl label.muted {
-  display: block;
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-
 @media (max-width: 640px) {
   .auth-card {
     padding: 18px 14px;
@@ -9363,6 +9329,85 @@ textarea:focus {
     -webkit-backdrop-filter: none !important;
   }
 }
+
+.auth-welcome-pill {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.qu-thumbs-like-btn {
+  transition: transform 0.14s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.qu-thumbs-like-btn:hover {
+  background: #ffffff;
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.qu-thumbs-like-btn:active {
+  transform: scale(0.94);
+}
+
+.qu-small-prompt-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(2, 6, 23, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.qu-small-prompt-card {
+  width: 100%;
+  max-width: 360px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.qu-small-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #e0f2fe;
+}
+
+.qu-small-prompt-card input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  font-size: 14px;
+  outline: none;
+}
+
+.qu-small-prompt-card input:focus {
+  border-color: #38bdf8;
+}
+
 
 
 

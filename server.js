@@ -140,6 +140,11 @@ const RADIO_STATIONS = [
   }
 ];
 
+function getActiveRadioStations() {
+  const s = db.getSiteSettings();
+  return Array.isArray(s.radio_stations) && s.radio_stations.length ? s.radio_stations : RADIO_STATIONS;
+}
+
 const PROFILE_MUSIC_PRESETS = [
   { id: '', label: 'بدون موسيقى' },
   { id: 'preset:calm_lofi', label: 'أنغام هادئة (Lo-Fi)' },
@@ -2307,9 +2312,29 @@ app.post('/api/upload/wallpaper', requireRegistered, (req, res, next) => {
     return res.status(403).json({ error: 'تغيير خلفية الغرفة متاح للمالك وملاك ومشرفي الغرف المصرح لهم فقط.' });
   }
   return next();
-}, uploadWallpaper.single('file'), (req, res) => {
+}, uploadWallpaper.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة خلفية.' });
-  return res.json({ url: `/uploads/wallpapers/${req.file.filename}` });
+  let finalUrl = `/uploads/wallpapers/${req.file.filename}`;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `wallpaper_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/jpeg',
+        dataBase64: buf.toString('base64'),
+        kind: 'wallpaper',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  } catch {
+    // fallback to disk path
+  }
+  await db.flushWrites();
+  return res.json({ url: finalUrl });
 });
 
 app.post('/api/upload/emoji', requirePanelAccess, uploadEmoji.single('file'), async (req, res) => {
@@ -2443,17 +2468,85 @@ app.delete('/api/profile/music', requireRegistered, async (req, res) => {
   return res.json({ ok: true, user: mapUserRow(updated) });
 });
 
-app.post('/api/upload/rank-icon', requirePanelAccess, uploadRankIcon.single('file'), (req, res) => {
+app.post('/api/upload/rank-icon', requirePanelAccess, uploadRankIcon.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق أيقونة رتبة.' });
-  return res.json({ url: `/uploads/rank_icons/${req.file.filename}` });
+  let finalUrl = `/uploads/rank_icons/${req.file.filename}`;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `rank_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/png',
+        dataBase64: buf.toString('base64'),
+        kind: 'rank_icon',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  } catch {
+    // fallback
+  }
+  await db.flushWrites();
+  return res.json({ url: finalUrl });
 });
 
-app.post('/api/upload/news', requireRegistered, uploadNewsImg.single('file'), (req, res) => {
+app.post('/api/upload/site-logo', requirePanelAccess, uploadAvatar.single('file'), async (req, res) => {
+  if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'access_panel')) {
+    return res.status(403).json({ error: 'صلاحية تعديل الشعار غير متوفرة.' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الشعار.' });
+  let finalUrl = `/uploads/avatars/${req.file.filename}`;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `logo_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/png',
+        dataBase64: buf.toString('base64'),
+        kind: 'logo',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  } catch {
+    // fallback
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, url: finalUrl });
+});
+
+app.post('/api/upload/news', requireRegistered, uploadNewsImg.single('file'), async (req, res) => {
   if (req.authUser.role !== 'site_owner' && !canDo(req.authUser.role, 'publish_news')) {
     return res.status(403).json({ error: 'ليست لديك صلاحية نشر الأخبار.' });
   }
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة الخبر.' });
-  return res.json({ url: `/uploads/news/${req.file.filename}` });
+  let finalUrl = `/uploads/news/${req.file.filename}`;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `news_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: req.file.mimetype || 'image/jpeg',
+        dataBase64: buf.toString('base64'),
+        kind: 'news',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  } catch {
+    // fallback
+  }
+  await db.flushWrites();
+  return res.json({ url: finalUrl });
 });
 
 app.post('/api/upload/bot-avatar', requireOwner, uploadAvatar.single('file'), async (req, res) => {
@@ -2487,7 +2580,7 @@ app.post('/api/upload/bot-avatar', requireOwner, uploadAvatar.single('file'), as
 // YOUTUBE SEARCH BY NAME & RADIO STATIONS
 // ==========================================
 app.get('/api/radio/stations', (_req, res) => {
-  res.json({ stations: RADIO_STATIONS });
+  res.json({ stations: getActiveRadioStations() });
 });
 
 function collectYoutubeVideoRenderers(node, out = [], seen = new Set()) {
@@ -2682,6 +2775,23 @@ app.post('/api/profile/interact', requireAuth, async (req, res) => {
   const uid = Number(String(targetKey).replace('user:', ''));
   const updated = db.interactProfile(uid, { like: Boolean(like), rating, visit: Boolean(visit) });
   if (!updated) return res.status(404).json({ error: 'العضو غير موجود.' });
+
+  if (Boolean(visit) && Number(settings.feat_profile_visit_notif ?? 1) !== 0) {
+    const actorEntry = onlinePresenceMap.get(req.authUser.key);
+    const actorStealth = Boolean(req.authUser.isStealth || actorEntry?.isStealth || isStealthEntry(actorEntry));
+    if (!actorStealth) {
+      const visitorName = String(req.authUser.name || (req.authUser.isGuest ? 'زائر' : 'عضو')).trim();
+      const notif = db.addNotification({
+        targetKey: `user:${uid}`,
+        title: '👁️ زيارة للملف الشخصي',
+        body: `زار ملفك الشخصي: ${visitorName}`,
+        category: 'profile_visit',
+        fromKey: req.authUser.key
+      });
+      emitNotificationToUser(null, `user:${uid}`, notif);
+    }
+  }
+
   syncUserPresence(uid);
   await db.flushWrites();
   return res.json({ ok: true, user: mapUserRow(updated) });
@@ -2864,7 +2974,7 @@ app.get('/api/shop/items', (_req, res) => {
     profileBackgrounds: PROFILE_BG_EFFECTS,
     rankBadgeStyles: RANK_BADGE_STYLES,
     musicPresets: PROFILE_MUSIC_PRESETS,
-    radioStations: RADIO_STATIONS,
+    radioStations: getActiveRadioStations(),
     gifts: db.getGiftsCatalog()
   });
 });
@@ -3651,7 +3761,9 @@ app.put('/api/admin/settings', requirePanelAccess, async (req, res) => {
       'block_vpn',
       'welcome_bot_enabled',
       'welcome_bot_mode',
-      'ad_units'
+      'ad_units',
+      'feat_profile_visit_notif',
+      'radio_stations'
     ];
     for (const k of ownerOnlySettingKeys) delete body[k];
   }
@@ -3747,6 +3859,7 @@ app.post('/api/admin/store/frames', requireOwner, async (req, res) => {
   });
   if (result.error) return res.status(400).json({ error: result.error });
   const catalog = getEffectiveFramesCatalog();
+  if (io) io.emit('frames_catalog', catalog);
   await db.flushWrites();
   return res.json({ frame: result.frame, framesCatalog: catalog });
 });
@@ -3757,6 +3870,7 @@ app.delete('/api/admin/store/frames/:id', requireOwner, async (req, res) => {
     syncUserPresence(uid);
   }
   const catalog = getEffectiveFramesCatalog();
+  if (io) io.emit('frames_catalog', catalog);
   await db.flushWrites();
   return res.json({ ok: true, framesCatalog: catalog });
 });
@@ -5290,6 +5404,8 @@ app.get('/api/owner/suite', requireOwner, (_req, res) => {
       feat_profile_gifts: settings.feat_profile_gifts === 0 ? 0 : 1,
       feat_profile_relations: settings.feat_profile_relations === 0 ? 0 : 1,
       feat_profile_wall: settings.feat_profile_wall === 0 ? 0 : 1,
+      feat_profile_visit_notif: settings.feat_profile_visit_notif === 0 ? 0 : 1,
+      radio_stations: getActiveRadioStations(),
       custom_drawer_sections: Array.isArray(settings.custom_drawer_sections) ? settings.custom_drawer_sections : [],
       custom_profile_fields: Array.isArray(settings.custom_profile_fields) ? settings.custom_profile_fields : [],
       royal_member_ruby_multiplier: Number(settings.royal_member_ruby_multiplier) || 1.2,
@@ -5618,6 +5734,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
       if (updated.quiz_reward_coins) b.rewardCoins = Number(updated.quiz_reward_coins) || 100;
     }
     const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات بوت المسابقات', details: `${updated.quiz_interval_sec}ث / ${updated.quiz_reward_coins} روبي` });
     await db.flushWrites();
     return res.json({ ok: true, settings: pubSettings });
@@ -5716,6 +5833,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
   if (action === 'update_protections') {
     db.updateSiteSettings(protections || {});
     const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث إعدادات الحماية والمميزات' });
     await db.flushWrites();
     return res.json({ ok: true, settings: pubSettings });
@@ -5735,15 +5853,23 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         }
       }
     }
+    const ranksNow = db.getAllRanks();
+    const framesCat = getEffectiveFramesCatalog();
+    if (io) {
+      io.emit('settings', pubSettings);
+      io.emit('ranks', ranksNow);
+      io.emit('frames_catalog', framesCat);
+    }
     db.addAdminLog({ actorKey: actor.key, actorName: actor.name, actorRole: actor.role, action: 'تحديث مصفوفة الصلاحيات الشاملة' });
     await db.flushWrites();
-    return res.json({ ok: true, settings: pubSettings, ranks: db.getAllRanks() });
+    return res.json({ ok: true, settings: pubSettings, ranks: ranksNow, framesCatalog: framesCat });
   }
 
   if (action === 'save_custom_drawer_sections') {
     const { sections } = req.body || {};
     const updated = db.updateSiteSettings({ custom_drawer_sections: Array.isArray(sections) ? sections : [] });
     const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,
@@ -5767,7 +5893,8 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
         'feat_profile_friends',
         'feat_profile_gifts',
         'feat_profile_relations',
-        'feat_profile_wall'
+        'feat_profile_wall',
+        'feat_profile_visit_notif'
       ];
       for (const tk of allowedToggles) {
         if (toggles[tk] !== undefined) patch[tk] = toggles[tk] ? 1 : 0;
@@ -5775,6 +5902,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     }
     const updated = db.updateSiteSettings(patch);
     const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,
@@ -5802,6 +5930,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
 
     const fullUpdated = db.updateSiteSettings(patch);
     const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
     startVirtualMembersLoop();
     db.addAdminLog({
       actorKey: actor.key,
@@ -5812,6 +5941,22 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     });
     await db.flushWrites();
     return res.json({ ok: true, settings: pubSettings });
+  }
+
+  if (action === 'save_radio_stations') {
+    const list = Array.isArray(req.body?.stations) ? req.body.stations : [];
+    db.updateSiteSettings({ radio_stations: list });
+    const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
+    db.addAdminLog({
+      actorKey: actor.key,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: 'تحديث محطات الراديو المباشرة',
+      details: `${getActiveRadioStations().length} محطة`
+    });
+    await db.flushWrites();
+    return res.json({ ok: true, settings: pubSettings, stations: getActiveRadioStations() });
   }
 
   if (action === 'toggle_emergency') {
@@ -5827,6 +5972,7 @@ app.post('/api/owner/action', requireOwner, async (req, res) => {
     const val = req.body?.enabled ? 1 : 0;
     db.updateSiteSettings({ [field]: val });
     const pubSettings = db.getPublicSiteSettings();
+    if (io) io.emit('settings', pubSettings);
     db.addAdminLog({
       actorKey: actor.key,
       actorName: actor.name,

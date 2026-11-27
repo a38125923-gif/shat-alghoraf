@@ -523,6 +523,33 @@ const DEFAULT_RANKS = [
   }
 ];
 
+const DEFAULT_RADIO_STATIONS = [
+  {
+    id: 'arabic_hits',
+    name: 'إذاعة الأغاني العربية المباشرة',
+    genre: 'طرب وموسيقى عربية',
+    streamUrl: 'https://n0e.radiojar.com/8s5u5tpdtwzuv'
+  },
+  {
+    id: 'quran_live',
+    name: 'إذاعة القرآن الكريم المباشرة',
+    genre: 'تلاوات عطرة على مدار الساعة',
+    streamUrl: 'https://n0a.radiojar.com/0tpy1h0kxtzuv'
+  },
+  {
+    id: 'chill_lofi',
+    name: 'موسيقى استرخاء ولوفاي',
+    genre: 'أجواء هادئة للدردشة',
+    streamUrl: 'https://streams.fluxfm.de/Chillhop/mp3-320/audio/'
+  },
+  {
+    id: 'classic_tarab',
+    name: 'سهرة الطرب الأصيل والعود',
+    genre: 'طرب أصيل',
+    streamUrl: 'https://n09.radiojar.com/4wqre23fytzuv'
+  }
+];
+
 const DEFAULT_SITE_SETTINGS = {
   id: 1,
   site_name: 'شات عربي الاصيل',
@@ -601,6 +628,8 @@ const DEFAULT_SITE_SETTINGS = {
   feat_profile_gifts: 1,
   feat_profile_relations: 1,
   feat_profile_wall: 1,
+  feat_profile_visit_notif: 1,
+  radio_stations: DEFAULT_RADIO_STATIONS,
   custom_drawer_sections: [],
   custom_profile_fields: [],
   royal_member_ruby_multiplier: 1.2,
@@ -2935,7 +2964,12 @@ function deleteCustomEmoji(id) {
 // ==========================================
 function loadCustomFramesCatalogFromDoc(docData) {
   store.customFramesById.clear();
-  const items = Array.isArray(docData?.items) ? docData.items : [];
+  const rawItems = docData?.items;
+  const items = Array.isArray(rawItems)
+    ? rawItems
+    : rawItems && typeof rawItems === 'object'
+      ? Object.values(rawItems)
+      : [];
   for (const item of items) {
     if (!item || !item.id || !item.imageUrl) continue;
     const price = Math.max(0, Number(item.price) || 0);
@@ -3125,7 +3159,7 @@ function updateSiteSettings(patch = {}) {
     site_name: patch.site_name !== undefined ? sanitizePlainText(patch.site_name, 60) || cur.site_name : cur.site_name,
     site_description:
       patch.site_description !== undefined ? sanitizePlainText(patch.site_description, 180) : cur.site_description,
-    site_logo: patch.site_logo !== undefined ? sanitizeSafeUrl(patch.site_logo, { maxLen: 260 }) : cur.site_logo,
+    site_logo: patch.site_logo !== undefined ? sanitizeSafeUrl(patch.site_logo, { maxLen: 500 }) : cur.site_logo,
     welcome_message:
       patch.welcome_message !== undefined ? sanitizePlainText(patch.welcome_message, 400) : cur.welcome_message,
     owner_join_message:
@@ -3362,6 +3396,31 @@ function updateSiteSettings(patch = {}) {
       patch.feat_profile_relations !== undefined ? (patch.feat_profile_relations ? 1 : 0) : cur.feat_profile_relations !== 0 ? 1 : 0,
     feat_profile_wall:
       patch.feat_profile_wall !== undefined ? (patch.feat_profile_wall ? 1 : 0) : cur.feat_profile_wall !== 0 ? 1 : 0,
+    feat_profile_visit_notif:
+      patch.feat_profile_visit_notif !== undefined
+        ? (patch.feat_profile_visit_notif ? 1 : 0)
+        : cur.feat_profile_visit_notif !== 0 ? 1 : 0,
+    radio_stations:
+      patch.radio_stations !== undefined
+        ? (Array.isArray(patch.radio_stations) ? patch.radio_stations : [])
+            .map((st, idx) => {
+              const name = sanitizePlainText(st?.name || '', 60);
+              const genre = sanitizePlainText(st?.genre || '', 80) || 'بث مباشر';
+              const rawUrl = String(st?.streamUrl || '').trim().slice(0, 500);
+              const isHttpStream = /^https?:\/\/[^\s"'<>]+$/i.test(rawUrl);
+              if (!name || !isHttpStream) return null;
+              return {
+                id: String(st?.id || `radio_${Date.now()}_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48) || `radio_${idx}`,
+                name,
+                genre,
+                streamUrl: rawUrl
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 25)
+        : Array.isArray(cur.radio_stations) && cur.radio_stations.length
+          ? cur.radio_stations
+          : DEFAULT_RADIO_STATIONS,
     custom_drawer_sections:
       patch.custom_drawer_sections !== undefined
         ? (Array.isArray(patch.custom_drawer_sections) ? patch.custom_drawer_sections : [])
@@ -6420,7 +6479,7 @@ module.exports = {
     const cleanId = safeDocId(String(mediaId || ''));
     if (!cleanId || !dataBase64) return false;
     const rawB64 = String(dataBase64);
-    const allowedKinds = new Set(['avatar', 'cover', 'music', 'frame', 'bot_avatar', 'emoji']);
+    const allowedKinds = new Set(['avatar', 'cover', 'music', 'frame', 'bot_avatar', 'emoji', 'logo', 'wallpaper', 'rank_icon', 'news']);
     const safeKind = allowedKinds.has(String(kind)) ? String(kind) : 'avatar';
     const chunkSize = 750000;
     const fullRecord = {
@@ -6844,7 +6903,7 @@ module.exports = {
           updated_at: nowIso()
         }, true),
         fsSetDoc('settings', 'store_frames_catalog', {
-          items: Object.fromEntries(Array.from(store.customFramesById.entries())),
+          items: Array.from(store.customFramesById.values()),
           updatedAt: nowIso()
         }, false),
         fsSetDoc('counters', 'sequences', store.counters, true)

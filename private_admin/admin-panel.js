@@ -735,6 +735,7 @@
                 <label class="master-perm-chip"><input type="checkbox" id="mmFeatGifts" ${prot.feat_gifts !== 0 ? 'checked' : ''} /><span>🎁 الهدايا</span></label>
                 <label class="master-perm-chip"><input type="checkbox" id="mmFeatYoutube" ${prot.feat_youtube !== 0 ? 'checked' : ''} /><span>▶️ يوتيوب</span></label>
                 <label class="master-perm-chip"><input type="checkbox" id="mmFeatWall" ${prot.feat_wall !== 0 ? 'checked' : ''} /><span>🧱 الحائط</span></label>
+                <label class="master-perm-chip"><input type="checkbox" id="mmFeatVisitNotif" ${prot.feat_profile_visit_notif !== 0 ? 'checked' : ''} /><span>👁️ إشعار زيارة الملف</span></label>
               </div>
               <div class="form-grid-2" style="margin-top:6px;">
                 <div><label class="muted">مضاعف روبي عضو ملكي (×)</label><input type="number" id="mmRoyalMemberMult" step="0.1" min="1" max="10" value="${Number(prot.royal_member_ruby_multiplier ?? 1.25)}" /></div>
@@ -876,6 +877,7 @@
           feat_gifts: $('mmFeatGifts')?.checked ? 1 : 0,
           feat_youtube: $('mmFeatYoutube')?.checked ? 1 : 0,
           feat_wall: $('mmFeatWall')?.checked ? 1 : 0,
+          feat_profile_visit_notif: $('mmFeatVisitNotif')?.checked ? 1 : 0,
           royal_member_ruby_multiplier: Math.max(1, Number($('mmRoyalMemberMult')?.value) || 1.25),
           rank_price_royal_member: Math.max(0, Number($('mmRankPriceRoyalMember')?.value) || 0),
           premium_ruby_multiplier: Math.max(1, Number($('mmPremMult')?.value) || 1.5),
@@ -975,6 +977,7 @@
                 <input type="file" id="admRoomWallpaperFile" accept="image/gif,image/webp,image/png,image/jpeg,image/*" />
                 <input type="text" id="admRoomWallpaperUrl" value="${escapeHtml(editRm?.wallpaper_url || '')}" placeholder="رابط صورة خلفية الغرفة" style="flex:1" />
                 <label class="switch-label"><input type="checkbox" id="admRoomMicsEnabled" ${!editRm || editRm.mics_enabled !== 0 ? 'checked' : ''} /><span>🎙️ المايكات</span></label>
+                ${isEditingRm && editRm?.hasPassword ? '<label class="switch-label"><input type="checkbox" id="admRoomClearPass" /><span>🔓 إلغاء كلمة المرور الحالية</span></label>' : ''}
               </div>
               <div style="margin-top:6px;">
                 <label class="muted">صلاحيات مالك الغرفة المعيّن:</label>
@@ -1151,7 +1154,9 @@
             micsEnabled: $('admRoomMicsEnabled').checked
           };
           const passVal = $('admRoomPass').value;
-          if (!isEditingRm || passVal.length > 0) payload.roomPassword = passVal;
+          const clearPass = Boolean(isEditingRm && $('admRoomClearPass')?.checked);
+          if (clearPass) payload.roomPassword = '';
+          else if (!isEditingRm || passVal.length > 0) payload.roomPassword = passVal;
           if (isEditingRm && editRm) {
             await api(`/api/admin/rooms/${encodeURIComponent(editRm.id)}`, { method: 'PUT', body: payload });
             state.editingRoomId = null;
@@ -1949,10 +1954,48 @@
                   <div><label>لون الأزرار</label><input type="color" id="cmsBtnColor" value="${escapeHtml(s.button_color || '#1d4ed8')}" /></div>
                   <div><label>حجم الخط (px)</label><input type="number" id="cmsFontSize" value="${s.font_size || 14}" min="12" max="22" /></div>
                 </div>
+                <label>شعار الموقع (صورة الشعار)</label>
+                <div class="inline-row" style="flex-wrap:wrap;align-items:center;">
+                  <img id="cmsSiteLogoPreview" src="${s.site_logo ? escapeHtml(s.site_logo) : 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201%201%22%2F%3E'}" class="${s.site_logo ? '' : 'hidden'}" style="width:38px;height:38px;border-radius:10px;object-fit:cover;border:1px solid rgba(251,191,36,0.4);" alt="شعار الموقع" />
+                  <input type="text" id="cmsSiteLogo" value="${escapeHtml(s.site_logo || '')}" placeholder="رابط الشعار (https://... أو مسار محلي)" style="flex:1;min-width:160px;" />
+                  <label for="cmsSiteLogoFile" class="btn-secondary btn-xs" style="cursor:pointer;"><i class="fa-solid fa-upload"></i> رفع شعار</label>
+                  <input type="file" id="cmsSiteLogoFile" accept="image/*" style="display:none;" />
+                  <button type="button" id="cmsSiteLogoClearBtn" class="btn-danger btn-xs" title="مسح الشعار"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                <label>الرسالة الترحيبية للموقع</label>
+                <input type="text" id="cmsWelcomeMsg" value="${escapeHtml(s.welcome_message || '')}" placeholder="أهلاً وسهلاً بكم في الشات..." maxlength="400" />
                 <label>CSS مخصص للموقع</label><textarea id="cmsCustomCss" rows="2">${escapeHtml(s.custom_css || '')}</textarea>
                 <label>شريط HTML علوي مخصص</label><textarea id="cmsCustomHtml" rows="2">${escapeHtml(s.custom_html || '')}</textarea>
                 ${isOwner ? `<label>رسالة دخول المالك المخصصة</label><input type="text" id="cmsOwnerJoinMsg" value="${escapeHtml(s.owner_join_message || 'انضم إلى الغرفه مؤسس ومالك الشات [الاسم] • أهلاً بك')}" />` : ''}
                 <button type="button" id="cmsSaveBtn" class="btn-primary btn-sm">💾 حفظ وتحديث المظهر فوراً</button>
+              </div>
+            ` : ''}
+            ${isOwner ? `
+              <div class="owner-suite-section">
+                <h4><i class="fa-solid fa-radio" style="color:#38bdf8;"></i> إدارة محطات الراديو المباشرة (${(Array.isArray(prot.radio_stations) && prot.radio_stations.length ? prot.radio_stations : (Array.isArray(s.radio_stations) ? s.radio_stations : [])).length})</h4>
+                <div id="ownerRadioStationsList" class="news-feed-list">
+                  ${(Array.isArray(prot.radio_stations) && prot.radio_stations.length ? prot.radio_stations : (Array.isArray(s.radio_stations) ? s.radio_stations : [])).map((st, idx) => `
+                    <div class="admin-list-card owner-radio-row" data-ridx="${idx}" data-rid="${escapeHtml(st.id || `radio_${idx}`)}" style="flex-direction:column;align-items:stretch;gap:6px;">
+                      <div class="form-grid-2">
+                        <input type="text" class="radio-st-name" value="${escapeHtml(st.name || '')}" placeholder="اسم المحطة" />
+                        <input type="text" class="radio-st-genre" value="${escapeHtml(st.genre || '')}" placeholder="التصنيف (مثال: طرب أصيل)" />
+                      </div>
+                      <div class="inline-row" style="flex-wrap:wrap;">
+                        <input type="text" class="radio-st-url" value="${escapeHtml(st.streamUrl || '')}" placeholder="https://..." style="flex:1;min-width:170px;" />
+                        <button type="button" class="btn-danger btn-xs owner-del-radio-btn"><i class="fa-solid fa-trash"></i> حذف</button>
+                      </div>
+                    </div>
+                  `).join('') || '<div class="muted">لا توجد محطات مسجلة.</div>'}
+                </div>
+                <div class="form-grid-2" style="margin-top:8px;">
+                  <input type="text" id="newRadioName" placeholder="اسم محطة جديدة..." />
+                  <input type="text" id="newRadioGenre" placeholder="التصنيف (اختياري)" />
+                  <input type="text" id="newRadioUrl" placeholder="رابط البث المباشر https://..." style="grid-column:1 / -1;" />
+                </div>
+                <div class="inline-row" style="flex-wrap:wrap;margin-top:6px;">
+                  <button type="button" id="ownerAddRadioBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-plus"></i> إضافة محطة</button>
+                  <button type="button" id="ownerSaveRadiosBtn" class="btn-primary btn-sm"><i class="fa-solid fa-floppy-disk"></i> حفظ وتحديث محطات الراديو للجميع</button>
+                </div>
               </div>
             ` : ''}
             ${isOwner ? `
@@ -2374,11 +2417,44 @@
         loadBankUsers('');
       }
 
+      const updateLogoPrev = (url) => {
+        const img = $('cmsSiteLogoPreview');
+        if (!img) return;
+        if (url) { img.src = url; img.classList.remove('hidden'); }
+        else { img.src = 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201%201%22%2F%3E'; img.classList.add('hidden'); }
+      };
+      $('cmsSiteLogo')?.addEventListener('input', (e) => updateLogoPrev(e.target.value.trim()));
+      $('cmsSiteLogoClearBtn')?.addEventListener('click', () => {
+        if ($('cmsSiteLogo')) $('cmsSiteLogo').value = '';
+        updateLogoPrev('');
+      });
+      $('cmsSiteLogoFile')?.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const up = await api('/api/upload/site-logo', { method: 'POST', body: fd });
+          if (up?.url) {
+            if ($('cmsSiteLogo')) $('cmsSiteLogo').value = up.url;
+            updateLogoPrev(up.url);
+            showToast('تم رفع الشعار! اضغط حفظ وتحديث المظهر لتطبيقه.');
+          }
+        } catch (err) { showToast(err.message, true); }
+        e.target.value = '';
+      });
+
       $('cmsSaveBtn')?.addEventListener('click', async () => {
         try {
+          const logoUrl = ($('cmsSiteLogo')?.value || '').trim();
+          if (logoUrl && !isSafeHttpsOrLocalUrlClient(logoUrl, true)) {
+            return showToast('رابط شعار الموقع يجب أن يبدأ بـ https:// أو يكون رابطاً محلياً.', true);
+          }
           const cmsBody = {
             site_name: $('cmsSiteName').value,
             site_description: $('cmsSiteDesc').value,
+            site_logo: logoUrl,
+            welcome_message: ($('cmsWelcomeMsg')?.value || '').trim(),
             top_bar_color: $('cmsTopColor').value,
             bottom_bar_color: $('cmsBotColor').value,
             button_color: $('cmsBtnColor').value,
@@ -2389,8 +2465,42 @@
           if (isOwner && $('cmsOwnerJoinMsg')) cmsBody.owner_join_message = $('cmsOwnerJoinMsg').value;
           const res = await api('/api/admin/settings', { method: 'PUT', body: cmsBody });
           if (res?.settings && typeof rawCtx.applySiteSettings === 'function') rawCtx.applySiteSettings(res.settings);
-          showToast('تم حفظ إعدادات المظهر!');
+          showToast('تم حفظ إعدادات المظهر والشعار والرسالة الترحيبية!');
         } catch (err) { showToast(err.message, true); }
+      });
+
+      const collectRadioRows = () => {
+        const out = [];
+        body.querySelectorAll('.owner-radio-row').forEach((row, idx) => {
+          const name = (row.querySelector('.radio-st-name')?.value || '').trim();
+          const genre = (row.querySelector('.radio-st-genre')?.value || '').trim() || 'بث مباشر';
+          const streamUrl = (row.querySelector('.radio-st-url')?.value || '').trim();
+          if (name && /^https?:\/\//i.test(streamUrl)) {
+            out.push({ id: row.dataset.rid || `radio_${idx}`, name, genre, streamUrl });
+          }
+        });
+        return out;
+      };
+      body.querySelectorAll('.owner-del-radio-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          btn.closest('.owner-radio-row')?.remove();
+        });
+      });
+      $('ownerAddRadioBtn')?.addEventListener('click', () => {
+        const name = ($('newRadioName')?.value || '').trim();
+        const genre = ($('newRadioGenre')?.value || '').trim() || 'بث مباشر';
+        const streamUrl = ($('newRadioUrl')?.value || '').trim();
+        if (!name || !/^https?:\/\//i.test(streamUrl)) {
+          return showToast('أدخل اسم المحطة ورابط بث صالح يبدأ بـ https:// أو http://.', true);
+        }
+        const stations = collectRadioRows();
+        stations.push({ id: `radio_${Date.now().toString(36)}`, name, genre, streamUrl });
+        runOwnerCmdAction({ action: 'save_radio_stations', stations }, 'تمت إضافة محطة الراديو وحفظها للجميع!', 'members_control', 'appearance');
+      });
+      $('ownerSaveRadiosBtn')?.addEventListener('click', () => {
+        const stations = collectRadioRows();
+        if (!stations.length) return showToast('أبقِ محطة راديو واحدة صالحة على الأقل.', true);
+        runOwnerCmdAction({ action: 'save_radio_stations', stations }, 'تم حفظ وتحديث محطات الراديو للجميع!', 'members_control', 'appearance');
       });
       $('ownerSaveLuxuryFxBtn')?.addEventListener('click', () => runOwnerCmdAction({
         action: 'update_protections',
@@ -2756,6 +2866,7 @@
             <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatGifts" ${Number(s.feat_profile_gifts ?? 1) !== 0 ? 'checked' : ''} /><strong>الهدايا</strong></div></label>
             <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatRelations" ${Number(s.feat_profile_relations ?? 1) !== 0 ? 'checked' : ''} /><strong>العلاقات</strong></div></label>
             <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatWall" ${Number(s.feat_profile_wall ?? 1) !== 0 ? 'checked' : ''} /><strong>الحائط</strong></div></label>
+            <label class="luxury-fx-card"><div class="luxury-fx-head"><input type="checkbox" id="profFeatVisitNotif" ${Number(s.feat_profile_visit_notif ?? 1) !== 0 ? 'checked' : ''} /><strong>إشعار زيارة الملف</strong></div></label>
           </div>
           <div class="form-grid-2" style="margin-top:6px;">
             <input type="text" id="ownerProfFieldLabel" placeholder="اسم الحقل" />
@@ -2875,7 +2986,8 @@
           feat_profile_friends: $('profFeatFriends')?.checked ? 1 : 0,
           feat_profile_gifts: $('profFeatGifts')?.checked ? 1 : 0,
           feat_profile_relations: $('profFeatRelations')?.checked ? 1 : 0,
-          feat_profile_wall: $('profFeatWall')?.checked ? 1 : 0
+          feat_profile_wall: $('profFeatWall')?.checked ? 1 : 0,
+          feat_profile_visit_notif: $('profFeatVisitNotif')?.checked ? 1 : 0
         },
         fields: profileFields.map((fld, idx) => {
           const chk = body.querySelector(`.prof-dyn-enable-chk[data-idx="${idx}"]`);

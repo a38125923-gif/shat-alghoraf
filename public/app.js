@@ -1916,6 +1916,11 @@
     document.title = s.site_name || 'شات الغرف المباشر';
     if ($('authSiteName')) $('authSiteName').textContent = s.site_name || 'شات الغرف المباشر';
     if ($('authSiteDesc')) $('authSiteDesc').textContent = s.site_description || '';
+    if ($('authWelcomeMsg')) {
+      const wMsg = String(s.welcome_message || '').trim();
+      $('authWelcomeMsg').textContent = wMsg;
+      $('authWelcomeMsg').classList.toggle('hidden', !wMsg);
+    }
     if ($('drawerSiteTitle')) $('drawerSiteTitle').textContent = s.site_name || 'القائمة الرئيسية';
     if (s.site_logo && $('authSiteLogo')) {
       $('authSiteLogo').src = s.site_logo;
@@ -1923,6 +1928,10 @@
     } else if ($('authSiteLogo')) {
       $('authSiteLogo').src = DEFAULT_LOGO_SVG;
       $('authSiteLogo').classList.add('hidden');
+    }
+    if (Array.isArray(s.radio_stations) && s.radio_stations.length) {
+      state.shopItems.radioStations = s.radio_stations;
+      renderRadioStationsPopover();
     }
     const root = document.documentElement.style;
     const normBarColor = (c, fb = '#0f2342') => (!c || c === '#1a45e5' || c === '#0b2239' || c === '#18181b' ? fb : c);
@@ -2248,7 +2257,7 @@
       }
     }
 
-    const baseTopic = r.welcome_message || r.description || state.settings?.marquee_text || 'أهلاً بكم في شات الغرف المباشر!';
+    const baseTopic = r.welcome_message || r.description || state.settings?.welcome_message || state.settings?.marquee_text || 'أهلاً بكم في شات الغرف المباشر!';
     const topicTxt = r.is_frozen ? `❄️ الغرفة مجمدة حالياً (للقراءة فقط) • ${baseTopic}` : baseTopic;
     if ($('topicBannerText')) $('topicBannerText').textContent = topicTxt;
 
@@ -3656,10 +3665,16 @@
     const isReg = u.key && String(u.key).startsWith('user:');
     const targetUserId = isReg ? Number(String(u.key).replace('user:', '')) : null;
     const isOwner = state.user?.role === 'site_owner';
+    const isSupremeOwnerActor = Boolean(
+      state.user &&
+      state.user.role === 'site_owner' &&
+      (state.user.isSupremeOwner || String(state.user.email || '').toLowerCase() === 'a38125923@gmail.com')
+    );
     const isTargetOwner =
       u.role === 'site_owner' ||
       u.isSupremeOwner ||
       String(u.email || '').toLowerCase() === 'a38125923@gmail.com';
+    const canSupremeManageMedia = Boolean(isSupremeOwnerActor && !isTargetOwner && targetUserId);
     const isTargetOwnerGalaxy = isTargetOwner && isOwnerGalaxyVisualEnabled();
     const isBotTarget =
       Boolean(u.isVirtual) ||
@@ -3738,17 +3753,39 @@
             <button type="button" class="hero-circle-glass-btn cover-close-x-btn" id="quHeroCloseBtn" title="إغلاق">✕</button>
             <button type="button" class="hero-circle-glass-btn" id="quCoverPreviewToggleBtn" title="معاينة الغلاف والبطاقة"><i class="fa-solid fa-eye"></i></button>
           </div>
+          ${canSupremeManageMedia ? `
+            <div class="profile-cover-top-right">
+              <label for="quOwnerCoverFile" id="quOwnerUploadCoverBtn" class="hero-circle-glass-btn cover-cam-icon-btn" title="تغيير غلاف العضو" style="cursor:pointer;">
+                <i class="fa-solid fa-camera"></i>
+              </label>
+              <button type="button" id="quOwnerCoverDelBtn" class="hero-circle-glass-btn cover-del-x-btn${u.coverUrl ? '' : ' hidden'}" title="حذف غلاف العضو">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+            <input type="file" id="quOwnerCoverFile" accept="image/*" class="sr-file-input" />
+          ` : ''}
           <div class="profile-cover-stats-bar">
             <span class="hero-stat-pill" title="عدد زوار الملف"><i class="fa-solid fa-eye" style="color:#38bdf8;"></i> <strong id="quVisitorsCountVal">${Number(u.visitorsCount || 0)}</strong> <small>الزوار</small></span>
             ${allowProfRating && isReg ? `<span class="hero-stat-pill" title="النجوم والتقييم"><i class="fa-solid fa-star" style="color:#fbbf24;"></i> <strong id="quRatingAvg">${avgRating}</strong> <small>التقييم</small></span>` : ''}
-            ${allowProfLikes ? `<button type="button" class="hero-stat-pill" id="quLikeBtn" title="إعجاب"><i class="fa-solid fa-heart" style="color:#fb7185;"></i> <strong id="quLikesCount">${Number(u.likesCount || 0)}</strong> <small>الإعجابات</small></button>` : ''}
+            ${allowProfLikes && isReg ? `<button type="button" class="hero-stat-pill qu-thumbs-like-btn" id="quLikeBtn" title="إعجاب بالملف"><i class="fa-solid fa-thumbs-up" style="color:#38bdf8;"></i> <strong id="quLikesCount">${Number(u.likesCount || 0)}</strong> <small>إعجاب</small></button>` : ''}
           </div>
         </div>
 
         <div class="profile-centered-identity">
           <div class="profile-avatar-85-stage${isTargetOwnerGalaxy ? ' owner-cosmic-avatar-stage' : ''}">
             ${isTargetOwnerGalaxy ? '<span class="owner-avatar-cosmic-halo" aria-hidden="true"></span>' : ''}
-            ${formatAvatarHTML(u, 'profile-avatar-85')}
+            <span id="quAvatarRenderSlot">${formatAvatarHTML(u, 'profile-avatar-85')}</span>
+            ${canSupremeManageMedia ? `
+              <div class="avatar-inner-actions">
+                <label for="quOwnerAvatarFile" id="quOwnerUploadAvatarBtn" class="avatar-cam-pill-btn" role="button" tabindex="0" title="تغيير صورة العضو">
+                  <i class="fa-solid fa-camera"></i>
+                </label>
+                <button type="button" id="quOwnerAvatarDelBtn" class="avatar-inner-circle-btn danger${u.avatarUrl ? '' : ' hidden'}" title="حذف صورة العضو">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+              <input type="file" id="quOwnerAvatarFile" accept="image/*" class="sr-file-input" />
+            ` : ''}
           </div>
           <div class="profile-name-row-center" id="quHeaderNameRow">
             ${roleBadgeHTML(u.role, true)}
@@ -3874,6 +3911,8 @@
                     ${canGiveCoins ? '<button type="button" class="qu-admin-grid-btn ruby" id="quCoinsBtn"><i class="fa-solid fa-gem"></i><span>منح روبي</span></button>' : ''}
                     ${isOwner ? `<button type="button" class="qu-admin-grid-btn" id="quShadowMuteBtn"><i class="fa-solid fa-user-ninja"></i><span>${u.isShadowMuted ? 'فك كتم صامت' : 'كتم صامت'}</span></button>` : ''}
                     ${canMod && targetUserId ? `<button type="button" class="qu-admin-grid-btn" id="quGhostBtn"><i class="fa-solid fa-ghost"></i><span>${u.isGhosted ? 'إلغاء شبح' : 'وضع الشبح'}</span></button>` : ''}
+                    ${canSupremeManageMedia ? '<button type="button" class="qu-admin-grid-btn info" id="quOwnerEmailBtn"><i class="fa-solid fa-envelope"></i><span>تغيير البريد الإلكتروني</span></button>' : ''}
+                    ${canSupremeManageMedia ? '<button type="button" class="qu-admin-grid-btn warning" id="quOwnerPassBtn"><i class="fa-solid fa-key"></i><span>تغيير كلمة المرور</span></button>' : ''}
                     ${canClearRoom ? '<button type="button" class="qu-admin-grid-btn danger" id="quClearRoomBtn"><i class="fa-solid fa-broom"></i><span>مسح الغرفة</span></button>' : ''}
                     ${isOwner && targetUserId ? '<button type="button" class="qu-admin-grid-btn danger" id="quDeleteAccountBtn"><i class="fa-solid fa-user-slash"></i><span>حذف الحساب</span></button>' : ''}
                   </div>
@@ -3890,64 +3929,6 @@
               </div>
             </div>
           </div>
-
-          ${isOwner && !isTargetOwner && targetUserId ? `
-            <div id="quOwnerSecretBox" class="qu-owner-secret-box">
-              <div class="qu-owner-secret-head">
-                <strong><i class="fa-solid fa-crown" style="color:#fbbf24;"></i> صندوق المالك السري — تحكم كامل بالحساب</strong>
-                <span class="muted" style="font-size:11px;">مرئي للمالك فقط</span>
-              </div>
-              <div class="qu-owner-secret-grid">
-                <div class="qu-owner-media-ctrl">
-                  <label class="muted">الصورة الشخصية (رفع / رابط / حذف)</label>
-                  <div class="inline-row" style="gap:6px;flex-wrap:wrap;">
-                    <label class="btn-secondary btn-xs" style="cursor:pointer;">
-                      <i class="fa-solid fa-upload"></i> رفع صورة
-                      <input type="file" id="quOwnerAvatarFile" accept="image/*" class="hidden" />
-                    </label>
-                    <input type="text" id="quOwnerAvatarUrl" value="${escapeHtml(u.avatarUrl || '')}" placeholder="رابط https://..." style="flex:1;min-width:130px;" />
-                    <button type="button" id="quOwnerAvatarUrlBtn" class="btn-primary btn-xs">تطبيق</button>
-                    <button type="button" id="quOwnerAvatarDelBtn" class="btn-danger btn-xs" title="حذف الصورة"><i class="fa-solid fa-trash"></i></button>
-                  </div>
-                </div>
-                <div class="qu-owner-media-ctrl">
-                  <label class="muted">صورة الغلاف (رفع / رابط / حذف)</label>
-                  <div class="inline-row" style="gap:6px;flex-wrap:wrap;">
-                    <label class="btn-secondary btn-xs" style="cursor:pointer;">
-                      <i class="fa-solid fa-image"></i> رفع غلاف
-                      <input type="file" id="quOwnerCoverFile" accept="image/*" class="hidden" />
-                    </label>
-                    <input type="text" id="quOwnerCoverUrl" value="${escapeHtml(u.coverUrl || '')}" placeholder="رابط https://..." style="flex:1;min-width:130px;" />
-                    <button type="button" id="quOwnerCoverUrlBtn" class="btn-primary btn-xs">تطبيق</button>
-                    <button type="button" id="quOwnerCoverDelBtn" class="btn-danger btn-xs" title="حذف الغلاف"><i class="fa-solid fa-trash"></i></button>
-                  </div>
-                </div>
-              </div>
-              <div class="form-grid-2" style="margin-top:8px;">
-                <div>
-                  <label class="muted">البريد الإلكتروني</label>
-                  <input type="email" id="quOwnerEditEmail" value="${escapeHtml(u.email || '')}" placeholder="email@example.com" />
-                </div>
-                <div>
-                  <label class="muted">كلمة مرور جديدة (اختياري)</label>
-                  <input type="password" id="quOwnerEditPass" placeholder="اتركه فارغاً للإبقاء" minlength="5" />
-                </div>
-                <div>
-                  <label class="muted">رصيد الروبي</label>
-                  <input type="number" id="quOwnerEditCoins" value="${Number(u.coins || 0)}" min="0" max="100000000" />
-                </div>
-                <div>
-                  <label class="muted">الرتبة</label>
-                  <select id="quOwnerEditRole">
-                    ${(state.ranks || []).filter((r) => r.key !== 'guest' && r.key !== 'site_owner').sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0)).map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === u.role ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
-                  </select>
-                </div>
-              </div>
-              <button type="button" id="quOwnerEditSaveBtn" class="btn-primary btn-sm btn-full" style="margin-top:8px;">
-                <i class="fa-solid fa-floppy-disk"></i> حفظ تعديلات المالك الشاملة
-              </button>
-            </div>
-          ` : ''}
         </div>
       </div>
     `;
@@ -4007,15 +3988,18 @@
     });
 
     $('quLikeBtn')?.addEventListener('click', async () => {
-      if (state.user?.isGuest) return showToast('الإعجاب متاح للأعضاء المسجلين.', true);
       try {
         const res = await api('/api/profile/interact', { method: 'POST', body: { targetKey: u.key, like: true } });
         const upd = res?.user || res?.target;
         if (upd) {
           u.likesCount = upd.likesCount;
           if ($('quLikesCount')) $('quLikesCount').textContent = String(upd.likesCount || 0);
+          [state.roomUsers, state.onlineUsers, state.persistentMembers].forEach((arr) => {
+            const match = Array.isArray(arr) ? arr.find((x) => x.key === u.key) : null;
+            if (match) match.likesCount = upd.likesCount;
+          });
         }
-        showToast('تم إرسال الإعجاب للملف.');
+        showToast('👍 تم تسجيل إعجابك بالملف!');
       } catch (err) {
         showToast(err.message, true);
       }
@@ -4283,8 +4267,9 @@
           try {
             await api('/api/mod/clear-avatar', { method: 'POST', body: { userId: targetUserId, targetKey: u.key } });
             u.avatarUrl = '';
-            const stage = $('quickUserBody')?.querySelector('.profile-avatar-85-stage');
-            if (stage) stage.innerHTML = formatAvatarHTML(u, 'profile-avatar-85');
+            const slot = $('quAvatarRenderSlot');
+            if (slot) slot.innerHTML = formatAvatarHTML(u, 'profile-avatar-85');
+            $('quOwnerAvatarDelBtn')?.classList.add('hidden');
             showToast('تم مسح صورة العضو بنجاح.');
             done();
           } catch (err) {
@@ -4356,17 +4341,16 @@
       });
     });
 
-    if (isOwner && !isTargetOwner && targetUserId) {
+    if (canSupremeManageMedia) {
       const applyTargetUserMediaUpdate = (updatedUser) => {
         if (!updatedUser) return;
         u.avatarUrl = updatedUser.avatarUrl || '';
         u.coverUrl = updatedUser.coverUrl || '';
-        if ($('quOwnerAvatarUrl')) $('quOwnerAvatarUrl').value = u.avatarUrl;
-        if ($('quOwnerCoverUrl')) $('quOwnerCoverUrl').value = u.coverUrl;
-        const stage = $('quickUserBody')?.querySelector('.profile-avatar-85-stage');
-        if (stage) {
-          stage.innerHTML = `${isTargetOwnerGalaxy ? '<span class="owner-avatar-cosmic-halo" aria-hidden="true"></span>' : ''}${formatAvatarHTML(u, 'profile-avatar-85')}`;
-        }
+        const slot = $('quAvatarRenderSlot');
+        if (slot) slot.innerHTML = formatAvatarHTML(u, 'profile-avatar-85');
+        $('quOwnerAvatarDelBtn')?.classList.toggle('hidden', !u.avatarUrl);
+        $('quOwnerCoverDelBtn')?.classList.toggle('hidden', !u.coverUrl);
+
         const coverHero = $('quCoverHero');
         if (coverHero) {
           coverHero.classList.toggle('has-cover-img', Boolean(u.coverUrl));
@@ -4384,6 +4368,13 @@
             cImg.remove();
           }
         }
+        [state.roomUsers, state.onlineUsers, state.persistentMembers].forEach((arr) => {
+          const match = Array.isArray(arr) ? arr.find((x) => x.key === u.key) : null;
+          if (match) {
+            match.avatarUrl = u.avatarUrl;
+            match.coverUrl = u.coverUrl;
+          }
+        });
       };
 
       const sendOwnerMediaUpload = async (kind, file) => {
@@ -4409,40 +4400,6 @@
         const f = e.target.files?.[0];
         if (f) sendOwnerMediaUpload('cover', f);
         e.target.value = '';
-      });
-
-      $('quOwnerAvatarUrlBtn')?.addEventListener('click', async () => {
-        const url = ($('quOwnerAvatarUrl')?.value || '').trim();
-        if (!url || !isSafeHttpsOrLocalUrlClient(url, true)) {
-          return showToast('أدخل رابط صورة صالح يبدأ بـ https:// أو /.', true);
-        }
-        try {
-          const res = await api(`/api/admin/users/${targetUserId}/media`, {
-            method: 'POST',
-            body: { kind: 'avatar', mode: 'url', url }
-          });
-          applyTargetUserMediaUpdate(res?.user);
-          showToast('تم حفظ رابط الصورة الشخصية.');
-        } catch (err) {
-          showToast(err.message, true);
-        }
-      });
-
-      $('quOwnerCoverUrlBtn')?.addEventListener('click', async () => {
-        const url = ($('quOwnerCoverUrl')?.value || '').trim();
-        if (!url || !isSafeHttpsOrLocalUrlClient(url, true)) {
-          return showToast('أدخل رابط غلاف صالح يبدأ بـ https:// أو /.', true);
-        }
-        try {
-          const res = await api(`/api/admin/users/${targetUserId}/media`, {
-            method: 'POST',
-            body: { kind: 'cover', mode: 'url', url }
-          });
-          applyTargetUserMediaUpdate(res?.user);
-          showToast('تم حفظ رابط الغلاف.');
-        } catch (err) {
-          showToast(err.message, true);
-        }
       });
 
       $('quOwnerAvatarDelBtn')?.addEventListener('click', async () => {
@@ -4471,38 +4428,66 @@
         }
       });
 
-      $('quOwnerEditSaveBtn')?.addEventListener('click', async () => {
-        const email = ($('quOwnerEditEmail')?.value || '').trim();
-        const password = ($('quOwnerEditPass')?.value || '').trim();
-        const coins = Number($('quOwnerEditCoins')?.value);
-        const role = $('quOwnerEditRole')?.value || u.role;
-        if (password && password.length < 5) {
-          return showToast('كلمة المرور الجديدة يجب أن لا تقل عن 5 أحرف.', true);
-        }
-        try {
-          const payload = {
-            email: email || undefined,
-            coins: Number.isFinite(coins) ? Math.max(0, Math.floor(coins)) : undefined,
-            role
-          };
-          if (password) payload.password = password;
-          const res = await api(`/api/admin/users/${targetUserId}`, { method: 'PUT', body: payload });
-          if (res?.user) {
-            u.email = res.user.email;
-            u.coins = res.user.coins;
-            u.role = res.user.role;
-            if ($('quHeaderNameRow')) $('quHeaderNameRow').innerHTML = `${roleBadgeHTML(u.role, true)} ${formatNameHTML(u)}`;
-            if ($('quHeaderRoleSub')) {
-              const rk = getRank(u.role);
-              $('quHeaderRoleSub').innerHTML = `${escapeHtml(rk.label)} • المستوى ${Math.max(1, Number(u.level) || Number(rk.power) || 1)} ${u.vipFamily ? `• <i class="fa-solid fa-crown"></i> ${escapeHtml(u.vipFamily)}` : ''}`;
-            }
-            if ($('quOwnerEditPass')) $('quOwnerEditPass').value = '';
+      const openSmallOwnerCredPrompt = ({ mode }) => {
+        document.getElementById('quOwnerSmallCredBackdrop')?.remove();
+        const isEmail = mode === 'email';
+        const wrap = document.createElement('div');
+        wrap.id = 'quOwnerSmallCredBackdrop';
+        wrap.className = 'qu-small-prompt-backdrop';
+        wrap.innerHTML = `
+          <div class="qu-small-prompt-card" role="dialog" aria-modal="true">
+            <div class="qu-small-prompt-head">
+              <strong><i class="fa-solid ${isEmail ? 'fa-envelope' : 'fa-key'}" style="color:#fbbf24;"></i> ${isEmail ? 'تغيير البريد الإلكتروني للعضو' : 'تغيير كلمة مرور العضو'}</strong>
+              <button type="button" class="btn-secondary btn-xs" id="quSmallCredCloseBtn" style="min-height:26px;padding:2px 8px;">✕</button>
+            </div>
+            <div class="muted" style="font-size:11.5px;">العضو: <strong>${escapeHtml(u.name || '')}</strong></div>
+            <input
+              type="${isEmail ? 'email' : 'password'}"
+              id="quSmallCredInput"
+              value="${isEmail ? escapeHtml(u.email || '') : ''}"
+              placeholder="${isEmail ? 'أدخل البريد الإلكتروني الجديد...' : 'كلمة المرور الجديدة (5 أحرف فأكثر)...'}"
+              autocomplete="off"
+            />
+            <div class="inline-row" style="justify-content:flex-end;gap:8px;">
+              <button type="button" id="quSmallCredCancelBtn" class="btn-secondary btn-xs">إلغاء</button>
+              <button type="button" id="quSmallCredSaveBtn" class="btn-primary btn-xs"><i class="fa-solid fa-check"></i> حفظ في Firebase</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(wrap);
+        const inp = $('quSmallCredInput');
+        setTimeout(() => inp?.focus(), 40);
+        const closePrompt = () => wrap.remove();
+        wrap.addEventListener('click', (ev) => {
+          if (ev.target === wrap) closePrompt();
+        });
+        $('quSmallCredCloseBtn')?.addEventListener('click', closePrompt);
+        $('quSmallCredCancelBtn')?.addEventListener('click', closePrompt);
+        $('quSmallCredSaveBtn')?.addEventListener('click', async () => {
+          const val = (inp?.value || '').trim();
+          if (isEmail) {
+            if (!val || !val.includes('@')) return showToast('أدخل بريداً إلكترونياً صحيحاً.', true);
+          } else if (val.length < 5) {
+            return showToast('كلمة المرور يجب أن تكون 5 أحرف على الأقل.', true);
           }
-          showToast('تم حفظ تعديلات المالك للحساب بنجاح.');
-        } catch (err) {
-          showToast(err.message, true);
-        }
-      });
+          const saveBtn = $('quSmallCredSaveBtn');
+          try {
+            if (saveBtn) saveBtn.disabled = true;
+            const payload = isEmail ? { email: val } : { password: val };
+            const res = await api(`/api/admin/users/${targetUserId}`, { method: 'PUT', body: payload });
+            if (isEmail && res?.user?.email) u.email = res.user.email;
+            showToast(isEmail ? 'تم تحديث البريد الإلكتروني وحفظه في Firebase!' : 'تم تحديث كلمة المرور وحفظها في Firebase!');
+            closePrompt();
+          } catch (err) {
+            showToast(err.message, true);
+          } finally {
+            if (saveBtn) saveBtn.disabled = false;
+          }
+        });
+      };
+
+      $('quOwnerEmailBtn')?.addEventListener('click', () => openSmallOwnerCredPrompt({ mode: 'email' }));
+      $('quOwnerPassBtn')?.addEventListener('click', () => openSmallOwnerCredPrompt({ mode: 'password' }));
     }
 
     openModal('quickUserModal');
@@ -6820,6 +6805,32 @@
           if (!$('emojiPopover')?.classList.contains('hidden')) {
             renderEmojiPopoverGrid();
           }
+        },
+        onFramesCatalog(catalog) {
+          if (!Array.isArray(catalog)) return;
+          state.shopItems.frames = catalog;
+          if (!$('storeModal')?.classList.contains('hidden')) {
+            renderStoreTab(state.activeStoreTab || 'store');
+          }
+          if (!$('customizeModal')?.classList.contains('hidden')) {
+            const isGuestUser = !state.user || state.user.isGuest;
+            const isOwnerSelf = state.user?.role === 'site_owner';
+            const canAddons = !isGuestUser && (isOwnerSelf || hasPerm('use_addons'));
+            const canBgEff = canAddons && passesSettingRankThreshold('min_rank_bg_effect', 'member');
+            renderCustomizeAddonsGrids(canAddons, canBgEff);
+          }
+        },
+        onNotification(notif) {
+          if (!notif) return;
+          playNotificationChime('notif');
+          const cur = Array.isArray(state.social?.notifications) ? state.social.notifications : [];
+          if (!cur.some((n) => n.id && n.id === notif.id)) {
+            state.social.notifications = [notif, ...cur];
+          }
+          lastSeenNotifCount += 1;
+          updateNotificationBadge(lastSeenNotifCount);
+          if (notif.body) showToast(notif.body);
+          else if (notif.title) showToast(notif.title);
         },
         onSocialState(res) {
           if (!res) return;
