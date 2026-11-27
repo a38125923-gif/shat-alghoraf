@@ -179,6 +179,16 @@
 
       <!-- MICS 1..5 (#1a237e) + BLUE DIVIDER BUTTONS + YOUTUBE BAR -->
       <section class="mics-and-room-strip">
+        <!-- COMPACT MINI AUDIO BAR DIRECTLY ABOVE MICS -->
+        <div id="micMiniYoutubeBar" class="mic-mini-yt-bar hidden">
+          <div class="mini-yt-eq" aria-hidden="true"><span></span><span></span><span></span></div>
+          <span id="micMiniYtTitle" class="mini-yt-title">جاري تشغيل الصوت...</span>
+          <div class="mini-yt-actions">
+            <button type="button" id="micMiniYtPlayPauseBtn" class="mini-yt-btn" title="تشغيل / إيقاف مؤقت"><i class="fa-solid fa-pause"></i></button>
+            <button type="button" id="micMiniYtStopBtn" class="mini-yt-btn danger hidden" title="إيقاف"><i class="fa-solid fa-stop"></i></button>
+          </div>
+        </div>
+
         <div id="micsCollapsibleWrap" class="mics-bar-row">
           <div id="micSlotsContainer" class="mic-slots-row"></div>
           <div class="mic-self-floating hidden" id="micSelfFloating">
@@ -208,18 +218,6 @@
           <span class="blue-divider-line"></span>
         </div>
 
-        <!-- COMPACT MINI AUDIO BAR DIRECTLY UNDER MICS -->
-        <div id="micMiniYoutubeBar" class="mic-mini-yt-bar hidden">
-          <div class="mini-yt-eq" aria-hidden="true"><span></span><span></span><span></span></div>
-          <span id="micMiniYtTitle" class="mini-yt-title">جاري تشغيل الصوت...</span>
-          <span id="micMiniYtBy" class="mini-yt-by hidden"></span>
-          <div class="mini-yt-actions">
-            <button type="button" id="micMiniYtMuteBtn" class="mini-yt-btn" title="كتم/تشغيل الصوت محلياً"><i class="fa-solid fa-volume-high"></i></button>
-            <button type="button" id="micMiniYtExpandBtn" class="mini-yt-btn" title="إظهار / إخفاء الفيديو"><i class="fa-solid fa-tv"></i></button>
-            <button type="button" id="micMiniYtStopBtn" class="mini-yt-btn danger hidden" title="إيقاف"><i class="fa-solid fa-stop"></i></button>
-          </div>
-        </div>
-
         <!-- COMPACT QUIZ BOT STATUS & OWNER TOGGLE BAR (COMPETITIONS ROOM) -->
         <div id="quizBotRoomBar" class="quiz-bot-room-bar hidden">
           <span class="quiz-bot-pill"><i class="fa-solid fa-robot"></i> <span id="quizBotStatusText">بوت المسابقات التلقائي نشط • 100 / 50 / 25 نقطة</span></span>
@@ -246,12 +244,11 @@
           </button>
         </div>
 
-        <!-- COLLAPSIBLE SYNCED YOUTUBE PLAYER BAR + LIVE SEARCH BY NAME -->
+        <!-- COLLAPSIBLE SEARCH-ONLY YOUTUBE PICKER BAR -->
         <div id="roomYoutubeBar" class="room-yt-bar hidden">
           <div class="yt-bar-head">
-            <span id="ytNowPlayingLabel"><i class="fa-brands fa-youtube" style="color:#ef4444"></i> يوتيوب الغرفة</span>
+            <span id="ytNowPlayingLabel"><i class="fa-brands fa-youtube" style="color:#ef4444"></i> بحث وتشغيل يوتيوب</span>
             <div class="yt-bar-controls">
-              <button type="button" id="ytSwitchMiniBtn" class="yt-mini-btn hidden" title="تصغير إلى شريط صوتي أسفل المايك"><i class="fa-solid fa-compress"></i> مصغر</button>
               <button type="button" id="ytMuteLocalBtn" class="yt-mini-btn"><i class="fa-solid fa-volume-high"></i> صوت</button>
               <button type="button" id="ytStopBtn" class="yt-mini-btn danger hidden"><i class="fa-solid fa-stop"></i> إيقاف</button>
               <button type="button" id="ytCloseViewBtn" class="yt-mini-btn"><i class="fa-solid fa-xmark"></i></button>
@@ -259,17 +256,14 @@
           </div>
           <div id="ytManagerForm" class="yt-manager-wrap">
             <div class="yt-manager-form">
-              <input type="text" id="ytSearchInput" placeholder="اكتب اسم الأغنية أو المقطع للبحث الفوري..." autocomplete="off" />
+              <input type="text" id="ytSearchInput" placeholder="اكتب اسم الأغنية أو المقطع للبحث التلقائي..." autocomplete="off" />
               <button type="button" id="ytSearchBtn" class="btn-primary btn-xs"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>
             </div>
             <div id="ytSearchResults" class="yt-search-results hidden"></div>
-            <div class="yt-manager-form">
-              <input type="text" id="ytUrlInput" placeholder="أو ألصق رابط يوتيوب مباشر (اختياري)..." />
-              <button type="button" id="ytPlayRoomBtn" class="btn-secondary btn-xs"><i class="fa-solid fa-play"></i> تشغيل</button>
-            </div>
           </div>
         </div>
         <div id="ytPlayerContainer" class="yt-player-wrap hidden">
+          <button type="button" id="ytCompactCloseBtn" class="yt-compact-close-btn hidden" title="إغلاق المشغل"><i class="fa-solid fa-xmark"></i></button>
           <iframe
             id="ytIframe"
             src="about:blank"

@@ -2447,7 +2447,13 @@
             const codeVal = (files.length === 1 && customCode)
               ? customCode
               : `:${customCode ? `${customCode.replace(/^:+|:+$/g, '')}_${i + 1}` : baseName}:`;
-            await api('/api/admin/emojis', { method: 'POST', body: { code: codeVal, imageUrl: up.url } });
+            const resEm = await api('/api/admin/emojis', {
+              method: 'POST',
+              body: { code: codeVal, imageUrl: up.url, isAnimated: Boolean(up.isAnimated) }
+            });
+            if (resEm?.emoji && Array.isArray(state.emojis)) {
+              state.emojis.unshift(resEm.emoji);
+            }
             uploadedCount += 1;
           }
           showToast(uploadedCount > 1 ? `تم رفع وإضافة ${uploadedCount} فيسات/ملصقات بنجاح!` : 'تمت إضافة الملصق بنجاح!');

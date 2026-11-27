@@ -930,7 +930,7 @@ function makeUploader(subdir, allowedPrefix, maxBytes = 15 * 1024 * 1024) {
       const mime = String(file.mimetype || '').toLowerCase();
       const mimeExt = MIME_TO_EXT[mime] || '';
       const origExt = path.extname(file.originalname || '').toLowerCase();
-      const ext = mime === 'image/gif' || mime === 'image/webp'
+      const ext = mime === 'image/gif' || mime === 'image/webp' || mime === 'image/svg+xml'
         ? mimeExt
         : (origExt && /^[.a-z0-9]{2,8}$/.test(origExt) ? origExt : mimeExt || (allowedPrefix === 'audio/' ? '.webm' : '.png'));
       cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
@@ -1645,10 +1645,27 @@ function kickTargetFromPresence(targetKey, { reason = 'تم طردك من الغ
     kickedReason: cleanReason,
     isBanned: Boolean(banned)
   });
+  for (const rm of db.getAllRooms()) {
+    releaseUserMicsInRoom(targetKey, rm.id);
+  }
   emitToUserKey(targetKey, banned ? 'banned' : 'kicked', {
     reason: cleanReason,
     banned: Boolean(banned)
   });
+  const sockSet = userSocketsMap.get(String(targetKey));
+  if (sockSet && sockSet.size) {
+    const socksCopy = [...sockSet];
+    userSocketsMap.delete(String(targetKey));
+    setTimeout(() => {
+      for (const s of socksCopy) {
+        try {
+          s.disconnect(true);
+        } catch {
+          // ignore
+        }
+      }
+    }, 120);
+  }
   removeOnlinePresence(targetKey);
 }
 
@@ -2147,7 +2164,7 @@ app.get('/api/settings/public', (_req, res) => {
 // UPLOAD ENDPOINTS
 // ==========================================
 app.get('/api/profile-media/:id', async (req, res) => {
-  const cleanId = String(req.params.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  const cleanId = String(req.params.id || '').replace(/[^a-zA-Z0-9_.-]/g, '').replace(/\.{2,}/g, '');
   if (!cleanId) return res.status(404).end();
   const media = await db.getProfileMedia(cleanId);
   if (!media || !media.dataBase64) return res.status(404).end();
@@ -2295,9 +2312,35 @@ app.post('/api/upload/wallpaper', requireRegistered, (req, res, next) => {
   return res.json({ url: `/uploads/wallpapers/${req.file.filename}` });
 });
 
-app.post('/api/upload/emoji', requirePanelAccess, uploadEmoji.single('file'), (req, res) => {
+app.post('/api/upload/emoji', requirePanelAccess, uploadEmoji.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'لم يتم إرفاق صورة إيموجي.' });
-  return res.json({ url: `/uploads/emojis/${req.file.filename}` });
+  const mime = String(req.file.mimetype || 'image/png').toLowerCase();
+  const ext = MIME_TO_EXT[mime] || path.extname(req.file.filename || '') || '.png';
+  const isAnimated = mime === 'image/gif' || mime === 'image/webp' || mime === 'image/svg+xml' || /\.(gif|webp|svg)$/i.test(ext);
+  const fallbackUrl = `/uploads/emojis/${req.file.filename}`;
+  let finalUrl = fallbackUrl;
+  let savedInFirebase = false;
+  try {
+    const buf = await fs.promises.readFile(req.file.path);
+    if (buf.length > 0 && buf.length <= 720 * 1024) {
+      const mediaId = `emoji_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const ok = await db.saveProfileMedia(mediaId, {
+        mimeType: mime,
+        dataBase64: buf.toString('base64'),
+        kind: 'emoji',
+        userId: req.authUser.userId
+      });
+      if (ok) {
+        finalUrl = `/api/profile-media/${mediaId}`;
+        savedInFirebase = true;
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  } catch {
+    // fallback to disk upload
+  }
+  await db.flushWrites();
+  return res.json({ ok: true, url: finalUrl, isAnimated, savedInFirebase });
 });
 
 app.post('/api/upload/frame', requireOwner, uploadFrame.single('file'), async (req, res) => {
@@ -3671,16 +3714,19 @@ app.post('/api/admin/emojis', requirePanelAccess, async (req, res) => {
   const result = db.addCustomEmoji({
     code: req.body?.code,
     imageUrl: req.body?.imageUrl,
+    isAnimated: Boolean(req.body?.isAnimated),
     createdBy: req.authUser.name
   });
   if (result.error) return res.status(400).json({ error: result.error });
   await db.flushWrites();
+  if (io) io.emit('emojis', db.getAllCustomEmojis());
   return res.json({ emoji: result.emoji });
 });
 
 app.delete('/api/admin/emojis/:id', requirePanelAccess, async (req, res) => {
   db.deleteCustomEmoji(req.params.id);
   await db.flushWrites();
+  if (io) io.emit('emojis', db.getAllCustomEmojis());
   return res.json({ ok: true });
 });
 
@@ -6001,7 +6047,6 @@ function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconne
 
   ensureCompetitionsQuizBotRunning(targetRoomId);
   const qBot = roomQuizBots.get(targetRoomId);
-  const messages = db.getRoomMessages(targetRoomId, 100, entry.key);
   const pubRoom = db.sanitizeRoomForPublic(room);
   const isManager = db.isRoomManager(targetRoomId, entry.userId, entry.role);
   const canStyleRoom = db.hasRoomOwnerPermission(targetRoomId, entry.userId, entry.role, 'style_bg');
@@ -6021,6 +6066,7 @@ function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconne
   recentRoomPresence.set(entry.key, { roomId: targetRoomId, at: Date.now() });
 
   let royalEntrance = null;
+  let joinNotice = null;
   if (!isSilentReconnect && !rejoiningSameRoom && !recentlyInSameRoom && oldRoomId !== targetRoomId && !isStealthEntry(entry)) {
     const rank = db.getRankByKey(entry.role);
     const isOwnerJoin = entry.role === 'site_owner';
@@ -6042,9 +6088,15 @@ function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconne
         joinMessage: ownerJoinText
       };
     }
+    const noticeText = isOwnerJoin ? ownerJoinText : `✓ انضم "${entry.name}" إلى الغرفة`;
+    joinNotice = {
+      kind: isOwnerJoin ? 'royal_join' : 'join',
+      text: noticeText,
+      joinMessage: ownerJoinText
+    };
     emitRoomNoticeMessage(
       targetRoomId,
-      isOwnerJoin ? ownerJoinText : `✓ انضم "${entry.name}" إلى الغرفة`,
+      noticeText,
       {
         senderKey: isOwnerJoin ? 'system:royal_join' : 'system:join',
         senderName: entry.name,
@@ -6059,6 +6111,8 @@ function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconne
     triggerWelcomeBotOnRoomJoin(entry, pubRoom);
   }
 
+  const messages = db.getRoomMessages(targetRoomId, 100, entry.key);
+
   return {
     room: pubRoom,
     isRoomManager: isManager,
@@ -6071,6 +6125,7 @@ function movePresenceToRoom(entry, targetRoomId, telemetry = {}, isSilentReconne
       ? buildSanitizedMutePayload(activeMuteRow, targetRoomId)
       : null,
     royalEntrance,
+    joinNotice,
     quizBot: {
       active: Boolean(qBot && qBot.active),
       hintSent: Boolean(qBot && qBot.hintSent),
@@ -7001,6 +7056,23 @@ app.post('/api/pm/send', requireAuth, async (req, res) => {
     const mins = Math.max(1, Math.ceil((pmMute.expires_at - Date.now()) / 60000));
     return res.status(403).json({ error: `تم كتمك مؤقتاً لمدة: ${formatMuteDurationArabic(mins)}` });
   }
+  if (entry.role !== 'site_owner' && (entry.isShadowMuted || guestShadowMutedKeys.has(entry.key) || entry.isGhosted)) {
+    return res.json({
+      ok: true,
+      pm: {
+        id: `shadow_${Date.now()}`,
+        from_key: entry.key,
+        from_name: entry.name,
+        from_role: entry.role,
+        from_avatar: entry.avatarUrl || '',
+        to_key: toKey,
+        to_name: toName || 'عضو',
+        content: clean,
+        created_at: new Date().toISOString(),
+        is_read: 1
+      }
+    });
+  }
   if (entry.role !== 'site_owner' && !canDo(entry.role, 'send_links') && containsUrl(clean)) {
     db.addViolationLog({
       offenderKey: entry.key,
@@ -7146,8 +7218,7 @@ app.post('/api/mod/warn', requireAuth, async (req, res) => {
   const check = canModerateWithImmunity(entry, targetKey);
   if (!check.allowed) return res.status(403).json({ error: check.reason });
 
-  const cleanReason = String(req.body?.reason || 'مخالفة قوانين الغرفة').trim().slice(0, 240);
-  if (cleanReason.length < 2) return res.status(400).json({ error: 'يجب كتابة سبب التحذير (حرفان على الأقل).' });
+  const cleanReason = String(req.body?.reason || '').trim().slice(0, 240) || 'مخالفة قوانين الغرفة';
 
   db.addAdminLog({
     actorKey: entry.key,
@@ -7204,16 +7275,10 @@ app.post('/api/mod/mute', requireAuth, async (req, res) => {
     return res.json({ ok: true });
   }
 
-  const minsNum = Number(req.body?.minutes);
+  const minsNum = Number(req.body?.minutes) || 15;
   const cleanReason = String(req.body?.reason || '').trim().slice(0, 240);
-  if (!Number.isFinite(minsNum) || minsNum < 1) {
-    return res.status(400).json({ error: 'يجب تحديد مدة الكتم بالدقائق (دقيقة واحدة على الأقل).' });
-  }
-  if (!isOwner && cleanReason.length < 2) {
-    return res.status(400).json({ error: 'يجب كتابة سبب الكتم (حرفان على الأقل).' });
-  }
-  const effectiveReason = cleanReason || 'بقرار من المالك';
-  const mins = Math.min(1440, Math.floor(minsNum));
+  const effectiveReason = cleanReason || (isOwner ? 'بقرار من المالك' : 'بقرار إداري');
+  const mins = Math.max(1, Math.min(1440, Math.floor(minsNum)));
   db.setMute(targetKey, roomId, mins * 60 * 1000, entry.name, effectiveReason, {
     targetName: check.info.targetName,
     mutedByKey: entry.key
@@ -7259,10 +7324,7 @@ app.post('/api/mod/kick', requireAuth, async (req, res) => {
   if (!check.allowed) return res.status(403).json({ error: check.reason });
 
   const cleanReason = db.sanitizePlainText(String(req.body?.reason || ''), 240);
-  if (!isOwner && cleanReason.length < 2) {
-    return res.status(400).json({ error: 'يجب كتابة سبب الطرد (حرفان على الأقل).' });
-  }
-  const effectiveReason = cleanReason || 'بقرار من المالك';
+  const effectiveReason = cleanReason || (isOwner ? 'بقرار من المالك' : 'بقرار إداري');
   db.addAdminLog({
     actorKey: entry.key,
     actorName: entry.name,
@@ -7273,7 +7335,7 @@ app.post('/api/mod/kick', requireAuth, async (req, res) => {
     details: `${roomId} • السبب: ${effectiveReason}`
   });
   kickTargetFromPresence(targetKey, {
-    reason: `تم طردك من الغرفة بواسطة ${entry.name} — السبب: ${effectiveReason}`,
+    reason: `تم طردك من الغرفة بواسطة ${entry.name}${cleanReason ? ` — السبب: ${cleanReason}` : ''}`,
     banned: false
   });
   notifyOwnersModerationEvent({
@@ -7326,10 +7388,7 @@ app.post('/api/mod/room-ban', requireAuth, async (req, res) => {
   if (!check.allowed) return res.status(403).json({ error: check.reason });
 
   const cleanReason = db.sanitizePlainText(String(req.body?.reason || ''), 200);
-  if (!isOwner && cleanReason.length < 2) {
-    return res.status(400).json({ error: 'يجب كتابة سبب الحظر من الغرفة (حرفان على الأقل).' });
-  }
-  const effectiveReason = cleanReason || 'بقرار من مالك الغرفة';
+  const effectiveReason = cleanReason || (isOwner ? 'بقرار من المالك' : 'بقرار إدارة الغرفة');
   db.banFromRoom({
     roomId,
     targetKey,
@@ -7357,6 +7416,7 @@ app.post('/api/mod/room-ban', requireAuth, async (req, res) => {
         forceRoomNotice: `تم حظرك من غرفة "${rm.name}" بواسطة ${entry.name} (${effectiveReason}).`,
         forceRoomAt: Date.now()
       });
+      emitToUserKey(targetKey, 'forced_room_move', { roomId: 'general' });
     } else {
       kickTargetFromPresence(targetKey, {
         reason: `تم حظرك من غرفة "${rm.name}" بواسطة ${entry.name} (${effectiveReason})`,
@@ -7379,10 +7439,7 @@ app.post('/api/mod/ban', requireAuth, async (req, res) => {
   if (!check.allowed) return res.status(403).json({ error: check.reason });
 
   const cleanReason = String(req.body?.reason || '').trim().slice(0, 240);
-  if (!isOwner && cleanReason.length < 2) {
-    return res.status(400).json({ error: 'يجب كتابة سبب الحظر (حرفان على الأقل).' });
-  }
-  const effectiveReason = cleanReason || (banType === 'xban' ? 'بقرار من المالك (X-Ban)' : 'بقرار من المالك');
+  const effectiveReason = cleanReason || (banType === 'xban' ? 'بقرار إداري (X-Ban)' : 'بقرار إداري');
   const { targetName, targetEmail, targetIp, targetDevice, targetFingerprint } = check.info;
   db.banTarget({
     targetKey,
@@ -7877,6 +7934,10 @@ async function start() {
       } else if (notif.target_key) {
         emitToUserKey(notif.target_key, 'notification', notif);
       }
+    },
+    onEmojisChanged(emojis) {
+      if (!io) return;
+      io.emit('emojis', emojis || db.getAllCustomEmojis());
     }
   });
 

@@ -23,6 +23,7 @@
     firestoreActive: false,
     socket: null,
     socketConnected: false,
+    hasSocketJoinedOnce: false,
     unsubs: [],
     roomUnsubs: [],
     heartbeatTimer: null,
@@ -431,10 +432,22 @@
     sock.on('connect', () => {
       if (!session.active || session.socket !== sock) return;
       session.socketConnected = true;
-      sock.auth = { token: session.token, roomId: session.roomId };
-      if (session.roomId) {
-        sock.emit('join_room', { roomId: session.roomId, silent: true }, () => {});
-      }
+      const targetRoomId = session.roomId || 'general';
+      sock.auth = { token: session.token, roomId: targetRoomId };
+      sock.emit('join_room', { roomId: targetRoomId, silent: Boolean(session.hasSocketJoinedOnce) }, (ack) => {
+        if (!session.active || session.socket !== sock) return;
+        session.hasSocketJoinedOnce = true;
+        if (ack && ack.ok) {
+          if (ack.room?.id) session.roomId = ack.room.id;
+          if (Array.isArray(ack.messages) && ack.messages.length) {
+            const lastId = Number(ack.messages[ack.messages.length - 1]?.id) || 0;
+            if (lastId > session.lastMsgId) session.lastMsgId = lastId;
+          }
+          if (typeof session.callbacks?.onRoomJoined === 'function') {
+            session.callbacks.onRoomJoined(ack);
+          }
+        }
+      });
       scheduleLoops();
     });
 
@@ -574,6 +587,11 @@
       session.callbacks?.onSettings?.(settings);
     });
 
+    sock.on('emojis', (emojis) => {
+      if (!session.active) return;
+      session.callbacks?.onEmojis?.(Array.isArray(emojis) ? emojis : []);
+    });
+
     sock.on('webrtc_signal', (sig) => {
       if (!session.active || !sig || !sig.id || session.seenWebRtcIds.has(sig.id)) return;
       session.seenWebRtcIds.add(sig.id);
@@ -619,6 +637,7 @@
     session.token = token || '';
     session.user = user || null;
     session.roomId = roomId || 'general';
+    session.hasSocketJoinedOnce = false;
     session.apiFetch = apiFetch;
     session.callbacks = callbacks || {};
     session.lastMsgId = 0;
@@ -636,7 +655,13 @@
       attachFirestoreGlobalListeners();
     }
 
-    const boot = await syncBootstrap(session.roomId);
+    let boot = null;
+    try {
+      boot = await syncBootstrap(session.roomId);
+      if (boot?.room?.id) session.hasSocketJoinedOnce = true;
+    } catch (err) {
+      if (err?.status === 401 || err?.status === 403) throw err;
+    }
     attachFirestoreRoomListeners(session.roomId);
     connectSocket();
     scheduleLoops();

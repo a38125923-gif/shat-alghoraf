@@ -1073,9 +1073,37 @@ textarea:focus {
   color: #cbd5e1;
 }
 
+.yt-player-wrap {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #020617;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.2);
+}
+
+.yt-compact-close-btn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
 .yt-player-wrap iframe {
+  display: block;
   width: 100%;
-  height: 150px;
+  height: 152px;
   border: none;
   border-radius: 8px;
 }
@@ -9290,6 +9318,52 @@ textarea:focus {
   font-size: 11px;
   font-weight: 800;
 }
+
+.mic-mini-yt-bar.is-paused .mini-yt-eq span {
+  animation-play-state: paused;
+  opacity: 0.45;
+}
+
+.cody-msg-row.is-swiping-reply {
+  transition: none !important;
+  will-change: transform;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.cody-msg-row.swipe-snap-back {
+  transition: transform 0.18s ease-out !important;
+}
+
+.chat-feed {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+@media (max-width: 900px) {
+  .cody-msg-row {
+    contain: layout style;
+  }
+
+  .cody-msg-row,
+  .cody-msg-row.glass-bubble-msg,
+  .msg-click-action-bar,
+  .emoji-popover,
+  .radio-popover,
+  .users-side-panel,
+  .slide-sheet-drawer,
+  .modal-card,
+  .modal-backdrop,
+  .cody-topbar,
+  .cody-footerbar,
+  .top-dropdown,
+  .plus-dropdown,
+  .quick-user-card,
+  .room-banner-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
 
 
 

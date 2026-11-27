@@ -1289,7 +1289,11 @@ function fsListen(colName, onChanges) {
 
 function enqueueSet(colName, docId, data, merge = false) {
   scheduleJsonSnapshot();
-  return trackWrite(fsSetDoc(colName, docId, data, merge).catch(() => {}));
+  return trackWrite(
+    fsSetDoc(colName, docId, data, merge).catch((err) => {
+      console.error(`[Firestore enqueueSet error] ${colName}/${docId}:`, err?.message || err);
+    })
+  );
 }
 
 function enqueueDelete(colName, docId) {
@@ -2127,11 +2131,11 @@ async function init(eventHooks = {}) {
     try {
       createFirestoreDriver();
       try {
-        loadedCollections = await withTimeout(fetchAllCollections(), 8000, 'Firestore initial fetch');
+        loadedCollections = await withTimeout(fetchAllCollections(), 15000, 'Firestore initial fetch');
       } catch (firstErr) {
         console.warn('Firestore initial fetch retry after transient error:', firstErr.message);
-        await new Promise((r) => setTimeout(r, 500));
-        loadedCollections = await withTimeout(fetchAllCollections(), 6000, 'Firestore retry fetch');
+        await new Promise((r) => setTimeout(r, 600));
+        loadedCollections = await withTimeout(fetchAllCollections(), 12000, 'Firestore retry fetch');
       }
     } catch (fsErr) {
       console.warn('Cloud Firestore unavailable or timed out, falling back to local SQLite/JSON:', fsErr.message);
@@ -2885,10 +2889,11 @@ function getAllCustomEmojis() {
   return [...store.customEmojisById.values()].sort((a, b) => Number(b.id) - Number(a.id));
 }
 
-function addCustomEmoji({ code, imageUrl, createdBy }) {
+function addCustomEmoji({ code, imageUrl, isAnimated, createdBy }) {
   const norm = normalizeEmojiCode(code);
   if (norm.length < 3) return { error: 'أدخل رمز اختصار الإيموجي (مثال: :وردة:).' };
-  if (!imageUrl || !String(imageUrl).startsWith('/uploads/emojis/')) {
+  const cleanUrl = String(imageUrl || '').trim();
+  if (!cleanUrl || (!cleanUrl.startsWith('/uploads/emojis/') && !cleanUrl.startsWith('/api/profile-media/'))) {
     return { error: 'يرجى رفع صورة الإيموجي أو الملصق أولاً.' };
   }
   for (const e of store.customEmojisById.values()) {
@@ -2897,11 +2902,13 @@ function addCustomEmoji({ code, imageUrl, createdBy }) {
     }
   }
 
+  const detectedAnimated = Boolean(isAnimated) || /\.(gif|webp|svg)(\?|$)/i.test(cleanUrl);
   const id = nextSeq('custom_emojis');
   const emoji = {
     id,
     code: norm,
-    image_url: imageUrl,
+    image_url: cleanUrl,
+    is_animated: detectedAnimated,
     created_by: createdBy || '',
     created_at: nowIso()
   };
@@ -2913,6 +2920,11 @@ function addCustomEmoji({ code, imageUrl, createdBy }) {
 function deleteCustomEmoji(id) {
   const numId = Number(id);
   if (Number.isNaN(numId)) return false;
+  const existing = store.customEmojisById.get(numId);
+  if (existing?.image_url && String(existing.image_url).startsWith('/api/profile-media/')) {
+    const mediaId = String(existing.image_url).replace('/api/profile-media/', '').split('?')[0];
+    if (mediaId) deleteProfileMedia(mediaId);
+  }
   store.customEmojisById.delete(numId);
   enqueueDelete('custom_emojis', String(numId));
   return true;
@@ -6408,7 +6420,7 @@ module.exports = {
     const cleanId = safeDocId(String(mediaId || ''));
     if (!cleanId || !dataBase64) return false;
     const rawB64 = String(dataBase64);
-    const allowedKinds = new Set(['avatar', 'cover', 'music', 'frame', 'bot_avatar']);
+    const allowedKinds = new Set(['avatar', 'cover', 'music', 'frame', 'bot_avatar', 'emoji']);
     const safeKind = allowedKinds.has(String(kind)) ? String(kind) : 'avatar';
     const chunkSize = 750000;
     const fullRecord = {

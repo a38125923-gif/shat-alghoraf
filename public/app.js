@@ -540,6 +540,10 @@
     ytBarOpen: false,
     ytSearchTimer: null,
     ytForceVideo: false,
+    ytMicPaused: false,
+    ytLocalClosedVideoId: '',
+    lastMicWaveTickTs: 0,
+    lastRoyalEntranceShownAt: 0,
     quizBotState: { active: false, hintSent: false, enabledSetting: true },
     activeCustomizeTab: 'info',
     nameStyleMode: 'solid',
@@ -2305,62 +2309,70 @@
   function renderRoomYoutubeBar() {
     const r = state.currentRoom;
     if (!r) return;
-    const hasVideo = Boolean(r.youtube_video_id && r.youtube_is_playing);
+    const rawHasVideo = Boolean(r.youtube_video_id && r.youtube_is_playing);
+    const closedLocally = Boolean(rawHasVideo && state.ytLocalClosedVideoId && state.ytLocalClosedVideoId === r.youtube_video_id && !r.youtube_mini_mode);
+    const hasVideo = rawHasVideo && !closedLocally;
     const canSearchYt = Boolean(state.user && !(state.user.isFrozen && state.user.role !== 'site_owner'));
     const isOnMic = (state.mics || []).some((m) => m.holderKey === state.user?.key);
     const canStopYt = Boolean(state.isRoomManager || (r.youtube_by_key && r.youtube_by_key === state.user?.key) || isOnMic);
 
     $('ytManagerForm')?.classList.toggle('hidden', !canSearchYt);
-    $('ytStopBtn')?.classList.toggle('hidden', !(canStopYt && hasVideo));
+    $('ytStopBtn')?.classList.toggle('hidden', !(canStopYt && rawHasVideo));
     $('toggleYoutubeBarBtn')?.classList.toggle('active', hasVideo || state.ytBarOpen);
 
     const miniBar = $('micMiniYoutubeBar');
     const ytPlayer = $('ytPlayerContainer');
     const ytIframe = $('ytIframe');
-    const showMiniBar = hasVideo && Boolean(r.youtube_mini_mode) && !state.ytForceVideo;
+    const compactCloseBtn = $('ytCompactCloseBtn');
+    const showMiniBar = hasVideo && Boolean(r.youtube_mini_mode);
 
     if (hasVideo) {
       const displayTitle = r.youtube_title || r.youtube_video_id;
       const bySuffix = r.youtube_by_name ? ` • ${r.youtube_by_name}` : '';
-      $('ytNowPlayingLabel').innerHTML = `<i class="fa-brands fa-youtube" style="color:#ef4444"></i> ${escapeHtml(displayTitle)}${escapeHtml(bySuffix)}`;
+      if ($('ytNowPlayingLabel')) {
+        $('ytNowPlayingLabel').innerHTML = `<i class="fa-brands fa-youtube" style="color:#ef4444"></i> ${escapeHtml(displayTitle)}${escapeHtml(bySuffix)}`;
+      }
 
       if (miniBar) {
         miniBar.classList.toggle('hidden', !showMiniBar);
+        miniBar.classList.toggle('is-paused', Boolean(state.ytMicPaused));
         if ($('micMiniYtTitle')) $('micMiniYtTitle').textContent = displayTitle;
-        if ($('micMiniYtBy')) {
-          $('micMiniYtBy').textContent = r.youtube_by_name || '';
-          $('micMiniYtBy').classList.toggle('hidden', !r.youtube_by_name);
-        }
-        if ($('micMiniYtMuteBtn')) {
-          $('micMiniYtMuteBtn').innerHTML = state.ytLocalMuted
-            ? '<i class="fa-solid fa-volume-xmark"></i>'
-            : '<i class="fa-solid fa-volume-high"></i>';
-        }
-        if ($('micMiniYtExpandBtn')) {
-          $('micMiniYtExpandBtn').innerHTML = state.ytForceVideo
-            ? '<i class="fa-solid fa-compress"></i>'
-            : '<i class="fa-solid fa-tv"></i>';
+        if ($('micMiniYtPlayPauseBtn')) {
+          $('micMiniYtPlayPauseBtn').innerHTML = state.ytMicPaused
+            ? '<i class="fa-solid fa-play"></i>'
+            : '<i class="fa-solid fa-pause"></i>';
         }
         $('micMiniYtStopBtn')?.classList.toggle('hidden', !canStopYt);
       }
 
-      $('ytSwitchMiniBtn')?.classList.toggle('hidden', showMiniBar);
-      $('roomYoutubeBar')?.classList.toggle('hidden', !(state.ytBarOpen || !showMiniBar));
+      // Keep search bar hidden unless user explicitly opened it
+      $('roomYoutubeBar')?.classList.toggle('hidden', !state.ytBarOpen);
 
       if (ytPlayer) {
         ytPlayer.classList.remove('hidden');
         ytPlayer.classList.toggle('yt-audio-only-frame', showMiniBar);
       }
+      if (compactCloseBtn) {
+        compactCloseBtn.classList.toggle('hidden', showMiniBar);
+      }
 
-      const targetSrc = `https://www.youtube.com/embed/${encodeURIComponent(r.youtube_video_id)}?autoplay=1&enablejsapi=1${state.ytLocalMuted ? '&mute=1' : ''}`;
-      if (ytIframe && (ytIframe.dataset.videoId !== r.youtube_video_id || ytIframe.dataset.muted !== String(state.ytLocalMuted))) {
+      const wantAutoplay = showMiniBar ? '1' : '0';
+      const targetSrc = `https://www.youtube.com/embed/${encodeURIComponent(r.youtube_video_id)}?autoplay=${wantAutoplay}&enablejsapi=1${state.ytLocalMuted ? '&mute=1' : ''}`;
+      if (
+        ytIframe &&
+        (ytIframe.dataset.videoId !== r.youtube_video_id ||
+          ytIframe.dataset.muted !== String(state.ytLocalMuted) ||
+          ytIframe.dataset.autoplay !== wantAutoplay)
+      ) {
+        state.ytMicPaused = false;
         ytIframe.src = targetSrc;
         ytIframe.dataset.videoId = r.youtube_video_id;
         ytIframe.dataset.muted = String(state.ytLocalMuted);
+        ytIframe.dataset.autoplay = wantAutoplay;
       }
     } else {
       miniBar?.classList.add('hidden');
-      $('ytSwitchMiniBtn')?.classList.add('hidden');
+      compactCloseBtn?.classList.add('hidden');
       if (ytPlayer) {
         ytPlayer.classList.add('hidden');
         ytPlayer.classList.remove('yt-audio-only-frame');
@@ -2368,8 +2380,11 @@
       if (ytIframe && ytIframe.getAttribute('src') && ytIframe.getAttribute('src') !== 'about:blank') {
         ytIframe.src = 'about:blank';
         delete ytIframe.dataset.videoId;
+        delete ytIframe.dataset.autoplay;
       }
-      $('ytNowPlayingLabel').innerHTML = '<i class="fa-brands fa-youtube" style="color:#ef4444"></i> بحث وتشغيل يوتيوب الغرفة';
+      if ($('ytNowPlayingLabel')) {
+        $('ytNowPlayingLabel').innerHTML = '<i class="fa-brands fa-youtube" style="color:#ef4444"></i> بحث وتشغيل يوتيوب الغرفة';
+      }
       $('roomYoutubeBar')?.classList.toggle('hidden', !state.ytBarOpen);
     }
     if ($('ytMuteLocalBtn')) {
@@ -2397,7 +2412,7 @@
       }
       resBox.innerHTML = results.map((v) => `
         <button type="button" class="yt-result-card" data-vid="${escapeHtml(v.videoId)}" data-title="${escapeHtml(v.title)}">
-          <img src="${escapeHtml(v.thumbnail)}" class="yt-result-thumb" alt="" />
+          <img src="${escapeHtml(v.thumbnail)}" class="yt-result-thumb" loading="lazy" decoding="async" alt="" />
           <div class="yt-result-meta">
             <div class="yt-result-title">${escapeHtml(v.title)}</div>
             <div class="yt-result-sub">${escapeHtml(v.author)} • ${escapeHtml(v.duration)}</div>
@@ -2424,10 +2439,14 @@
             });
             if (res?.room) state.currentRoom = { ...state.currentRoom, ...res.room };
             state.ytForceVideo = false;
-            if (iAmOnMic) state.ytBarOpen = false;
-            showToast(iAmOnMic ? `تم تشغيل الصوت تحت المايك: ${title}` : `تم تشغيل في الغرفة: ${title}`);
+            state.ytLocalClosedVideoId = '';
+            state.ytMicPaused = false;
+            state.ytBarOpen = false;
+            if ($('ytSearchInput')) $('ytSearchInput').value = '';
             resBox.classList.add('hidden');
+            $('roomYoutubeBar')?.classList.add('hidden');
             renderRoomYoutubeBar();
+            showToast(iAmOnMic ? `تم تشغيل الصوت أعلى المايكات: ${title}` : `تم تنزيل الفيديو في الغرفة: ${title}`);
           } catch (err) {
             showToast(err.message, true);
           }
@@ -2554,13 +2573,19 @@
     if (state.micWaveRaf) return;
     const tick = () => {
       const wavesEnabled = Number(state.settings?.fx_mic_waves ?? 1) !== 0;
-      const hasOccupied = (state.mics || []).some((m) => Boolean(m.holderKey));
-      if (!wavesEnabled || !hasOccupied) {
+      const hasOccupied = (state.mics || []).some((m) => Boolean(m.holderKey) && !m.isSelfMuted && !m.isAdminMuted);
+      if (!wavesEnabled || !hasOccupied || state.micsCollapsed) {
         state.micWaveRaf = null;
         return;
       }
 
       const now = Date.now();
+      if (now - (state.lastMicWaveTickTs || 0) < 65) {
+        state.micWaveRaf = requestAnimationFrame(tick);
+        return;
+      }
+      state.lastMicWaveTickTs = now;
+
       for (const m of state.mics || []) {
         const slot = Number(m.slot);
         let level = 0;
@@ -2832,6 +2857,12 @@
 
   async function reactToMessage(msgId, reactionKey) {
     if (!msgId || !reactionKey || !state.token) return;
+    const feed = $('chatFeed');
+    const preRow = feed?.querySelector(`[data-msg-id="${CSS.escape(String(msgId))}"]`);
+    if (preRow) {
+      preRow.querySelector('.msg-click-action-bar')?.classList.add('hidden');
+      preRow.querySelector('.msg-dots-menu')?.classList.add('hidden');
+    }
     try {
       const res = await api(`/api/chat/messages/${encodeURIComponent(String(msgId))}/react`, {
         method: 'POST',
@@ -2840,11 +2871,9 @@
       if (res?.message) {
         const idx = state.messages.findIndex((m) => String(m.id) === String(msgId));
         if (idx !== -1) state.messages[idx] = { ...state.messages[idx], ...res.message };
-        const existingRow = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(String(msgId))}"]`);
+        const existingRow = feed?.querySelector(`[data-msg-id="${CSS.escape(String(msgId))}"]`);
         if (existingRow) {
-          const wasOpen = !existingRow.querySelector('.msg-click-action-bar')?.classList.contains('hidden');
           const fresh = createMessageRowElement(res.message);
-          if (wasOpen) fresh.querySelector('.msg-click-action-bar')?.classList.remove('hidden');
           existingRow.replaceWith(fresh);
         }
       }
@@ -3070,6 +3099,8 @@
     row.querySelectorAll('[data-react-key]').forEach((rBtn) => {
       rBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        row.querySelector('.msg-click-action-bar')?.classList.add('hidden');
+        row.querySelector('.msg-dots-menu')?.classList.add('hidden');
         reactToMessage(msg.id, rBtn.dataset.reactKey);
       });
     });
@@ -3084,6 +3115,59 @@
       $('chatFeed')?.querySelectorAll('.msg-click-action-bar').forEach((b) => b.classList.add('hidden'));
       if (willShow) clickBar.classList.remove('hidden');
     });
+
+    // WhatsApp-style mobile touch swipe-to-reply
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchLastDx = 0;
+    let touchSwiping = false;
+    row.addEventListener('touchstart', (e) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      if (e.target.closest('button, a, audio, .msg-actions-wrap, .msg-click-action-bar, .msg-reactions-bar')) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchLastDx = 0;
+      touchSwiping = false;
+      row.classList.remove('swipe-snap-back');
+    }, { passive: true });
+    row.addEventListener('touchmove', (e) => {
+      if (!touchStartX || !e.touches || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      if (!touchSwiping) {
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+          touchStartX = 0;
+          return;
+        }
+        if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+          touchSwiping = true;
+          row.classList.add('is-swiping-reply');
+        }
+      }
+      if (touchSwiping) {
+        touchLastDx = dx;
+        const clamped = Math.max(-72, Math.min(72, dx));
+        row.style.transform = `translateX(${clamped}px)`;
+      }
+    }, { passive: true });
+    const endSwipeReply = () => {
+      if (!touchSwiping) {
+        touchStartX = 0;
+        return;
+      }
+      const triggered = Math.abs(touchLastDx) >= 48;
+      touchSwiping = false;
+      touchStartX = 0;
+      touchLastDx = 0;
+      row.classList.remove('is-swiping-reply');
+      row.classList.add('swipe-snap-back');
+      row.style.transform = '';
+      if (triggered) {
+        setReplyTarget(msg);
+      }
+    };
+    row.addEventListener('touchend', endSwipeReply, { passive: true });
+    row.addEventListener('touchcancel', endSwipeReply, { passive: true });
 
     const runDeleteMessage = async () => {
       if (!msg.id) return;
@@ -3180,15 +3264,35 @@
             }
           }
         } else if (act === 'warn') {
-          openQuickUserModal(targetObj, { initialTab: 'admin', initialAction: 'warn' });
+          try {
+            await api('/api/mod/warn', { method: 'POST', body: { targetKey: targetObj.key, roomId: state.currentRoom?.id } });
+            showToast(`تم إرسال تحذير إلى ${targetObj.name}.`);
+          } catch (err) {
+            showToast(err.message, true);
+          }
         } else if (act === 'mute') {
-          openQuickUserModal(targetObj, { initialTab: 'admin', initialAction: 'mute' });
+          try {
+            await api('/api/mod/mute', { method: 'POST', body: { targetKey: targetObj.key, minutes: 15, roomId: state.currentRoom?.id } });
+            showToast(`تم كتم ${targetObj.name} مؤقتاً (15 دقيقة).`);
+          } catch (err) {
+            showToast(err.message, true);
+          }
         } else if (act === 'kick') {
-          openQuickUserModal(targetObj, { initialTab: 'admin', initialAction: 'kick' });
+          try {
+            await api('/api/mod/kick', { method: 'POST', body: { targetKey: targetObj.key, roomId: state.currentRoom?.id } });
+            showToast(`تم طرد ${targetObj.name} من الغرفة.`);
+          } catch (err) {
+            showToast(err.message, true);
+          }
         } else if (act === 'rank') {
           openQuickUserModal(targetObj, { initialTab: 'admin' });
         } else if (act === 'ban') {
-          openQuickUserModal(targetObj, { initialTab: 'admin', initialAction: 'ban' });
+          try {
+            await api('/api/mod/ban', { method: 'POST', body: { targetKey: targetObj.key, banType: 'ban' } });
+            showToast(`تم حظر ${targetObj.name} نهائياً.`);
+          } catch (err) {
+            showToast(err.message, true);
+          }
         }
       });
     });
@@ -3198,12 +3302,16 @@
 
   function renderAllMessages() {
     const feed = $('chatFeed');
-    feed.innerHTML = '';
-    for (const m of state.messages) {
+    if (!feed) return;
+    const maxDom = window.innerWidth <= 900 ? 90 : 150;
+    const list = (state.messages || []).slice(-maxDom);
+    const frag = document.createDocumentFragment();
+    for (const m of list) {
       const ts = Number(m.created_at_ms) || 0;
       if (ts > (state.lastRoomMsgTs || 0)) state.lastRoomMsgTs = ts;
-      feed.appendChild(createMessageRowElement(m));
+      frag.appendChild(createMessageRowElement(m));
     }
+    feed.replaceChildren(frag);
     feed.scrollTop = feed.scrollHeight;
   }
 
@@ -4017,55 +4125,22 @@
       }
     });
 
-    $('quWarnBtn')?.addEventListener('click', () => {
-      showInlinePrompt({
-        title: `<i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> توجيه تحذير إلى ${escapeHtml(u.name)}`,
-        htmlBody: `<input type="text" id="quInlineWarnInput" placeholder="اكتب سبب التحذير (إلزامي)..." />`,
-        confirmText: 'إرسال التحذير',
-        onConfirm: async (_box, done) => {
-          const reason = ($('quInlineWarnInput')?.value || '').trim();
-          if (reason.length < 2) return showToast('يرجى كتابة سبب التحذير (حرفين على الأقل).', true);
-          try {
-            await api('/api/mod/warn', { method: 'POST', body: { targetKey: u.key, reason, roomId: state.currentRoom?.id } });
-            showToast(`تم إرسال التحذير إلى ${u.name}.`);
-            done();
-          } catch (err) {
-            showToast(err.message, true);
-          }
-        }
-      });
+    $('quWarnBtn')?.addEventListener('click', async () => {
+      try {
+        await api('/api/mod/warn', { method: 'POST', body: { targetKey: u.key, roomId: state.currentRoom?.id } });
+        showToast(`تم إرسال التحذير إلى ${u.name}.`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
     });
 
-    $('quMuteBtn')?.addEventListener('click', () => {
-      const reasonReqLabel = isOwner ? 'سبب الكتم (اختياري للمالك)' : 'سبب الكتم (إلزامي)';
-      showInlinePrompt({
-        title: `<i class="fa-solid fa-volume-xmark" style="color:#d97706;"></i> كتم مؤقت لـ "${escapeHtml(u.name)}"`,
-        htmlBody: `
-          <div class="form-grid-2">
-            <div><label class="muted">المدة بالدقائق</label><input type="number" id="quInlineMuteMins" value="15" min="1" max="1440" /></div>
-            <div><label class="muted">${reasonReqLabel}</label><input type="text" id="quInlineMuteReason" placeholder="${isOwner ? 'اختياري للمالك...' : 'اكتب سبب الكتم...'}" /></div>
-          </div>
-        `,
-        confirmText: 'تأكيد الكتم',
-        danger: true,
-        onConfirm: async (_box, done) => {
-          const minutes = Number($('quInlineMuteMins')?.value);
-          const reason = ($('quInlineMuteReason')?.value || '').trim();
-          if (!Number.isFinite(minutes) || minutes < 1) {
-            return showToast('يرجى تحديد مدة الكتم بالدقائق (1 فأكثر).', true);
-          }
-          if (!isOwner && reason.length < 2) {
-            return showToast('يرجى كتابة سبب الكتم (حرفين على الأقل).', true);
-          }
-          try {
-            await api('/api/mod/mute', { method: 'POST', body: { targetKey: u.key, minutes, reason, roomId: state.currentRoom?.id } });
-            showToast(`تم كتم ${u.name} لمدة ${Math.round(minutes)} دقيقة.`);
-            done();
-          } catch (err) {
-            showToast(err.message, true);
-          }
-        }
-      });
+    $('quMuteBtn')?.addEventListener('click', async () => {
+      try {
+        await api('/api/mod/mute', { method: 'POST', body: { targetKey: u.key, minutes: 15, roomId: state.currentRoom?.id } });
+        showToast(`تم كتم ${u.name} مؤقتاً (15 دقيقة).`);
+      } catch (err) {
+        showToast(err.message, true);
+      }
     });
 
     $('quUnmuteBtn')?.addEventListener('click', async () => {
@@ -4077,46 +4152,24 @@
       }
     });
 
-    $('quKickBtn')?.addEventListener('click', () => {
-      showInlinePrompt({
-        title: `<i class="fa-solid fa-door-open" style="color:#dc2626;"></i> طرد "${escapeHtml(u.name)}" من الغرفة`,
-        htmlBody: `<input type="text" id="quInlineKickReason" placeholder="${isOwner ? 'سبب الطرد (اختياري للمالك)...' : 'اكتب سبب الطرد (إلزامي)...'}" />`,
-        confirmText: 'تأكيد الطرد',
-        danger: true,
-        onConfirm: async (_box, done) => {
-          const reason = ($('quInlineKickReason')?.value || '').trim();
-          if (!isOwner && reason.length < 2) return showToast('يرجى كتابة سبب الطرد (حرفين على الأقل).', true);
-          try {
-            await api('/api/mod/kick', { method: 'POST', body: { targetKey: u.key, reason, roomId: state.currentRoom?.id } });
-            showToast(`تم طرد ${u.name} من الغرفة.`);
-            done();
-            closeModal('quickUserModal');
-          } catch (err) {
-            showToast(err.message, true);
-          }
-        }
-      });
+    $('quKickBtn')?.addEventListener('click', async () => {
+      try {
+        await api('/api/mod/kick', { method: 'POST', body: { targetKey: u.key, roomId: state.currentRoom?.id } });
+        showToast(`تم طرد ${u.name} من الغرفة.`);
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
     });
 
-    $('quRoomBanBtn')?.addEventListener('click', () => {
-      showInlinePrompt({
-        title: `<i class="fa-solid fa-door-closed" style="color:#dc2626;"></i> حظر "${escapeHtml(u.name)}" من هذه الغرفة`,
-        htmlBody: `<input type="text" id="quInlineRoomBanReason" placeholder="${isOwner ? 'سبب الحظر من الغرفة (اختياري للمالك)...' : 'اكتب سبب الحظر من الغرفة (إلزامي)...'}" />`,
-        confirmText: 'تأكيد حظر الغرفة',
-        danger: true,
-        onConfirm: async (_box, done) => {
-          const reason = ($('quInlineRoomBanReason')?.value || '').trim();
-          if (!isOwner && reason.length < 2) return showToast('يرجى كتابة سبب الحظر من الغرفة (حرفين على الأقل).', true);
-          try {
-            await api('/api/mod/room-ban', { method: 'POST', body: { roomId: state.currentRoom?.id, targetKey: u.key, reason } });
-            showToast(`تم حظر ${u.name} من الغرفة بنجاح.`);
-            done();
-            closeModal('quickUserModal');
-          } catch (err) {
-            showToast(err.message, true);
-          }
-        }
-      });
+    $('quRoomBanBtn')?.addEventListener('click', async () => {
+      try {
+        await api('/api/mod/room-ban', { method: 'POST', body: { roomId: state.currentRoom?.id, targetKey: u.key } });
+        showToast(`تم حظر ${u.name} من الغرفة بنجاح.`);
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
     });
 
     $('quClearRoomBtn')?.addEventListener('click', () => {
@@ -4263,46 +4316,24 @@
       });
     });
 
-    $('quXBanBtn')?.addEventListener('click', () => {
-      showInlinePrompt({
-        title: `<i class="fa-solid fa-shield-virus" style="color:#dc2626;"></i> إكس باند (حظر الجهاز) لـ "${escapeHtml(u.name)}"`,
-        htmlBody: `<input type="text" id="quInlineXBanReason" placeholder="${isOwner ? 'سبب الإكس باند (اختياري للمالك)...' : 'اكتب سبب الإكس باند (إلزامي)...'}" />`,
-        confirmText: 'تأكيد إكس باند',
-        danger: true,
-        onConfirm: async (_box, done) => {
-          const reason = ($('quInlineXBanReason')?.value || '').trim();
-          if (!isOwner && reason.length < 2) return showToast('يرجى كتابة سبب الإكس باند (حرفين على الأقل).', true);
-          try {
-            await api('/api/mod/ban', { method: 'POST', body: { targetKey: u.key, reason, banType: 'xban' } });
-            showToast('تم تنفيذ إكس باند وحظر الجهاز نهائياً.');
-            done();
-            closeModal('quickUserModal');
-          } catch (err) {
-            showToast(err.message, true);
-          }
-        }
-      });
+    $('quXBanBtn')?.addEventListener('click', async () => {
+      try {
+        await api('/api/mod/ban', { method: 'POST', body: { targetKey: u.key, banType: 'xban' } });
+        showToast('تم تنفيذ إكس باند وحظر الجهاز نهائياً.');
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
     });
 
-    $('quBanBtn')?.addEventListener('click', () => {
-      showInlinePrompt({
-        title: `<i class="fa-solid fa-ban" style="color:#dc2626;"></i> حظر نهائي لـ "${escapeHtml(u.name)}"`,
-        htmlBody: `<input type="text" id="quInlineBanReason" placeholder="${isOwner ? 'سبب الحظر (اختياري للمالك)...' : 'اكتب سبب الحظر (إلزامي)...'}" />`,
-        confirmText: 'تأكيد الحظر',
-        danger: true,
-        onConfirm: async (_box, done) => {
-          const reason = ($('quInlineBanReason')?.value || '').trim();
-          if (!isOwner && reason.length < 2) return showToast('يرجى كتابة سبب الحظر (حرفين على الأقل).', true);
-          try {
-            await api('/api/mod/ban', { method: 'POST', body: { targetKey: u.key, reason, banType: 'ban' } });
-            showToast('تم حظر العضو نهائياً.');
-            done();
-            closeModal('quickUserModal');
-          } catch (err) {
-            showToast(err.message, true);
-          }
-        }
-      });
+    $('quBanBtn')?.addEventListener('click', async () => {
+      try {
+        await api('/api/mod/ban', { method: 'POST', body: { targetKey: u.key, banType: 'ban' } });
+        showToast('تم حظر العضو نهائياً.');
+        closeModal('quickUserModal');
+      } catch (err) {
+        showToast(err.message, true);
+      }
     });
 
     $('quDeleteAccountBtn')?.addEventListener('click', () => {
@@ -6429,10 +6460,13 @@
     state.isRoomManager = Boolean(data.isRoomManager);
     state.canStyleRoom = Boolean(data.canStyleRoom || data.isRoomManager);
     state.roomKingKey = data.roomKingKey || null;
+    if (Array.isArray(data.rooms)) state.rooms = data.rooms;
+    if (Array.isArray(data.onlineUsers)) state.onlineUsers = data.onlineUsers;
     state.messages = Array.isArray(data.messages) ? data.messages : [];
     state.mics = Array.isArray(data.mics) ? data.mics : [];
     state.roomUsers = Array.isArray(data.users) ? data.users : [];
     state.ytForceVideo = false;
+    state.ytLocalClosedVideoId = '';
     state.quizBotState = data.quizBot || { active: Boolean(data.room.quiz_bot_active) };
     state.typingUsers.clear();
     if (data.activeMute !== undefined) updateMutedStateUI(data.activeMute || null);
@@ -6443,6 +6477,11 @@
     renderAllMessages();
     renderRoomUsers();
     renderUserIdentity();
+    syncChatComposerLockState();
+    if (data.royalEntrance && Date.now() - (state.lastRoyalEntranceShownAt || 0) > 10000) {
+      state.lastRoyalEntranceShownAt = Date.now();
+      showCinematicEntrance(data.royalEntrance);
+    }
     syncLocalMirror();
   }
 
@@ -6561,6 +6600,10 @@
               if (found) openQuickUserModal(found);
             }
           }
+        },
+        onRoomJoined(data) {
+          if (!data || !data.room) return;
+          applyRoomJoinPayload(data);
         },
         onSessionPatch(patch) {
           if (!patch) return;
@@ -6771,6 +6814,13 @@
         onSettings(settings) {
           applySiteSettings(settings);
         },
+        onEmojis(emojis) {
+          state.emojis = Array.isArray(emojis) ? emojis : [];
+          syncLocalMirror();
+          if (!$('emojiPopover')?.classList.contains('hidden')) {
+            renderEmojiPopoverGrid();
+          }
+        },
         onSocialState(res) {
           if (!res) return;
           const pms = Array.isArray(res.privateMessages) ? res.privateMessages : [];
@@ -6956,7 +7006,11 @@
     }
 
     if (tab === 'animated') {
-      const animatedCustom = (state.emojis || []).filter((e) => e.image_url && /\.(gif|webp)(\?|$)/i.test(String(e.image_url)));
+      const isAnimEmoji = (e) => {
+        const u = String(e?.image_url || '');
+        return Boolean(e?.is_animated) || /\.(gif|webp|svg)(\?|$)/i.test(u) || /^data:image\/(gif|webp|svg\+xml)/i.test(u);
+      };
+      const animatedCustom = (state.emojis || []).filter((e) => e.image_url && isAnimEmoji(e));
       const builtinHtml = ANIMATED_STICKERS.map((st) => `
         <button type="button" class="emoji-pick-btn sticker-pick-btn" data-sticker-id="${escapeHtml(st.id)}" data-sticker-glyph="${escapeHtml(st.glyph)}" data-sticker-label="${escapeHtml(st.label)}" title="${escapeHtml(st.label)}">
           <span class="sticker-anim-float">${st.svg || st.glyph}</span>
@@ -6964,7 +7018,7 @@
       `).join('');
       const customGifHtml = animatedCustom.map((e) => `
         <button type="button" class="emoji-pick-btn sticker-gif-pick-btn" data-ins="${escapeHtml(e.code)}" title="${escapeHtml(e.code)}">
-          <img src="${escapeHtml(e.image_url)}" alt="${escapeHtml(e.code)}" />
+          <img src="${escapeHtml(e.image_url)}" loading="lazy" decoding="async" alt="${escapeHtml(e.code)}" />
         </button>
       `).join('');
       grid.innerHTML = builtinHtml + customGifHtml;
@@ -6998,7 +7052,7 @@
 
     if (tab === 'custom') {
       grid.innerHTML = state.emojis.length
-        ? state.emojis.map((e) => `<button type="button" class="emoji-pick-btn" data-ins="${escapeHtml(e.code)}"><img src="${escapeHtml(e.image_url)}" alt="" /></button>`).join('')
+        ? state.emojis.map((e) => `<button type="button" class="emoji-pick-btn" data-ins="${escapeHtml(e.code)}"><img src="${escapeHtml(e.image_url)}" loading="lazy" decoding="async" alt="" /></button>`).join('')
         : '<div class="muted" style="grid-column:1/-1;text-align:center;">لا توجد ملصقات مخصصة.</div>';
     } else {
       const list = EMOJI_CATEGORIES[tab] || EMOJI_CATEGORIES.faces;
@@ -7459,19 +7513,17 @@
       state.ytLocalMuted = !state.ytLocalMuted;
       renderRoomYoutubeBar();
     });
-    $('micMiniYtMuteBtn')?.addEventListener('click', () => {
-      state.ytLocalMuted = !state.ytLocalMuted;
-      renderRoomYoutubeBar();
-    });
-    $('micMiniYtExpandBtn')?.addEventListener('click', () => {
-      state.ytForceVideo = !state.ytForceVideo;
-      state.ytBarOpen = state.ytForceVideo;
-      renderRoomYoutubeBar();
-    });
-    $('ytSwitchMiniBtn')?.addEventListener('click', () => {
-      state.ytForceVideo = false;
-      state.ytBarOpen = false;
-      if (state.currentRoom) state.currentRoom.youtube_mini_mode = 1;
+    $('micMiniYtPlayPauseBtn')?.addEventListener('click', () => {
+      state.ytMicPaused = !state.ytMicPaused;
+      const iframe = $('ytIframe');
+      try {
+        iframe?.contentWindow?.postMessage(
+          JSON.stringify({ event: 'command', func: state.ytMicPaused ? 'pauseVideo' : 'playVideo', args: '' }),
+          '*'
+        );
+      } catch {
+        // ignore cross-origin postMessage
+      }
       renderRoomYoutubeBar();
     });
     $('micMiniYtStopBtn')?.addEventListener('click', async () => {
@@ -7484,6 +7536,26 @@
       } catch (err) {
         showToast(err.message, true);
       }
+    });
+    $('ytCompactCloseBtn')?.addEventListener('click', async () => {
+      const r = state.currentRoom;
+      if (!r) return;
+      const isOnMic = (state.mics || []).some((m) => m.holderKey === state.user?.key);
+      const canStopYt = Boolean(state.isRoomManager || (r.youtube_by_key && r.youtube_by_key === state.user?.key) || isOnMic);
+      if (canStopYt) {
+        try {
+          const res = await api('/api/chat/youtube', { method: 'POST', body: { roomId: r.id, url: '', isPlaying: false } });
+          if (res?.room) {
+            state.currentRoom = res.room;
+            renderRoomYoutubeBar();
+            return;
+          }
+        } catch {
+          // fallback to local close
+        }
+      }
+      state.ytLocalClosedVideoId = r.youtube_video_id || '';
+      renderRoomYoutubeBar();
     });
     $('roomQuizToggleBtn')?.addEventListener('click', async () => {
       if (!state.currentRoom) return;
@@ -7517,25 +7589,6 @@
         e.preventDefault();
         clearTimeout(state.ytSearchTimer);
         performYouTubeSearch($('ytSearchInput').value);
-      }
-    });
-    $('ytPlayRoomBtn')?.addEventListener('click', async () => {
-      const url = $('ytUrlInput').value.trim();
-      const iAmOnMic = (state.mics || []).some((m) => m.holderKey === state.user?.key);
-      try {
-        const res = await api('/api/chat/youtube', {
-          method: 'POST',
-          body: { roomId: state.currentRoom?.id, url, isPlaying: true, miniMode: iAmOnMic }
-        });
-        $('ytUrlInput').value = '';
-        state.ytForceVideo = false;
-        if (iAmOnMic) state.ytBarOpen = false;
-        if (res?.room) {
-          state.currentRoom = res.room;
-          renderRoomYoutubeBar();
-        }
-      } catch (err) {
-        showToast(err.message, true);
       }
     });
     $('ytStopBtn')?.addEventListener('click', async () => {
