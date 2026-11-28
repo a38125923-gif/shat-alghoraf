@@ -285,7 +285,7 @@
       return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
     };
     const lum = 0.2126 * toLin(rgb[0]) + 0.7152 * toLin(rgb[1]) + 0.0722 * toLin(rgb[2]);
-    return lum >= 0.12;
+    return lum >= 0.2;
   }
 
   function isReadableOnLightBg(hex) {
@@ -296,7 +296,7 @@
       return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
     };
     const lum = 0.2126 * toLin(rgb[0]) + 0.7152 * toLin(rgb[1]) + 0.0722 * toLin(rgb[2]);
-    return lum <= 0.58;
+    return lum <= 0.38;
   }
 
   function refreshLucideIcons() {
@@ -975,8 +975,8 @@
       'dropOwnerSuiteBtn',
       'dropAdminBtn',
       'topStealthBadge',
-      'plusAdminNoticeBtn',
-      'plusClearRoomBtn',
+      'dropAdminNoticeBtn',
+      'dropClearRoomBtn',
       'drawerOwnerSuiteBtn',
       'drawerAdminBtn',
       'custStealthCard'
@@ -1087,39 +1087,36 @@
       }
     }
 
-    // 3) Plus Dropdown Admin Items
-    const plusDrop = $('plusDropdown');
-    if (plusDrop) {
-      const custTextBtn = $('plusCustomizeTextBtn');
+    // 3) Profile Dropdown Admin Notice & Clear Room Actions
+    if (profDrop && dropLogout) {
       if (canNotice) {
-        if (!$('plusAdminNoticeBtn')) {
+        if (!$('dropAdminNoticeBtn')) {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.id = 'plusAdminNoticeBtn';
+          btn.id = 'dropAdminNoticeBtn';
           btn.className = 'drop-item';
           btn.innerHTML = '<i class="fa-solid fa-bullhorn"></i> إرسال كإشعار إدارة';
           btn.addEventListener('click', () => {
-            $('plusDropdown')?.classList.add('hidden');
+            $('profileDropdown')?.classList.add('hidden');
             state.adminNoticeMode = true;
             $('adminNoticeModePill')?.classList.remove('hidden');
             $('messageInput')?.focus();
           });
-          if (custTextBtn && custTextBtn.parentNode === plusDrop) plusDrop.insertBefore(btn, custTextBtn);
-          else plusDrop.appendChild(btn);
+          profDrop.insertBefore(btn, dropLogout);
         }
       } else {
-        $('plusAdminNoticeBtn')?.remove();
+        $('dropAdminNoticeBtn')?.remove();
       }
 
       if (canClearRoom) {
-        if (!$('plusClearRoomBtn')) {
+        if (!$('dropClearRoomBtn')) {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.id = 'plusClearRoomBtn';
+          btn.id = 'dropClearRoomBtn';
           btn.className = 'drop-item danger';
           btn.innerHTML = '<i class="fa-solid fa-broom"></i> مسح رسائل الغرفة';
           btn.addEventListener('click', async () => {
-            $('plusDropdown')?.classList.add('hidden');
+            $('profileDropdown')?.classList.add('hidden');
             if (!confirm('مسح جميع رسائل هذه الغرفة؟')) return;
             try {
               await api('/api/mod/clear-room', { method: 'POST', body: { roomId: state.currentRoom?.id } });
@@ -1129,10 +1126,10 @@
               showToast(err.message, true);
             }
           });
-          plusDrop.appendChild(btn);
+          profDrop.insertBefore(btn, dropLogout);
         }
       } else {
-        $('plusClearRoomBtn')?.remove();
+        $('dropClearRoomBtn')?.remove();
       }
     }
 
@@ -1489,7 +1486,7 @@
     return Number(state.settings?.fx_owner_galaxy_identity ?? 1) !== 0;
   }
 
-  function formatNameHTML(userObj) {
+  function formatNameHTML(userObj, opts = {}) {
     const uKey = userObj.sender_key || userObj.key || '';
     const name = escapeHtml(userObj.sender_name || userObj.name || 'عضو');
     const role = userObj.sender_role || userObj.role || 'member';
@@ -1521,13 +1518,17 @@
       classes.push(`name-anim-speed-${nameAnimSpeed}`);
     }
 
+    const surfaceMode = opts.surface || 'dark';
+    const surfaceIsDark = surfaceMode === 'stage'
+      ? isCurrentStageDark()
+      : surfaceMode !== 'light';
+
     const styles = [];
     if (!isExclusiveOwner && shine === 'none' && nameStyleMode !== 'gradient') {
-      const stageIsDark = isCurrentStageDark();
       let safeNameCol = nameColor;
       if (!nameBg) {
-        if (stageIsDark && !isReadableOnDarkBg(nameColor)) safeNameCol = '#f8fafc';
-        else if (!stageIsDark && !isReadableOnLightBg(nameColor)) safeNameCol = '#0f172a';
+        if (surfaceIsDark && !isReadableOnDarkBg(nameColor)) safeNameCol = '#f8fafc';
+        else if (!surfaceIsDark && !isReadableOnLightBg(nameColor)) safeNameCol = '#0f172a';
       }
       styles.push(`color:${escapeHtml(safeNameCol)}`);
     }
@@ -2010,13 +2011,10 @@
 
     $('micsCollapsibleWrap')?.classList.toggle('hidden', !micsEnabled || state.micsCollapsed);
     $('toggleYoutubeBarBtn')?.classList.toggle('hidden', !canYtUi);
-    $('plusYoutubeBtn')?.classList.toggle('hidden', !canYtUi);
     $('footerWallBtn')?.classList.toggle('hidden', !canWallUi);
-    $('plusWallBtn')?.classList.toggle('hidden', !canWallUi);
     document.querySelector('.drawer-item[data-drawer="wall"]')?.classList.toggle('hidden', !canWallUi);
     $('topPmBtn')?.classList.toggle('hidden', !canPmUi);
     $('quickImageUploadBtn')?.classList.toggle('hidden', !canMediaUi);
-    $('plusUploadImageBtn')?.classList.toggle('hidden', !canMediaUi);
     $('voiceRecordBtn')?.classList.toggle('hidden', !canMediaUi);
     $('quickTextStyleBtn')?.classList.toggle('hidden', !canMsgStyleUi);
     if (!canMsgStyleUi) $('inlineMsgStyleBar')?.classList.add('hidden');
@@ -2241,7 +2239,6 @@
     syncChatComposerLockState();
 
     const isGuestUser = Boolean(u.isGuest);
-    $('guestRegisterBottomBtn')?.classList.toggle('hidden', !isGuestUser);
     $('dropGuestRegisterBtn')?.classList.toggle('hidden', !isGuestUser);
     $('custGuestUpgradeCard')?.classList.toggle('hidden', !isGuestUser);
 
@@ -2253,14 +2250,11 @@
     const canMsgStyleOn = !isGuestUser && (isOwner || passesSettingRankThreshold('min_rank_msg_style', 'member'));
     $('topPmBtn')?.classList.toggle('hidden', !pmOn);
     $('quickImageUploadBtn')?.classList.toggle('hidden', !mediaOn);
-    $('plusUploadImageBtn')?.classList.toggle('hidden', !mediaOn);
     $('voiceRecordBtn')?.classList.toggle('hidden', !mediaOn);
     $('quickTextStyleBtn')?.classList.toggle('hidden', !canMsgStyleOn);
     if (!canMsgStyleOn) $('inlineMsgStyleBar')?.classList.add('hidden');
     $('toggleYoutubeBarBtn')?.classList.toggle('hidden', !ytOn);
-    $('plusYoutubeBtn')?.classList.toggle('hidden', !ytOn);
     $('footerWallBtn')?.classList.toggle('hidden', !wallOn);
-    $('plusWallBtn')?.classList.toggle('hidden', !wallOn);
     document.querySelector('.drawer-item[data-drawer="wall"]')?.classList.toggle('hidden', !wallOn);
   }
 
@@ -2308,6 +2302,8 @@
     const nightOn = isNightAtmosphereActive() && !r.wallpaper_url && !r.bg_custom;
     const isDarkStage = Boolean(nightOn || rawTheme === 'royal_night' || r.wallpaper_url || r.bg_custom);
     stage.className = `chat-stage theme-${rawTheme} ${isDarkStage ? 'is-dark-stage' : 'is-light-stage'}${nightOn ? ' night-atmosphere-active' : ''}`;
+    $('appView')?.classList.toggle('app-dark-mode', isDarkStage);
+    $('appView')?.classList.toggle('app-light-mode', !isDarkStage);
     if (r.wallpaper_url) {
       stage.style.backgroundImage = `url("${r.wallpaper_url}")`;
     } else if (r.bg_custom) {
@@ -2972,6 +2968,14 @@
     const rawWbotColor = String(state.settings?.welcome_bot_color || msg.bot_color || 'royal_gold');
     const wbotColorKey = allowedWbotColors.has(rawWbotColor) ? rawWbotColor : 'royal_gold';
 
+    const useOwnerPortal = isOwnerSender && !isAdminNotice && isOwnerGalaxyVisualEnabled();
+    const useGlassBubbles = Number(state.settings?.fx_glass_bubbles ?? 1) !== 0;
+    const tierMeta = getRankTierMeta(msg.sender_role || 'member');
+    const rankTierClass = isOwnerSender ? 'rank-tier-owner' : tierMeta.msgClass;
+    const rankGlowColor = isOwnerSender ? 'rgba(251, 191, 36, 0.62)' : tierMeta.glowColor;
+    const stageIsDark = isCurrentStageDark();
+    const rowIsDarkSurface = Boolean(stageIsDark || useOwnerPortal || isQuizBotMsg || isWelcomeBotMsg);
+
     let inlineTextHtml = '';
     let mediaBelowHtml = '';
     let hasMention = false;
@@ -2998,14 +3002,13 @@
             ? '<span class="admin-notice-prefix">إشعار الإدارة</span>'
             : '';
       const rawTxtColor = String(msg.text_color || '').trim();
-      const stageIsDark = isCurrentStageDark();
       let readableColor = '';
       if (isAdminNotice) {
         readableColor = stageIsDark ? '#fecaca' : '#991b1b';
       } else if (!isWelcomeBotMsg) {
         if (rawTxtColor) {
-          if (stageIsDark) {
-            readableColor = isReadableOnDarkBg(rawTxtColor) ? escapeHtml(rawTxtColor) : '#e2e8f0';
+          if (rowIsDarkSurface) {
+            readableColor = isReadableOnDarkBg(rawTxtColor) ? escapeHtml(rawTxtColor) : '#f1f5f9';
           } else {
             readableColor = isReadableOnLightBg(rawTxtColor) ? escapeHtml(rawTxtColor) : '#0f172a';
           }
@@ -3018,12 +3021,6 @@
       const colorCss = readableColor ? `color:${readableColor};` : '';
       inlineTextHtml = `<span class="msg-text-inline ${readableColor ? '' : 'msg-auto-color'}" style="${colorCss}font-size:${msgFontSize}px;${ff}${fw}${fi}">${prefix}${rendered.html}</span>`;
     }
-
-    const useOwnerPortal = isOwnerSender && !isAdminNotice && isOwnerGalaxyVisualEnabled();
-    const useGlassBubbles = Number(state.settings?.fx_glass_bubbles ?? 1) !== 0;
-    const tierMeta = getRankTierMeta(msg.sender_role || 'member');
-    const rankTierClass = isOwnerSender ? 'rank-tier-owner' : tierMeta.msgClass;
-    const rankGlowColor = isOwnerSender ? 'rgba(251, 191, 36, 0.62)' : tierMeta.glowColor;
 
     row.className = `cody-msg-row ${tierMeta.tierClass}${useGlassBubbles ? ` glass-bubble-msg ${rankTierClass}` : ''}${isQuizBotMsg ? ` quiz-bot-msg-card quiz-style-${escapeHtml(quizStyleKey)}` : ''}${isWelcomeBotMsg ? ` welcome-bot-msg-card wbot-color-${escapeHtml(wbotColorKey)}` : ''}${isAdminNotice ? ' admin-notice-row' : ''}${isGift ? ' gift-msg-row' : ''}${mentionsMe ? ' mention-for-me' : ''}${useOwnerPortal ? ' owner-royal-msg-row owner-portal-card' : (isOwnerSender && !isAdminNotice ? ' owner-gold-glass-fallback' : '')}`;
     if (useGlassBubbles && !useOwnerPortal) {
@@ -3087,7 +3084,7 @@
         <div class="msg-head-line">
           <div class="msg-inline-main">
             ${roleBadgeHTML(msg.sender_role, true)}
-            <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(msg)}</span>
+            <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(msg, { surface: rowIsDarkSurface ? 'dark' : 'light' })}</span>
             ${inlineTextHtml}
           </div>
           <div class="msg-time-actions">
@@ -3401,7 +3398,7 @@
           <div class="msg-head-line">
             <div class="msg-inline-main">
               ${roleBadgeHTML(u.role, true)}
-              <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u)}</span>
+              <span class="msg-name-trigger" style="cursor:pointer" title="اضغط لنداء العضو">${formatNameHTML(u, { surface: isRoyal ? 'dark' : 'stage' })}</span>
               <span class="${isRoyal ? 'join-royal-bar' : 'join-maroon-bar'}"><i class="fa-solid ${isRoyal ? 'fa-crown' : 'fa-check'}"></i> ${isRoyal ? escapeHtml(customJoinTxt || defaultRoyalJoin) : 'انضم إلى الغرفة الآن'}</span>
             </div>
             <span class="msg-time">${formatTimeAgo(Date.now())}</span>
@@ -7270,7 +7267,6 @@
         state.guestRegisterReturnToChat = false;
       }
     });
-    $('guestRegisterBottomBtn')?.addEventListener('click', openAuthRegisterForGuest);
     $('dropGuestRegisterBtn')?.addEventListener('click', openAuthRegisterForGuest);
     $('custGuestRegisterBtn')?.addEventListener('click', openAuthRegisterForGuest);
 
@@ -7282,7 +7278,6 @@
     $('dropLogoutBtn').addEventListener('click', () => logoutUser({ explicit: true }));
 
     // Top quick icons
-    $('topReportBtn')?.addEventListener('click', () => openSocialModal('report'));
     $('topNotifBtn')?.addEventListener('click', () => openSocialModal('notifications'));
     $('topFriendsBtn')?.addEventListener('click', () => openSocialModal('friends'));
     $('topPmBtn')?.addEventListener('click', () => openSlideSheetDrawer('pm'));
@@ -7296,12 +7291,7 @@
     });
     $('closeUsersSideBtn')?.addEventListener('click', () => $('usersSidePanel')?.classList.remove('open'));
     $('closeSlideSheetBtn')?.addEventListener('click', closeSlideSheetDrawer);
-    $('footerFriendsBtn')?.addEventListener('click', () => openSocialModal('friends'));
     $('footerWallBtn')?.addEventListener('click', () => openSlideSheetDrawer('wall'));
-    $('plusWallBtn')?.addEventListener('click', () => {
-      $('plusDropdown')?.classList.add('hidden');
-      openSlideSheetDrawer('wall');
-    });
     $('quickImageUploadBtn')?.addEventListener('click', () => $('chatImageFileInput')?.click());
     $('quickTextStyleBtn')?.addEventListener('click', () => {
       const bar = $('inlineMsgStyleBar');
@@ -7452,7 +7442,6 @@
     $('closeTopicBannerBtn')?.addEventListener('click', () => {
       $('topicBannerBar')?.classList.add('hidden');
     });
-    $('footerOptionsBtn')?.addEventListener('click', () => openCustomizeModal('appearance'));
     $('footerRefreshBtn')?.addEventListener('click', async () => {
       if (state.currentRoom) {
         await window.AsilRealtime?.triggerHeartbeatNow(true).catch(() => {});
@@ -7601,15 +7590,6 @@
       state.ytBarOpen = !state.ytBarOpen;
       renderRoomYoutubeBar();
     });
-    $('plusYoutubeBtn')?.addEventListener('click', () => {
-      $('plusDropdown')?.classList.add('hidden');
-      state.ytBarOpen = true;
-      renderRoomYoutubeBar();
-    });
-    $('plusReportBtn')?.addEventListener('click', () => {
-      $('plusDropdown')?.classList.add('hidden');
-      openSocialModal('report');
-    });
     $('ytCloseViewBtn')?.addEventListener('click', () => {
       state.ytBarOpen = false;
       $('roomYoutubeBar')?.classList.add('hidden');
@@ -7750,14 +7730,6 @@
       state.typingTimeout = setTimeout(() => window.AsilRealtime?.setTyping(false), 1500);
     });
 
-    $('plusMenuBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      $('plusDropdown').classList.toggle('hidden');
-    });
-    $('plusUploadImageBtn').addEventListener('click', () => {
-      $('plusDropdown').classList.add('hidden');
-      $('chatImageFileInput').click();
-    });
     $('chatImageFileInput').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -7780,10 +7752,6 @@
     $('adminNoticeModePill').addEventListener('click', () => {
       state.adminNoticeMode = false;
       $('adminNoticeModePill').classList.add('hidden');
-    });
-    $('plusCustomizeTextBtn').addEventListener('click', () => {
-      $('plusDropdown').classList.add('hidden');
-      openCustomizeModal('appearance');
     });
 
     // Emoji Popover (positioned directly above bottomBar)
@@ -8334,7 +8302,6 @@
     // Dismiss popovers on outside click
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.profile-trigger-wrap')) $('profileDropdown').classList.add('hidden');
-      if (!e.target.closest('.plus-menu-wrap')) $('plusDropdown').classList.add('hidden');
       if (!e.target.closest('#emojiPopover') && !e.target.closest('#emojiPickerBtn')) $('emojiPopover').classList.add('hidden');
       if (!e.target.closest('#radioPopover') && !e.target.closest('#footerRadioSwitchBtn')) $('radioPopover')?.classList.add('hidden');
       if (!e.target.closest('.msg-actions-wrap') && !e.target.closest('.wall-post-menu-wrap')) {
@@ -8380,9 +8347,10 @@
     const lockNote = $('inlineMsgLockNote');
     if (lockNote) lockNote.classList.add('hidden');
 
-    const activeColor = (u.textColor || '#e2e8f0').toLowerCase();
+    const defaultTextHex = isCurrentStageDark() ? '#e2e8f0' : '#0f172a';
+    const activeColor = (u.textColor || defaultTextHex).toLowerCase();
     if ($('inlineMsgColorPicker')) {
-      $('inlineMsgColorPicker').value = /^#[0-9a-f]{6}$/i.test(activeColor) ? activeColor : '#e2e8f0';
+      $('inlineMsgColorPicker').value = /^#[0-9a-f]{6}$/i.test(activeColor) ? activeColor : defaultTextHex;
       $('inlineMsgColorPicker').disabled = false;
     }
 

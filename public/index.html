@@ -141,19 +141,15 @@
             <span id="pmBadge" class="badge-count hidden">0</span>
             <span class="ti-lbl">رسالة</span>
           </button>
-          <button type="button" id="topFriendsBtn" class="top-icon-btn" title="طلبات الصداقة">
+          <button type="button" id="topFriendsBtn" class="top-icon-btn" title="الأصدقاء والطلبات">
             <span class="ti-ico"><i class="fa-solid fa-user-group"></i></span>
             <span id="friendBadge" class="badge-count hidden">0</span>
-            <span class="ti-lbl">طلب</span>
+            <span class="ti-lbl">الأصدقاء</span>
           </button>
           <button type="button" id="topNotifBtn" class="top-icon-btn" title="الإشعارات">
             <span class="ti-ico"><i class="fa-solid fa-bell"></i></span>
             <span id="notifBadge" class="badge-count hidden">0</span>
             <span class="ti-lbl">اشعار</span>
-          </button>
-          <button type="button" id="topReportBtn" class="top-icon-btn" title="إبلاغ الإدارة">
-            <span class="ti-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>
-            <span class="ti-lbl">إبلاغ</span>
           </button>
         </div>
 
@@ -349,51 +345,35 @@
 
       <!-- BOTTOM INPUT BAR -->
       <section id="bottomBar" class="cody-input-bar">
-        <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">
-          <i class="fa-solid fa-paper-plane"></i>
-        </button>
-
         <div class="input-pill-wrap">
           <span id="adminNoticeModePill" class="admin-mode-pill hidden" title="إلغاء وضع إشعار الإدارة">
             <i class="fa-solid fa-bullhorn"></i> إشعار <i class="fa-solid fa-xmark"></i>
           </span>
+          <button type="button" id="emojiPickerBtn" class="inside-emoji-btn" title="إيموجي وملصقات">
+            <i class="fa-regular fa-face-smile"></i>
+          </button>
           <input
             type="text"
             id="messageInput"
-            placeholder="اكتب هنا..."
+            placeholder="اكتب رسالتك هنا..."
             maxlength="1000"
             autocomplete="off"
           />
           <button type="button" id="quickTextStyleBtn" class="inside-emoji-btn" title="لون وحجم الخط">
             <i class="fa-solid fa-palette"></i>
           </button>
-          <button type="button" id="emojiPickerBtn" class="inside-emoji-btn" title="إيموجي وملصقات">
-            <i class="fa-regular fa-face-smile"></i>
-          </button>
         </div>
 
         <div class="input-left-tools">
-          <button type="button" id="guestRegisterBottomBtn" class="guest-register-chat-btn hidden" title="تسجيل عضوية دائمة">
-            <i class="fa-solid fa-user-plus"></i><span>تسجيل عضوية</span>
+          <button type="button" id="quickImageUploadBtn" class="input-tool-btn" title="رفع صورة أو GIF">
+            <i class="fa-regular fa-image"></i>
           </button>
           <button type="button" id="voiceRecordBtn" class="input-tool-btn" title="المايك الصوتي (تسجيل)">
             <i class="fa-solid fa-microphone"></i>
           </button>
-          <button type="button" id="quickImageUploadBtn" class="input-tool-btn" title="رفع صورة أو GIF">
-            <i class="fa-regular fa-image"></i>
+          <button type="button" id="sendMsgBtn" class="send-circle-btn" title="إرسال">
+            <i class="fa-solid fa-paper-plane"></i>
           </button>
-          <div class="plus-menu-wrap">
-            <button type="button" id="plusMenuBtn" class="input-tool-btn" title="إضافات وخيارات">
-              <i class="fa-solid fa-plus"></i>
-            </button>
-            <div id="plusDropdown" class="plus-dropdown hidden">
-              <button type="button" id="plusUploadImageBtn" class="drop-item"><i class="fa-solid fa-image"></i> إرسال صورة / GIF</button>
-              <button type="button" id="plusWallBtn" class="drop-item"><i class="fa-solid fa-signs-post"></i> الحائط والمنشورات</button>
-              <button type="button" id="plusYoutubeBtn" class="drop-item"><i class="fa-brands fa-youtube"></i> مشغل يوتيوب الغرفة</button>
-              <button type="button" id="plusReportBtn" class="drop-item"><i class="fa-solid fa-triangle-exclamation"></i> إبلاغ الإدارة</button>
-              <button type="button" id="plusCustomizeTextBtn" class="drop-item"><i class="fa-solid fa-palette"></i> تخصيص الخط والألوان</button>
-            </div>
-          </div>
         </div>
 
         <input type="file" id="chatImageFileInput" accept="image/gif,image/webp,image/png,image/jpeg,image/*" class="hidden" />
@@ -401,14 +381,6 @@
 
       <!-- FIXED DARK CHARCOAL FOOTER BAR (#18181b) -->
       <footer id="codyFooterBar" class="cody-footerbar">
-        <button type="button" id="footerOptionsBtn" class="footer-nav-btn" title="الخيارات">
-          <span class="fn-ico"><i class="fa-solid fa-sliders"></i></span>
-          <span class="fn-lbl">الخيارات</span>
-        </button>
-        <button type="button" id="footerFriendsBtn" class="footer-nav-btn" title="الأصدقاء">
-          <span class="fn-ico"><i class="fa-solid fa-user-group"></i></span>
-          <span class="fn-lbl">الأصدقاء</span>
-        </button>
         <button type="button" id="toggleUsersDrawerBtn" class="footer-nav-btn" title="المتواجدين">
           <span class="fn-ico"><i class="fa-solid fa-users"></i> <span id="roomOnlineCounter" class="footer-count-pill">0</span></span>
           <span class="fn-lbl">المتواجدين</span>
