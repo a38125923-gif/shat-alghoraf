@@ -546,6 +546,8 @@
     lastRoyalEntranceShownAt: 0,
     quizBotState: { active: false, hintSent: false, enabledSetting: true },
     activeCustomizeTab: 'info',
+    pendingAvatarDataUrl: undefined,
+    pendingCoverDataUrl: undefined,
     nameStyleMode: 'solid',
     activeNameStyleTab: 'color',
     activeLeaderboardTab: 'rich',
@@ -1225,6 +1227,23 @@
     const cleanKey = String(roleKey || 'member').trim() || 'member';
     const found = state.ranks.find((r) => r.key === cleanKey);
     if (found) return found;
+    const fallbackPowerMap = {
+      guest: 1,
+      member: 2,
+      bronze_member: 3,
+      silver_member: 4,
+      gold_member: 5,
+      royal_member: 6,
+      royal_vip: 7,
+      premium: 8,
+      admin: 9,
+      super_admin: 10,
+      owner: 11,
+      super_owner: 12,
+      general_admin: 13,
+      co_owner: 14,
+      site_owner: 15
+    };
     if (cleanKey === 'guest') {
       return {
         key: 'guest',
@@ -1240,13 +1259,13 @@
     }
     return {
       key: cleanKey,
-      label: 'عضو',
-      icon: cleanKey === 'member' ? '' : '👤',
+      label: cleanKey === 'site_owner' ? 'المالك' : 'عضو',
+      icon: cleanKey === 'member' ? '' : (cleanKey === 'site_owner' ? '👑' : '👤'),
       badge_style: 'royal_shield',
       image_url: '',
       bg_color: '#334155',
       text_color: '#ffffff',
-      power: 5,
+      power: fallbackPowerMap[cleanKey] || 2,
       permissions: {}
     };
   }
@@ -1271,13 +1290,33 @@
     return Boolean(rk.permissions && rk.permissions[perm]);
   }
 
-  function passesSettingRankThreshold(settingKey, userObj = state.user) {
+  function passesSettingRankThreshold(settingKey, fallbackOrUser = 'member', explicitUser = state.user) {
+    const userObj = fallbackOrUser && typeof fallbackOrUser === 'object' ? fallbackOrUser : explicitUser;
+    const fallbackKey = typeof fallbackOrUser === 'string' && fallbackOrUser ? fallbackOrUser : 'member';
     if (!userObj) return false;
     if (userObj.role === 'site_owner' || userObj.isSupremeOwner) return true;
-    const reqRoleKey = String(state.settings?.[settingKey] || 'member');
-    const reqPower = Number(getRank(reqRoleKey)?.power || 0);
-    const myPower = Number(getRank(userObj.role || 'guest')?.power || 0);
+    const reqRoleKey = String(state.settings?.[settingKey] || fallbackKey || 'member');
+    if (reqRoleKey === 'disabled' || reqRoleKey === 'owner_only') return false;
+    if (reqRoleKey === 'guest') return true;
+    if (userObj.isGuest || userObj.role === 'guest') return false;
+    const reqPower = Number(getRank(reqRoleKey)?.power || 2);
+    const myPower = Number(getRank(userObj.role || 'guest')?.power || userObj.level || 0);
     return myPower >= reqPower;
+  }
+
+  function patchUserInLists(userPatch) {
+    if (!userPatch || !userPatch.key) return;
+    const applyPatch = (arr) => {
+      if (!Array.isArray(arr)) return;
+      for (let i = 0; i < arr.length; i += 1) {
+        if (arr[i] && arr[i].key === userPatch.key) {
+          arr[i] = { ...arr[i], ...userPatch };
+        }
+      }
+    };
+    applyPatch(state.roomUsers);
+    applyPatch(state.onlineUsers);
+    applyPatch(state.persistentMembers);
   }
 
   function canUploadAnimatedGif(userObj = state.user) {
@@ -4638,6 +4677,9 @@
     }
 
     const u = state.user;
+    state.pendingAvatarDataUrl = undefined;
+    state.pendingCoverDataUrl = undefined;
+    $('saveCustomizeBtn')?.classList.remove('has-pending-media');
     syncProfileUploadControlsForRole(u);
     $('custCoverHero')?.classList.remove('cover-preview-clean');
     document.querySelector('#customizeModal .profile-luxury-card')?.classList.remove('profile-card-preview-mode');
@@ -5174,8 +5216,9 @@
         custAvatarStage.insertBefore(halo, custAvatarStage.firstChild);
       }
     }
-    if (u.avatarUrl) {
-      $('custPreviewAvatarImg').src = u.avatarUrl;
+    const effectiveAvatarUrl = state.pendingAvatarDataUrl !== undefined ? state.pendingAvatarDataUrl : (u.avatarUrl || '');
+    if (effectiveAvatarUrl) {
+      $('custPreviewAvatarImg').src = effectiveAvatarUrl;
       $('custPreviewAvatarImg').classList.remove('hidden');
       $('custPreviewAvatarLetter').classList.add('hidden');
     } else {
@@ -5186,16 +5229,17 @@
     }
     const canAv = !u.isGuest && (isOwner || passesSettingRankThreshold('min_rank_avatar', 'member'));
     if ($('custDeleteAvatarBtn')) {
-      $('custDeleteAvatarBtn').classList.toggle('hidden', !canAv || !u.avatarUrl);
+      $('custDeleteAvatarBtn').classList.toggle('hidden', !canAv || !effectiveAvatarUrl);
     }
 
+    const effectiveCoverUrl = state.pendingCoverDataUrl !== undefined ? state.pendingCoverDataUrl : (u.coverUrl || '');
     if ($('custCoverImg') && $('custCoverHero')) {
       const hero = $('custCoverHero');
-      if (u.coverUrl) {
-        $('custCoverImg').src = u.coverUrl;
+      if (effectiveCoverUrl) {
+        $('custCoverImg').src = effectiveCoverUrl;
         $('custCoverImg').classList.remove('hidden');
         hero.classList.add('has-cover-img');
-        hero.style.backgroundImage = `url('${u.coverUrl}')`;
+        hero.style.backgroundImage = `url('${effectiveCoverUrl}')`;
         hero.style.backgroundSize = 'cover';
         hero.style.backgroundPosition = 'center';
         hero.style.width = '100%';
@@ -5215,8 +5259,10 @@
     }
     const canCov = !u.isGuest && (isOwner || passesSettingRankThreshold('min_rank_cover', 'member'));
     if ($('custDeleteCoverBtn')) {
-      $('custDeleteCoverBtn').classList.toggle('hidden', !canCov || !u.coverUrl);
+      $('custDeleteCoverBtn').classList.toggle('hidden', !canCov || !effectiveCoverUrl);
     }
+    const hasPendingMedia = state.pendingAvatarDataUrl !== undefined || state.pendingCoverDataUrl !== undefined;
+    $('saveCustomizeBtn')?.classList.toggle('has-pending-media', hasPendingMedia);
 
     const card = document.querySelector('#customizeModal .profile-luxury-card');
     if (card) {
@@ -5318,6 +5364,12 @@
     if (!state.user || state.user.isGuest) {
       return showToast('حفظ وتعديل الملف الشخصي متاح للأعضاء المسجلين فقط.', true);
     }
+    const saveBtn = $('saveCustomizeBtn');
+    const prevHtml = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الحفظ في Firebase...';
+    }
     try {
       const textColVal = $('custTextColor').value || '#0f172a';
       const customFields = { ...((state.user?.customFields && typeof state.user.customFields === 'object') ? state.user.customFields : {}) };
@@ -5350,6 +5402,12 @@
         vipWings: $('custVipWingsToggle').checked,
         customFields
       };
+      if (state.pendingAvatarDataUrl !== undefined) {
+        bodyPayload.avatarUrl = state.pendingAvatarDataUrl;
+      }
+      if (state.pendingCoverDataUrl !== undefined) {
+        bodyPayload.coverUrl = state.pendingCoverDataUrl;
+      }
       if (!$('custDisplayNameWrap')?.classList.contains('hidden') && $('custDisplayName')) {
         bodyPayload.displayName = $('custDisplayName').value;
       }
@@ -5357,15 +5415,25 @@
         method: 'POST',
         body: bodyPayload
       });
+      state.pendingAvatarDataUrl = undefined;
+      state.pendingCoverDataUrl = undefined;
       state.user = res.user;
+      patchUserInLists(state.user);
       persistSessionState(state.user, state.token);
       syncLocalMirror();
       renderUserIdentity();
+      renderRoomUsers();
       updateCustomizePreview();
-      showToast('تم حفظ وتطبيق تعديلات ملفك الشخصي!');
+      showToast('تم حفظ وتطبيق تعديلات ملفك الشخصي في Firebase بنجاح!');
       if (closeAfter) closeModal('customizeModal');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = prevHtml || '<i class="fa-solid fa-floppy-disk"></i> حفظ جميع التغييرات';
+        saveBtn.classList.toggle('has-pending-media', state.pendingAvatarDataUrl !== undefined || state.pendingCoverDataUrl !== undefined);
+      }
     }
   }
 
@@ -6604,9 +6672,11 @@
         onSessionPatch(patch) {
           if (!patch) return;
           state.user = state.user ? { ...state.user, ...patch } : patch;
+          patchUserInLists(state.user);
           window.AsilRealtime?.updateUser(state.user);
           if (state.user && state.token) persistSessionState(state.user, state.token);
           renderUserIdentity();
+          renderRoomUsers();
         },
         onRoomPermissions(perms) {
           if (!perms) return;
@@ -6769,11 +6839,13 @@
         },
         onGlobalOnlineUsers(list) {
           state.onlineUsers = list || [];
+          for (const ou of state.onlineUsers) patchUserInLists(ou);
           renderRoomUsers();
         },
         onPresenceSnapshot(all) {
           if (!Array.isArray(all)) return;
           state.onlineUsers = all;
+          for (const ou of all) patchUserInLists(ou);
           const rid = state.currentRoom?.id;
           if (rid) state.roomUsers = all.filter((u) => u.roomId === rid);
           renderRoomUsers();
@@ -7885,76 +7957,108 @@
       }
     }
 
-    async function prepareProfileImageForFirebase(file, kind) {
-      if (!file) return file;
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('تعذر قراءة ملف الصورة.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImageElementFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        let objUrl = '';
+        try {
+          objUrl = URL.createObjectURL(file);
+        } catch {
+          objUrl = '';
+        }
+        img.onload = () => {
+          if (objUrl) URL.revokeObjectURL(objUrl);
+          resolve(img);
+        };
+        img.onerror = async () => {
+          if (objUrl) URL.revokeObjectURL(objUrl);
+          try {
+            const fallbackUrl = await readFileAsDataUrl(file);
+            const img2 = new Image();
+            img2.onload = () => resolve(img2);
+            img2.onerror = () => reject(new Error('ملف الصورة غير مدعوم أو تالف.'));
+            img2.src = fallbackUrl;
+          } catch {
+            reject(new Error('ملف الصورة غير مدعوم أو تالف.'));
+          }
+        };
+        if (objUrl) {
+          img.src = objUrl;
+        } else {
+          readFileAsDataUrl(file).then((u) => { img.src = u; }).catch(reject);
+        }
+      });
+    }
+
+    async function compressImageToBase64UnderLimit(file, kind, maxBase64Bytes = 78 * 1024) {
+      if (!file) throw new Error('لم يتم اختيار صورة.');
       const isGif = await isGifUploadFile(file);
       if (isGif) {
         if (!canUploadAnimatedGif(state.user)) {
           throw new Error('رفع صور GIF المتحركة متاح للمالك وأعلى رتبتين فقط.');
         }
-        return file;
+        if (file.size <= 55 * 1024) {
+          const gifDataUrl = await readFileAsDataUrl(file);
+          if (gifDataUrl && gifDataUrl.length <= maxBase64Bytes) return gifDataUrl;
+        }
       }
-      const maxDim = kind === 'cover' ? 1200 : 400;
-      const quality = kind === 'cover' ? 0.82 : 0.84;
-      return new Promise((resolve) => {
-        const img = new Image();
-        const objUrl = URL.createObjectURL(file);
-        img.onload = () => {
-          try {
-            let w = img.naturalWidth || img.width;
-            let h = img.naturalHeight || img.height;
-            if (!w || !h) {
-              URL.revokeObjectURL(objUrl);
-              return resolve(file);
-            }
-            const needsResize = w > maxDim || h > maxDim;
-            if (needsResize) {
-              const scale = maxDim / Math.max(w, h);
-              w = Math.max(1, Math.round(w * scale));
-              h = Math.max(1, Math.round(h * scale));
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              URL.revokeObjectURL(objUrl);
-              return resolve(file);
-            }
-            ctx.drawImage(img, 0, 0, w, h);
-            const finalizeBlob = (blob, mimeType, ext) => {
-              URL.revokeObjectURL(objUrl);
-              if (!blob) return resolve(file);
-              if (!needsResize && file.type === mimeType && blob.size >= file.size) {
-                return resolve(file);
-              }
-              const baseName = (file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
-              resolve(new File([blob], `${baseName}.${ext}`, { type: mimeType }));
-            };
-            canvas.toBlob((webpBlob) => {
-              if (webpBlob && webpBlob.type === 'image/webp') {
-                return finalizeBlob(webpBlob, 'image/webp', 'webp');
-              }
-              canvas.toBlob((jpegBlob) => {
-                finalizeBlob(jpegBlob, 'image/jpeg', 'jpg');
-              }, 'image/jpeg', quality);
-            }, 'image/webp', quality);
-          } catch {
-            URL.revokeObjectURL(objUrl);
-            resolve(file);
+
+      const img = await loadImageElementFromFile(file);
+      const natW = img.naturalWidth || img.width || 1;
+      const natH = img.naturalHeight || img.height || 1;
+      const initialMaxDim = kind === 'cover' ? 960 : 360;
+      const dimScaleSteps = [1, 0.78, 0.58, 0.42];
+      const qualitySteps = [0.85, 0.76, 0.66, 0.56, 0.46, 0.36];
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('المتصفح لا يدعم ضغط الصور.');
+
+      let bestResult = '';
+      for (const dimFactor of dimScaleSteps) {
+        const targetMax = Math.max(96, Math.round(initialMaxDim * dimFactor));
+        const scale = Math.min(1, targetMax / Math.max(natW, natH));
+        const w = Math.max(1, Math.round(natW * scale));
+        const h = Math.max(1, Math.round(natH * scale));
+        canvas.width = w;
+        canvas.height = h;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        for (const q of qualitySteps) {
+          let dataUrl = canvas.toDataURL('image/webp', q);
+          if (!/^data:image\/webp;base64,/i.test(dataUrl)) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, w, h);
+            ctx.restore();
+            dataUrl = canvas.toDataURL('image/jpeg', q);
           }
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(objUrl);
-          resolve(file);
-        };
-        img.src = objUrl;
-      });
+          if (!bestResult || dataUrl.length < bestResult.length) {
+            bestResult = dataUrl;
+          }
+          if (dataUrl.length <= maxBase64Bytes) {
+            return dataUrl;
+          }
+        }
+      }
+      if (bestResult && bestResult.length <= 80 * 1024) return bestResult;
+      throw new Error('تعذر ضغط الصورة تحت 80KB — اختر صورة أصغر.');
     }
 
     $('custUploadAvatarBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if ($('custAvatarFile')?.disabled) {
+      const canAv = !state.user?.isGuest && (isExclusiveOwnerObj(state.user) || passesSettingRankThreshold('min_rank_avatar', 'member'));
+      if (!canAv || $('custAvatarFile')?.disabled) {
         e.preventDefault();
         showToast('تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.', true);
       }
@@ -7962,7 +8066,8 @@
     $('custUploadAvatarBtn')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if ($('custAvatarFile')?.disabled) {
+        const canAv = !state.user?.isGuest && (isExclusiveOwnerObj(state.user) || passesSettingRankThreshold('min_rank_avatar', 'member'));
+        if (!canAv || $('custAvatarFile')?.disabled) {
           showToast('تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.', true);
           return;
         }
@@ -7973,20 +8078,15 @@
       const rawFile = $('custAvatarFile').files[0];
       if (!rawFile) return;
       try {
-        const file = await prepareProfileImageForFirebase(rawFile, 'avatar');
-        const fd = new FormData();
-        fd.append('file', file);
-        const res = await api('/api/upload/avatar', { method: 'POST', body: fd });
-        if (res?.user) state.user = res.user;
-        else if (state.user) state.user.avatarUrl = res.url;
-        try {
-          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(state.user));
-        } catch {
-          // ignore
+        const canAv = !state.user?.isGuest && (isExclusiveOwnerObj(state.user) || passesSettingRankThreshold('min_rank_avatar', 'member'));
+        if (!canAv) {
+          throw new Error('تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.');
         }
+        const base64DataUrl = await compressImageToBase64UnderLimit(rawFile, 'avatar');
+        state.pendingAvatarDataUrl = base64DataUrl;
         updateCustomizePreview();
-        renderUserIdentity();
-        showToast('تم رفع وحفظ الصورة الشخصية في قاعدة البيانات بنجاح!');
+        const kbSize = Math.max(1, Math.round(base64DataUrl.length / 1024));
+        showToast(`تم ضغط الصورة الشخصية (${kbSize}KB) ومعاينتها — اضغط "حفظ جميع التغييرات" للتثبيت.`);
       } catch (err) {
         showToast(err.message, true);
       } finally {
@@ -7994,40 +8094,59 @@
       }
     });
     $('custDeleteAvatarBtn')?.addEventListener('click', async () => {
+      if (state.pendingAvatarDataUrl && state.pendingAvatarDataUrl !== (state.user?.avatarUrl || '')) {
+        state.pendingAvatarDataUrl = state.user?.avatarUrl ? undefined : '';
+        updateCustomizePreview();
+        showToast('تم إلغاء معاينة الصورة المختارة.');
+        return;
+      }
       if (!confirm('حذف صورتك الشخصية الحالية؟')) return;
       try {
         const res = await api('/api/profile/avatar', { method: 'DELETE' });
+        state.pendingAvatarDataUrl = undefined;
         if (res?.user) state.user = res.user;
         else state.user.avatarUrl = '';
+        patchUserInLists(state.user);
         updateCustomizePreview();
         renderUserIdentity();
+        renderRoomUsers();
         showToast('تم حذف الصورة الشخصية.');
       } catch (err) {
         showToast(err.message, true);
       }
     });
     $('custUploadCoverBtn')?.addEventListener('click', (e) => {
-      e.preventDefault();
       e.stopPropagation();
-      $('custCoverFile')?.click();
+      const canCov = !state.user?.isGuest && (isExclusiveOwnerObj(state.user) || passesSettingRankThreshold('min_rank_cover', 'member'));
+      if (!canCov || $('custCoverFile')?.disabled) {
+        e.preventDefault();
+        showToast('تغيير صورة الغلاف مقيّد حالياً لرتبة أعلى من رتبتك.', true);
+      }
+    });
+    $('custUploadCoverBtn')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const canCov = !state.user?.isGuest && (isExclusiveOwnerObj(state.user) || passesSettingRankThreshold('min_rank_cover', 'member'));
+        if (!canCov || $('custCoverFile')?.disabled) {
+          showToast('تغيير صورة الغلاف مقيّد حالياً لرتبة أعلى من رتبتك.', true);
+          return;
+        }
+        $('custCoverFile')?.click();
+      }
     });
     $('custCoverFile')?.addEventListener('change', async () => {
       const rawFile = $('custCoverFile').files[0];
       if (!rawFile) return;
       try {
-        const file = await prepareProfileImageForFirebase(rawFile, 'cover');
-        const fd = new FormData();
-        fd.append('file', file);
-        const res = await api('/api/upload/cover', { method: 'POST', body: fd });
-        if (res?.user) state.user = res.user;
-        else if (state.user) state.user.coverUrl = res.url;
-        try {
-          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(state.user));
-        } catch {
-          // ignore
+        const canCov = !state.user?.isGuest && (isExclusiveOwnerObj(state.user) || passesSettingRankThreshold('min_rank_cover', 'member'));
+        if (!canCov) {
+          throw new Error('تغيير صورة الغلاف مقيّد حالياً لرتبة أعلى من رتبتك.');
         }
+        const base64DataUrl = await compressImageToBase64UnderLimit(rawFile, 'cover');
+        state.pendingCoverDataUrl = base64DataUrl;
         updateCustomizePreview();
-        showToast('تم رفع وحفظ صورة الغلاف في قاعدة البيانات بنجاح!');
+        const kbSize = Math.max(1, Math.round(base64DataUrl.length / 1024));
+        showToast(`تم ضغط صورة الغلاف (${kbSize}KB) ومعاينتها — اضغط "حفظ جميع التغييرات" للتثبيت.`);
       } catch (err) {
         showToast(err.message, true);
       } finally {
@@ -8035,12 +8154,21 @@
       }
     });
     $('custDeleteCoverBtn')?.addEventListener('click', async () => {
+      if (state.pendingCoverDataUrl && state.pendingCoverDataUrl !== (state.user?.coverUrl || '')) {
+        state.pendingCoverDataUrl = state.user?.coverUrl ? undefined : '';
+        updateCustomizePreview();
+        showToast('تم إلغاء معاينة صورة الغلاف المختارة.');
+        return;
+      }
       if (!confirm('حذف صورة الغلاف الحالية؟')) return;
       try {
         const res = await api('/api/profile/cover', { method: 'DELETE' });
+        state.pendingCoverDataUrl = undefined;
         if (res?.user) state.user = res.user;
         else state.user.coverUrl = '';
+        patchUserInLists(state.user);
         updateCustomizePreview();
+        renderRoomUsers();
         showToast('تم حذف صورة الغلاف.');
       } catch (err) {
         showToast(err.message, true);

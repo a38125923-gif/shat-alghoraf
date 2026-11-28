@@ -68,7 +68,8 @@ function sanitizeSafeUrl(rawUrl, { allowDataImage = true, maxLen = 600 } = {}) {
     return /^preset:[a-zA-Z0-9_-]{1,40}$/.test(s) ? s : '';
   }
   if (allowDataImage && /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(s)) {
-    return s.slice(0, Math.max(maxLen, 65000));
+    const limit = Math.max(maxLen, 160000);
+    return s.length <= limit ? s : '';
   }
   if (/^https:\/\//i.test(s)) {
     try {
@@ -3695,6 +3696,7 @@ function syncUserStateDoc(userRow) {
     isFrozen: Boolean(userRow.is_frozen),
     displayName: getEffectiveName(userRow),
     avatarUrl: String(userRow.avatar_url || ''),
+    coverUrl: String(userRow.cover_url || ''),
     updatedAt: nowIso()
   };
   enqueueSet('user_states', safeDocId(userKey), stateDoc, true);
@@ -4064,8 +4066,8 @@ function updateUserCustomization(
           ? String(current.name_style_mode)
           : 'solid',
     name_gradient: nameGradient !== undefined ? String(nameGradient || 'gold_royal').trim().slice(0, 30) : current.name_gradient || 'gold_royal',
-    avatar_url: avatarUrl !== undefined ? sanitizeSafeUrl(avatarUrl, { maxLen: 500 }) : current.avatar_url,
-    cover_url: coverUrl !== undefined ? sanitizeSafeUrl(coverUrl, { maxLen: 500 }) : current.cover_url || '',
+    avatar_url: avatarUrl !== undefined ? sanitizeSafeUrl(avatarUrl, { maxLen: 160000 }) : current.avatar_url,
+    cover_url: coverUrl !== undefined ? sanitizeSafeUrl(coverUrl, { maxLen: 160000 }) : current.cover_url || '',
     avatar_frame:
       avatarFrame !== undefined
         ? (avatarFrame === 'owner_sovereign' && current.role !== 'site_owner' && !isSupremeOwnerEmail(current.email)

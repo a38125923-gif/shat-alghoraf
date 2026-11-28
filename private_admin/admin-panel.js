@@ -575,7 +575,11 @@
       const allRanksSorted = [...(suite.ranks || ov.ranks || state.ranks || [])].sort((a, b) => (Number(a.power) || 0) - (Number(b.power) || 0));
       const minRankSelect = (id, curVal, includeGuest = true) => {
         const list = includeGuest ? allRanksSorted : allRanksSorted.filter((r) => r.key !== 'guest');
-        return `<select id="${id}" class="master-rank-select">${list.map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === curVal ? 'selected' : ''}>${escapeHtml(r.icon || '⭐')} ${escapeHtml(r.label)}</option>`).join('')}</select>`;
+        const opts = list.map((r) => `<option value="${escapeHtml(r.key)}" ${r.key === curVal ? 'selected' : ''}>${escapeHtml(r.icon || '⭐')} ${escapeHtml(r.label)} (مستوى ${Number(r.power) || 1})</option>`).join('');
+        const disabledOpt = !includeGuest
+          ? `<option value="disabled" ${curVal === 'disabled' || curVal === 'owner_only' ? 'selected' : ''}>⛔ إيقاف (للمالك فقط)</option>`
+          : '';
+        return `<select id="${id}" class="master-rank-select">${opts}${disabledOpt}</select>`;
       };
       const staffRoles = [...(suite.ranks || ov.ranks || state.ranks || [])]
         .filter((r) => Number(r.power) >= 2 && Number(r.power) <= 14 && r.key !== 'site_owner' && r.key !== 'guest')

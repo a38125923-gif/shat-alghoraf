@@ -1577,7 +1577,22 @@ function syncUserPresence(userId) {
   if (existing) {
     Object.assign(existing, mapped, { firebaseUid: row.firebase_uid || existing.firebaseUid || '' });
     db.syncOnlinePresenceDoc(buildPublicPresenceDoc(existing));
-    if (existing.roomId) broadcastRoomUsers(existing.roomId);
+    if (existing.roomId) {
+      const slots = roomMics.get(existing.roomId);
+      if (Array.isArray(slots)) {
+        let micChanged = false;
+        for (const s of slots) {
+          if (s && s.holderKey === mapped.key) {
+            s.holderName = mapped.name;
+            s.holderRole = mapped.role;
+            s.holderAvatar = mapped.avatarUrl || '';
+            micChanged = true;
+          }
+        }
+        if (micChanged) syncRoomMicsToFirestore(existing.roomId);
+      }
+      broadcastRoomUsers(existing.roomId);
+    }
   }
   emitToUserKey(mapped.key, 'session_patch', mapped);
   broadcastGlobalOnlineUsers();
@@ -2918,13 +2933,46 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     return res.status(403).json({ error: 'تلوين وتكبير خط الرسائل مقيّد حالياً لرتبة أعلى من رتبتك.' });
   }
 
-  if (avatarUrl !== undefined) {
+  let nextAvatarUrl = avatarUrl;
+  if (avatarUrl !== undefined && avatarUrl !== (req.authUser.avatarUrl || '')) {
+    if (avatarUrl !== '' && !canPassSettingThreshold(req.authUser, 'min_rank_avatar', 'member')) {
+      return res.status(403).json({ error: 'تغيير الصورة الشخصية مقيّد حالياً لرتبة أعلى من رتبتك.' });
+    }
     const chk = validateHttpsOrLocalUrl(avatarUrl, { allowDataImage: true });
     if (!chk.ok) return res.status(400).json({ error: `الصورة الشخصية: ${chk.error}` });
+    if (/^data:image\/gif;base64,/i.test(chk.value) && !canUserUploadAnimatedGif(req.authUser)) {
+      return res.status(403).json({ error: 'رفع صور GIF المتحركة متاح للمالك وأعلى رتبتين فقط.' });
+    }
+    if (chk.value.startsWith('data:image/') && chk.value.length > 150000) {
+      return res.status(400).json({ error: 'حجم الصورة الشخصية كبير جداً، يرجى اختيار صورة أصغر.' });
+    }
+    const prevAvatar = String(req.authUser.avatarUrl || '');
+    if (prevAvatar.startsWith('/api/profile-media/') && prevAvatar !== chk.value) {
+      const oldMediaId = prevAvatar.replace('/api/profile-media/', '').split('?')[0];
+      if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+    }
+    nextAvatarUrl = chk.value;
   }
-  if (coverUrl !== undefined) {
+
+  let nextCoverUrl = coverUrl;
+  if (coverUrl !== undefined && coverUrl !== (req.authUser.coverUrl || '')) {
+    if (coverUrl !== '' && !canPassSettingThreshold(req.authUser, 'min_rank_cover', 'member')) {
+      return res.status(403).json({ error: 'تغيير صورة الغلاف مقيّد حالياً لرتبة أعلى من رتبتك.' });
+    }
     const chk = validateHttpsOrLocalUrl(coverUrl, { allowDataImage: true });
     if (!chk.ok) return res.status(400).json({ error: `صورة الغلاف: ${chk.error}` });
+    if (/^data:image\/gif;base64,/i.test(chk.value) && !canUserUploadAnimatedGif(req.authUser)) {
+      return res.status(403).json({ error: 'رفع صور GIF المتحركة متاح للمالك وأعلى رتبتين فقط.' });
+    }
+    if (chk.value.startsWith('data:image/') && chk.value.length > 150000) {
+      return res.status(400).json({ error: 'حجم صورة الغلاف كبير جداً، يرجى اختيار صورة أصغر.' });
+    }
+    const prevCover = String(req.authUser.coverUrl || '');
+    if (prevCover.startsWith('/api/profile-media/') && prevCover !== chk.value) {
+      const oldMediaId = prevCover.replace('/api/profile-media/', '').split('?')[0];
+      if (oldMediaId) db.deleteProfileMedia(oldMediaId).catch(() => {});
+    }
+    nextCoverUrl = chk.value;
   }
   if (profileMusic !== undefined) {
     const chk = validateHttpsOrLocalUrl(profileMusic, { allowPreset: true });
@@ -2947,8 +2995,8 @@ app.post('/api/profile/customize', requireRegistered, async (req, res) => {
     nameFontSize: clampedNameSize,
     nameStyleMode,
     nameGradient,
-    avatarUrl,
-    coverUrl,
+    avatarUrl: nextAvatarUrl,
+    coverUrl: nextCoverUrl,
     avatarFrame,
     nameplateStyle,
     nameShine,
