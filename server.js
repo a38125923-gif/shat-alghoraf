@@ -2032,6 +2032,12 @@ app.post('/api/login', async (req, res) => {
     const freshRow = db.findUserById(row.id);
     db.syncUserStateDoc(freshRow);
     const mapped = mapUserRow(freshRow);
+    recentRoomPresence.delete(mapped.key);
+    const prevGrace = pendingGrace.get(mapped.key);
+    if (prevGrace) {
+      clearTimeout(prevGrace.timeout);
+      pendingGrace.delete(mapped.key);
+    }
     const token = issuePersistentSessionToken({
       user: mapped,
       isGuest: false,
@@ -2071,6 +2077,12 @@ app.post('/api/guest', async (req, res) => {
 
   const guestRow = db.upsertGuest({ key, name, ipAddress: ip, deviceId, fingerprint, userAgent, country, firebaseUid: cleanFuid });
   const user = mapGuestRow(guestRow, key, name);
+  recentRoomPresence.delete(key);
+  const prevGuestGrace = pendingGrace.get(key);
+  if (prevGuestGrace) {
+    clearTimeout(prevGuestGrace.timeout);
+    pendingGrace.delete(key);
+  }
   const token = issuePersistentSessionToken({
     isGuest: true,
     guestKey: key,
@@ -6305,8 +6317,13 @@ app.get('/api/chat/bootstrap', requireAuth, async (req, res) => {
     ? requestedRoom
     : (db.getAllRooms()[0]?.id || 'general');
   const existingEntry = onlinePresenceMap.get(req.authUser.key);
-  const entry = upsertOnlinePresence(req.authUser, telemetry, existingEntry?.roomId || initialRoomId);
-  const joined = movePresenceToRoom(entry, entry.roomId || initialRoomId, telemetry, Boolean(existingEntry));
+  const targetRoomId = existingEntry?.roomId && db.getRoomById(existingEntry.roomId)
+    ? existingEntry.roomId
+    : initialRoomId;
+  const entry = existingEntry
+    ? upsertOnlinePresence(req.authUser, telemetry, existingEntry.roomId || '')
+    : upsertOnlinePresence(req.authUser, telemetry, '');
+  const joined = movePresenceToRoom(entry, targetRoomId, telemetry, Boolean(existingEntry && existingEntry.roomId === targetRoomId));
   await db.flushWrites();
 
   const freshUser = req.authUser.isGuest
@@ -6395,7 +6412,10 @@ app.post('/api/chat/logout', requireAuth, async (req, res) => {
 
 app.post('/api/chat/rooms/:roomId/join', requireAuth, async (req, res) => {
   const telemetry = getClientTelemetry(req);
-  const entry = resolveOnlineSessionFromRequest(req);
+  const hadPresence = onlinePresenceMap.has(req.authUser.key);
+  const entry = hadPresence
+    ? resolveOnlineSessionFromRequest(req)
+    : upsertOnlinePresence(req.authUser, telemetry, '');
   if ((entry.isFrozen || guestFrozenKeys.has(entry.key)) && entry.role !== 'site_owner') {
     return res.status(403).json({ error: 'حسابك مجمد مؤقتاً من قبل المالك ولا يمكنك التنقل بين الغرف.' });
   }
@@ -7912,7 +7932,9 @@ io.on('connection', (socket) => {
   const targetRoomId = requestedRoom && db.getRoomById(requestedRoom)
     ? requestedRoom
     : (existingEntry?.roomId && db.getRoomById(existingEntry.roomId) ? existingEntry.roomId : (db.getAllRooms()[0]?.id || 'general'));
-  const entry = upsertOnlinePresence(authUser, socket.clientTelemetry || {}, targetRoomId);
+  const entry = existingEntry
+    ? upsertOnlinePresence(authUser, socket.clientTelemetry || {}, existingEntry.roomId || targetRoomId)
+    : upsertOnlinePresence(authUser, socket.clientTelemetry || {}, '');
   if (entry?.roomId) {
     socket.join(entry.roomId);
     socket.emit('room_users', {
@@ -7924,19 +7946,21 @@ io.on('connection', (socket) => {
       roomId: entry.roomId,
       slots: getPublicMicSlots(entry.roomId)
     });
+  } else if (targetRoomId) {
+    socket.join(targetRoomId);
   }
   socket.emit('online_users', buildGlobalOnlineUsers());
   socket.emit('rooms', buildRoomsPayload());
 
   socket.on('join_room', async (payload = {}, ack) => {
     try {
-      const roomId = String(payload.roomId || '').trim();
+      const roomId = String(payload.roomId || '').trim() || db.getAllRooms()[0]?.id || 'general';
       const rm = db.getRoomById(roomId);
       if (!rm) {
         if (typeof ack === 'function') ack({ error: 'الغرفة غير موجودة.' });
         return;
       }
-      const live = onlinePresenceMap.get(userKey) || upsertOnlinePresence(authUser, socket.clientTelemetry || {}, roomId);
+      const live = onlinePresenceMap.get(userKey) || upsertOnlinePresence(authUser, socket.clientTelemetry || {}, '');
       const isOwnerOrMod = live.role === 'site_owner' || canDo(live.role, 'manage_rooms');
       if (!isOwnerOrMod && db.isBannedFromRoom(roomId, live.key)) {
         if (typeof ack === 'function') ack({ error: 'تم حظرك من دخول هذه الغرفة.', roomBanned: true });

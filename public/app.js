@@ -6439,7 +6439,8 @@
   // ==========================================
   // FIREBASE REAL-TIME SYNC (onSnapshot + REST)
   // ==========================================
-  function applyRoomJoinPayload(data) {
+  function applyRoomJoinPayload(raw) {
+    const data = raw?.room ? raw : (raw?.roomState?.room ? raw.roomState : null);
     if (!data || !data.room) return;
     state.currentRoom = data.room;
     state.isRoomManager = Boolean(data.isRoomManager);
@@ -6449,7 +6450,9 @@
     if (Array.isArray(data.onlineUsers)) state.onlineUsers = data.onlineUsers;
     state.messages = Array.isArray(data.messages) ? data.messages : [];
     state.mics = Array.isArray(data.mics) ? data.mics : [];
-    state.roomUsers = Array.isArray(data.users) ? data.users : [];
+    state.roomUsers = Array.isArray(data.users)
+      ? data.users
+      : (Array.isArray(data.roomUsers) ? data.roomUsers : []);
     state.ytForceVideo = false;
     state.ytLocalClosedVideoId = '';
     state.quizBotState = data.quizBot || { active: Boolean(data.room.quiz_bot_active) };
@@ -6536,8 +6539,8 @@
   let lastMicForceMuteHandledAt = 0;
   let lastMicKickHandledAt = 0;
 
-  function connectRealtime() {
-    const savedRoom = state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general';
+  function connectRealtime(initialRoomOverride = '') {
+    const savedRoom = initialRoomOverride || state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general';
     state.realtimeActive = true;
     lastSeenPmIds = new Set((state.social?.privateMessages || []).map((x) => x.id));
     lastSeenNotifCount = Number(state.social?.unreadNotifCount || 0);
@@ -6572,7 +6575,9 @@
             pBadge.classList.toggle('hidden', data.unreadPmCount === 0);
           }
           if (data.activeMute !== undefined) updateMutedStateUI(data.activeMute || null);
-          applyRoomJoinPayload(data);
+          const roomPayload = data?.roomState || (data?.room ? data : null);
+          if (roomPayload) applyRoomJoinPayload(roomPayload);
+          else renderRoomUsers();
           syncLocalMirror(true);
 
           if (!state.deepLinkHandled) {
@@ -6586,8 +6591,14 @@
             }
           }
         },
+        onConnected(boot) {
+          const bootRoom = boot?.roomState?.room?.id || boot?.room?.id;
+          if (!state.currentRoom?.id || !bootRoom) {
+            joinRoomWithPrompt(savedRoom || 'general');
+          }
+        },
         onRoomJoined(data) {
-          if (!data || !data.room) return;
+          if (!data || (!data.room && !data.roomState?.room)) return;
           applyRoomJoinPayload(data);
         },
         onSessionPatch(patch) {
@@ -6614,14 +6625,16 @@
           }
           let changed = false;
           if (meta.fromSnapshot) {
+            if (!msgs.length) return;
             const snapMap = new Map(msgs.map((m) => [String(m.id), m]));
             const numericIds = msgs.map((m) => Number(m.id)).filter((n) => Number.isFinite(n) && n > 0);
             const minSnapId = numericIds.length ? Math.min(...numericIds) : 0;
+            const maxSnapId = numericIds.length ? Math.max(...numericIds) : 0;
             const keep = [];
             for (const oldMsg of state.messages || []) {
               const sid = String(oldMsg.id || '');
               const numId = Number(sid);
-              const inWindow = !msgs.length || msgs.length < 40 || (Number.isFinite(numId) && numId >= minSnapId);
+              const inWindow = minSnapId > 0 && Number.isFinite(numId) && numId >= minSnapId && numId <= maxSnapId;
               if (sid && inWindow && !snapMap.has(sid)) {
                 const domEl = $('chatFeed')?.querySelector(`[data-msg-id="${CSS.escape(sid)}"]`);
                 if (domEl) domEl.remove();
@@ -6940,7 +6953,7 @@
     });
   }
 
-  function enterApp(user, token) {
+  function enterApp(user, token, opts = {}) {
     hideBanBlockedScreen();
     updateMutedStateUI(null);
     window.AsilRealtime?.stop({ keepServerPresence: true });
@@ -6948,13 +6961,23 @@
     state.guestRegisterReturnToChat = false;
     state.mentionedUserId = null;
     state.mentionedUserName = '';
+    state.currentRoom = null;
+    state.messages = [];
+    state.roomUsers = [];
+    state.mics = [];
+    const targetInitialRoom = opts?.freshLogin
+      ? 'general'
+      : (opts?.roomId || localStorage.getItem(ROOM_KEY) || 'general');
+    if (opts?.freshLogin) {
+      localStorage.setItem(ROOM_KEY, 'general');
+    }
     $('authBackToChatBtn')?.classList.add('hidden');
     state.user = user;
     state.token = token;
     persistSessionState(user, token);
     $('authView').classList.add('hidden');
     $('appView').classList.remove('hidden');
-    connectRealtime();
+    connectRealtime(targetInitialRoom);
   }
 
   function logoutUser(opts = {}) {
@@ -7100,7 +7123,7 @@
           method: 'POST',
           body: { identifier: $('loginIdentifier').value, password: $('loginPassword').value }
         });
-        enterApp(res.user, res.token);
+        enterApp(res.user, res.token, { freshLogin: true });
       } catch (err) {
         $('authError').textContent = err.message;
         $('authError').classList.remove('hidden');
@@ -7116,7 +7139,7 @@
           body: { username: $('regUsername').value, email: $('regEmail').value, password: $('regPassword').value, invitedBy }
         });
         localStorage.removeItem(REF_KEY);
-        enterApp(res.user, res.token);
+        enterApp(res.user, res.token, { freshLogin: true });
       } catch (err) {
         $('authError').textContent = err.message;
         $('authError').classList.remove('hidden');
@@ -7140,7 +7163,7 @@
         if (res?.user?.key) {
           localStorage.setItem(GUEST_PROFILE_KEY, JSON.stringify({ key: res.user.key, name: res.user.name }));
         }
-        enterApp(res.user, res.token);
+        enterApp(res.user, res.token, { freshLogin: true });
       } catch (err) {
         $('authError').textContent = err.message;
         $('authError').classList.remove('hidden');
@@ -8190,6 +8213,26 @@
         document.querySelectorAll('.msg-dots-menu').forEach((m) => m.classList.add('hidden'));
       }
     });
+
+    // Resume realtime listeners & current room cleanly when returning to browser/tab (no setInterval)
+    let _lastForegroundSyncAt = 0;
+    const handleForegroundResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (!state.token || !state.user || $('appView')?.classList.contains('hidden')) return;
+      const now = Date.now();
+      if (now - _lastForegroundSyncAt < 1800) return;
+      _lastForegroundSyncAt = now;
+      if (!state.realtimeActive) {
+        connectRealtime(state.currentRoom?.id || localStorage.getItem(ROOM_KEY) || 'general');
+      } else if (!state.currentRoom?.id) {
+        joinRoomWithPrompt(localStorage.getItem(ROOM_KEY) || 'general');
+      } else {
+        window.AsilRealtime?.resumeOnForeground?.();
+      }
+    };
+    document.addEventListener('visibilitychange', handleForegroundResume);
+    window.addEventListener('pageshow', handleForegroundResume);
+    window.addEventListener('online', handleForegroundResume);
   }
 
   function renderInlineMsgStyleBar() {

@@ -271,10 +271,37 @@
 
   function attachFirestoreRoomListeners(roomId) {
     clearUnsubs(session.roomUnsubs);
-    if (!session.firestoreActive || !sdkState.db || !sdkState.mods?.fsMod) return;
+    if (!session.firestoreActive || !sdkState.db || !sdkState.mods?.fsMod || !roomId) return;
     const fsDb = sdkState.db;
     const { collection, doc, limit, onSnapshot, orderBy, query, where } = sdkState.mods.fsMod;
     const cb = session.callbacks || {};
+
+    const emitMessagesSnap = (snap) => {
+      if (!session.active || session.roomId !== roomId) return;
+      const msgs = snap.docs
+        .map((d) => d.data())
+        .filter((m) => m && m.id)
+        .sort((a, b) => Number(a.id) - Number(b.id));
+      if (msgs.length) {
+        session.lastMsgId = Math.max(session.lastMsgId, Number(msgs[msgs.length - 1].id) || 0);
+      }
+      if (typeof cb.onMessages === 'function') cb.onMessages(msgs, { roomId, fromSnapshot: true });
+    };
+
+    const attachUnorderedFallback = () => {
+      if (!session.active || session.roomId !== roomId) return;
+      try {
+        session.roomUnsubs.push(
+          onSnapshot(
+            query(collection(fsDb, 'messages'), where('room_id', '==', roomId), limit(150)),
+            emitMessagesSnap,
+            () => {}
+          )
+        );
+      } catch {
+        // ignore if Firestore query unavailable
+      }
+    };
 
     try {
       session.roomUnsubs.push(
@@ -285,26 +312,26 @@
             orderBy('id', 'desc'),
             limit(120)
           ),
-          (snap) => {
-            const msgs = snap.docs
-              .map((d) => d.data())
-              .filter((m) => m && m.id)
-              .sort((a, b) => Number(a.id) - Number(b.id));
-            if (msgs.length) {
-              session.lastMsgId = Math.max(session.lastMsgId, Number(msgs[msgs.length - 1].id) || 0);
-            }
-            if (typeof cb.onMessages === 'function') cb.onMessages(msgs, { roomId, fromSnapshot: true });
+          emitMessagesSnap,
+          () => {
+            // Fallback seamlessly when Firestore composite index (room_id, id) is not yet created
+            attachUnorderedFallback();
+            refreshRoomsAndUsersViaHttp();
           }
         )
       );
       session.roomUnsubs.push(
-        onSnapshot(doc(fsDb, 'room_mics', safeFirestoreDocId(roomId)), (snap) => {
-          if (!snap.exists()) return;
-          const data = snap.data();
-          if (Array.isArray(data?.slots) && typeof cb.onRoomMics === 'function') {
-            cb.onRoomMics(roomId, data.slots);
-          }
-        })
+        onSnapshot(
+          doc(fsDb, 'room_mics', safeFirestoreDocId(roomId)),
+          (snap) => {
+            if (!snap.exists() || !session.active || session.roomId !== roomId) return;
+            const data = snap.data();
+            if (Array.isArray(data?.slots) && typeof cb.onRoomMics === 'function') {
+              cb.onRoomMics(roomId, data.slots);
+            }
+          },
+          () => {}
+        )
       );
     } catch (err) {
       console.warn('[Firestore Room Listeners] Fallback active:', err?.message || err);
@@ -380,11 +407,13 @@
     if (!session.active || !session.apiFetch) return null;
     const targetRoom = roomId || session.roomId || 'general';
     const data = await session.apiFetch(`/api/chat/bootstrap?roomId=${encodeURIComponent(targetRoom)}`);
-    if (data && data.room?.id) {
-      session.roomId = data.room.id;
+    const roomPayload = data?.roomState || (data?.room ? data : null);
+    if (roomPayload?.room?.id) {
+      session.roomId = roomPayload.room.id;
+      session.hasSocketJoinedOnce = true;
     }
-    if (Array.isArray(data?.messages) && data.messages.length) {
-      session.lastMsgId = Number(data.messages[data.messages.length - 1]?.id) || 0;
+    if (Array.isArray(roomPayload?.messages) && roomPayload.messages.length) {
+      session.lastMsgId = Number(roomPayload.messages[roomPayload.messages.length - 1]?.id) || 0;
     } else {
       session.lastMsgId = 0;
     }
@@ -436,12 +465,15 @@
       sock.auth = { token: session.token, roomId: targetRoomId };
       sock.emit('join_room', { roomId: targetRoomId, silent: Boolean(session.hasSocketJoinedOnce) }, (ack) => {
         if (!session.active || session.socket !== sock) return;
-        session.hasSocketJoinedOnce = true;
         if (ack && ack.ok) {
+          session.hasSocketJoinedOnce = true;
           if (ack.room?.id) session.roomId = ack.room.id;
           if (Array.isArray(ack.messages) && ack.messages.length) {
             const lastId = Number(ack.messages[ack.messages.length - 1]?.id) || 0;
             if (lastId > session.lastMsgId) session.lastMsgId = lastId;
+          }
+          if (session.firestoreActive && session.roomUnsubs.length === 0) {
+            attachFirestoreRoomListeners(session.roomId);
           }
           if (typeof session.callbacks?.onRoomJoined === 'function') {
             session.callbacks.onRoomJoined(ack);
@@ -655,19 +687,24 @@
     session.lastForcedNameAt = 0;
     session.lastAvatarClearedAt = 0;
 
+    // Initialize Firebase Web SDK in background so external CDN loading never blocks joining the room
     if (firebaseWebConfig?.apiKey) {
-      await ensureFirebaseWebSdk(firebaseWebConfig);
-      attachFirestoreGlobalListeners();
+      ensureFirebaseWebSdk(firebaseWebConfig).then((sdk) => {
+        if (!session.active || !sdk) return;
+        attachFirestoreGlobalListeners();
+        attachFirestoreRoomListeners(session.roomId);
+      }).catch(() => {});
     }
 
     let boot = null;
     try {
       boot = await syncBootstrap(session.roomId);
-      if (boot?.room?.id) session.hasSocketJoinedOnce = true;
     } catch (err) {
       if (err?.status === 401 || err?.status === 403) throw err;
     }
-    attachFirestoreRoomListeners(session.roomId);
+    if (session.firestoreActive) {
+      attachFirestoreRoomListeners(session.roomId);
+    }
     connectSocket();
     scheduleLoops();
     if (typeof session.callbacks.onConnected === 'function') {
@@ -676,14 +713,15 @@
     return boot;
   }
 
-  async function switchRoom(roomId, password = '') {
+  async function switchRoom(roomId, password = '', opts = {}) {
     if (!session.active || !session.apiFetch) return { error: 'الجلسة غير نشطة' };
     const res = await session.apiFetch(`/api/chat/rooms/${encodeURIComponent(roomId)}/join`, {
       method: 'POST',
-      body: { password }
+      body: { password, silent: Boolean(opts?.silent) }
     });
     if (res && !res.error) {
       session.roomId = res.room?.id || roomId;
+      session.hasSocketJoinedOnce = true;
       session.lastMsgId = Array.isArray(res.messages) && res.messages.length
         ? Number(res.messages[res.messages.length - 1]?.id) || 0
         : 0;
@@ -693,6 +731,45 @@
       attachFirestoreRoomListeners(session.roomId);
     }
     return res;
+  }
+
+  async function resumeOnForeground() {
+    if (!session.active || !session.apiFetch) return null;
+    const targetRoomId = session.roomId || 'general';
+    if (session.firestoreActive && session.roomUnsubs.length === 0) {
+      attachFirestoreRoomListeners(targetRoomId);
+    }
+    if (session.socket) {
+      session.socket.auth = { token: session.token, roomId: targetRoomId };
+      if (!session.socket.connected) {
+        try {
+          session.socket.connect();
+        } catch {
+          // ignore
+        }
+      } else {
+        session.socket.emit('join_room', { roomId: targetRoomId, silent: Boolean(session.hasSocketJoinedOnce) }, (ack) => {
+          if (!session.active) return;
+          if (ack && ack.ok) {
+            session.hasSocketJoinedOnce = true;
+            if (ack.room?.id) session.roomId = ack.room.id;
+            if (typeof session.callbacks?.onRoomJoined === 'function') {
+              session.callbacks.onRoomJoined(ack);
+            }
+          }
+        });
+        return null;
+      }
+    }
+    try {
+      const res = await switchRoom(targetRoomId, '', { silent: Boolean(session.hasSocketJoinedOnce) });
+      if (res && !res.error && typeof session.callbacks?.onRoomJoined === 'function') {
+        session.callbacks.onRoomJoined(res);
+      }
+      return res;
+    } catch {
+      return null;
+    }
   }
 
   async function triggerHeartbeatNow(includeMessages = true) {
@@ -801,6 +878,7 @@
     signInWithGoogle,
     start,
     switchRoom,
+    resumeOnForeground,
     syncBootstrap,
     syncSocialState,
     triggerHeartbeatNow,
