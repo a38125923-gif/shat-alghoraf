@@ -190,7 +190,9 @@ const ALL_RANK_PERMISSIONS = [
   'publish_news',
   'send_links',
   'change_name',
-  'profile_music'
+  'profile_music',
+  'manage_ads',
+  'manage_bot'
 ];
 
 function makeRankPerms(enabledList = []) {
@@ -315,7 +317,12 @@ const DEFAULT_RANKS = [
     tier_order: 14,
     is_system: 1,
     max_assignable_rank: 13,
-    ...makeRankPerms(['*'])
+    ...makeRankPerms([
+      'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+      'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank', 'stealth',
+      'give_coins', 'clear_room', 'access_panel', 'room_owner', 'publish_news',
+      'send_links', 'change_name', 'profile_music'
+    ])
   },
   {
     key: 'general_admin',
@@ -1736,6 +1743,8 @@ function normalizeRankDoc(docId, data) {
     perm_send_links: isOwner ? 1 : fallbackPerms('send_links', power >= 8 ? 1 : 0),
     perm_change_name: isOwner ? 1 : fallbackPerms('change_name', key === 'guest' ? 0 : 1),
     perm_profile_music: isOwner ? 1 : fallbackPerms('profile_music', key === 'guest' ? 0 : 1),
+    perm_manage_ads: isOwner ? 1 : fallbackPerms('manage_ads', 0),
+    perm_manage_bot: isOwner ? 1 : fallbackPerms('manage_bot', 0),
     max_assignable_rank: isOwner
       ? 15
       : data.max_assignable_rank !== undefined
@@ -2678,11 +2687,17 @@ function getRankPower(role) {
 function getMaxAssignablePower(role) {
   if (role === 'site_owner') return 15;
   const row = store.ranksByKey.get(role);
-  if (!row || row.perm_set_rank !== 1) return -1;
+  if (!row || role === 'guest') return -1;
   const ownPower = Math.max(1, Math.min(15, Number(row.power) || 1));
-  const ceiling =
-    row.max_assignable_rank !== undefined ? Number(row.max_assignable_rank) || 0 : Math.max(0, ownPower - 1);
-  return Math.min(ownPower - 1, Math.max(0, ceiling));
+  if (row.max_assignable_rank !== undefined) {
+    const ceiling = Math.max(0, Number(row.max_assignable_rank) || 0);
+    if (ceiling <= 0) return -1;
+    return Math.min(ownPower - 1, ceiling);
+  }
+  if (row.perm_set_rank === 1) {
+    return Math.max(0, ownPower - 1);
+  }
+  return -1;
 }
 
 function canAssignRankTo(actorRole, targetRoleKey, { roomId = null, actorUserId = null } = {}) {
@@ -2691,12 +2706,15 @@ function canAssignRankTo(actorRole, targetRoleKey, { roomId = null, actorUserId 
   }
   if (actorRole === 'site_owner') return true;
   const row = store.ranksByKey.get(actorRole);
-  if (row && row.perm_set_rank === 1) {
-    const allowedList = Array.isArray(row.assignable_roles) ? row.assignable_roles : [];
-    if (allowedList.includes(targetRoleKey)) return true;
-    const maxPower = getMaxAssignablePower(actorRole);
+  if (row && actorRole !== 'guest') {
+    const ownPower = getRankPower(actorRole);
     const targetPower = getRankPower(targetRoleKey);
-    if (maxPower >= 0 && targetPower <= maxPower) return true;
+    if (targetPower < ownPower) {
+      const allowedList = Array.isArray(row.assignable_roles) ? row.assignable_roles : [];
+      if (allowedList.includes(targetRoleKey)) return true;
+      const maxPower = getMaxAssignablePower(actorRole);
+      if (maxPower > 0 && targetPower <= maxPower) return true;
+    }
   }
   if (roomId && actorUserId) {
     const rm = store.roomsById.get(roomId);
@@ -2708,6 +2726,30 @@ function canAssignRankTo(actorRole, targetRoleKey, { roomId = null, actorUserId 
     }
   }
   return false;
+}
+
+function hasUpgradePrivilege(role) {
+  if (!role || role === 'guest') return false;
+  if (role === 'site_owner') return true;
+  const row = store.ranksByKey.get(role);
+  if (!row) return false;
+  const ownPower = getRankPower(role);
+  if (getMaxAssignablePower(role) > 0) return true;
+  const allowedList = Array.isArray(row.assignable_roles) ? row.assignable_roles : [];
+  return allowedList.some((rk) => rk && rk !== 'site_owner' && rk !== 'guest' && isValidRank(rk) && getRankPower(rk) < ownPower);
+}
+
+function hasMiniPanelAccess(role) {
+  if (!role || role === 'guest') return false;
+  if (role === 'site_owner') return true;
+  return (
+    hasPermission(role, 'ban') ||
+    hasPermission(role, 'mute') ||
+    hasPermission(role, 'manage_rooms') ||
+    hasPermission(role, 'manage_ads') ||
+    hasPermission(role, 'manage_bot') ||
+    hasUpgradePrivilege(role)
+  );
 }
 
 function getRankSortWeight(role) {
@@ -2765,11 +2807,12 @@ function createRank({
   if (store.ranksByKey.has(safeKey)) return { error: 'مفتاح هذه الرتبة موجود مسبقاً.' };
 
   const clampedPower = Math.max(1, Math.min(14, Number(power) || 2));
-  const rawMaxAssign =
-    maxAssignableRank !== undefined ? Number(maxAssignableRank) || 0 : permissions.set_rank ? Math.max(0, clampedPower - 1) : 0;
   const cleanAssignableRoles = Array.isArray(assignableRoles)
     ? assignableRoles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest').slice(0, 40)
     : [];
+  const rawMaxAssign =
+    maxAssignableRank !== undefined ? Number(maxAssignableRank) || 0 : permissions.set_rank ? Math.max(0, clampedPower - 1) : 0;
+  const clampedMaxAssign = Math.max(0, Math.min(14, rawMaxAssign));
 
   const permFields = {};
   for (const p of ALL_RANK_PERMISSIONS) {
@@ -2780,6 +2823,11 @@ function createRank({
     } else {
       permFields[`perm_${p}`] = permissions[p] ? 1 : 0;
     }
+  }
+  if (clampedMaxAssign > 0 || cleanAssignableRoles.length > 0) {
+    permFields.perm_set_rank = 1;
+  } else if (maxAssignableRank !== undefined) {
+    permFields.perm_set_rank = 0;
   }
 
   const docObj = {
@@ -2794,7 +2842,7 @@ function createRank({
     tier_order: clampedPower,
     is_system: 0,
     ...permFields,
-    max_assignable_rank: Math.max(0, Math.min(14, rawMaxAssign)),
+    max_assignable_rank: clampedMaxAssign,
     assignable_roles: cleanAssignableRoles,
     created_at: nowIso()
   };
@@ -2829,14 +2877,14 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
 
   const p = permissions || {};
   const isOwner = key === 'site_owner';
-  const nextMaxAssign = isOwner
+  let nextMaxAssign = isOwner
     ? 15
     : maxAssignableRank !== undefined
       ? Math.max(0, Math.min(14, Number(maxAssignableRank) || 0))
       : existing.max_assignable_rank !== undefined
         ? Math.min(14, Number(existing.max_assignable_rank) || 0)
         : Math.max(0, nextPower - 1);
-  const nextAssignableRoles = isOwner
+  let nextAssignableRoles = isOwner
     ? []
     : Array.isArray(assignableRoles)
       ? assignableRoles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest').slice(0, 40)
@@ -2857,6 +2905,20 @@ function updateRank(key, { label, icon, badgeStyle, imageUrl, bgColor, textColor
       permPatch[col] = p.clear_room ? 1 : 0;
     } else {
       permPatch[col] = existing[col] ? 1 : 0;
+    }
+  }
+
+  if (!isOwner) {
+    if (maxAssignableRank !== undefined || Array.isArray(assignableRoles)) {
+      permPatch.perm_set_rank = nextMaxAssign > 0 || nextAssignableRoles.length > 0 ? 1 : 0;
+    } else if (p.set_rank !== undefined) {
+      if (!p.set_rank) {
+        nextMaxAssign = 0;
+        nextAssignableRoles = [];
+        permPatch.perm_set_rank = 0;
+      } else if (nextMaxAssign === 0 && nextAssignableRoles.length === 0) {
+        nextMaxAssign = Math.max(0, nextPower - 1);
+      }
     }
   }
 
@@ -6312,6 +6374,8 @@ module.exports = {
   isValidRank,
   hasPermission,
   canAssignRankTo,
+  hasUpgradePrivilege,
+  hasMiniPanelAccess,
   createRank,
   updateRank,
   deleteRank,

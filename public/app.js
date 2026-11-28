@@ -968,7 +968,71 @@
     $('authBackToChatBtn')?.classList.toggle('hidden', !state.guestRegisterReturnToChat);
   }
 
+  function getMiniPanelCapabilities(userObj = state.user) {
+    if (!userObj || userObj.isGuest) {
+      return {
+        isOwner: false,
+        canBan: false,
+        canMute: false,
+        canBanMute: false,
+        canUpgrade: false,
+        canRooms: false,
+        canAds: false,
+        canBot: false,
+        canPanel: false
+      };
+    }
+    const isOwner = userObj.role === 'site_owner' || Boolean(userObj.isSupremeOwner);
+    if (isOwner) {
+      return {
+        isOwner: true,
+        canBan: true,
+        canMute: true,
+        canBanMute: true,
+        canUpgrade: true,
+        canRooms: true,
+        canAds: true,
+        canBot: true,
+        canPanel: true
+      };
+    }
+    const rk = getRank(userObj.role);
+    const p = rk?.permissions || {};
+    const ownPower = Number(rk?.power || 0);
+    const canBan = Boolean(p.ban);
+    const canMute = Boolean(p.mute);
+    const canBanMute = canBan || canMute;
+    const ceiling = Number(rk?.max_assignable_rank || 0);
+    const assignableList = Array.isArray(rk?.assignable_roles) ? rk.assignable_roles : [];
+    const hasAssignableRole = assignableList.some((rKey) => {
+      if (!rKey || rKey === 'site_owner' || rKey === 'guest') return false;
+      const targetPower = Number(getRank(rKey)?.power || 0);
+      return targetPower > 1 && targetPower < ownPower;
+    });
+    const canUpgrade = ownPower > 1 && (ceiling > 0 || hasAssignableRole);
+    const canRooms = Boolean(p.manage_rooms);
+    const canAds = Boolean(p.manage_ads);
+    const canBot = Boolean(p.manage_bot);
+    const canPanel = canBanMute || canUpgrade || canRooms || canAds || canBot;
+    return {
+      isOwner: false,
+      canBan,
+      canMute,
+      canBanMute,
+      canUpgrade,
+      canRooms,
+      canAds,
+      canBot,
+      canPanel
+    };
+  }
+
   function teardownAdminUi() {
+    const wasOpen = Boolean($('adminModal') && !$('adminModal').classList.contains('hidden'));
+    if (wasOpen) {
+      closeModal('adminModal');
+      showToast('تم سحب صلاحيات لوحة التحكم من رتبتك.', true);
+    }
     [
       'adminModal',
       'dropStealthBtn',
@@ -989,14 +1053,14 @@
       teardownAdminUi();
       return;
     }
-    const isOwner = u.role === 'site_owner' || Boolean(u.isSupremeOwner);
+    const caps = getMiniPanelCapabilities(u);
+    const isOwner = caps.isOwner;
     const canStealth = isOwner || hasPerm('stealth');
-    const canBank = isOwner || u.role === 'co_owner' || Number(getRank(u.role)?.power || 0) >= 14;
-    const canPanel = isOwner || hasPerm('access_panel') || canBank;
+    const canPanel = caps.canPanel;
     const canNotice = isOwner || hasPerm('access_panel');
     const canClearRoom = isOwner || hasPerm('clear_room') || state.isRoomManager;
 
-    if (!canPanel && !canStealth && !canClearRoom) {
+    if (!canPanel && !canStealth && !canClearRoom && !canNotice) {
       teardownAdminUi();
       return;
     }
@@ -1075,12 +1139,18 @@
           btn.type = 'button';
           btn.id = 'dropAdminBtn';
           btn.className = 'drop-item';
-          btn.innerHTML = '<i class="fa-solid fa-sliders"></i> لوحة التحكم';
           btn.addEventListener('click', () => {
             $('profileDropdown')?.classList.add('hidden');
-            openAdminPanel('stats');
+            const ownerNow = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
+            openAdminPanel(ownerNow ? 'ranks_matrix' : 'auto');
           });
           profDrop.insertBefore(btn, dropLogout);
+        }
+        const dropBtn = $('dropAdminBtn');
+        if (dropBtn) {
+          dropBtn.innerHTML = isOwner
+            ? '<i class="fa-solid fa-crown" style="color:#F59E0B"></i> لوحة التحكم'
+            : '<i class="fa-solid fa-sliders" style="color:#38bdf8"></i> لوحة التحكم المصغرة';
         }
       } else {
         $('dropAdminBtn')?.remove();
@@ -1164,12 +1234,18 @@
           btn.type = 'button';
           btn.id = 'drawerAdminBtn';
           btn.className = 'drawer-item';
-          btn.innerHTML = '<i class="fa-solid fa-sliders"></i> لوحة التحكم';
           btn.addEventListener('click', () => {
             closeMainDrawerLocal();
-            openAdminPanel('stats');
+            const ownerNow = state.user?.role === 'site_owner' || Boolean(state.user?.isSupremeOwner);
+            openAdminPanel(ownerNow ? 'ranks_matrix' : 'auto');
           });
           drawerNav.insertBefore(btn, drawerLogout);
+        }
+        const drawerBtn = $('drawerAdminBtn');
+        if (drawerBtn) {
+          drawerBtn.innerHTML = isOwner
+            ? '<i class="fa-solid fa-crown" style="color:#F59E0B"></i> لوحة التحكم'
+            : '<i class="fa-solid fa-sliders" style="color:#38bdf8"></i> لوحة التحكم المصغرة';
         }
       } else {
         $('drawerAdminBtn')?.remove();
@@ -1215,15 +1291,34 @@
     }
 
     // 6) Admin Panel access lives in external authorized bundle (/admin-panel.js) or dedicated /admin dashboard.
+    const adminModalEl = $('adminModal');
+    const wasAdminModalOpen = Boolean(adminModalEl && !adminModalEl.classList.contains('hidden'));
     if (!canPanel) {
-      $('adminModal')?.remove();
+      if (wasAdminModalOpen) {
+        closeModal('adminModal');
+        showToast('تم سحب صلاحيات لوحة التحكم من رتبتك.', true);
+      }
+      adminModalEl?.remove();
+    } else if (wasAdminModalOpen && typeof window.__asilAdminPanelSync === 'function') {
+      window.__asilAdminPanelSync();
     }
   }
 
   function getRank(roleKey) {
     const cleanKey = String(roleKey || 'member').trim() || 'member';
     const found = state.ranks.find((r) => r.key === cleanKey);
-    if (found) return found;
+    if (found) {
+      if (!found.permissions || typeof found.permissions !== 'object') {
+        const derived = {};
+        Object.keys(found).forEach((k) => {
+          if (k.startsWith('perm_')) {
+            derived[k.slice(5)] = Number(found[k]) === 1 || found[k] === true;
+          }
+        });
+        found.permissions = derived;
+      }
+      return found;
+    }
     const fallbackPowerMap = {
       guest: 1,
       member: 2,
@@ -3729,7 +3824,7 @@
     const canKick = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('kick') || (isRoomOwnerSelf && roomOwnerPerms.kick !== false));
     const canRoomBan = allowedByImmunity && (isOwner || hasPerm('ban') || (isRoomOwnerSelf && roomOwnerPerms.room_ban !== false));
     const canClearRoom = allowedByImmunity && (isOwner || state.isRoomManager || hasPerm('clear_room'));
-    const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || hasPerm('set_rank') || (isRoomOwnerSelf && Boolean(roomOwnerPerms.assign_roles)));
+    const canRank = Boolean(targetUserId) && allowedByImmunity && (isOwner || getMiniPanelCapabilities(state.user).canUpgrade || (isRoomOwnerSelf && Boolean(roomOwnerPerms.assign_roles)));
     const canGiveCoins = Boolean(targetUserId) && (isOwner || (allowedByImmunity && hasPerm('give_coins')));
     const showAdminTab = Boolean(allowedByImmunity && (canMod || canBan || canKick || canRoomBan || canClearRoom || canRank || canGiveCoins || isOwner));
     const canGift = !isMe && !isBotTarget && !state.user?.isGuest && isFeatureEnabled('feat_gifts') && isFeatureEnabled('feat_profile_gifts') && (isOwner || hasPerm('gifts'));
@@ -6413,9 +6508,8 @@
     if (!state.token || !state.user || state.user.isGuest) {
       return Promise.reject(new Error('لوحة التحكم متاحة للمصرح لهم فقط.'));
     }
-    const isOwner = state.user.role === 'site_owner' || Boolean(state.user.isSupremeOwner);
-    const canPanel = isOwner || hasPerm('access_panel') || state.user.role === 'co_owner' || Number(getRank(state.user.role)?.power || 0) >= 14;
-    if (!canPanel) {
+    const caps = getMiniPanelCapabilities(state.user);
+    if (!caps.canPanel) {
       return Promise.reject(new Error('لوحة التحكم غير متاحة لرتبتك.'));
     }
     return new Promise((resolve, reject) => {
@@ -6435,11 +6529,18 @@
     });
   }
 
-  async function openAdminPanel(rawTab = 'ranks_matrix', preselectRoomId = null, subOverride = null) {
+  async function openAdminPanel(rawTab = 'auto', preselectRoomId = null, subOverride = null) {
     ensureAdminUiMounted();
     if (!state.user || state.user.isGuest) {
       return showToast('لوحة التحكم غير متاحة لرتبتك.', true);
     }
+    const caps = getMiniPanelCapabilities(state.user);
+    if (!caps.canPanel) {
+      return showToast('لوحة التحكم غير متاحة لرتبتك.', true);
+    }
+    const effectiveTab = (!rawTab || rawTab === 'auto')
+      ? (caps.isOwner ? 'ranks_matrix' : 'auto')
+      : rawTab;
     try {
       const panel = await ensureAdminPanelScriptLoaded();
       const ctx = {
@@ -6462,7 +6563,7 @@
         BUILT_IN_RANK_SVGS,
         openAdminPanel
       };
-      return await panel.openModal(ctx, rawTab, preselectRoomId, subOverride);
+      return await panel.openModal(ctx, effectiveTab, preselectRoomId, subOverride);
     } catch (err) {
       showToast(err.message || 'لوحة التحكم غير متاحة.', true);
     }
@@ -6955,6 +7056,16 @@
         },
         onUserState(st) {
           if (!st) return;
+          if (st.role && state.user && !state.user.isGuest && st.role !== state.user.role) {
+            state.user.role = st.role;
+            state.user.level = Number(getRank(st.role)?.power || state.user.level || 2);
+            persistSessionState(state.user, state.token);
+            patchUserInLists(state.user);
+            window.AsilRealtime?.updateUser(state.user);
+            renderUserIdentity();
+            renderRoomUsers();
+            renderAllMessages();
+          }
           if (st.activeMute) updateMutedStateUI(st.activeMute);
           else if (state.activeMute) updateMutedStateUI(null);
           if (state.user && typeof st.isFrozen === 'boolean' && state.user.isFrozen !== st.isFrozen) {

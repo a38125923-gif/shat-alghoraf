@@ -187,6 +187,48 @@
     if (typeof cb.onUserState === 'function') cb.onUserState(st);
   }
 
+  const CLIENT_ALL_RANK_PERMISSIONS = [
+    'pm', 'chat_media', 'mic', 'youtube', 'wall', 'gifts', 'use_addons', 'immune',
+    'delete_msg', 'mute', 'kick', 'ban', 'manage_rooms', 'set_rank', 'stealth',
+    'give_coins', 'clear_room', 'access_panel', 'room_owner', 'publish_news',
+    'send_links', 'change_name', 'profile_music', 'manage_ads', 'manage_bot'
+  ];
+
+  function normalizeClientRankDoc(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const key = String(raw.key || '').trim();
+    const isOwner = key === 'site_owner';
+    const power = Math.max(1, Math.min(15, Number(raw.power) || 1));
+    const permissions = {};
+    for (const p of CLIENT_ALL_RANK_PERMISSIONS) {
+      if (isOwner) {
+        permissions[p] = true;
+      } else if (raw.permissions && typeof raw.permissions === 'object' && raw.permissions[p] !== undefined) {
+        permissions[p] = Boolean(raw.permissions[p]);
+      } else if (raw[`perm_${p}`] !== undefined) {
+        permissions[p] = Number(raw[`perm_${p}`]) === 1 || raw[`perm_${p}`] === true;
+      } else {
+        permissions[p] = false;
+      }
+    }
+    const rawMax = raw.max_assignable_rank !== undefined
+      ? Math.max(0, Math.min(14, Number(raw.max_assignable_rank) || 0))
+      : (permissions.set_rank ? Math.max(0, power - 1) : 0);
+    return {
+      ...raw,
+      key,
+      power,
+      tier_order: Number(raw.tier_order) || power,
+      max_assignable_rank: isOwner ? 15 : rawMax,
+      assignable_roles: isOwner
+        ? []
+        : Array.isArray(raw.assignable_roles)
+          ? raw.assignable_roles.map((r) => String(r || '').trim()).filter((r) => r && r !== 'site_owner' && r !== 'guest')
+          : [],
+      permissions
+    };
+  }
+
   function attachFirestoreGlobalListeners() {
     if (!sdkState.db || !sdkState.mods?.fsMod) return;
     const fsDb = sdkState.db;
@@ -202,8 +244,13 @@
       session.unsubs.push(
         onSnapshot(collection(fsDb, 'ranks'), (snap) => {
           const ranks = snap.docs
-            .map((d) => d.data())
-            .sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
+            .map((d) => normalizeClientRankDoc(d.data()))
+            .filter((r) => r && r.key && r.isActive !== false)
+            .sort(
+              (a, b) =>
+                (Number(b.power) || 0) - (Number(a.power) || 0) ||
+                (Number(b.tier_order) || 0) - (Number(a.tier_order) || 0)
+            );
           if (ranks.length && typeof cb.onRanks === 'function') cb.onRanks(ranks);
         })
       );
